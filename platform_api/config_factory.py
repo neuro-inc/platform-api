@@ -1,5 +1,6 @@
 import os
 import pathlib
+from decimal import Decimal
 from typing import Dict, Optional, Sequence
 
 from alembic.config import Config as AlembicConfig
@@ -104,6 +105,10 @@ class EnvironConfigFactory:
             interval_sec=float(
                 self._environ.get("NP_ENFORCER_INTERVAL_SEC")
                 or JobPolicyEnforcerConfig.interval_sec
+            ),
+            credit_notification_threshold=Decimal(
+                self._environ.get("NP_ENFORCER_CREDIT_NOTIFICATION_THRESHOLD")
+                or JobPolicyEnforcerConfig.credit_notification_threshold
             ),
         )
 

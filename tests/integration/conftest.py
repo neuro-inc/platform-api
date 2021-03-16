@@ -757,7 +757,7 @@ def config_factory(
             platform_api_url=URL("http://localhost:8080/api/v1"),
             token=token_factory("compute"),
             interval_sec=1,
-            quota_notification_threshold=0.1,
+            credit_notification_threshold=Decimal("0.1"),
         )
         database_config = DatabaseConfig(postgres=postgres_config)
         config_url = URL("http://localhost:8082/api/v1")

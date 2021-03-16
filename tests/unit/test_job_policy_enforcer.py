@@ -20,6 +20,7 @@ from neuro_auth_client import (
     Quota as AuthQuota,
     User as AuthUser,
 )
+from notifications_client import CreditsWillRunOutSoon
 from yarl import URL
 
 from platform_api.admin_client import AdminClient
@@ -29,6 +30,7 @@ from platform_api.orchestrator.job import Job, JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_policy_enforcer import (
     BillingEnforcer,
     CreditsLimitEnforcer,
+    CreditsNotificationsEnforcer,
     JobPolicyEnforcePoller,
     JobPolicyEnforcer,
     RuntimeLimitEnforcer,
@@ -36,7 +38,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
 from platform_api.orchestrator.job_request import JobRequest, JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
-from tests.unit.conftest import MockAuthClient
+from tests.unit.conftest import MockAuthClient, MockNotificationsClient
 
 
 _EnforcePollingRunner = Callable[
@@ -393,3 +395,40 @@ class TestBillingEnforcer:
         assert admin_client.change_log[1][1] == job.owner
         assert -admin_client.change_log[1][2] >= second * per_hour
         assert -admin_client.change_log[1][2] <= 2 * second * per_hour
+
+
+class TestCreditsNotificationEnforcer:
+    @pytest.mark.asyncio
+    async def test_credits_almost_run_out_user_notified(
+        self,
+        jobs_service: JobsService,
+        mock_auth_client: MockAuthClient,
+        mock_notifications_client: MockNotificationsClient,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        user = AuthUser(
+            name="test_user",
+            clusters=[
+                AuthCluster(name="test-cluster", quota=AuthQuota(credits=Decimal("10")))
+            ],
+        )
+
+        enforcer = CreditsNotificationsEnforcer(
+            jobs_service,
+            mock_auth_client,
+            mock_notifications_client,
+            notification_threshold=Decimal("2000"),
+        )
+        job, _ = await jobs_service.create_job(
+            job_request_factory(), user, cluster_name="test-cluster"
+        )
+        mock_auth_client.user_to_return = user
+        await enforcer.enforce()
+        assert (
+            CreditsWillRunOutSoon(
+                user_id=user.name,
+                cluster_name="test-cluster",
+                credits=Decimal("10"),
+            )
+            in mock_notifications_client.sent_notifications
+        )

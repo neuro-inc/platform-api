@@ -1,10 +1,13 @@
 from decimal import Decimal
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Set
+from unittest import mock
 
 import aiohttp.web
 import pytest
 from neuro_auth_client import Quota
-from notifications_client import JobCannotStartNoCredits
+from notifications_client import CreditsWillRunOutSoon, JobCannotStartNoCredits
+
+from platform_api.config import Config
 
 from .api import ApiConfig, JobsClient
 from .auth import _User
@@ -53,7 +56,7 @@ class TestCannotStartJobNoCredits:
         # Notification will be sent in graceful app shutdown
         await api.runner.close()
         assert (
-            "job-cannot-start-no-credits",
+            JobCannotStartNoCredits.slug(),
             {
                 "user_id": user.name,
                 "cluster_name": user.cluster_name,
@@ -201,3 +204,38 @@ class TestJobTransition:
             else:
                 raise AssertionError(f"Unexpected JobTransition payload: {payload}")
         assert states == {"pending", "failed"}
+
+
+class TestCreditsWillRunOutSoon:
+    @pytest.mark.asyncio
+    async def test_sent_if_credits_less_then_threshold(
+        self,
+        config: Config,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_request_factory: Callable[[], Dict[str, Any]],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        regular_user_factory: Callable[..., Any],
+        mock_notifications_server: NotificationsServer,
+    ) -> None:
+        threshold = config.job_policy_enforcer.credit_notification_threshold
+        quota = Quota(credits=threshold / 2)
+        user = await regular_user_factory(quota=quota)
+
+        jobs_client = jobs_client_factory(user)
+        job_request = job_request_factory()
+        job_request["container"]["command"] = "sleep 5s"  # Let job run for some time
+        job_data = await jobs_client.create_job(job_request)
+        await jobs_client.long_polling_by_job_id(job_data["id"], "succeeded")
+
+        # Notification will be sent in graceful app shutdown
+        await api.runner.close()
+
+        assert (
+            CreditsWillRunOutSoon.slug(),
+            {
+                "user_id": user.name,
+                "cluster_name": user.cluster_name,
+                "credits": mock.ANY,
+            },
+        ) in mock_notifications_server.requests
