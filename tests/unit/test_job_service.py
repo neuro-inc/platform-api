@@ -16,7 +16,11 @@ from neuro_auth_client import (
     Quota as AuthQuota,
     User as AuthUser,
 )
-from notifications_client import Client as NotificationsClient, JobTransition
+from notifications_client import (
+    Client as NotificationsClient,
+    JobCannotStartNoCredits,
+    JobTransition,
+)
 from yarl import URL
 
 from platform_api.cluster import (
@@ -37,6 +41,7 @@ from platform_api.orchestrator.jobs_service import (
     NEURO_PASSED_CONFIG,
     JobsService,
     JobsServiceException,
+    NoCreditsError,
     RunningJobsQuotaExceededError,
 )
 from platform_api.orchestrator.jobs_storage import JobFilter
@@ -1570,6 +1575,54 @@ class TestJobsService:
         assert not job.materialized
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "quota",
+        [
+            AuthQuota(),
+            AuthQuota(credits=Decimal("100")),
+        ],
+    )
+    async def test_create_job_has_credits(
+        self,
+        jobs_service: JobsService,
+        job_request_factory: Callable[[], JobRequest],
+        quota: AuthQuota,
+    ) -> None:
+        user = AuthUser(
+            name="testuser", clusters=[AuthCluster(name="test-cluster", quota=quota)]
+        )
+        request = job_request_factory()
+
+        job, _ = await jobs_service.create_job(
+            request, user, cluster_name="test-cluster"
+        )
+        assert job.status == JobStatus.PENDING
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "quota",
+        [
+            AuthQuota(credits=Decimal("0")),
+            AuthQuota(credits=Decimal("-0.5")),
+        ],
+    )
+    async def test_raise_no_credits(
+        self,
+        jobs_service: JobsService,
+        job_request_factory: Callable[..., JobRequest],
+        quota: AuthQuota,
+    ) -> None:
+        user = AuthUser(
+            name="testuser", clusters=[AuthCluster(name="test-cluster", quota=quota)]
+        )
+        request = job_request_factory(with_gpu=True)
+
+        with pytest.raises(
+            NoCreditsError, match=f"No credits left for user '{user.name}'"
+        ):
+            await jobs_service.create_job(request, user, cluster_name="test-cluster")
+
+    @pytest.mark.asyncio
     async def test_raise_for_jobs_limit(
         self,
         jobs_service: JobsService,
@@ -2053,6 +2106,33 @@ class TestJobServiceNotification:
         self, jobs_service_factory: Callable[..., JobsService]
     ) -> JobsService:
         return jobs_service_factory()
+
+    @pytest.mark.asyncio
+    async def test_no_credits(
+        self,
+        jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
+        mock_job_request: JobRequest,
+        mock_notifications_client: MockNotificationsClient,
+    ) -> None:
+        user = AuthUser(
+            name="testuser",
+            clusters=[
+                AuthCluster(name="test-cluster", quota=AuthQuota(credits=Decimal("0")))
+            ],
+        )
+
+        with pytest.raises(NoCreditsError):
+            await jobs_service.create_job(
+                job_request=mock_job_request, user=user, cluster_name="test-cluster"
+            )
+
+        assert mock_notifications_client.sent_notifications == [
+            JobCannotStartNoCredits(
+                user_id=user.name,
+                cluster_name="test-cluster",
+            )
+        ]
 
     @pytest.mark.asyncio
     async def test_new_job_created(

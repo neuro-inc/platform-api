@@ -1,11 +1,64 @@
+from decimal import Decimal
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Set
 
 import aiohttp.web
 import pytest
+from neuro_auth_client import Quota
+from notifications_client import JobCannotStartNoCredits
 
 from .api import ApiConfig, JobsClient
 from .auth import _User
 from .notifications import NotificationsServer
+
+
+class TestCannotStartJobNoCredits:
+    @pytest.mark.asyncio
+    async def test_not_sent_has_credits(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_request_factory: Callable[[], Dict[str, Any]],
+        jobs_client: Callable[[], Any],
+        regular_user_factory: Callable[..., Awaitable[_User]],
+        mock_notifications_server: NotificationsServer,
+    ) -> None:
+        quota = Quota(credits=Decimal("100"))
+        user = await regular_user_factory(quota=quota)
+        url = api.jobs_base_url
+        job_request = job_request_factory()
+        async with client.post(url, headers=user.headers, json=job_request) as response:
+            await response.read()
+        # Notification will be sent in graceful app shutdown
+        await api.runner.close()
+        for (slug, request) in mock_notifications_server.requests:
+            if slug == JobCannotStartNoCredits.slug():
+                raise AssertionError("Unexpected JobCannotStartQuotaReached sent")
+
+    @pytest.mark.asyncio
+    async def test_sent_if_no_credits(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_request_factory: Callable[[], Dict[str, Any]],
+        jobs_client: Callable[[], Any],
+        regular_user_factory: Callable[..., Awaitable[_User]],
+        mock_notifications_server: NotificationsServer,
+    ) -> None:
+        quota = Quota(credits=Decimal("0"))
+        user = await regular_user_factory(quota=quota)
+        url = api.jobs_base_url
+        job_request = job_request_factory()
+        async with client.post(url, headers=user.headers, json=job_request) as response:
+            await response.read()
+        # Notification will be sent in graceful app shutdown
+        await api.runner.close()
+        assert (
+            "job-cannot-start-no-credits",
+            {
+                "user_id": user.name,
+                "cluster_name": user.cluster_name,
+            },
+        ) in mock_notifications_server.requests
 
 
 class TestJobTransition:
