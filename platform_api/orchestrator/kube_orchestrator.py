@@ -460,8 +460,8 @@ class KubeOrchestrator(Orchestrator):
             logger.info(f"Starting Service for {job.id}.")
             service = await self._create_service(descriptor)
             if job.is_named:
-                # As job deletion can fail, we have to try to remove old service
-                # with same name just to be sure
+                # If old job finished recently, it pod can be still there
+                # with corresponding service, so we should delete it here
                 service_name = self._get_service_name_for_named(job)
                 await self._delete_service(service_name, ignore_missing=True)
                 await self._create_service(descriptor, name=service_name)
@@ -680,9 +680,14 @@ class KubeOrchestrator(Orchestrator):
             service = service.make_named(name)
         return await self._client.create_service(service)
 
-    async def _delete_service(self, name: str, *, ignore_missing: bool = False) -> None:
+    async def _get_services(self, job: Job) -> List[Service]:
+        return await self._client.list_services(self._get_job_labels(job))
+
+    async def _delete_service(
+        self, name: str, *, uid: Optional[str] = None, ignore_missing: bool = False
+    ) -> None:
         try:
-            await self._client.delete_service(name=name)
+            await self._client.delete_service(name=name, uid=uid)
         except NotFoundException:
             if ignore_missing:
                 return
@@ -694,9 +699,10 @@ class KubeOrchestrator(Orchestrator):
         if job.has_http_server_exposed:
             await self._delete_ingress(job)
 
-        await self._delete_service(self._get_job_pod_name(job))
-        if job.is_named:
-            await self._delete_service(self._get_service_name_for_named(job))
+        for service in await self._get_services(job):
+            await self._delete_service(
+                service.name, uid=service.uid, ignore_missing=True
+            )
 
         await self._delete_pod_network_policy(job)
 

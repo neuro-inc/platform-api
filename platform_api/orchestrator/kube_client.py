@@ -314,6 +314,7 @@ class Resources:
 class Service:
     name: str
     target_port: Optional[int]
+    uid: Optional[str] = None
     selector: Dict[str, str] = field(default_factory=dict)
     port: int = 80
     service_type: ServiceType = ServiceType.CLUSTER_IP
@@ -388,6 +389,7 @@ class Service:
         service_type = payload["spec"].get("type", Service.service_type.value)
         return cls(
             name=payload["metadata"]["name"],
+            uid=payload["metadata"]["uid"],
             selector=payload["spec"].get("selector", {}),
             target_port=http_payload.get("targetPort", None),
             port=http_payload.get("port", Service.port),
@@ -1498,8 +1500,18 @@ class KubeClient:
     async def delete_resource_by_link(self, link: str) -> None:
         await self._delete_resource_url(f"{self._base_url}{link}")
 
-    async def _delete_resource_url(self, url: str) -> None:
-        payload = await self._request(method="DELETE", url=url)
+    async def _delete_resource_url(self, url: str, uid: Optional[str] = None) -> None:
+        request_payload = None
+        if uid:
+            request_payload = {"preconditions": {"uid": uid}}
+        payload = await self._request(method="DELETE", url=url, json=request_payload)
+        if (
+            uid
+            and payload["kind"] == "Status"
+            and payload["status"] == "Failure"
+            and payload["reason"] == "Conflict"
+        ):
+            raise NotFoundException(payload["reason"])
         self._check_status_payload(payload)
 
     async def get_endpoint(
@@ -1671,9 +1683,18 @@ class KubeClient:
         self._check_status_payload(payload)
         return Service.from_primitive(payload)
 
-    async def delete_service(self, name: str) -> None:
+    async def list_services(self, labels: Dict[str, str]) -> List[Service]:
+        url = self._services_url
+        labelSelector = ",".join(f"{label}={value}" for label, value in labels.items())
+        payload = await self._request(
+            method="GET", url=url, params={"labelSelector": labelSelector}
+        )
+        self._check_status_payload(payload)
+        return [Service.from_primitive(item) for item in payload["items"]]
+
+    async def delete_service(self, name: str, uid: Optional[str] = None) -> None:
         url = self._generate_service_url(name)
-        await self._delete_resource_url(url)
+        await self._delete_resource_url(url, uid)
 
     async def create_docker_secret(self, secret: DockerRegistrySecret) -> None:
         url = self._generate_all_secrets_url(secret.namespace)
