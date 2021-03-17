@@ -969,6 +969,7 @@ class TestHasCreditsEnforcer:
 
         await check_not_cancelled(jobs)
 
+    @pytest.mark.parametrize("credits", [Decimal("0"), Decimal("-0.5")])
     @pytest.mark.asyncio
     async def test_user_has_no_credits_kill_all(
         self,
@@ -976,12 +977,13 @@ class TestHasCreditsEnforcer:
         mock_auth_client: MockAuthClient,
         make_jobs: Callable[[User, int], Awaitable[List[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
+        credits: Decimal,
     ) -> None:
         user = User(name="testuser", token="testtoken", cluster_name="test-cluster")
         jobs = await make_jobs(user, 5)
 
         mock_auth_client.user_to_return = self.make_auth_user(
-            user, {"test-cluster": Decimal("0.00")}
+            user, {"test-cluster": credits}
         )
 
         await has_credits_enforcer.enforce()
