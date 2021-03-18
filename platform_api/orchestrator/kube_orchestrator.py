@@ -388,6 +388,11 @@ class KubeOrchestrator(Orchestrator):
     def _get_job_labels(self, job: Job) -> Dict[str, str]:
         return {"platform.neuromation.io/job": job.id}
 
+    def _get_preset_labels(self, job: Job) -> Dict[str, str]:
+        if job.preset_name:
+            return {"platform.neuromation.io/preset": job.preset_name}
+        return {}
+
     def _get_gpu_labels(self, job: Job) -> Dict[str, str]:
         if not job.has_gpu or not job.gpu_model_id:
             return {}
@@ -397,6 +402,7 @@ class KubeOrchestrator(Orchestrator):
         labels = self._get_job_labels(job)
         labels.update(self._get_user_pod_labels(job))
         labels.update(self._get_gpu_labels(job))
+        labels.update(self._get_preset_labels(job))
         return labels
 
     def _get_pod_restart_policy(self, job: Job) -> PodRestartPolicy:

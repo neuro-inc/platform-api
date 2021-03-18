@@ -1266,7 +1266,9 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="test-cluster"
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                preset_name="preseet",
             ),
         )
         await delete_job_later(job)
@@ -1277,6 +1279,7 @@ class TestKubeOrchestrator:
         raw_pod = await kube_client.get_raw_pod(pod_name)
         assert raw_pod["metadata"]["labels"] == {
             "platform.neuromation.io/job": job.id,
+            "platform.neuromation.io/preset": job.preset_name,
             "platform.neuromation.io/user": job.owner,
         }
 
