@@ -22,7 +22,12 @@ import trafaret.keys
 from aiohttp_security import check_authorized
 from aiohttp_security.api import AUTZ_KEY
 from multidict import MultiDictProxy
-from neuro_auth_client import AuthClient, Permission, check_permissions
+from neuro_auth_client import (
+    AuthClient,
+    Permission,
+    User as AuthUser,
+    check_permissions,
+)
 from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
 from yarl import URL
 
@@ -53,7 +58,7 @@ from platform_api.orchestrator.jobs_storage import (
     JobStorageTransactionError,
 )
 from platform_api.resource import Preset, TPUResource
-from platform_api.user import User, authorized_user, untrusted_user
+from platform_api.user import authorized_user, make_job_uri, untrusted_user
 
 from .job_request_builder import create_container_from_payload
 from .validators import (
@@ -452,12 +457,14 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
 
 
 def infer_permissions_from_container(
-    user: User,
+    user: AuthUser,
     container: Container,
     registry_config: RegistryConfig,
     cluster_name: str,
 ) -> List[Permission]:
-    permissions = [Permission(uri=str(user.to_job_uri(cluster_name)), action="write")]
+    permissions = [
+        Permission(uri=str(make_job_uri(user, cluster_name)), action="write")
+    ]
     if container.belongs_to_registry(registry_config):
         permissions.append(
             Permission(

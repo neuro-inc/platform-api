@@ -18,7 +18,7 @@ from platform_api.cluster import (
 )
 from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import JobsConfig, JobsSchedulerConfig
-from platform_api.user import User
+from platform_api.user import get_cluster
 
 from ..utils.asyncio import run_and_log_exceptions
 from .base import Orchestrator
@@ -60,10 +60,9 @@ class JobsScheduler:
         self, username: str, cluster: str
     ) -> Optional[int]:
         auth_user = await self._auth_client.get_user(username)
-        user = User.create_from_auth_user(auth_user)
-        user_cluster = user.get_cluster(cluster)
-        if user_cluster:
-            return user_cluster.jobs_quota
+        auth_cluster = get_cluster(auth_user, cluster)
+        if auth_cluster:
+            return auth_cluster.quota.total_running_jobs
         return 0  # User has no access to this cluster
 
     async def _enforce_running_job_quota(

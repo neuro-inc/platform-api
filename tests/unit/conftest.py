@@ -40,13 +40,7 @@ from platform_api.cluster_config import (
 )
 from platform_api.config import JobsConfig, JobsSchedulerConfig
 from platform_api.orchestrator.base import Orchestrator
-from platform_api.orchestrator.job import (
-    AggregatedRunTime,
-    Job,
-    JobRecord,
-    JobStatusItem,
-    JobStatusReason,
-)
+from platform_api.orchestrator.job import Job, JobRecord, JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
@@ -464,20 +458,6 @@ def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
     loop.close()
 
 
-def create_quota(
-    time_gpu_minutes: Optional[int] = None, time_non_gpu_minutes: Optional[int] = None
-) -> AggregatedRunTime:
-
-    if time_gpu_minutes is not None:
-        gpu_delta = timedelta(minutes=time_gpu_minutes)
-    else:
-        gpu_delta = timedelta.max
-
-    if time_non_gpu_minutes is not None:
-        non_gpu_delta = timedelta(minutes=time_non_gpu_minutes)
-    else:
-        non_gpu_delta = timedelta.max
-
-    return AggregatedRunTime(
-        total_gpu_run_time_delta=gpu_delta, total_non_gpu_run_time_delta=non_gpu_delta
-    )
+@pytest.fixture
+def test_user() -> AuthUser:
+    return AuthUser(name="test_user", clusters=[AuthCluster(name="test-cluster")])

@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 from multidict import MultiDict
-from neuro_auth_client import Permission
+from neuro_auth_client import Permission, User as AuthUser
 from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
 from trafaret import DataError
 from yarl import URL
@@ -53,7 +53,6 @@ from platform_api.orchestrator.job_request import (
 from platform_api.orchestrator.jobs_poller import job_response_to_job_record
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.resource import Preset, TPUPreset, TPUResource
-from platform_api.user import User
 
 from .conftest import MockOrchestrator
 
@@ -1371,7 +1370,7 @@ class TestBulkJobFilterBuilder:
 
 class TestInferPermissionsFromContainer:
     def test_no_volumes(self) -> None:
-        user = User(name="testuser", token="")
+        user = AuthUser(name="testuser")
         container = Container(
             image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
         )
@@ -1386,7 +1385,7 @@ class TestInferPermissionsFromContainer:
         ]
 
     def test_volumes(self) -> None:
-        user = User(name="testuser", token="")
+        user = AuthUser(name="testuser")
         container = Container(
             image="image",
             resources=ContainerResources(cpu=0.1, memory_mb=16),
@@ -1415,7 +1414,7 @@ class TestInferPermissionsFromContainer:
         ]
 
     def test_image(self) -> None:
-        user = User(name="testuser", token="")
+        user = AuthUser(name="testuser")
         container = Container(
             image="example.com/testuser/image",
             resources=ContainerResources(cpu=0.1, memory_mb=16),

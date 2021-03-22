@@ -1,105 +1,11 @@
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional, Set
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Set
 
 import aiohttp.web
 import pytest
-from neuro_auth_client import Cluster as AuthCluster
-from notifications_client.notification import (
-    JobCannotStartQuotaReached,
-    QuotaWillBeReachedSoon,
-)
-
-from platform_api.orchestrator.job import Quota
 
 from .api import ApiConfig, JobsClient
 from .auth import _User
 from .notifications import NotificationsServer
-
-
-class TestCannotStartJobQuotaReached:
-    @pytest.mark.asyncio
-    async def test_not_sent_if_quota_not_reached(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client: Callable[[], Any],
-        regular_user_factory: Callable[..., Any],
-        mock_notifications_server: NotificationsServer,
-    ) -> None:
-        quota = Quota(total_non_gpu_run_time_minutes=100)
-        user = await regular_user_factory(quota=quota)
-        url = api.jobs_base_url
-        job_request = job_request_factory()
-        async with client.post(url, headers=user.headers, json=job_request) as response:
-            await response.read()
-        # Notification will be sent in graceful app shutdown
-        await api.runner.close()
-        for (slug, request) in mock_notifications_server.requests:
-            if slug == JobCannotStartQuotaReached.slug():
-                raise AssertionError("Unexpected JobCannotStartQuotaReached sent")
-
-    @pytest.mark.asyncio
-    async def test_sent_if_non_gpu_quota_reached(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        job_request_factory: Callable[[Optional[str]], Dict[str, Any]],
-        jobs_client: Callable[[], Any],
-        regular_user_factory: Callable[..., Any],
-        mock_notifications_server: NotificationsServer,
-    ) -> None:
-        clusters = [
-            AuthCluster("test-cluster"),
-            AuthCluster("testcluster2", quota=Quota(total_non_gpu_run_time_minutes=0)),
-        ]
-        user = await regular_user_factory(auth_clusters=clusters)
-        url = api.jobs_base_url
-        job_request = job_request_factory("testcluster2")
-        async with client.post(url, headers=user.headers, json=job_request) as response:
-            await response.read()
-        # Notification will be sent in graceful app shutdown
-        await api.runner.close()
-        assert (
-            "job-cannot-start-quota-reached",
-            {
-                "user_id": user.name,
-                "cluster_name": "testcluster2",
-                "quota": 0.0,
-                "resource": "non_gpu",
-            },
-        ) in mock_notifications_server.requests
-
-    @pytest.mark.asyncio
-    async def test_sent_if_gpu_quota_reached(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        job_request_factory: Callable[[Optional[str]], Dict[str, Any]],
-        jobs_client: Callable[[], Any],
-        regular_user_factory: Callable[..., Any],
-        mock_notifications_server: NotificationsServer,
-    ) -> None:
-        clusters = [
-            AuthCluster("test-cluster"),
-            AuthCluster("testcluster2", quota=Quota(total_gpu_run_time_minutes=0)),
-        ]
-        user = await regular_user_factory(auth_clusters=clusters)
-        url = api.jobs_base_url
-        job_request = job_request_factory("testcluster2")
-        job_request["container"]["resources"]["gpu"] = 1
-        async with client.post(url, headers=user.headers, json=job_request) as response:
-            await response.read()
-        # Notification will be sent in graceful app shutdown
-        await api.runner.close()
-        assert (
-            "job-cannot-start-quota-reached",
-            {
-                "user_id": user.name,
-                "cluster_name": "testcluster2",
-                "quota": 0.0,
-                "resource": "gpu",
-            },
-        ) in mock_notifications_server.requests
 
 
 class TestJobTransition:
@@ -147,14 +53,13 @@ class TestJobTransition:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[str], Dict[str, Any]],
         regular_user_factory: Callable[..., Any],
         mock_notifications_server: NotificationsServer,
     ) -> None:
-        quota = Quota(total_non_gpu_run_time_minutes=0)
-        user = await regular_user_factory(quota=quota)
+        user = await regular_user_factory()
         url = api.jobs_base_url
-        job_request = job_request_factory()
+        job_request = job_request_factory("not_existing_cluster")
         async with client.post(url, headers=user.headers, json=job_request) as response:
             await response.read()
         # Notification will be sent in graceful app shutdown
@@ -241,89 +146,3 @@ class TestJobTransition:
             else:
                 raise AssertionError(f"Unexpected JobTransition payload: {payload}")
         assert states == {"pending", "failed"}
-
-
-class TestQuotaWillBeReachedSoon:
-    @pytest.fixture
-    async def run_job(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        jobs_client_factory: Callable[[_User], JobsClient],
-    ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool, bool], Awaitable[str]]]:
-        cleanup_pairs = []
-
-        async def _impl(
-            user: _User,
-            job_request: Dict[str, Any],
-            wait_for_start: bool = True,
-            do_kill: bool = False,
-        ) -> str:
-            url = api.jobs_base_url
-            headers = user.headers
-            jobs_client = jobs_client_factory(user)
-            async with client.post(url, headers=headers, json=job_request) as resp:
-                assert resp.status == aiohttp.web.HTTPAccepted.status_code, str(
-                    job_request
-                )
-                data = await resp.json()
-                job_id = data["id"]
-                if wait_for_start:
-                    await jobs_client.long_polling_by_job_id(job_id, "running")
-                    if do_kill:
-                        await jobs_client.delete_job(job_id)
-                        await jobs_client.long_polling_by_job_id(job_id, "cancelled")
-                else:
-                    cleanup_pairs.append((jobs_client, job_id))
-            return job_id
-
-        yield _impl
-
-        if not api.runner.closed:
-            for jobs_client, job_id in cleanup_pairs:
-                await jobs_client.delete_job(job_id=job_id, assert_success=False)
-
-    @pytest.mark.asyncio
-    async def test_sent_if_non_gpu_quota_will_be_reached_soon(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
-        jobs_client_factory: Callable[[_User], JobsClient],
-        regular_user_factory: Callable[..., Any],
-        run_job: Callable[..., Awaitable[str]],
-        mock_notifications_server: NotificationsServer,
-    ) -> None:
-        quota = Quota(total_non_gpu_run_time_minutes=2)
-        user = await regular_user_factory(quota=quota)
-        jobs_client = jobs_client_factory(user)
-
-        # NOTE: due to the fact that the /stats route reports the jobs run
-        # time in minutes rounded, we need to wait at least 30 seconds to
-        # trigger the quota enforcing logic.
-        job_request = job_request_factory()
-        job_request["container"]["command"] = "sleep 35s"
-        job_id = await run_job(user, job_request, do_kill=False)
-        await jobs_client.long_polling_by_job_id(job_id, "succeeded")
-
-        # Notification will be sent in graceful app shutdown
-        await api.runner.close()
-
-        number_of_quota_notifs = len(
-            [
-                slug
-                for slug, _ in mock_notifications_server.requests
-                if slug == QuotaWillBeReachedSoon.slug()
-            ]
-        )
-        assert number_of_quota_notifs == 1
-        assert (
-            QuotaWillBeReachedSoon.slug(),
-            {
-                "user_id": user.name,
-                "cluster_name": "test-cluster",
-                "resource": "non_gpu",
-                "quota": 120.0,
-                "used": 60.0,  # indicates that the notification was sent in time
-            },
-        ) in mock_notifications_server.requests

@@ -20,8 +20,6 @@ from platform_api.orchestrator.job_policy_enforcer import (
     BillingEnforcer,
     CreditsLimitEnforcer,
     JobPolicyEnforcePoller,
-    PlatformApiClient,
-    QuotaEnforcer,
     RuntimeLimitEnforcer,
 )
 
@@ -350,9 +348,6 @@ async def create_app(
             app["tags_app"]["jobs_service"] = jobs_service
 
             logger.info("Initializing JobPolicyEnforcePoller")
-            api_client = await exit_stack.enter_async_context(
-                PlatformApiClient(config.job_policy_enforcer)
-            )
             admin_client = await exit_stack.enter_async_context(
                 AdminClient(
                     base_url=config.admin_url,
@@ -364,10 +359,7 @@ async def create_app(
                 JobPolicyEnforcePoller(
                     config.job_policy_enforcer,
                     enforcers=[
-                        QuotaEnforcer(
-                            api_client, notifications_client, config.job_policy_enforcer
-                        ),
-                        RuntimeLimitEnforcer(api_client),
+                        RuntimeLimitEnforcer(jobs_service),
                         CreditsLimitEnforcer(jobs_service, auth_client),
                         BillingEnforcer(jobs_service, admin_client),
                     ],
