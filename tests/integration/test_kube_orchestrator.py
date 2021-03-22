@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 import shlex
 import time
 import uuid
@@ -13,6 +14,7 @@ from typing import (
     Callable,
     Dict,
     Iterator,
+    List,
     Optional,
 )
 from unittest import mock
@@ -55,6 +57,7 @@ from platform_api.orchestrator.kube_client import (
     NodeAffinity,
     NodeSelectorRequirement,
     NodeSelectorTerm,
+    NotFoundException,
     PodDescriptor,
     SecretRef,
     Service,
@@ -851,6 +854,50 @@ class TestKubeOrchestrator:
         finally:
             await kube_client.delete_service(service_name)
 
+    @pytest.mark.asyncio
+    async def test_list_services(self, kube_client: KubeClient) -> None:
+        labels1 = {"label": f"value-{uuid.uuid4()}"}
+        labels2 = {"label": f"value-{uuid.uuid4()}"}
+
+        def _gen_for_labels(labels: Dict[str, str]) -> List[Service]:
+            return [
+                Service(name=f"job-{uuid.uuid4()}", target_port=8080, labels=labels)
+                for _ in range(5)
+            ]
+
+        services1 = _gen_for_labels(labels1)
+        services2 = _gen_for_labels(labels2)
+        try:
+            for service in itertools.chain(services1, services2):
+                await kube_client.create_service(service)
+
+            assert {service.name for service in services1} == {
+                service.name for service in await kube_client.list_services(labels1)
+            }
+
+            assert {service.name for service in services2} == {
+                service.name for service in await kube_client.list_services(labels2)
+            }
+        finally:
+            for service in itertools.chain(services1, services2):
+                try:
+                    await kube_client.delete_service(service.name)
+                except Exception:
+                    pass
+
+    @pytest.mark.asyncio
+    async def test_service_delete_by_uid(self, kube_client: KubeClient) -> None:
+        service_name = f"job-{uuid.uuid4()}"
+        service = Service(name=service_name, target_port=8080)
+        try:
+            service_initial = await kube_client.create_service(service)
+            await kube_client.delete_service(service_name)
+            await kube_client.create_service(service)
+            with pytest.raises(NotFoundException):
+                await kube_client.delete_service(service_name, uid=service_initial.uid)
+        finally:
+            await kube_client.delete_service(service_name)
+
     async def _wait_for_job_service(
         self,
         kube_ingress_ip: str,
@@ -1219,7 +1266,9 @@ class TestKubeOrchestrator:
         job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="test-cluster"
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                preset_name="preseet",
             ),
         )
         await delete_job_later(job)
@@ -1230,6 +1279,7 @@ class TestKubeOrchestrator:
         raw_pod = await kube_client.get_raw_pod(pod_name)
         assert raw_pod["metadata"]["labels"] == {
             "platform.neuromation.io/job": job.id,
+            "platform.neuromation.io/preset": job.preset_name,
             "platform.neuromation.io/user": job.owner,
         }
 

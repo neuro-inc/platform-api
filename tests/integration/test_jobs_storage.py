@@ -368,15 +368,17 @@ class TestJobsStorage:
         job2 = self._create_job(tags=["t1", "t2"])
         job3 = self._create_job(tags=["t2"])
         job4 = self._create_job(tags=["t3"])
+        job5 = self._create_job(tags=["weird---tag////%%%$$$"])
 
         await storage.set_job(job1)
         await storage.set_job(job2)
         await storage.set_job(job3)
         await storage.set_job(job4)
+        await storage.set_job(job5)
 
         jobs = await storage.get_all_jobs()
         job_ids = [job.id for job in jobs]
-        assert job_ids == [job1.id, job2.id, job3.id, job4.id]
+        assert job_ids == [job1.id, job2.id, job3.id, job4.id, job5.id]
 
         filters = JobFilter(tags={"t1"})
         jobs = await storage.get_all_jobs(filters)
@@ -400,6 +402,11 @@ class TestJobsStorage:
         jobs = await storage.get_all_jobs(filters)
         job_ids = [job.id for job in jobs]
         assert job_ids == [job4.id]
+
+        filters = JobFilter(tags={"weird---tag////%%%$$$"})
+        jobs = await storage.get_all_jobs(filters)
+        job_ids = [job.id for job in jobs]
+        assert job_ids == [job5.id]
 
         filters = JobFilter(tags={"t1", "t2", "t3"})
         jobs = await storage.get_all_jobs(filters)

@@ -697,14 +697,10 @@ class TestJobRequestValidator:
         "tag",
         [
             "",
-            "a" * 257,
-            "foo-",
-            "-foo",
-            "foo--bar",
-            "foo::bar",
-            "foo//bar",
-            "foo..bar",
-            "foo.-bar",
+            "a" * 257,  # Too long
+            "with space",
+            "with\nnewline",
+            "with\ttab",
         ],
     )
     def test_job_tags_validator_invalid(self, tag: str) -> None:

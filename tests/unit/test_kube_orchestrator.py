@@ -1059,6 +1059,18 @@ class TestService:
             },
         }
 
+    @pytest.fixture
+    def service_payload_with_uid(
+        self, service_payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        return {
+            **service_payload,
+            "metadata": {
+                **service_payload["metadata"],
+                "uid": "test-uid",
+            },
+        }
+
     def test_to_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
         service = Service(
             name="testservice",
@@ -1105,48 +1117,54 @@ class TestService:
         service_payload["spec"]["clusterIP"] = "None"
         assert service.to_primitive() == service_payload
 
-    def test_from_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
-        service = Service.from_primitive(service_payload)
+    def test_from_primitive(
+        self, service_payload_with_uid: Dict[str, Dict[str, Any]]
+    ) -> None:
+        service = Service.from_primitive(service_payload_with_uid)
         assert service == Service(
             name="testservice",
-            selector=service_payload["spec"]["selector"],
+            uid="test-uid",
+            selector=service_payload_with_uid["spec"]["selector"],
             target_port=8080,
         )
 
     def test_from_primitive_with_labels(
-        self, service_payload: Dict[str, Dict[str, Any]]
+        self, service_payload_with_uid: Dict[str, Dict[str, Any]]
     ) -> None:
         labels = {"label-name": "label-value"}
-        input_payload = service_payload.copy()
+        input_payload = service_payload_with_uid.copy()
         input_payload["metadata"]["labels"] = labels
         service = Service.from_primitive(input_payload)
         assert service == Service(
             name="testservice",
-            selector=service_payload["spec"]["selector"],
+            uid="test-uid",
+            selector=service_payload_with_uid["spec"]["selector"],
             target_port=8080,
             labels=labels,
         )
 
     def test_from_primitive_node_port(
-        self, service_payload: Dict[str, Dict[str, Any]]
+        self, service_payload_with_uid: Dict[str, Dict[str, Any]]
     ) -> None:
-        service_payload["spec"]["type"] = "NodePort"
-        service = Service.from_primitive(service_payload)
+        service_payload_with_uid["spec"]["type"] = "NodePort"
+        service = Service.from_primitive(service_payload_with_uid)
         assert service == Service(
             name="testservice",
-            selector=service_payload["spec"]["selector"],
+            uid="test-uid",
+            selector=service_payload_with_uid["spec"]["selector"],
             target_port=8080,
             service_type=ServiceType.NODE_PORT,
         )
 
     def test_from_primitive_headless(
-        self, service_payload: Dict[str, Dict[str, Any]]
+        self, service_payload_with_uid: Dict[str, Dict[str, Any]]
     ) -> None:
-        service_payload["spec"]["clusterIP"] = "None"
-        service = Service.from_primitive(service_payload)
+        service_payload_with_uid["spec"]["clusterIP"] = "None"
+        service = Service.from_primitive(service_payload_with_uid)
         assert service == Service(
             name="testservice",
-            selector=service_payload["spec"]["selector"],
+            uid="test-uid",
+            selector=service_payload_with_uid["spec"]["selector"],
             cluster_ip="None",
             target_port=8080,
         )
