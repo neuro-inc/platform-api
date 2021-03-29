@@ -89,8 +89,13 @@ jobs:
           file: .coverage-integration.xml
           flags: integration
           name: codecov-integration
-      - name: Run e2e tests
-        run: make test_k8s_e2e
+# At the moment (2021/02/29), e2e tests involve using
+# outdated components (platform-config from 2019) and do not
+# simulate real environment. Also we only 1 E2E test, that
+# just runs single job
+# So the e2e test are disabled and should be removed.
+#      - name: Run e2e tests
+#        run: make test_k8s_e2e
 
   deploy_dev:
     name: Deploy on dev
