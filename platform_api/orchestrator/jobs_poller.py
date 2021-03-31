@@ -15,6 +15,7 @@ from .job_request import (
     Container,
     ContainerHTTPServer,
     ContainerResources,
+    ContainerTPUResource,
     ContainerVolume,
     DiskContainerVolume,
     JobRequest,
@@ -60,6 +61,20 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
             read_only=payload["read_only"],
         )
 
+    def _parse_resources(data: Mapping[str, Any]) -> ContainerResources:
+        tpu = None
+        if "tpu" in data:
+            tpu = ContainerTPUResource.from_primitive(data["tpu"])
+
+        return ContainerResources(
+            cpu=data["cpu"],
+            memory_mb=data["memory_mb"],
+            gpu=data.get("gpu"),
+            gpu_model_id=data.get("gpu_model"),
+            shm=data.get("shm"),
+            tpu=tpu,
+        )
+
     def _parse_container(data: Mapping[str, Any]) -> Container:
         http_server = None
         http = data.get("http", {})
@@ -76,7 +91,7 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
 
         return Container(
             image=data["image"],
-            resources=ContainerResources.from_primitive(data["resources"]),
+            resources=_parse_resources(data["resources"]),
             entrypoint=data.get("entrypoint"),
             command=data.get("command"),
             env=data["env"],

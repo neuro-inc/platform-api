@@ -1439,7 +1439,14 @@ async def test_parse_response(mock_orchestrator: MockOrchestrator) -> None:
             request=JobRequest.create(
                 Container(
                     image="testimage",
-                    resources=ContainerResources(cpu=1, memory_mb=128),
+                    resources=ContainerResources(
+                        cpu=1,
+                        memory_mb=128,
+                        gpu=1,
+                        gpu_model_id="nvidia-tesla-k80",
+                        shm=True,
+                        tpu=ContainerTPUResource(type="type", software_version="1.0"),
+                    ),
                     volumes=[
                         ContainerVolume(
                             uri=URL("storage://test-cluster/testuser/dataset"),
