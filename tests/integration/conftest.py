@@ -62,17 +62,6 @@ from platform_api.resource import (
 )
 
 
-pytest_plugins = [
-    "tests.integration.auth",
-    "tests.integration.api",
-    "tests.integration.docker",
-    "tests.integration.secrets",
-    "tests.integration.diskapi",
-    "tests.integration.notifications",
-    "tests.integration.postgres",
-]
-
-
 @pytest.fixture(scope="session")
 def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
     asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
