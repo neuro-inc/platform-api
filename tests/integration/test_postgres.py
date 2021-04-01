@@ -1,5 +1,6 @@
 import asyncio
 
+import asyncpg
 import pytest
 from asyncpg.pool import Pool
 
@@ -13,30 +14,67 @@ async def test_postgres_available(postgres_pool: Pool) -> None:
         assert result[0] == 4
 
 
-@pytest.mark.asyncio
-async def test_cluster_update_notifier(postgres_pool: Pool) -> None:
-    notifier = ClusterUpdateNotifier(postgres_pool)
-    count = 0
+class Counter:
+    def __init__(self) -> None:
+        self.count = 0
 
-    async def assert_count(expected_count: int) -> None:
+    def callback(self) -> None:
+        self.count += 1
+
+    async def assert_count(self, expected_count: int) -> None:
         async def _loop() -> None:
-            while count != expected_count:
+            while self.count != expected_count:
                 await asyncio.sleep(0.1)
 
         try:
-            await asyncio.wait_for(_loop(), timeout=5)
+            await asyncio.wait_for(_loop(), timeout=1)
         except asyncio.TimeoutError:
-            assert count == expected_count
+            assert self.count == expected_count
 
-    def callback() -> None:
-        nonlocal count
-        count += 1
 
-    async with notifier.listen_to_cluster_update(callback):
+@pytest.mark.asyncio
+async def test_cluster_update_notifier(postgres_pool: Pool) -> None:
+    notifier = ClusterUpdateNotifier(postgres_pool)
+    counter = Counter()
+
+    async with notifier.listen_to_cluster_update(counter.callback):
         await notifier.notify_cluster_update()
-        await assert_count(1)
+        await counter.assert_count(1)
         await notifier.notify_cluster_update()
-        await assert_count(2)
+        await counter.assert_count(2)
     await notifier.notify_cluster_update()
     await asyncio.sleep(0.2)
-    await assert_count(2)
+    await counter.assert_count(2)
+
+
+@pytest.mark.asyncio
+async def test_cluster_update_notifier_connection_lost(postgres_pool: Pool) -> None:
+    notifier = ClusterUpdateNotifier(postgres_pool, heartbeat_interval_sec=0.1)
+    counter = Counter()
+
+    async with notifier.listen_to_cluster_update(counter.callback):
+        await notifier.notify_cluster_update()
+        await counter.assert_count(1)
+
+        # Kill 'LISTEN ...' connections
+        pid_rows = await postgres_pool.fetch(
+            "SELECT pid, query FROM pg_stat_activity where QUERY like 'LISTEN%';"
+        )
+        for pid_row in pid_rows:
+            await postgres_pool.execute(
+                f"SELECT pg_terminate_backend({pid_row['pid']});"
+            )
+        await asyncio.sleep(0.2)  # allow it to reconnect
+
+        await notifier.notify_cluster_update()
+        await counter.assert_count(2)
+
+
+@pytest.mark.asyncio
+async def test_cluster_update_notifier_failed_to_subscribe(postgres_pool: Pool) -> None:
+    await postgres_pool.close()
+    notifier = ClusterUpdateNotifier(postgres_pool)
+
+    with pytest.raises(asyncpg.InterfaceError):
+        async with notifier.listen_to_cluster_update(lambda: None):
+            pass

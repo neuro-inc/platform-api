@@ -1,14 +1,27 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Sequence, Union
+from contextlib import suppress
+from typing import (
+    Any,
+    AsyncContextManager,
+    AsyncIterator,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Union,
+)
 
 import asyncpgsa
 import sqlalchemy as sa
 import sqlalchemy.sql as sasql
 from aiorwlock import RWLock
 from async_generator import asynccontextmanager
+from asyncpg import Connection
 from asyncpg.pool import Pool
+from typing_extensions import Protocol
 
 from .cluster_config import ClusterConfig
 from .config import Config, PollerConfig
@@ -59,13 +72,76 @@ class Cluster(ABC):
         pass
 
 
+Callback = Callable[[], None]
+
+
+class Subscription(Protocol):
+    async def is_alive(self) -> bool:
+        pass
+
+
+Subscribe = Callable[[Callback], AsyncContextManager[Subscription]]
+
+
+class AutoReSubscriber:
+    _inner_manager: Optional[AsyncContextManager[Subscription]] = None
+    _subscription: Optional[Subscription] = None
+    _task: Optional["asyncio.Task[None]"] = None
+
+    def __init__(self, subscribe: Subscribe, callback: Callback, check_interval: float):
+        self._subscribe = subscribe
+        self._callback = callback
+        self._check_interval = check_interval
+        self._lock = asyncio.Lock()
+
+    async def _setup_subscription(self) -> None:
+        async with self._lock:
+            self._inner_manager = self._subscribe(self._callback)
+            self._subscription = await self._inner_manager.__aenter__()
+
+    async def _teardown_subscription(
+        self, aexit_args: Any = (None, None, None)
+    ) -> None:
+        async with self._lock:
+            if self._inner_manager:
+                await self._inner_manager.__aexit__(*aexit_args)
+            self._inner_manager = None
+            self._subscription = None
+
+    async def _checker_task(self) -> None:
+        while True:
+            await asyncio.sleep(self._check_interval)
+            if self._subscription and not await self._subscription.is_alive():
+                try:
+                    await self._teardown_subscription()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.exception(
+                        f"{type(self).__qualname__}: Failed to cleanup subscription"
+                    )
+                await self._setup_subscription()
+
+    async def __aenter__(self) -> None:
+        await self._setup_subscription()
+        self._task = asyncio.create_task(self._checker_task())
+
+    async def __aexit__(self, *args: Any) -> None:
+        assert self._task
+        self._task.cancel()
+        with suppress(asyncio.CancelledError):
+            await self._task
+        await self._teardown_subscription(args)
+
+
 ClusterFactory = Callable[[ClusterConfig], Cluster]
 
 
 class ClusterUpdateNotifier:
-    def __init__(self, pool: Pool) -> None:
+    def __init__(self, pool: Pool, heartbeat_interval_sec: float = 15) -> None:
         self._pool = pool
         self._channel = "cluster_update_required"
+        self._heartbeat_interval_sec = heartbeat_interval_sec
 
     # Database helpers
 
@@ -78,21 +154,48 @@ class ClusterUpdateNotifier:
         query = sa.text(f"NOTIFY {self._channel}")
         await self._execute(query)
 
+    class Subscription:
+        def __init__(self, conn: Connection):
+            self._conn = conn
+
+        async def is_alive(self) -> bool:
+            try:
+                await self._conn.execute("SELECT 42")
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                return False
+            return True
+
     @asynccontextmanager
-    async def listen_to_cluster_update(
+    async def _listen_to_cluster_update_once(
         self, listener: Callable[[], None]
-    ) -> AsyncIterator[None]:
+    ) -> AsyncIterator[Subscription]:
         def _listener(*args: Any) -> None:
             listener()
 
         async with self._pool.acquire() as conn:
-            logger.info(f"Subscribing to channel {self._channel!r}")
+            logger.info(
+                f"{type(self).__qualname__}: Subscribing to channel {self._channel!r}"
+            )
             await conn.add_listener(self._channel, _listener)
             try:
-                yield
+                yield ClusterUpdateNotifier.Subscription(conn)
             finally:
-                logger.info(f"Unsubscribing from channel {self._channel!r}")
+                logger.info(
+                    f"{type(self).__qualname__}: Unsubscribing "
+                    f"from channel {self._channel!r}"
+                )
                 await conn.remove_listener(self._channel, _listener)
+
+    @asynccontextmanager
+    async def listen_to_cluster_update(
+        self, listener: Callable[[], None]
+    ) -> AsyncIterator[None]:
+        async with AutoReSubscriber(
+            self._listen_to_cluster_update_once, listener, self._heartbeat_interval_sec
+        ):
+            yield
 
 
 async def get_cluster_configs(
