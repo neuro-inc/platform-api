@@ -113,14 +113,14 @@ class AutoReSubscriber:
             await asyncio.sleep(self._check_interval)
             if self._subscription and not await self._subscription.is_alive():
                 try:
-                    await self._teardown_subscription()
+                    await asyncio.shield(self._teardown_subscription())
                 except asyncio.CancelledError:
                     raise
                 except Exception:
                     logger.exception(
                         f"{type(self).__qualname__}: Failed to cleanup subscription"
                     )
-                await self._setup_subscription()
+                await asyncio.shield(self._setup_subscription())
 
     async def __aenter__(self) -> None:
         await self._setup_subscription()
