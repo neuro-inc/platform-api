@@ -22,6 +22,7 @@ install_requires = (
     "alembic==1.5.7",
     "psycopg2-binary==2.8.6",
     "sentry-sdk==1.0.0",
+    "typing-extensions==3.7.4.3",
 )
 
 setup(
