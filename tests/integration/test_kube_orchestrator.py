@@ -24,7 +24,12 @@ import pytest
 from aiohttp import web
 from yarl import URL
 
-from platform_api.cluster_config import RegistryConfig, StorageConfig
+from platform_api.cluster_config import (
+    STORAGE_URI_SCHEME,
+    OrchestratorConfig,
+    RegistryConfig,
+    StorageConfig,
+)
 from platform_api.orchestrator.job import (
     Job,
     JobRecord,
@@ -84,14 +89,13 @@ class MyJob(Job):
         if not record.owner:
             record = replace(record, owner="test-owner")
         super().__init__(
-            orchestrator_config=orchestrator.config,
+            orchestrator_config=orchestrator.orchestrator_config,
             record=record,
         )
 
     def _prepare(self) -> None:
         assert isinstance(self._orchestrator, KubeOrchestrator)
-        assert isinstance(self._orchestrator.config, KubeConfig)
-        namespace = self._orchestrator.config.namespace
+        namespace = self._orchestrator.kube_config.namespace
 
         self.internal_hostname = f"{self.id}.{namespace}"
         if self.is_named:
@@ -605,7 +609,7 @@ class TestKubeOrchestrator:
         assert storage_config.host_mount_path
         volumes = [
             ContainerVolume(
-                uri=URL(f"{storage_config.uri_scheme}://{cluster_name}"),
+                uri=URL(f"{STORAGE_URI_SCHEME}://{cluster_name}"),
                 dst_path=PurePath("/storage"),
             )
         ]
@@ -925,7 +929,6 @@ class TestKubeOrchestrator:
     @pytest.mark.asyncio
     async def test_job_with_exposed_http_server_no_job_name(
         self,
-        kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
         kube_client: KubeClient,
@@ -968,7 +971,6 @@ class TestKubeOrchestrator:
     @pytest.mark.asyncio
     async def test_job_with_exposed_http_server_with_job_name(
         self,
-        kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
         kube_client: KubeClient,
@@ -1019,7 +1021,6 @@ class TestKubeOrchestrator:
     @pytest.mark.asyncio
     async def test_job_with_exposed_http_server_with_auth_no_job_name(
         self,
-        kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
         kube_client: KubeClient,
@@ -2192,8 +2193,11 @@ class TestNodeAffinity:
         self,
         storage_config_host: StorageConfig,
         registry_config: RegistryConfig,
+        orchestrator_config: OrchestratorConfig,
         kube_config: KubeConfig,
-        kube_job_nodes_factory: Callable[[KubeConfig], Awaitable[None]],
+        kube_job_nodes_factory: Callable[
+            [OrchestratorConfig, KubeConfig], Awaitable[None]
+        ],
     ) -> AsyncIterator[KubeOrchestrator]:
         kube_config = replace(
             kube_config,
@@ -2201,6 +2205,9 @@ class TestNodeAffinity:
             node_label_gpu="gpu",
             node_label_node_pool="nodepool",
             node_label_preemptible="preemptible",
+        )
+        orchestrator_config = replace(
+            orchestrator_config,
             resource_pool_types=[
                 ResourcePoolType(
                     name="cpu-small", available_cpu=2, available_memory_mb=2048
@@ -2245,10 +2252,11 @@ class TestNodeAffinity:
                 ),
             ],
         )
-        await kube_job_nodes_factory(kube_config)
+        await kube_job_nodes_factory(orchestrator_config, kube_config)
         async with KubeOrchestrator(
             storage_config=storage_config_host,
             registry_config=registry_config,
+            orchestrator_config=orchestrator_config,
             kube_config=kube_config,
         ) as kube_orchestrator:
             yield kube_orchestrator

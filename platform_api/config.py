@@ -5,6 +5,9 @@ from typing import Optional, Sequence
 from alembic.config import Config as AlembicConfig
 from yarl import URL
 
+from .cluster_config import RegistryConfig, StorageConfig
+from .orchestrator.kube_config import KubeConfig
+
 
 @dataclass(frozen=True)
 class ServerConfig:
@@ -162,6 +165,10 @@ class PollerConfig:
     auth: AuthConfig
 
     config_url: URL
+
+    registry_config: RegistryConfig
+    storage_config: StorageConfig
+    kube_config: KubeConfig
 
     jobs: JobsConfig = JobsConfig()
 

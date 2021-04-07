@@ -63,14 +63,16 @@ class TestStorageVolume:
             nfs_server="4.3.2.1",
             nfs_export_path=PurePath("/tmp"),
         )
-        kube_config = KubeConfig(
+        orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            endpoint_url="http://1.2.3.4",
+            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
         )
+        kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
         kube_orchestrator = KubeOrchestrator(
             storage_config=storage_config,
             registry_config=registry_config,
+            orchestrator_config=orchestrator_config,
             kube_config=kube_config,
         )
         volume = kube_orchestrator.create_storage_volume()
@@ -82,14 +84,16 @@ class TestStorageVolume:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"), type=StorageType.HOST
         )
-        kube_config = KubeConfig(
+        orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            endpoint_url="http://1.2.3.4",
+            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
         )
+        kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
         kube_orchestrator = KubeOrchestrator(
             storage_config=storage_config,
             registry_config=registry_config,
+            orchestrator_config=orchestrator_config,
             kube_config=kube_config,
         )
         volume = kube_orchestrator.create_storage_volume()
@@ -99,14 +103,16 @@ class TestStorageVolume:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"), type=StorageType.PVC, pvc_name="testclaim"
         )
-        kube_config = KubeConfig(
+        orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            endpoint_url="http://1.2.3.4",
+            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
         )
+        kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
         kube_orchestrator = KubeOrchestrator(
             storage_config=storage_config,
             registry_config=registry_config,
+            orchestrator_config=orchestrator_config,
             kube_config=kube_config,
         )
         volume = kube_orchestrator.create_storage_volume()
@@ -120,14 +126,16 @@ class TestSecretVolume:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"), type=StorageType.PVC, pvc_name="testclaim"
         )
-        kube_config = KubeConfig(
+        orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            endpoint_url="http://1.2.3.4",
+            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
         )
+        kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
         kube_orchestrator = KubeOrchestrator(
             storage_config=storage_config,
             registry_config=registry_config,
+            orchestrator_config=orchestrator_config,
             kube_config=kube_config,
         )
         user_name = "test-user"
@@ -319,6 +327,7 @@ class TestOrchestratorConfig:
     def test_default_presets(self) -> None:
         config = OrchestratorConfig(
             jobs_domain_name_template="test",
+            jobs_internal_domain_name_template="test",
             resource_pool_types=(),
         )
         assert config.presets == DEFAULT_PRESETS
@@ -336,8 +345,6 @@ class TestKubeConfig:
                 token="value",
                 token_path="value",
                 namespace="value",
-                jobs_domain_name_template="value",
-                resource_pool_types=[],
                 node_label_gpu="value",
                 node_label_preemptible="value",
                 jobs_ingress_oauth_url=URL("value"),
@@ -354,8 +361,6 @@ class TestKubeConfig:
                 token="value",
                 token_path="value",
                 namespace="value",
-                jobs_domain_name_template="value",
-                resource_pool_types=[],
                 node_label_gpu="value",
                 node_label_preemptible="value",
                 jobs_ingress_class="traefik",
@@ -373,8 +378,6 @@ class TestKubeConfig:
             token="value",
             token_path="value",
             namespace="value",
-            jobs_domain_name_template="value",
-            resource_pool_types=[],
             node_label_gpu="value",
             node_label_preemptible="value",
             jobs_ingress_class="nginx",

@@ -4,8 +4,6 @@ from typing import Optional
 
 from yarl import URL
 
-from platform_api.cluster_config import OrchestratorConfig
-
 
 class KubeClientAuthType(str, enum.Enum):
     NONE = "none"
@@ -14,7 +12,7 @@ class KubeClientAuthType(str, enum.Enum):
 
 
 @dataclass(frozen=True)
-class KubeConfig(OrchestratorConfig):
+class KubeConfig:
     endpoint_url: str = ""
     cert_authority_data_pem: Optional[str] = None
     cert_authority_path: Optional[str] = None

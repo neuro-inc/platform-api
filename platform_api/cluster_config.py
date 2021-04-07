@@ -8,6 +8,9 @@ from yarl import URL
 from .resource import DEFAULT_PRESETS, Preset, ResourcePoolType, TPUResource
 
 
+STORAGE_URI_SCHEME = "storage"
+
+
 class StorageType(str, Enum):
     HOST = "host"
     NFS = "nfs"
@@ -25,8 +28,6 @@ class StorageConfig:
     nfs_export_path: Optional[PurePath] = None
 
     pvc_name: Optional[str] = None
-
-    uri_scheme: str = "storage"
 
     def __post_init__(self) -> None:
         self._check_nfs_attrs()
@@ -109,15 +110,20 @@ class RegistryConfig:
 
     @property
     def host(self) -> str:
+        return self.ger_registry_host(self.url)
+
+    @classmethod
+    def ger_registry_host(self, url: URL) -> str:
         """Returns registry hostname with port (if specified)"""
-        port = self.url.explicit_port  # type: ignore
+        port = url.explicit_port  # type: ignore
         suffix = f":{port}" if port is not None else ""
-        return f"{self.url.host}{suffix}"
+        return f"{url.host}{suffix}"
 
 
 @dataclass(frozen=True)
 class OrchestratorConfig:
     jobs_domain_name_template: str
+    jobs_internal_domain_name_template: str
 
     resource_pool_types: Sequence[ResourcePoolType]
     presets: Sequence[Preset] = DEFAULT_PRESETS
@@ -145,6 +151,7 @@ class OrchestratorConfig:
 
 @dataclass(frozen=True)
 class IngressConfig:
+    registry_url: URL
     storage_url: URL
     blob_storage_url: URL
     monitoring_url: URL
@@ -152,11 +159,13 @@ class IngressConfig:
     metrics_url: URL
     disks_url: URL
 
+    @property
+    def registry_host(self) -> str:
+        return RegistryConfig.ger_registry_host(self.registry_url)
+
 
 @dataclass(frozen=True)
 class ClusterConfig:
     name: str
-    storage: StorageConfig
-    registry: RegistryConfig
     orchestrator: OrchestratorConfig
     ingress: IngressConfig

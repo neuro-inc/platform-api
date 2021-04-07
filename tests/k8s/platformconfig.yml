@@ -9,29 +9,17 @@ data:
             "name": "test-cluster",
 
             "storage": {
-                "host": {"mount_path": "/tmp"},
                 "url": "http://platformapi/api/v1/storage"
             },
 
             "registry": {
-                "url": "https://registry.dev.neuromation.io",
-                "email": "registry@neuromation.io"
+                "url": "https://registry.dev.neuromation.io"
             },
 
             "orchestrator": {
-                "kubernetes": {
-                    "url": "http://localhost:8001",
-                    "ca_data": "certificate",
-                    "auth_type": "none",
-                    "token": "token",
-                    "namespace": "default",
-                    "node_label_gpu": "cloud.google.com/gke-accelerator",
-                    "node_label_preemptible": "cloud.google.com/gke-preemptible"
-                },
-
                 "is_http_ingress_secure": true,
                 "job_hostname_template": "{job_id}.jobs.platform.dev.neuromation.io",
-                "named_job_hostname_template": "{job_name}-{job_owner}.jobs.platform.dev.neuromation.io",
+                "job_internal_hostname_template": "{job_id}.platformapi-tests",
 
                 "resource_pool_types": [
                     {

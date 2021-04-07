@@ -11,7 +11,6 @@ from typing import (
     List,
     Optional,
     Sequence,
-    Union,
 )
 
 import asyncpgsa
@@ -24,7 +23,7 @@ from asyncpg.pool import Pool
 from typing_extensions import Protocol
 
 from .cluster_config import ClusterConfig
-from .config import Config, PollerConfig
+from .config import Config
 from .config_client import ConfigClient
 from .orchestrator.base import Orchestrator
 
@@ -198,15 +197,8 @@ class ClusterUpdateNotifier:
             yield
 
 
-async def get_cluster_configs(
-    config: Union[Config, PollerConfig], config_client: ConfigClient
-) -> Sequence[ClusterConfig]:
-    return await config_client.get_clusters(
-        jobs_ingress_class=config.jobs.jobs_ingress_class,
-        jobs_ingress_oauth_url=config.jobs.jobs_ingress_oauth_url,
-        registry_username=config.auth.service_name,
-        registry_password=config.auth.service_token,
-    )
+async def get_cluster_configs(config_client: ConfigClient) -> Sequence[ClusterConfig]:
+    return await config_client.get_clusters()
 
 
 class ClusterUpdater:
@@ -267,7 +259,7 @@ class ClusterUpdater:
             await self._is_active
 
     async def _do_update(self) -> None:
-        cluster_configs = await get_cluster_configs(self._config, self._config_client)
+        cluster_configs = await get_cluster_configs(self._config_client)
         cluster_registry = self._cluster_registry
         [
             await cluster_registry.replace(cluster_config)
@@ -280,13 +272,11 @@ class SingleClusterUpdater:
     def __init__(
         self,
         cluster_holder: "ClusterHolder",
-        config: PollerConfig,
         config_client: ConfigClient,
         cluster_name: str,
     ):
         self._loop = asyncio.get_event_loop()
         self._cluster_holder = cluster_holder
-        self._config = config
         self._config_client = config_client
         self._cluster_name = cluster_name
 
@@ -294,7 +284,7 @@ class SingleClusterUpdater:
         self._task: Optional[asyncio.Future[None]] = None
 
     async def do_update(self) -> None:
-        cluster_configs = await get_cluster_configs(self._config, self._config_client)
+        cluster_configs = await get_cluster_configs(self._config_client)
         try:
             cluster_config = next(
                 cluster_config
