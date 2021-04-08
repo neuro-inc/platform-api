@@ -72,9 +72,9 @@ class ClusterConfigFactory:
         return OrchestratorConfig(
             is_http_ingress_secure=orchestrator["is_http_ingress_secure"],
             jobs_domain_name_template=orchestrator["job_hostname_template"],
-            jobs_internal_domain_name_template=orchestrator[
-                "job_internal_hostname_template"
-            ],
+            jobs_internal_domain_name_template=orchestrator.get(
+                "job_internal_hostname_template", ""
+            ),
             resource_pool_types=[
                 self._create_resource_pool_type(r)
                 for r in orchestrator["resource_pool_types"]

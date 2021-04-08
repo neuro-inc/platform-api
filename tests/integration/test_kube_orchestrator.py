@@ -361,11 +361,11 @@ class TestKubeOrchestrator:
     async def test_job_requires_all_node_resources(
         self,
         kube_client: MyKubeClient,
-        kube_config_factory: Callable[..., KubeConfig],
+        orchestrator_config_factory: Callable[..., OrchestratorConfig],
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
-        kube_config = kube_config_factory(
+        orchestrator_config = orchestrator_config_factory(
             resource_pool_types=[
                 ResourcePoolType(
                     cpu=0.1,
@@ -376,7 +376,7 @@ class TestKubeOrchestrator:
             ]
         )
         async with kube_orchestrator_factory(
-            kube_config=kube_config
+            orchestrator_config=orchestrator_config
         ) as kube_orchestrator:
             container = Container(
                 image="ubuntu",

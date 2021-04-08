@@ -589,6 +589,7 @@ def storage_config_nfs(nfs_volume_server: Optional[str]) -> StorageConfig:
 async def kube_orchestrator_factory(
     storage_config_host: StorageConfig,
     registry_config: RegistryConfig,
+    orchestrator_config: OrchestratorConfig,
     kube_config: KubeConfig,
     event_loop: Any,
 ) -> Callable[..., KubeOrchestrator]:
@@ -596,6 +597,7 @@ async def kube_orchestrator_factory(
         defaults = dict(
             storage_config=storage_config_host,
             registry_config=registry_config,
+            orchestrator_config=orchestrator_config,
             kube_config=kube_config,
         )
         kwargs = {**defaults, **kwargs}
