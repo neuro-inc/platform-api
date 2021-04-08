@@ -13,6 +13,7 @@ from platform_api.cluster_config import (
 )
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_client import SecretVolume
+from platform_api.orchestrator.kube_config import KubeClientAuthType
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume,
     KubeConfig,
@@ -153,7 +154,6 @@ class TestEnvironConfigFactory:
 
     def test_create_defaults(self) -> None:
         environ = {
-            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_OAUTH_AUTH_URL": "https://oauth-auth",
@@ -213,14 +213,12 @@ class TestEnvironConfigFactory:
 
     def test_create_value_error_invalid_port(self) -> None:
         environ = {
-            "NP_STORAGE_HOST_MOUNT_PATH": "/tmp",
             "NP_API_PORT": "port",
             "NP_AUTH_URL": "https://auth",
             "NP_AUTH_TOKEN": "token",
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
-            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_API_ZIPKIN_URL": "https://zipkin:9411",
             "NP_API_ZIPKIN_SAMPLE_RATE": "1",
@@ -231,8 +229,6 @@ class TestEnvironConfigFactory:
     def test_create_custom(self, cert_authority_path: str) -> None:
         environ = {
             "NP_API_PORT": "1111",
-            "NP_K8S_JOBS_INGRESS_CLASS": "nginx",
-            "NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL": "http://neu.ro/oauth/authorize",
             "NP_K8S_JOB_DELETION_DELAY": "3600",
             "NP_DB_POSTGRES_DSN": "postgresql://postgres@localhost:5432/postgres",
             "NP_DB_POSTGRES_POOL_MIN": "50",
@@ -284,6 +280,140 @@ class TestEnvironConfigFactory:
 
         assert config.cors.allowed_origins == ["https://domain1.com", "http://do.main"]
 
+    def test_alembic_with_escaped_symbol(self) -> None:
+        config = EnvironConfigFactory(environ={}).create_alembic(
+            "postgresql://postgres%40@localhost:5432/postgres"
+        )
+
+        assert (
+            config.get_main_option("sqlalchemy.url")
+            == "postgresql://postgres%40@localhost:5432/postgres"
+        )
+
+    def test_registry_default(self) -> None:
+        config = EnvironConfigFactory(
+            environ={
+                "NP_REGISTRY_URL": "https://registry.neu.ro",
+                "NP_AUTH_NAME": "user",
+                "NP_AUTH_TOKEN": "token",
+            }
+        ).create_registry()
+
+        assert config == RegistryConfig(
+            url=URL("https://registry.neu.ro"), username="user", password="token"
+        )
+
+    def test_registry_custom(self) -> None:
+        config = EnvironConfigFactory(
+            environ={
+                "NP_REGISTRY_URL": "https://registry.neu.ro",
+                "NP_REGISTRY_EMAIL": "user@neu.ro",
+                "NP_AUTH_NAME": "user",
+                "NP_AUTH_TOKEN": "token",
+            }
+        ).create_registry()
+
+        assert config == RegistryConfig(
+            url=URL("https://registry.neu.ro"),
+            username="user",
+            password="token",
+            email="user@neu.ro",
+        )
+
+    def test_storage_host(self) -> None:
+        config = EnvironConfigFactory(
+            environ={"NP_STORAGE_TYPE": "host", "NP_HOST_MOUNT_PATH": "/storage"}
+        ).create_storage()
+
+        assert config == StorageConfig(
+            type=StorageType.HOST, host_mount_path=PurePath("/storage")
+        )
+
+    def test_storage_nfs(self) -> None:
+        config = EnvironConfigFactory(
+            environ={
+                "NP_STORAGE_TYPE": "nfs",
+                "NP_NFS_SERVER": "nfs-server",
+                "NP_NFS_EXPORT_PATH": "/nfs",
+            }
+        ).create_storage()
+
+        assert config == StorageConfig(
+            type=StorageType.NFS,
+            nfs_server="nfs-server",
+            nfs_export_path=PurePath("/nfs"),
+            host_mount_path=PurePath("/nfs"),
+        )
+
+    def test_storage_pvc(self) -> None:
+        config = EnvironConfigFactory(
+            environ={"NP_STORAGE_TYPE": "pvc", "NP_PVC_NAME": "storage"}
+        ).create_storage()
+
+        assert config == StorageConfig(
+            type=StorageType.PVC,
+            pvc_name="storage",
+            host_mount_path=PurePath("/mnt/storage"),
+        )
+
+    def test_kube_config_default(self) -> None:
+        config = EnvironConfigFactory(
+            environ={"NP_KUBE_URL": "https://kubernetes.default.svc"}
+        ).create_kube()
+
+        assert config == KubeConfig(endpoint_url="https://kubernetes.default.svc")
+
+    def test_kube_config_custom(self) -> None:
+        config = EnvironConfigFactory(
+            environ={
+                "NP_KUBE_URL": "https://kubernetes.default.svc",
+                "NP_KUBE_AUTH_TYPE": "token",
+                "NP_KUBE_CA_DATA": "ca-data",
+                "NP_KUBE_CA_DATA_PATH": "ca-data-path",
+                "NP_KUBE_CERT_PATH": "cert-path",
+                "NP_KUBE_CERT_KEY_PATH": "cert-key-path",
+                "NP_KUBE_TOKEN": "token",
+                "NP_KUBE_NAMESPACE": "platform-jobs",
+                "NP_KUBE_CONN_TIMEOUT": "1",
+                "NP_KUBE_READ_TIMEOUT": "2",
+                "NP_KUBE_CONN_POOL_SIZE": "3",
+                "NP_KUBE_INGRESS_CLASS": "nginx",
+                "NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL": "http://ingress-auth",
+                "NP_KUBE_POD_JOB_TOLERATION_KEY": "job",
+                "NP_KUBE_POD_PREEMPTIBLE_TOLERATION_KEY": "preemptible",
+                "NP_KUBE_POD_PRIORITY_CLASS_NAME": "job-priority",
+                "NP_KUBE_NODE_LABEL_JOB": "job-label",
+                "NP_KUBE_NODE_LABEL_GPU": "gpu-label",
+                "NP_KUBE_NODE_LABEL_PREEMPTIBLE": "preemptible-label",
+                "NP_KUBE_NODE_LABEL_NODE_POOL": "node-pool-label",
+            }
+        ).create_kube()
+
+        assert config == KubeConfig(
+            endpoint_url="https://kubernetes.default.svc",
+            auth_type=KubeClientAuthType.TOKEN,
+            cert_authority_data_pem="ca-data",
+            cert_authority_path="ca-data-path",
+            auth_cert_path="cert-path",
+            auth_cert_key_path="cert-key-path",
+            token="token",
+            namespace="platform-jobs",
+            client_conn_timeout_s=1,
+            client_read_timeout_s=2,
+            client_conn_pool_size=3,
+            jobs_ingress_class="nginx",
+            jobs_ingress_oauth_url=URL("http://ingress-auth"),
+            jobs_pod_job_toleration_key="job",
+            jobs_pod_preemptible_toleration_key="preemptible",
+            jobs_pod_priority_class_name="job-priority",
+            node_label_job="job-label",
+            node_label_gpu="gpu-label",
+            node_label_preemptible="preemptible-label",
+            node_label_node_pool="node-pool-label",
+        )
+
+
+class TestRegistryConfig:
     def test_registry_config_invalid_missing_host(self) -> None:
         with pytest.raises(ValueError, match="missing url hostname"):
             RegistryConfig(
@@ -311,16 +441,6 @@ class TestEnvironConfigFactory:
             password="compute_token",
         )
         assert config.host == "registry.com:5000"
-
-    def test_alembic_with_escaped_symbol(self) -> None:
-        config = EnvironConfigFactory(environ={}).create_alembic(
-            "postgresql://postgres%40@localhost:5432/postgres"
-        )
-
-        assert (
-            config.get_main_option("sqlalchemy.url")
-            == "postgresql://postgres%40@localhost:5432/postgres"
-        )
 
 
 class TestOrchestratorConfig:

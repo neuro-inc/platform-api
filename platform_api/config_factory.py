@@ -95,12 +95,6 @@ class EnvironConfigFactory:
                 self._environ.get("NP_K8S_JOB_IMAGE_PULL_DELAY", 60)  # 1 minute
             ),
             orphaned_job_owner=orphaned_job_owner,
-            jobs_ingress_class=self._environ.get(
-                "NP_K8S_JOBS_INGRESS_CLASS", JobsConfig.jobs_ingress_class
-            ),
-            jobs_ingress_oauth_url=URL(
-                self._environ["NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL"]
-            ),
         )
 
     def create_job_policy_enforcer(self) -> JobPolicyEnforcerConfig:
@@ -241,11 +235,11 @@ class EnvironConfigFactory:
     def create_kube(self) -> KubeConfig:
         return KubeConfig(
             endpoint_url=self._environ["NP_KUBE_URL"],
-            cert_authority_data_pem=self._environ.get("NP_KUBE_CA_DATA"),
-            cert_authority_path=self._environ.get("NP_KUBE_CA_DATA_PATH"),
             auth_type=KubeClientAuthType(
                 self._environ.get("NP_KUBE_AUTH_TYPE", "none")
             ),
+            cert_authority_data_pem=self._environ.get("NP_KUBE_CA_DATA"),
+            cert_authority_path=self._environ.get("NP_KUBE_CA_DATA_PATH"),
             auth_cert_path=self._environ.get("NP_KUBE_CERT_PATH"),
             auth_cert_key_path=self._environ.get("NP_KUBE_CERT_KEY_PATH"),
             token=self._environ.get("NP_KUBE_TOKEN"),
@@ -271,7 +265,8 @@ class EnvironConfigFactory:
             ),
             jobs_ingress_oauth_url=URL(
                 self._environ.get(
-                    "NP_KUBE_INGRESS_OAUTH_URL", KubeConfig.jobs_ingress_oauth_url
+                    "NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL",
+                    KubeConfig.jobs_ingress_oauth_url,
                 )
             ),
             jobs_pod_job_toleration_key=self._environ.get(
@@ -310,4 +305,6 @@ class EnvironConfigFactory:
             )
         if storage_type == StorageType.PVC:
             return StorageConfig.create_pvc(pvc_name=self._environ["NP_PVC_NAME"])
-        raise ValueError(f"Storage type {storage_type!r} is not supported")
+        raise ValueError(
+            f"Storage type {storage_type!r} is not supported"
+        )  # pragma: no cover

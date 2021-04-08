@@ -13,11 +13,11 @@ class KubeClientAuthType(str, enum.Enum):
 
 @dataclass(frozen=True)
 class KubeConfig:
-    endpoint_url: str = ""
+    endpoint_url: str
     cert_authority_data_pem: Optional[str] = None
     cert_authority_path: Optional[str] = None
 
-    auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE
+    auth_type: KubeClientAuthType = KubeClientAuthType.NONE
     auth_cert_path: Optional[str] = None
     auth_cert_key_path: Optional[str] = None
     token: Optional[str] = None
