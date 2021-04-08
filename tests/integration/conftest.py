@@ -53,6 +53,7 @@ from platform_api.orchestrator.kube_client import (
     NodeTaint,
     Resources,
 )
+from platform_api.orchestrator.kube_config import KubeClientAuthType
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 from platform_api.resource import (
     GKEGPUModels,
@@ -257,6 +258,7 @@ def kube_config_factory(
         defaults = dict(
             jobs_ingress_class="nginx",
             endpoint_url=cluster["server"],
+            auth_type=KubeClientAuthType.CERTIFICATE,
             cert_authority_data_pem=cert_authority_data_pem,
             cert_authority_path=None,  # disable, only `cert_authority_data_pem` works
             auth_cert_path=user["client-certificate"],
