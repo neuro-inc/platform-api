@@ -127,7 +127,7 @@ def storage_config_pvc() -> StorageConfig:
 
 @pytest.fixture(scope="session")
 def registry_config(token_factory: Callable[[str], str]) -> RegistryConfig:
-    return RegistryConfig(username="compute", password=token_factory("compute"))
+    return RegistryConfig(token=token_factory("compute"))
 
 
 @pytest.fixture(scope="session")

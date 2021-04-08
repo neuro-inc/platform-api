@@ -287,8 +287,7 @@ class EnvironConfigFactory:
     def create_registry(self) -> RegistryConfig:
         return RegistryConfig(
             url=URL(self._environ["NP_REGISTRY_URL"]),
-            username=self._environ.get("NP_AUTH_NAME", AuthConfig.service_name),
-            password=self._environ["NP_AUTH_TOKEN"],
+            token=self._environ["NP_AUTH_TOKEN"],
             email=self._environ.get("NP_REGISTRY_EMAIL", RegistryConfig.email),
         )
 

@@ -294,13 +294,12 @@ class TestEnvironConfigFactory:
         config = EnvironConfigFactory(
             environ={
                 "NP_REGISTRY_URL": "https://registry.neu.ro",
-                "NP_AUTH_NAME": "user",
-                "NP_AUTH_TOKEN": "token",
+                "NP_AUTH_TOKEN": "compute_token",
             }
         ).create_registry()
 
         assert config == RegistryConfig(
-            url=URL("https://registry.neu.ro"), username="user", password="token"
+            url=URL("https://registry.neu.ro"), token="compute_token"
         )
 
     def test_registry_custom(self) -> None:
@@ -308,15 +307,13 @@ class TestEnvironConfigFactory:
             environ={
                 "NP_REGISTRY_URL": "https://registry.neu.ro",
                 "NP_REGISTRY_EMAIL": "user@neu.ro",
-                "NP_AUTH_NAME": "user",
-                "NP_AUTH_TOKEN": "token",
+                "NP_AUTH_TOKEN": "compute_token",
             }
         ).create_registry()
 
         assert config == RegistryConfig(
             url=URL("https://registry.neu.ro"),
-            username="user",
-            password="token",
+            token="compute_token",
             email="user@neu.ro",
         )
 
@@ -416,29 +413,21 @@ class TestEnvironConfigFactory:
 class TestRegistryConfig:
     def test_registry_config_invalid_missing_host(self) -> None:
         with pytest.raises(ValueError, match="missing url hostname"):
-            RegistryConfig(
-                url=URL("registry.com"), username="compute", password="compute_token"
-            )
+            RegistryConfig(url=URL("registry.com"), token="compute_token")
 
     def test_registry_config_host_default_port(self) -> None:
-        config = RegistryConfig(
-            url=URL("http://registry.com"), username="compute", password="compute_token"
-        )
+        config = RegistryConfig(url=URL("http://registry.com"), token="compute_token")
         assert config.host == "registry.com"
 
     def test_registry_config_host_default_port_explicit(self) -> None:
         config = RegistryConfig(
-            url=URL("http://registry.com:80"),
-            username="compute",
-            password="compute_token",
+            url=URL("http://registry.com:80"), token="compute_token"
         )
         assert config.host == "registry.com:80"
 
     def test_registry_config_host_custom_port(self) -> None:
         config = RegistryConfig(
-            url=URL("http://registry.com:5000"),
-            username="compute",
-            password="compute_token",
+            url=URL("http://registry.com:5000"), token="compute_token"
         )
         assert config.host == "registry.com:5000"
 

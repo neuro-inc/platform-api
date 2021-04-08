@@ -317,7 +317,7 @@ class MockCluster(Cluster):
 
 @pytest.fixture
 def registry_config() -> RegistryConfig:
-    return RegistryConfig(username="compute", password="compute_token")
+    return RegistryConfig(token="compute_token")
 
 
 @pytest.fixture

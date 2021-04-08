@@ -6,6 +6,9 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
+from jose import jwt
+from neuro_auth_client.security import JWT_IDENTITY_CLAIM_OPTIONS
+
 from platform_api.cluster_config import (
     OrchestratorConfig,
     RegistryConfig,
@@ -212,13 +215,21 @@ class KubeOrchestrator(Orchestrator):
         secret = DockerRegistrySecret(
             name=self._get_docker_secret_name(job),
             namespace=self._kube_config.namespace,
-            username=self._registry_config.username,
-            password=self._registry_config.password,
+            username=self._get_token_user(self._registry_config.token),
+            password=self._registry_config.token,
             email=self._registry_config.email,
             registry_server=self._registry_config.host,
         )
         await self._client.update_docker_secret(secret, create_non_existent=True)
         return secret
+
+    def _get_token_user(self, token: str) -> str:
+        claims = jwt.get_unverified_claims(token)
+        for claim in JWT_IDENTITY_CLAIM_OPTIONS:
+            value = claims.get(claim)
+            if value:
+                return value
+        raise ValueError("Token is invalid")
 
     async def _create_user_network_policy(self, job: Job) -> None:
         name = self._get_user_resource_name(job)
