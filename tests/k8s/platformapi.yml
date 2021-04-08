@@ -142,6 +142,12 @@ spec:
           value: nginx
         - name: NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL
           value: "http://neu.ro/oauth/authorize"
+        - name: NP_REGISTRY_URL
+          value: https://registry.dev.neuromation.io
+        - name: NP_STORAGE_TYPE
+          value: host
+        - name: NP_HOST_MOUNT_PATH
+          value: /tmp
         - name: NP_DB_REDIS_URI
           value: redis://platformredis:6379/0
         - name: NP_DB_POSTGRES_DSN
