@@ -95,6 +95,10 @@ spec:
         - name: NP_KUBE_TOKEN
           value: {{ .Values.NP_KUBE_TOKEN | quote }}
         {{- end }}
+        {{- if .Values.NP_KUBE_TOKEN_PATH }}
+        - name: NP_KUBE_TOKEN_PATH
+          value: {{ .Values.NP_KUBE_TOKEN_PATH | quote }}
+        {{- end }}
         {{- if .Values.NP_KUBE_NAMESPACE }}
         - name: NP_KUBE_NAMESPACE
           value: {{ .Values.NP_KUBE_NAMESPACE | quote }}
