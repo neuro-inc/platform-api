@@ -12,9 +12,10 @@ from yarl import URL
 
 from platform_api import poller_main
 from platform_api.api import create_app
-from platform_api.cluster_config import ClusterConfig
+from platform_api.cluster_config import ClusterConfig, RegistryConfig, StorageConfig
 from platform_api.config import AuthConfig, Config, PollerConfig
 from platform_api.orchestrator.job import JobStatus
+from platform_api.orchestrator.kube_config import KubeConfig
 
 from .auth import _User
 from .conftest import ApiRunner
@@ -73,7 +74,11 @@ class AuthApiConfig(NamedTuple):
 
 @pytest.fixture
 async def api(
-    config: Config, cluster_config_factory: Callable[..., ClusterConfig]
+    config: Config,
+    registry_config: RegistryConfig,
+    storage_config_host: StorageConfig,
+    kube_config: KubeConfig,
+    cluster_config_factory: Callable[..., ClusterConfig],
 ) -> AsyncIterator[ApiConfig]:
     clusters = [
         cluster_config_factory("test-cluster"),
@@ -95,6 +100,9 @@ async def api(
             scheduler=config.scheduler,
             config_url=config.config_url,
             sentry=config.sentry,
+            registry_config=registry_config,
+            storage_config=storage_config_host,
+            kube_config=kube_config,
         )
         poller_app = await poller_main.create_app(poller_config, cluster)
         poller_runner = ApiRunner(poller_app, port=8090 + index)
@@ -108,7 +116,11 @@ async def api(
 
 @pytest.fixture
 async def api_with_oauth(
-    config_with_oauth: Config, cluster_config: ClusterConfig
+    config_with_oauth: Config,
+    registry_config: RegistryConfig,
+    storage_config_host: StorageConfig,
+    kube_config: KubeConfig,
+    cluster_config: ClusterConfig,
 ) -> AsyncIterator[ApiConfig]:
     app = await create_app(config_with_oauth, [cluster_config])
     runner = ApiRunner(app, port=8081)
@@ -126,6 +138,9 @@ async def api_with_oauth(
             scheduler=config_with_oauth.scheduler,
             config_url=config_with_oauth.config_url,
             sentry=config_with_oauth.sentry,
+            registry_config=registry_config,
+            storage_config=storage_config_host,
+            kube_config=kube_config,
         )
         poller_app = await poller_main.create_app(poller_config, cluster)
         poller_runner = ApiRunner(poller_app, port=8090)

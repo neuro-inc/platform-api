@@ -135,9 +135,10 @@ async def create_secrets_url(container: aiodocker.containers.DockerContainer) ->
 
 
 class SecretsClient:
-    def __init__(self, url: URL, auth_token: str):
+    def __init__(self, url: URL, user_name: str, user_token: str):
         self._base_url = url / "api/v1"
-        headers = {"Authorization": f"Bearer {auth_token}"}
+        self._user_name = user_name
+        headers = {"Authorization": f"Bearer {user_token}"}
         self._client = aiohttp.ClientSession(headers=headers)
 
     async def __aenter__(self) -> "SecretsClient":
@@ -164,14 +165,14 @@ class SecretsClient:
         async with self._client.post(url, json=payload) as resp:
             assert resp.status == 201, await resp.text()
             data = await resp.json()
-            assert data == {"key": key}
+            assert data == {"key": key, "owner": self._user_name}
 
 
 @asynccontextmanager
 async def create_secrets_client(
-    url: URL, auth_token: str = ""
+    url: URL, user_name: str = "", user_token: str = ""
 ) -> AsyncIterator[SecretsClient]:
-    async with SecretsClient(url, auth_token) as client:
+    async with SecretsClient(url, user_name, user_token) as client:
         yield client
 
 
@@ -180,7 +181,7 @@ async def secrets_client_factory(
     secrets_server_url: URL,
 ) -> Callable[[_User], AsyncIterator[SecretsClient]]:
     def _f(user: _User) -> AsyncIterator[SecretsClient]:
-        return create_secrets_client(secrets_server_url, user.token)
+        return create_secrets_client(secrets_server_url, user.name, user.token)
 
     return _f
 

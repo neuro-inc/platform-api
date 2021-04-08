@@ -1426,14 +1426,15 @@ class KubeClient:
         return f"{self._nodes_url}/{name}"
 
     @property
-    def _v1beta1_namespace_url(self) -> str:
+    def _networking_v1beta1_namespace_url(self) -> str:
         return (
-            f"{self._base_url}/apis/extensions/v1beta1" f"/namespaces/{self._namespace}"
+            f"{self._base_url}/apis/networking.k8s.io/v1beta1"
+            f"/namespaces/{self._namespace}"
         )
 
     @property
     def _ingresses_url(self) -> str:
-        return f"{self._v1beta1_namespace_url}/ingresses"
+        return f"{self._networking_v1beta1_namespace_url}/ingresses"
 
     def _generate_ingress_url(self, ingress_name: str) -> str:
         return f"{self._ingresses_url}/{ingress_name}"

@@ -16,26 +16,14 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
         {
             "name": "cluster_name",
             "storage": {
-                "nfs": {"server": "127.0.0.1", "export_path": "/nfs/export/path"},
                 "url": "https://dev.neu.ro/api/v1/storage",
             },
             "registry": {
                 "url": "https://registry-dev.neu.ro",
-                "email": "registry@neuromation.io",
             },
             "orchestrator": {
-                "kubernetes": {
-                    "url": "https://1.2.3.4:8443",
-                    "ca_data": "certificate",
-                    "auth_type": "token",
-                    "token": "auth_token",
-                    "namespace": "default",
-                    "jobs_ingress_class": "nginx",
-                    "jobs_ingress_oauth_url": "https://neu.ro/oauth/authorize",
-                    "node_label_gpu": "cloud.google.com/gke-accelerator",
-                    "node_label_preemptible": "cloud.google.com/gke-preemptible",
-                },
                 "job_hostname_template": "{job_id}.jobs.neu.ro",
+                "job_internal_hostname_template": "{job_id}.platformapi-tests",
                 "resource_pool_types": [
                     {"name": "node-pool1"},
                     {"name": "node-pool2", "gpu": 0},
@@ -91,12 +79,7 @@ class TestConfigClient:
     ) -> None:
         async with create_config_api(cluster_configs_payload) as url:
             async with ConfigClient(base_url=url) as client:
-                result = await client.get_clusters(
-                    jobs_ingress_class="nginx",
-                    jobs_ingress_oauth_url=URL("https://neu.ro/oauth/authorize"),
-                    registry_username="registry_user",
-                    registry_password="registry_token",
-                )
+                result = await client.get_clusters()
 
                 assert len(result) == 1
 
@@ -107,11 +90,6 @@ class TestConfigClient:
         cluster_configs_payload.append({})
         async with create_config_api(cluster_configs_payload) as url:
             async with ConfigClient(base_url=url) as client:
-                result = await client.get_clusters(
-                    jobs_ingress_class="nginx",
-                    jobs_ingress_oauth_url=URL("https://neu.ro/oauth/authorize"),
-                    registry_username="registry_user",
-                    registry_password="registry_token",
-                )
+                result = await client.get_clusters()
 
                 assert len(result) == 1

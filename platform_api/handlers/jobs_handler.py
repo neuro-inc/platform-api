@@ -31,7 +31,7 @@ from neuro_auth_client import (
 from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
 from yarl import URL
 
-from platform_api.cluster_config import ClusterConfig, RegistryConfig
+from platform_api.cluster_config import STORAGE_URI_SCHEME, ClusterConfig
 from platform_api.config import Config
 from platform_api.log import log_debug_time
 from platform_api.orchestrator.job import (
@@ -459,16 +459,16 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
 def infer_permissions_from_container(
     user: AuthUser,
     container: Container,
-    registry_config: RegistryConfig,
+    registry_host: str,
     cluster_name: str,
 ) -> List[Permission]:
     permissions = [
         Permission(uri=str(make_job_uri(user, cluster_name)), action="write")
     ]
-    if container.belongs_to_registry(registry_config):
+    if container.belongs_to_registry(registry_host):
         permissions.append(
             Permission(
-                uri=str(container.to_image_uri(registry_config, cluster_name)),
+                uri=str(container.to_image_uri(registry_host, cluster_name)),
                 action="read",
             )
         )
@@ -548,7 +548,7 @@ class JobsHandler:
             allowed_gpu_models=gpu_models,
             allowed_tpu_resources=cluster_config.orchestrator.tpu_resources,
             cluster_name=cluster_config.name,
-            storage_scheme=cluster_config.storage.uri_scheme,
+            storage_scheme=STORAGE_URI_SCHEME,
         )
 
     def _get_cluster_config(
@@ -602,7 +602,7 @@ class JobsHandler:
         container = create_container_from_payload(request_payload)
 
         permissions = infer_permissions_from_container(
-            user, container, cluster_config.registry, cluster_name
+            user, container, cluster_config.ingress.registry_host, cluster_name
         )
         await check_permissions(request, permissions)
 

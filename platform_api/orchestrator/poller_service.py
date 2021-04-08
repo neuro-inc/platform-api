@@ -186,6 +186,7 @@ class JobsPollerService:
 
         self._dummy_cluster_orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.missing-cluster",
+            jobs_internal_domain_name_template="{job_id}.missing-cluster",
             resource_pool_types=(),
         )
         self._auth_client = auth_client

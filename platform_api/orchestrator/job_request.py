@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 
 from yarl import URL
 
-from platform_api.cluster_config import RegistryConfig
 from platform_api.resource import Preset, ResourcePoolType
 
 
@@ -321,13 +320,13 @@ class Container:
     tty: bool = False
     working_dir: Optional[str] = None
 
-    def belongs_to_registry(self, registry_config: RegistryConfig) -> bool:
-        prefix = f"{registry_config.host}/"
+    def belongs_to_registry(self, registry_host: str) -> bool:
+        prefix = f"{registry_host}/"
         return self.image.startswith(prefix)
 
-    def to_image_uri(self, registry_config: RegistryConfig, cluster_name: str) -> URL:
-        assert self.belongs_to_registry(registry_config), "Unknown registry"
-        prefix = f"{registry_config.host}/"
+    def to_image_uri(self, registry_host: str, cluster_name: str) -> URL:
+        assert self.belongs_to_registry(registry_host), "Unknown registry"
+        prefix = f"{registry_host}/"
         repo = self.image[len(prefix) :]
         path, *_ = repo.split(":", 1)
         assert cluster_name

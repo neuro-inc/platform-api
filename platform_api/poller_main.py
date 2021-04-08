@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from contextlib import AsyncExitStack
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator, Callable, Optional
 
 import aiohttp.web
 import sentry_sdk
@@ -42,8 +42,18 @@ async def create_ping_app(config: PollerConfig) -> aiohttp.web.Application:
     return ping_app
 
 
-def create_cluster(config: ClusterConfig) -> Cluster:
-    return KubeCluster(config)
+def create_cluster_factory(
+    config: PollerConfig,
+) -> Callable[[ClusterConfig], Cluster]:
+    def _create_cluster(cluster_config: ClusterConfig) -> Cluster:
+        return KubeCluster(
+            registry_config=config.registry_config,
+            storage_config=config.storage_config,
+            cluster_config=cluster_config,
+            kube_config=config.kube_config,
+        )
+
+    return _create_cluster
 
 
 async def create_app(
@@ -69,7 +79,7 @@ async def create_app(
 
             logger.info("Initializing Cluster Registry")
             cluster_holder = await exit_stack.enter_async_context(
-                ClusterHolder(factory=create_cluster)
+                ClusterHolder(factory=create_cluster_factory(config))
             )
 
             logger.info("Initializing Config client")
@@ -100,7 +110,6 @@ async def create_app(
 
             logger.info("Initializing ClusterUpdater")
             cluster_updater = SingleClusterUpdater(
-                config=config,
                 config_client=config_client,
                 cluster_holder=cluster_holder,
                 cluster_name=config.cluster_name,

@@ -1,10 +1,12 @@
 import os
 import pathlib
+from pathlib import PurePath
 from typing import Dict, Optional, Sequence
 
 from alembic.config import Config as AlembicConfig
 from yarl import URL
 
+from .cluster_config import RegistryConfig, StorageConfig, StorageType
 from .config import (
     AuthConfig,
     Config,
@@ -22,6 +24,7 @@ from .config import (
     ServerConfig,
     ZipkinConfig,
 )
+from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
 
 
 class EnvironConfigFactory:
@@ -78,6 +81,9 @@ class EnvironConfigFactory:
             config_url=config_url,
             cluster_name=cluster_name,
             sentry=self.create_sentry(),
+            registry_config=self.create_registry(),
+            storage_config=self.create_storage(),
+            kube_config=self.create_kube(),
         )
 
     def create_jobs(self, *, orphaned_job_owner: str) -> JobsConfig:
@@ -89,12 +95,6 @@ class EnvironConfigFactory:
                 self._environ.get("NP_K8S_JOB_IMAGE_PULL_DELAY", 60)  # 1 minute
             ),
             orphaned_job_owner=orphaned_job_owner,
-            jobs_ingress_class=self._environ.get(
-                "NP_K8S_JOBS_INGRESS_CLASS", JobsConfig.jobs_ingress_class
-            ),
-            jobs_ingress_oauth_url=URL(
-                self._environ["NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL"]
-            ),
         )
 
     def create_job_policy_enforcer(self) -> JobPolicyEnforcerConfig:
@@ -231,3 +231,80 @@ class EnvironConfigFactory:
         config.set_main_option("script_location", script_path)
         config.set_main_option("sqlalchemy.url", postgres_dsn.replace("%", "%%"))
         return config
+
+    def create_kube(self) -> KubeConfig:
+        return KubeConfig(
+            endpoint_url=self._environ["NP_KUBE_URL"],
+            auth_type=KubeClientAuthType(
+                self._environ.get("NP_KUBE_AUTH_TYPE", "none")
+            ),
+            cert_authority_data_pem=self._environ.get("NP_KUBE_CA_DATA"),
+            cert_authority_path=self._environ.get("NP_KUBE_CA_DATA_PATH"),
+            auth_cert_path=self._environ.get("NP_KUBE_CERT_PATH"),
+            auth_cert_key_path=self._environ.get("NP_KUBE_CERT_KEY_PATH"),
+            token=self._environ.get("NP_KUBE_TOKEN"),
+            token_path=self._environ.get("NP_KUBE_TOKEN_PATH"),
+            namespace=self._environ.get("NP_KUBE_NAMESPACE", KubeConfig.namespace),
+            client_conn_timeout_s=int(
+                self._environ.get(
+                    "NP_KUBE_CONN_TIMEOUT", KubeConfig.client_conn_timeout_s
+                )
+            ),
+            client_read_timeout_s=int(
+                self._environ.get(
+                    "NP_KUBE_READ_TIMEOUT", KubeConfig.client_read_timeout_s
+                )
+            ),
+            client_conn_pool_size=int(
+                self._environ.get(
+                    "NP_KUBE_CONN_POOL_SIZE", KubeConfig.client_conn_pool_size
+                )
+            ),
+            jobs_ingress_class=self._environ.get(
+                "NP_KUBE_INGRESS_CLASS", KubeConfig.jobs_ingress_class
+            ),
+            jobs_ingress_oauth_url=URL(
+                self._environ.get(
+                    "NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL",
+                    KubeConfig.jobs_ingress_oauth_url,
+                )
+            ),
+            jobs_pod_job_toleration_key=self._environ.get(
+                "NP_KUBE_POD_JOB_TOLERATION_KEY", KubeConfig.jobs_pod_job_toleration_key
+            ),
+            jobs_pod_preemptible_toleration_key=self._environ.get(
+                "NP_KUBE_POD_PREEMPTIBLE_TOLERATION_KEY"
+            ),
+            jobs_pod_priority_class_name=self._environ.get(
+                "NP_KUBE_POD_PRIORITY_CLASS_NAME"
+            ),
+            node_label_gpu=self._environ.get("NP_KUBE_NODE_LABEL_GPU"),
+            node_label_preemptible=self._environ.get("NP_KUBE_NODE_LABEL_PREEMPTIBLE"),
+            node_label_job=self._environ.get("NP_KUBE_NODE_LABEL_JOB"),
+            node_label_node_pool=self._environ.get("NP_KUBE_NODE_LABEL_NODE_POOL"),
+        )
+
+    def create_registry(self) -> RegistryConfig:
+        return RegistryConfig(
+            url=URL(self._environ["NP_REGISTRY_URL"]),
+            username=self._environ.get("NP_AUTH_NAME", AuthConfig.service_name),
+            password=self._environ["NP_AUTH_TOKEN"],
+            email=self._environ.get("NP_REGISTRY_EMAIL", RegistryConfig.email),
+        )
+
+    def create_storage(self) -> StorageConfig:
+        storage_type = StorageType(self._environ["NP_STORAGE_TYPE"])
+        if storage_type == StorageType.HOST:
+            return StorageConfig.create_host(
+                host_mount_path=PurePath(self._environ["NP_HOST_MOUNT_PATH"])
+            )
+        if storage_type == StorageType.NFS:
+            return StorageConfig.create_nfs(
+                nfs_server=self._environ["NP_NFS_SERVER"],
+                nfs_export_path=PurePath(self._environ["NP_NFS_EXPORT_PATH"]),
+            )
+        if storage_type == StorageType.PVC:
+            return StorageConfig.create_pvc(pvc_name=self._environ["NP_PVC_NAME"])
+        raise ValueError(
+            f"Storage type {storage_type!r} is not supported"
+        )  # pragma: no cover

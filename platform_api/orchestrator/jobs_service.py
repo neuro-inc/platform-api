@@ -37,7 +37,6 @@ from .jobs_storage import (
     JobsStorageException,
     JobStorageTransactionError,
 )
-from .kube_config import KubeConfig
 from .status import Status
 
 
@@ -80,6 +79,7 @@ class JobsService:
 
         self._dummy_cluster_orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.missing-cluster",
+            jobs_internal_domain_name_template="{job_id}.missing-cluster",
             resource_pool_types=(),
         )
         self._auth_client = auth_client
@@ -147,13 +147,19 @@ class JobsService:
         new_container = replace(job_request.container, env=new_env)
         return replace(job_request, container=new_container)
 
-    async def _prepare_job_hostnames(self, job: Job, namespace: str) -> None:
-        job.internal_hostname = f"{job.id}.{namespace}"
+    async def _prepare_job_hostnames(
+        self, job: Job, orchestrator_config: OrchestratorConfig
+    ) -> None:
+        job.internal_hostname = (
+            orchestrator_config.jobs_internal_domain_name_template.format(job_id=job.id)
+        )
         if job.is_named:
             from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
 
             job.internal_hostname_named = (
-                f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.owner}.{namespace}"
+                orchestrator_config.jobs_internal_domain_name_template.format(
+                    job_id=f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.owner}"
+                )
             )
 
     async def create_job(
@@ -223,10 +229,7 @@ class JobsService:
 
             async with self._create_job_in_storage(record) as record:
                 job = self._make_job(record, cluster_config)
-                if isinstance(cluster_config.orchestrator, KubeConfig):
-                    await self._prepare_job_hostnames(
-                        job, cluster_config.orchestrator.namespace
-                    )
+                await self._prepare_job_hostnames(job, cluster_config.orchestrator)
             return job, Status.create(job.status)
 
         except ClusterNotFound as cluster_err:

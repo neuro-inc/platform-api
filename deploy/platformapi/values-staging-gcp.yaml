@@ -1,7 +1,6 @@
 NP_API_URL: https://staging.neu.ro/api/v1
 NP_ADMIN_URL: https://staging.neu.ro/apis/admin/v1
 NP_AUTH_PUBLIC_URL: https://staging.neu.ro/api/v1/users
-NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL: https://staging.neu.ro/oauth/authorize
 NP_OAUTH_AUTH_URL: https://login.neu.ro/authorize
 NP_OAUTH_TOKEN_URL: https://login.neu.ro/oauth/token
 NP_OAUTH_LOGOUT_URL: https://login.neu.ro/v2/logout
