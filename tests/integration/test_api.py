@@ -1,5 +1,6 @@
 import asyncio
 import json
+from decimal import Decimal
 from typing import (
     Any,
     AsyncContextManager,
@@ -2517,6 +2518,50 @@ class TestJobs:
 
         # cleanup
         await jobs_client.delete_job(job_id)
+
+    @pytest.mark.asyncio
+    @pytest.mark.asyncio
+    async def test_create_job_has_credits(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_request_factory: Callable[[], Dict[str, Any]],
+        regular_user_factory: Callable[..., Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+    ) -> None:
+        quota = Quota(credits=Decimal("100"))
+        user = await regular_user_factory(quota=quota)
+        url = api.jobs_base_url
+        job_request = job_request_factory()
+        async with client.post(url, headers=user.headers, json=job_request) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+        jobs_client_factory(user)  # perform jobs cleanup after test
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "credits",
+        [
+            Decimal("0"),
+            Decimal("-0.01"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_create_job_no_credits(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_request_factory: Callable[[], Dict[str, Any]],
+        regular_user_factory: Callable[..., Any],
+        credits: Decimal,
+    ) -> None:
+        quota = Quota(credits=credits)
+        user = await regular_user_factory(quota=quota)
+        url = api.jobs_base_url
+        job_request = job_request_factory()
+        async with client.post(url, headers=user.headers, json=job_request) as response:
+            assert response.status == HTTPBadRequest.status_code, await response.text()
+            data = await response.json()
+            assert data == {"error": f"No credits left for user '{user.name}'"}
 
     @pytest.mark.asyncio
     async def test_create_multiple_jobs_with_same_name_after_first_finished(

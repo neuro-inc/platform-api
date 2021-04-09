@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import timedelta
+from decimal import Decimal
 from typing import Optional, Sequence
 
 from alembic.config import Config as AlembicConfig
@@ -93,7 +94,7 @@ class JobPolicyEnforcerConfig:
     platform_api_url: URL
     token: str
     interval_sec: float = 60
-    quota_notification_threshold: float = 0.9
+    credit_notification_threshold: Decimal = Decimal("10")
 
 
 @dataclass(frozen=True)

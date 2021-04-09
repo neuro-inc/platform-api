@@ -5,9 +5,21 @@ import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Callable, Iterable, List, Mapping, Optional, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    TypeVar,
+)
 
 from neuro_auth_client import AuthClient
+from notifications_client import Client as NotificationsClient, CreditsWillRunOutSoon
 
 from platform_api.admin_client import AdminClient
 from platform_api.config import JobPolicyEnforcerConfig
@@ -15,6 +27,7 @@ from platform_api.orchestrator.job import Job, JobStatusReason
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
+from platform_api.user import get_cluster
 from platform_api.utils.asyncio import run_and_log_exceptions
 
 
@@ -25,6 +38,65 @@ class JobPolicyEnforcer:
     @abc.abstractmethod
     async def enforce(self) -> None:
         pass
+
+
+class CreditsNotificationsEnforcer(JobPolicyEnforcer):
+    def __init__(
+        self,
+        jobs_service: JobsService,
+        auth_client: AuthClient,
+        notifications_client: NotificationsClient,
+        notification_threshold: Decimal,
+    ):
+        self._jobs_service = jobs_service
+        self._auth_client = auth_client
+        self._notifications_client = notifications_client
+        self._threshold = notification_threshold
+        self._sent: Dict[Tuple[str, str], Optional[Decimal]] = defaultdict(lambda: None)
+
+    async def _notify_user_if_needed(
+        self, username: str, cluster_name: str, credits: Decimal
+    ) -> None:
+        notification_key = (username, cluster_name)
+        if credits >= self._threshold:
+            return
+        # Note: this check is also performed in notifications service
+        # using redis storage, so it's OK to use in memory dict here:
+        # this is just an optimization to avoid spamming it
+        # with duplicate notifications
+        if self._sent[notification_key] == credits:
+            return
+        await self._notifications_client.notify(
+            CreditsWillRunOutSoon(
+                user_id=username, cluster_name=cluster_name, credits=credits
+            )
+        )
+        self._sent[notification_key] = credits
+
+    async def enforce(self) -> None:
+        running_jobs = self._jobs_service.iter_all_jobs(
+            job_filter=JobFilter(
+                statuses={JobStatus(item) for item in JobStatus.active_values()}
+            )
+        )
+        user_to_clusters: Dict[str, Set[str]] = defaultdict(set)
+        async for job in running_jobs:
+            user_to_clusters[job.owner].add(job.cluster_name)
+        await run_and_log_exceptions(
+            self._enforce_for_user(username, clusters)
+            for username, clusters in user_to_clusters.items()
+        )
+
+    async def _enforce_for_user(self, username: str, clusters: Set[str]) -> None:
+        user = await self._auth_client.get_user(username)
+        for cluster_name in clusters:
+            cluster = get_cluster(user, cluster_name)
+            if cluster:
+                await self._notify_user_if_needed(
+                    username=user.name,
+                    cluster_name=cluster.name,
+                    credits=cluster.quota.credits,
+                )
 
 
 class RuntimeLimitEnforcer(JobPolicyEnforcer):

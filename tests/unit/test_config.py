@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import PurePath
 from typing import Dict
 
@@ -171,6 +172,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_TOKEN": "compute-token",
+            "NP_ENFORCER_CREDIT_NOTIFICATION_THRESHOLD": "200.33",
             "NP_API_ZIPKIN_URL": "https://zipkin:9411",
             "NP_API_ZIPKIN_SAMPLE_RATE": "1",
         }
@@ -190,7 +192,9 @@ class TestEnvironConfigFactory:
             "http://platformapi:8080/api/v1"
         )
         assert config.job_policy_enforcer.token == "compute-token"
-
+        assert config.job_policy_enforcer.credit_notification_threshold == (
+            Decimal("200.33")
+        )
         assert config.notifications.url == URL("http://notifications:8080")
         assert config.notifications.token == "token"
 

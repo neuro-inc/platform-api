@@ -23,7 +23,7 @@ from neuro_auth_client import (
     User as AuthUser,
 )
 from notifications_client import Client as NotificationsClient
-from notifications_client.notification import AbstractNotification
+from notifications_client.notifications import Notification
 from yarl import URL
 
 from platform_api.cluster import (
@@ -180,10 +180,10 @@ class MockJobsStorage(InMemoryJobsStorage):
 
 class MockNotificationsClient(NotificationsClient):
     def __init__(self) -> None:
-        self._sent_notifications: List[AbstractNotification] = []
+        self._sent_notifications: List[Notification] = []
         pass
 
-    async def notify(self, notification: AbstractNotification) -> None:
+    async def notify(self, notification: Notification) -> None:
         self._sent_notifications.append(notification)
 
     async def init(self) -> None:
@@ -193,7 +193,7 @@ class MockNotificationsClient(NotificationsClient):
         pass
 
     @property
-    def sent_notifications(self) -> List[AbstractNotification]:
+    def sent_notifications(self) -> List[Notification]:
         return self._sent_notifications
 
 

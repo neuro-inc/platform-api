@@ -1,11 +1,67 @@
+from decimal import Decimal
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Set
+from unittest import mock
 
 import aiohttp.web
 import pytest
+from neuro_auth_client import Quota
+from notifications_client import CreditsWillRunOutSoon, JobCannotStartNoCredits
+
+from platform_api.config import Config
 
 from .api import ApiConfig, JobsClient
 from .auth import _User
 from .notifications import NotificationsServer
+
+
+class TestCannotStartJobNoCredits:
+    @pytest.mark.asyncio
+    async def test_not_sent_has_credits(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_request_factory: Callable[[], Dict[str, Any]],
+        jobs_client: Callable[[], Any],
+        regular_user_factory: Callable[..., Awaitable[_User]],
+        mock_notifications_server: NotificationsServer,
+    ) -> None:
+        quota = Quota(credits=Decimal("100"))
+        user = await regular_user_factory(quota=quota)
+        url = api.jobs_base_url
+        job_request = job_request_factory()
+        async with client.post(url, headers=user.headers, json=job_request) as response:
+            await response.read()
+        # Notification will be sent in graceful app shutdown
+        await api.runner.close()
+        for (slug, request) in mock_notifications_server.requests:
+            if slug == JobCannotStartNoCredits.slug():
+                raise AssertionError("Unexpected JobCannotStartQuotaReached sent")
+
+    @pytest.mark.asyncio
+    async def test_sent_if_no_credits(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_request_factory: Callable[[], Dict[str, Any]],
+        jobs_client: Callable[[], Any],
+        regular_user_factory: Callable[..., Awaitable[_User]],
+        mock_notifications_server: NotificationsServer,
+    ) -> None:
+        quota = Quota(credits=Decimal("0"))
+        user = await regular_user_factory(quota=quota)
+        url = api.jobs_base_url
+        job_request = job_request_factory()
+        async with client.post(url, headers=user.headers, json=job_request) as response:
+            await response.read()
+        # Notification will be sent in graceful app shutdown
+        await api.runner.close()
+        assert (
+            JobCannotStartNoCredits.slug(),
+            {
+                "user_id": user.name,
+                "cluster_name": user.cluster_name,
+            },
+        ) in mock_notifications_server.requests
 
 
 class TestJobTransition:
@@ -99,7 +155,8 @@ class TestJobTransition:
 
             if payload["status"] == "pending":
                 assert (
-                    "prev_status" not in payload or payload["prev_status"] == "pending"
+                    payload.get("prev_status") is None
+                    or payload["prev_status"] == "pending"
                 )
             elif payload["status"] == "running":
                 assert payload["prev_status"] == "pending"
@@ -139,10 +196,46 @@ class TestJobTransition:
 
             if payload["status"] == "pending":
                 assert (
-                    "prev_status" not in payload or payload["prev_status"] == "pending"
+                    payload.get("prev_status") is None
+                    or payload["prev_status"] == "pending"
                 )
             elif payload["status"] == "failed":
                 assert payload["prev_status"] == "pending"
             else:
                 raise AssertionError(f"Unexpected JobTransition payload: {payload}")
         assert states == {"pending", "failed"}
+
+
+class TestCreditsWillRunOutSoon:
+    @pytest.mark.asyncio
+    async def test_sent_if_credits_less_then_threshold(
+        self,
+        config: Config,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_request_factory: Callable[[], Dict[str, Any]],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        regular_user_factory: Callable[..., Any],
+        mock_notifications_server: NotificationsServer,
+    ) -> None:
+        threshold = config.job_policy_enforcer.credit_notification_threshold
+        quota = Quota(credits=threshold / 2)
+        user = await regular_user_factory(quota=quota)
+
+        jobs_client = jobs_client_factory(user)
+        job_request = job_request_factory()
+        job_request["container"]["command"] = "sleep 5s"  # Let job run for some time
+        job_data = await jobs_client.create_job(job_request)
+        await jobs_client.long_polling_by_job_id(job_data["id"], "succeeded")
+
+        # Notification will be sent in graceful app shutdown
+        await api.runner.close()
+
+        assert (
+            CreditsWillRunOutSoon.slug(),
+            {
+                "user_id": user.name,
+                "cluster_name": user.cluster_name,
+                "credits": mock.ANY,
+            },
+        ) in mock_notifications_server.requests

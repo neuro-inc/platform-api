@@ -19,6 +19,7 @@ from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 from platform_api.orchestrator.job_policy_enforcer import (
     BillingEnforcer,
     CreditsLimitEnforcer,
+    CreditsNotificationsEnforcer,
     JobPolicyEnforcePoller,
     RuntimeLimitEnforcer,
 )
@@ -356,6 +357,14 @@ async def create_app(
                         RuntimeLimitEnforcer(jobs_service),
                         CreditsLimitEnforcer(jobs_service, auth_client),
                         BillingEnforcer(jobs_service, admin_client),
+                        CreditsNotificationsEnforcer(
+                            jobs_service=jobs_service,
+                            auth_client=auth_client,
+                            notifications_client=notifications_client,
+                            notification_threshold=(
+                                config.job_policy_enforcer.credit_notification_threshold
+                            ),
+                        ),
                     ],
                 )
             )

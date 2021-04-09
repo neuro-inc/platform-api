@@ -13,7 +13,11 @@ from neuro_auth_client import (
     Permission,
     User as AuthUser,
 )
-from notifications_client import Client as NotificationsClient, JobTransition
+from notifications_client import (
+    Client as NotificationsClient,
+    JobCannotStartNoCredits,
+    JobTransition,
+)
 from yarl import URL
 
 from platform_api.cluster import ClusterConfig, ClusterConfigRegistry, ClusterNotFound
@@ -52,12 +56,12 @@ class JobsServiceException(Exception):
 
 class RunningJobsQuotaExceededError(JobsServiceException):
     def __init__(self, user: str) -> None:
-        super().__init__(f"jobs limit quota exceeded for user '{user}'")
+        super().__init__(f"Jobs limit quota exceeded for user '{user}'")
 
 
 class NoCreditsError(JobsServiceException):
     def __init__(self, user: str) -> None:
-        super().__init__(f"no credits left for user '{user}'")
+        super().__init__(f"No credits left for user '{user}'")
 
 
 class JobsService:
@@ -111,6 +115,10 @@ class JobsService:
         running_count = len(await self._jobs_storage.get_all_jobs(running_filter))
         if running_count >= cluster.quota.total_running_jobs:
             raise RunningJobsQuotaExceededError(user.name)
+
+    async def _raise_for_no_credits(self, user: AuthUser, cluster: AuthCluster) -> None:
+        if cluster.quota.credits is not None and cluster.quota.credits <= 0:
+            raise NoCreditsError(user.name)
 
     async def _make_pass_config_token(
         self, username: str, cluster_name: str, job_id: str
@@ -189,6 +197,17 @@ class JobsService:
             )
         if not wait_for_jobs_quota:
             await self._raise_for_running_jobs_quota(user, user_cluster)
+        try:
+            await self._raise_for_no_credits(user, user_cluster)
+        except NoCreditsError:
+            await self._notifications_client.notify(
+                JobCannotStartNoCredits(
+                    user_id=user.name,
+                    cluster_name=cluster_name,
+                )
+            )
+            raise
+
         if pass_config:
             job_request = await self._setup_pass_config(user, cluster_name, job_request)
 
