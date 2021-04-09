@@ -72,16 +72,6 @@ function k8s::setup_storageclass {
     kubectl apply -f tests/k8s/storageclass.yml
 }
 
-function k8s::setup_registry {
-    local DOCKER_REGISTRY=registry.neuromation.io
-    kubectl delete secret np-docker-reg-secret || :
-    kubectl create secret docker-registry np-docker-reg-secret \
-        --docker-server $DOCKER_REGISTRY \
-        --docker-username $DOCKER_USER \
-        --docker-password $DOCKER_PASS \
-        --docker-email $DOCKER_EMAIL
-}
-
 function k8s::test {
     kubectl delete jobs testjob1 || :
     kubectl create -f tests/k8s/pod.yml
@@ -127,9 +117,6 @@ case "${1:-}" in
         ;;
     stop-nfs)
         k8s::stop_nfs
-        ;;
-    setup-registry)
-        k8s::setup_registry
         ;;
     *)
         exit 1

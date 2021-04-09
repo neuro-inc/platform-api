@@ -57,9 +57,6 @@ test_unit:
 test_integration:
 	pytest -vv --maxfail=3 --cov platform_api --cov-config=setup.cfg --cov-report xml:.coverage-integration.xml tests/integration
 
-test_e2e:
-	pytest -vv tests/e2e
-
 docker_build:
 	python setup.py sdist
 	docker build -f Dockerfile.k8s -t $(IMAGE) \
