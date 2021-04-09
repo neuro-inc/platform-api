@@ -2,10 +2,21 @@ NP_CLUSTER_NAME:
 NP_PLATFORM_API_URL:
 NP_AUTH_URL: http://platformauthapi:8080
 NP_AUTH_PUBLIC_URL:
-NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL:
 NP_SENTRY_URL:
 NP_SENTRY_CLUSTER:
 NP_PLATFORM_CONFIG_URI: http://platformconfig:8080/api/v1
+NP_KUBE_URL: https://kubernetes.default.svc
+NP_KUBE_AUTH_TYPE: token
+NP_KUBE_CA_DATA_PATH: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+NP_KUBE_TOKEN_PATH: /var/run/secrets/kubernetes.io/serviceaccount/token
+NP_KUBE_NAMESPACE: platform-jobs
+NP_KUBE_INGRESS_CLASS: traefik
+NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL: https://staging.neu.ro/oauth/authorize
+NP_KUBE_POD_JOB_TOLERATION_KEY: platform.neuromation.io/job
+NP_KUBE_NODE_LABEL_JOB: platform.neuromation.io/job
+NP_KUBE_NODE_LABEL_GPU: platform.neuromation.io/accelerator
+NP_KUBE_NODE_LABEL_PREEMPTIBLE: platform.neuromation.io/preemptible
+NP_KUBE_NODE_LABEL_NODE_POOL: platform.neuromation.io/nodepool
 
 k8sSuffix:
 

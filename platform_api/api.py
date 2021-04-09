@@ -26,7 +26,6 @@ from platform_api.orchestrator.job_policy_enforcer import (
 
 from .admin_client import AdminClient
 from .cluster import (
-    Cluster,
     ClusterConfig,
     ClusterConfigRegistry,
     ClusterUpdateNotifier,
@@ -39,7 +38,6 @@ from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
 from .handlers.stats_handler import StatsHandler
 from .handlers.tags_handler import TagsHandler
-from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobException
 from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import JobsStorage, PostgresJobsStorage
@@ -131,7 +129,7 @@ class ApiHandler:
         ]
         return {
             "name": cluster_config.name,
-            "registry_url": str(cluster_config.registry.url),
+            "registry_url": str(cluster_config.ingress.registry_url),
             "storage_url": str(cluster_config.ingress.storage_url),
             "blob_storage_url": str(cluster_config.ingress.blob_storage_url),
             "users_url": str(self._config.auth.public_endpoint_url),
@@ -230,10 +228,6 @@ async def create_tags_app(config: Config) -> aiohttp.web.Application:
     return tags_app
 
 
-def create_cluster(config: ClusterConfig) -> Cluster:
-    return KubeCluster(config)
-
-
 async def create_tracer(config: Config) -> aiozipkin.Tracer:
     endpoint = aiozipkin.create_endpoint(
         "platformapi",  # the same name as pod prefix on a cluster
@@ -307,7 +301,7 @@ async def create_app(
             if clusters:
                 client_clusters = clusters
             else:
-                client_clusters = await get_cluster_configs(config, config_client)
+                client_clusters = await get_cluster_configs(config_client)
 
             logger.info("Loading clusters")
             for cluster in client_clusters:

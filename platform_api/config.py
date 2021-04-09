@@ -6,6 +6,9 @@ from typing import Optional, Sequence
 from alembic.config import Config as AlembicConfig
 from yarl import URL
 
+from .cluster_config import RegistryConfig, StorageConfig
+from .orchestrator.kube_config import KubeConfig
+
 
 @dataclass(frozen=True)
 class ServerConfig:
@@ -70,8 +73,6 @@ class JobsConfig:
     deletion_delay_s: int = 0
     image_pull_error_delay_s: int = 0
     orphaned_job_owner: str = ""
-    jobs_ingress_class: str = "traefik"
-    jobs_ingress_oauth_url: URL = URL("https://neu.ro/oauth/authorize")
 
     @property
     def deletion_delay(self) -> timedelta:
@@ -163,6 +164,10 @@ class PollerConfig:
     auth: AuthConfig
 
     config_url: URL
+
+    registry_config: RegistryConfig
+    storage_config: StorageConfig
+    kube_config: KubeConfig
 
     jobs: JobsConfig = JobsConfig()
 

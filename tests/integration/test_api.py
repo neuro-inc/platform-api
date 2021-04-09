@@ -62,18 +62,8 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
                 "email": "registry@neuromation.io",
             },
             "orchestrator": {
-                "kubernetes": {
-                    "url": "http://127.0.0.1:8443",
-                    "ca_data": "certificate",
-                    "auth_type": "token",
-                    "token": "auth_token",
-                    "namespace": "default",
-                    "jobs_ingress_class": "nginx",
-                    "jobs_ingress_oauth_url": "https://neu.ro/oauth/authorize",
-                    "node_label_gpu": "cloud.google.com/gke-accelerator",
-                    "node_label_preemptible": "cloud.google.com/gke-preemptible",
-                },
                 "job_hostname_template": "{job_id}.jobs.neu.ro",
+                "job_internal_hostname_template": "{job_id}.platformapi-tests",
                 "resource_pool_types": [
                     {"name": "node-pool1"},
                     {"name": "node-pool1", "gpu": 0},

@@ -66,8 +66,6 @@ spec:
           value: "{{ .Values.NP_API_URL }}"
         - name: NP_ADMIN_URL
           value: "{{ .Values.NP_ADMIN_URL }}"
-        - name: NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL
-          value: "{{ .Values.NP_JOBS_INGRESS_OAUTH_AUTHORIZE_URL }}"
         - name: NP_PLATFORM_CONFIG_URI
           value: {{ .Values.NP_PLATFORM_CONFIG_URI }}
         - name: NP_AUTH_PUBLIC_URL

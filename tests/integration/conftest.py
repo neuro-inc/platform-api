@@ -29,6 +29,7 @@ from yarl import URL
 from platform_api.cluster_config import (
     ClusterConfig,
     IngressConfig,
+    OrchestratorConfig,
     RegistryConfig,
     StorageConfig,
 )
@@ -52,6 +53,7 @@ from platform_api.orchestrator.kube_client import (
     NodeTaint,
     Resources,
 )
+from platform_api.orchestrator.kube_config import KubeClientAuthType
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 from platform_api.resource import (
     GKEGPUModels,
@@ -60,17 +62,6 @@ from platform_api.resource import (
     TPUPreset,
     TPUResource,
 )
-
-
-pytest_plugins = [
-    "tests.integration.auth",
-    "tests.integration.api",
-    "tests.integration.docker",
-    "tests.integration.secrets",
-    "tests.integration.diskapi",
-    "tests.integration.notifications",
-    "tests.integration.postgres",
-]
 
 
 @pytest.fixture(scope="session")
@@ -140,24 +131,11 @@ def registry_config(token_factory: Callable[[str], str]) -> RegistryConfig:
 
 
 @pytest.fixture(scope="session")
-def kube_config_factory(
-    kube_config_cluster_payload: Dict[str, Any],
-    kube_config_user_payload: Dict[str, Any],
-    cert_authority_data_pem: Optional[str],
-) -> Iterator[Callable[..., KubeConfig]]:
-    cluster = kube_config_cluster_payload
-    user = kube_config_user_payload
-
-    def _f(**kwargs: Any) -> KubeConfig:
+def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]:
+    def _f(**kwargs: Any) -> OrchestratorConfig:
         defaults = dict(
-            jobs_ingress_class="nginx",
             jobs_domain_name_template="{job_id}.jobs.neu.ro",
-            endpoint_url=cluster["server"],
-            cert_authority_data_pem=cert_authority_data_pem,
-            cert_authority_path=None,  # disable, only `cert_authority_data_pem` works
-            auth_cert_path=user["client-certificate"],
-            auth_cert_key_path=user["client-key"],
-            node_label_gpu="gpu",
+            jobs_internal_domain_name_template="{job_id}.platformapi-tests",
             resource_pool_types=[
                 ResourcePoolType(
                     cpu=1.0,
@@ -251,9 +229,42 @@ def kube_config_factory(
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),
                 ),
             ],
-            namespace="platformapi-tests",
             job_schedule_scaleup_timeout=5,
             allow_privileged_mode=True,
+        )
+        kwargs = {**defaults, **kwargs}
+        return OrchestratorConfig(**kwargs)
+
+    yield _f
+
+
+@pytest.fixture(scope="session")
+async def orchestrator_config(
+    orchestrator_config_factory: Callable[..., OrchestratorConfig]
+) -> OrchestratorConfig:
+    return orchestrator_config_factory()
+
+
+@pytest.fixture(scope="session")
+def kube_config_factory(
+    kube_config_cluster_payload: Dict[str, Any],
+    kube_config_user_payload: Dict[str, Any],
+    cert_authority_data_pem: Optional[str],
+) -> Iterator[Callable[..., KubeConfig]]:
+    cluster = kube_config_cluster_payload
+    user = kube_config_user_payload
+
+    def _f(**kwargs: Any) -> KubeConfig:
+        defaults = dict(
+            jobs_ingress_class="nginx",
+            endpoint_url=cluster["server"],
+            auth_type=KubeClientAuthType.CERTIFICATE,
+            cert_authority_data_pem=cert_authority_data_pem,
+            cert_authority_path=None,  # disable, only `cert_authority_data_pem` works
+            auth_cert_path=user["client-certificate"],
+            auth_cert_key_path=user["client-key"],
+            node_label_gpu="gpu",
+            namespace="platformapi-tests",
         )
         kwargs = {**defaults, **kwargs}
         return KubeConfig(**kwargs)
@@ -269,13 +280,15 @@ async def kube_config(kube_config_factory: Callable[..., KubeConfig]) -> KubeCon
 @pytest.fixture
 def kube_job_nodes_factory(
     kube_client: KubeClient, delete_node_later: Callable[[str], Awaitable[None]]
-) -> Callable[[KubeConfig], Awaitable[None]]:
-    async def _create(kube_config: KubeConfig) -> None:
+) -> Callable[[OrchestratorConfig, KubeConfig], Awaitable[None]]:
+    async def _create(
+        orchestrator_config: OrchestratorConfig, kube_config: KubeConfig
+    ) -> None:
         assert kube_config.node_label_job
         assert kube_config.node_label_node_pool
         assert kube_config.node_label_preemptible
 
-        for pool_type in kube_config.resource_pool_types:
+        for pool_type in orchestrator_config.resource_pool_types:
             assert pool_type.name
 
             await delete_node_later(pool_type.name)
@@ -578,6 +591,7 @@ def storage_config_nfs(nfs_volume_server: Optional[str]) -> StorageConfig:
 async def kube_orchestrator_factory(
     storage_config_host: StorageConfig,
     registry_config: RegistryConfig,
+    orchestrator_config: OrchestratorConfig,
     kube_config: KubeConfig,
     event_loop: Any,
 ) -> Callable[..., KubeOrchestrator]:
@@ -585,6 +599,7 @@ async def kube_orchestrator_factory(
         defaults = dict(
             storage_config=storage_config_host,
             registry_config=registry_config,
+            orchestrator_config=orchestrator_config,
             kube_config=kube_config,
         )
         kwargs = {**defaults, **kwargs}
@@ -605,12 +620,14 @@ async def kube_orchestrator(
 async def kube_orchestrator_nfs(
     storage_config_nfs: StorageConfig,
     registry_config: RegistryConfig,
+    orchestrator_config: OrchestratorConfig,
     kube_config: KubeConfig,
     event_loop: Any,
 ) -> AsyncIterator[KubeOrchestrator]:
     orchestrator = KubeOrchestrator(
         storage_config=storage_config_nfs,
         registry_config=registry_config,
+        orchestrator_config=orchestrator_config,
         kube_config=kube_config,
     )
     async with orchestrator:
@@ -621,12 +638,14 @@ async def kube_orchestrator_nfs(
 async def kube_orchestrator_pvc(
     storage_config_pvc: StorageConfig,
     registry_config: RegistryConfig,
+    orchestrator_config: OrchestratorConfig,
     kube_config: KubeConfig,
     event_loop: Any,
 ) -> AsyncIterator[KubeOrchestrator]:
     orchestrator = KubeOrchestrator(
         storage_config=storage_config_pvc,
         registry_config=registry_config,
+        orchestrator_config=orchestrator_config,
         kube_config=kube_config,
     )
     async with orchestrator:
@@ -783,12 +802,11 @@ def config_factory(
 
 @pytest.fixture
 def cluster_config_factory(
-    kube_config: KubeConfig,
-    storage_config_host: StorageConfig,
-    registry_config: RegistryConfig,
+    orchestrator_config: OrchestratorConfig,
 ) -> Callable[..., ClusterConfig]:
     def _f(cluster_name: str = "test-cluster") -> ClusterConfig:
         ingress_config = IngressConfig(
+            registry_url=URL("https://registry.dev.neuromation.io"),
             storage_url=URL("https://neu.ro/api/v1/storage"),
             blob_storage_url=URL("https://neu.ro/api/v1/blob"),
             monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
@@ -797,11 +815,7 @@ def cluster_config_factory(
             disks_url=URL("https://neu.ro/api/v1/disk"),
         )
         return ClusterConfig(
-            name=cluster_name,
-            orchestrator=kube_config,
-            ingress=ingress_config,
-            storage=storage_config_host,
-            registry=registry_config,
+            name=cluster_name, orchestrator=orchestrator_config, ingress=ingress_config
         )
 
     return _f

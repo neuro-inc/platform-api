@@ -75,22 +75,9 @@ class ConfigClient:
             response.raise_for_status()
             yield response
 
-    async def get_clusters(
-        self,
-        *,
-        jobs_ingress_class: str,
-        jobs_ingress_oauth_url: URL,
-        registry_username: str,
-        registry_password: str,
-    ) -> Sequence[ClusterConfig]:
+    async def get_clusters(self) -> Sequence[ClusterConfig]:
         async with self._request(
             "GET", "clusters", params={"include": "config", "is_ready": "true"}
         ) as response:
             payload = await response.json()
-            return ClusterConfigFactory().create_cluster_configs(
-                payload,
-                jobs_ingress_class=jobs_ingress_class,
-                jobs_ingress_oauth_url=jobs_ingress_oauth_url,
-                registry_username=registry_username,
-                registry_password=registry_password,
-            )
+            return ClusterConfigFactory().create_cluster_configs(payload)

@@ -172,7 +172,7 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
                     f"but has no access to this cluster"
                 )
                 continue
-            if cluster.quota.credits <= 0:
+            if cluster.quota.credits is not None and cluster.quota.credits <= 0:
                 for job in cluster_jobs:
                     await self._service.cancel_job(
                         job.id, JobStatusReason.QUOTA_EXHAUSTED

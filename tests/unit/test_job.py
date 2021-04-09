@@ -7,7 +7,6 @@ from unittest import mock
 import pytest
 from yarl import URL
 
-from platform_api.cluster_config import RegistryConfig
 from platform_api.handlers.job_request_builder import create_container_from_payload
 from platform_api.orchestrator.job import (
     Job,
@@ -92,51 +91,36 @@ class TestContainer:
         container = Container(
             image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
         )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
-        assert not container.belongs_to_registry(registry_config)
+        assert not container.belongs_to_registry("example.com")
 
     def test_belongs_to_registry_different_host(self) -> None:
         container = Container(
             image="registry.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
-        assert not container.belongs_to_registry(registry_config)
+        assert not container.belongs_to_registry("example.com")
 
     def test_belongs_to_registry(self) -> None:
         container = Container(
             image="example.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
-        assert container.belongs_to_registry(registry_config)
+        assert container.belongs_to_registry("example.com")
 
     def test_to_image_uri_failure(self) -> None:
         container = Container(
             image="registry.com/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
         with pytest.raises(AssertionError, match="Unknown registry"):
-            container.to_image_uri(registry_config, "test-cluster")
+            container.to_image_uri("example.com", "test-cluster")
 
     def test_to_image_uri(self) -> None:
         container = Container(
             image="example.com/project/testimage%2d",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
-        uri = container.to_image_uri(registry_config, "test-cluster")
+        uri = container.to_image_uri("example.com", "test-cluster")
         assert uri == URL("image://test-cluster/project/testimage%252d")
 
     def test_to_image_uri_registry_with_custom_port(self) -> None:
@@ -144,12 +128,7 @@ class TestContainer:
             image="example.com:5000/project/testimage",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com:5000"),
-            username="compute",
-            password="compute_token",
-        )
-        uri = container.to_image_uri(registry_config, "test-cluster")
+        uri = container.to_image_uri("example.com:5000", "test-cluster")
         assert uri == URL("image://test-cluster/project/testimage")
 
     def test_to_image_uri_ignore_tag(self) -> None:
@@ -157,10 +136,7 @@ class TestContainer:
             image="example.com/project/testimage:latest",
             resources=ContainerResources(cpu=1, memory_mb=128),
         )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
-        uri = container.to_image_uri(registry_config, "test-cluster")
+        uri = container.to_image_uri("example.com", "test-cluster")
         assert uri == URL("image://test-cluster/project/testimage")
 
 

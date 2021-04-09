@@ -11,7 +11,6 @@ from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewR
 from trafaret import DataError
 from yarl import URL
 
-from platform_api.cluster_config import RegistryConfig
 from platform_api.handlers.jobs_handler import (
     BulkJobFilter,
     BulkJobFilterBuilder,
@@ -1374,11 +1373,8 @@ class TestInferPermissionsFromContainer:
         container = Container(
             image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
         )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
         permissions = infer_permissions_from_container(
-            user, container, registry_config, "test-cluster"
+            user, container, "example.com", "test-cluster"
         )
         assert permissions == [
             Permission(uri="job://test-cluster/testuser", action="write")
@@ -1401,11 +1397,8 @@ class TestInferPermissionsFromContainer:
                 ),
             ],
         )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
         permissions = infer_permissions_from_container(
-            user, container, registry_config, "test-cluster"
+            user, container, "http://example.com", "test-cluster"
         )
         assert permissions == [
             Permission(uri="job://test-cluster/testuser", action="write"),
@@ -1419,11 +1412,8 @@ class TestInferPermissionsFromContainer:
             image="example.com/testuser/image",
             resources=ContainerResources(cpu=0.1, memory_mb=16),
         )
-        registry_config = RegistryConfig(
-            url=URL("http://example.com"), username="compute", password="compute_token"
-        )
         permissions = infer_permissions_from_container(
-            user, container, registry_config, "test-cluster"
+            user, container, "example.com", "test-cluster"
         )
         assert permissions == [
             Permission(uri="job://test-cluster/testuser", action="write"),
@@ -1439,7 +1429,14 @@ async def test_parse_response(mock_orchestrator: MockOrchestrator) -> None:
             request=JobRequest.create(
                 Container(
                     image="testimage",
-                    resources=ContainerResources(cpu=1, memory_mb=128),
+                    resources=ContainerResources(
+                        cpu=1,
+                        memory_mb=128,
+                        gpu=1,
+                        gpu_model_id="nvidia-tesla-k80",
+                        shm=True,
+                        tpu=ContainerTPUResource(type="type", software_version="1.0"),
+                    ),
                     volumes=[
                         ContainerVolume(
                             uri=URL("storage://test-cluster/testuser/dataset"),

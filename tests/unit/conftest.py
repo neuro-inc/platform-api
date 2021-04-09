@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import (
     Any,
     AsyncIterator,
@@ -36,7 +36,6 @@ from platform_api.cluster_config import (
     IngressConfig,
     OrchestratorConfig,
     RegistryConfig,
-    StorageConfig,
 )
 from platform_api.config import JobsConfig, JobsSchedulerConfig
 from platform_api.orchestrator.base import Orchestrator
@@ -56,7 +55,6 @@ from platform_api.orchestrator.jobs_storage import (
     JobsStorage,
     JobStorageTransactionError,
 )
-from platform_api.orchestrator.kube_orchestrator import KubeConfig
 from platform_api.orchestrator.poller_service import (
     JobsPollerApi,
     JobsPollerService,
@@ -90,10 +88,6 @@ class MockOrchestrator(Orchestrator):
     @property
     def config(self) -> OrchestratorConfig:
         return self._config.orchestrator
-
-    @property
-    def storage_config(self) -> StorageConfig:
-        return self._config.storage
 
     def _get_status(self, job_id: str) -> JobStatus:
         return self._mock_statuses.get(job_id, self._mock_status_to_return)
@@ -327,19 +321,17 @@ def registry_config() -> RegistryConfig:
 
 
 @pytest.fixture
-def cluster_config(registry_config: RegistryConfig) -> ClusterConfig:
-    storage_config = StorageConfig(host_mount_path=PurePath("/tmp"))
-    orchestrator_config = KubeConfig(
+def cluster_config() -> ClusterConfig:
+    orchestrator_config = OrchestratorConfig(
         jobs_domain_name_template="{job_id}.jobs",
-        endpoint_url="http://k8s:1234",
+        jobs_internal_domain_name_template="{job_id}.default",
         resource_pool_types=[ResourcePoolType()],
     )
     return ClusterConfig(
         name="test-cluster",
-        storage=storage_config,
-        registry=registry_config,
         orchestrator=orchestrator_config,
         ingress=IngressConfig(
+            registry_url=URL(),
             storage_url=URL(),
             blob_storage_url=URL(),
             monitoring_url=URL(),

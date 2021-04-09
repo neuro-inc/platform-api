@@ -116,15 +116,14 @@ class KubeOrchestrator(Orchestrator):
         *,
         storage_config: StorageConfig,
         registry_config: RegistryConfig,
-        kube_config: OrchestratorConfig,
+        orchestrator_config: OrchestratorConfig,
+        kube_config: KubeConfig,
     ) -> None:
         self._loop = asyncio.get_event_loop()
-
-        assert isinstance(kube_config, KubeConfig)
-
         self._storage_config = storage_config
         self._registry_config = registry_config
-        self._kube_config: KubeConfig = kube_config
+        self._orchestrator_config = orchestrator_config
+        self._kube_config = kube_config
 
         # TODO (A Danshyn 05/21/18): think of the namespace life-time;
         # should we ensure it does exist before continuing
@@ -156,12 +155,16 @@ class KubeOrchestrator(Orchestrator):
         }
 
     @property
-    def config(self) -> OrchestratorConfig:
-        return self._kube_config
+    def orchestrator_config(self) -> OrchestratorConfig:
+        return self._orchestrator_config
 
     @property
     def storage_config(self) -> StorageConfig:
         return self._storage_config
+
+    @property
+    def kube_config(self) -> KubeConfig:
+        return self._kube_config
 
     async def __aenter__(self) -> "KubeOrchestrator":
         await self._client.init()
@@ -231,7 +234,7 @@ class KubeOrchestrator(Orchestrator):
             )
 
     async def _create_pod_network_policy(self, job: Job) -> None:
-        tpu_ipv4_cidr_block = self._kube_config.tpu_ipv4_cidr_block
+        tpu_ipv4_cidr_block = self._orchestrator_config.tpu_ipv4_cidr_block
         if not job.request.container.resources.tpu or not tpu_ipv4_cidr_block:
             # no need to create a network policy
             return
@@ -328,7 +331,7 @@ class KubeOrchestrator(Orchestrator):
         TKey = Tuple[int, float, int]
         pool_types: Dict[TKey, List[ResourcePoolType]] = defaultdict(list)
 
-        for pool_type in self._kube_config.resource_pool_types:
+        for pool_type in self._orchestrator_config.resource_pool_types:
             # Schedule jobs only on preemptible nodes if such node specified
             if job.preemptible_node and not pool_type.is_preemptible:
                 continue
@@ -597,14 +600,14 @@ class KubeOrchestrator(Orchestrator):
             return job_status
 
         schedule_timeout = (
-            job.schedule_timeout or self._kube_config.job_schedule_timeout
+            job.schedule_timeout or self._orchestrator_config.job_schedule_timeout
         )
 
         scaleup_events = [e for e in pod_events if e.reason == "TriggeredScaleUp"]
         scaleup_events.sort(key=operator.attrgetter("last_timestamp"))
         if scaleup_events and (
             (now - scaleup_events[-1].last_timestamp).total_seconds()
-            < self._kube_config.job_schedule_scaleup_timeout + schedule_timeout
+            < self._orchestrator_config.job_schedule_scaleup_timeout + schedule_timeout
         ):
             # waiting for cluster scaleup
             return JobStatusItem.create(
