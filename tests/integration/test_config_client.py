@@ -53,7 +53,6 @@ async def create_config_app(payload: List[Dict[str, Any]]) -> aiohttp.web.Applic
 
     async def handle(request: aiohttp.web.Request) -> aiohttp.web.Response:
         assert request.query["include"] == "config"
-        assert request.query["is_ready"] == "true"
         return aiohttp.web.json_response(payload)
 
     app.add_routes((aiohttp.web.get("/api/v1/clusters", handle),))

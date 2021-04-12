@@ -197,10 +197,6 @@ class ClusterUpdateNotifier:
             yield
 
 
-async def get_cluster_configs(config_client: ConfigClient) -> Sequence[ClusterConfig]:
-    return await config_client.get_clusters()
-
-
 class ClusterUpdater:
     def __init__(
         self,
@@ -259,7 +255,7 @@ class ClusterUpdater:
             await self._is_active
 
     async def _do_update(self) -> None:
-        cluster_configs = await get_cluster_configs(self._config_client)
+        cluster_configs = await self._config_client.get_clusters()
         cluster_registry = self._cluster_registry
         [
             await cluster_registry.replace(cluster_config)
@@ -284,20 +280,14 @@ class SingleClusterUpdater:
         self._task: Optional[asyncio.Future[None]] = None
 
     async def do_update(self) -> None:
-        cluster_configs = await get_cluster_configs(self._config_client)
-        try:
-            cluster_config = next(
-                cluster_config
-                for cluster_config in cluster_configs
-                if cluster_config.name == self._cluster_name
-            )
-        except StopIteration:
+        cluster_config = await self._config_client.get_cluster(self._cluster_name)
+        if cluster_config:
+            await self._cluster_holder.update(cluster_config)
+        else:
             logger.warning(
                 f"Was unable to fetch config for cluster {self._cluster_name}"
             )
             await self._cluster_holder.clean()
-        else:
-            await self._cluster_holder.update(cluster_config)
 
 
 class ClusterHolder:

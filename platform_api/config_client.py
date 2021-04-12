@@ -77,7 +77,14 @@ class ConfigClient:
 
     async def get_clusters(self) -> Sequence[ClusterConfig]:
         async with self._request(
-            "GET", "clusters", params={"include": "config", "is_ready": "true"}
+            "GET", "clusters", params={"include": "config"}
         ) as response:
             payload = await response.json()
             return ClusterConfigFactory().create_cluster_configs(payload)
+
+    async def get_cluster(self, name: str) -> Optional[ClusterConfig]:
+        async with self._request(
+            "GET", f"clusters/{name}", params={"include": "config"}
+        ) as response:
+            payload = await response.json()
+            return ClusterConfigFactory().create_cluster_config(payload)
