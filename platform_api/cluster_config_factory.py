@@ -16,12 +16,10 @@ class ClusterConfigFactory:
     def create_cluster_configs(
         self, payload: Sequence[Dict[str, Any]]
     ) -> Sequence[ClusterConfig]:
-        configs = (self._create_cluster_config(p) for p in payload)
+        configs = (self.create_cluster_config(p) for p in payload)
         return [c for c in configs if c]
 
-    def _create_cluster_config(
-        self, payload: Dict[str, Any]
-    ) -> Optional[ClusterConfig]:
+    def create_cluster_config(self, payload: Dict[str, Any]) -> Optional[ClusterConfig]:
         try:
             _cluster_config_validator.check(payload)
             return ClusterConfig(

@@ -30,7 +30,6 @@ from .cluster import (
     ClusterConfigRegistry,
     ClusterUpdateNotifier,
     ClusterUpdater,
-    get_cluster_configs,
 )
 from .config import Config, CORSConfig
 from .config_client import ConfigClient
@@ -301,7 +300,7 @@ async def create_app(
             if clusters:
                 client_clusters = clusters
             else:
-                client_clusters = await get_cluster_configs(config_client)
+                client_clusters = await config_client.get_clusters()
 
             logger.info("Loading clusters")
             for cluster in client_clusters:
