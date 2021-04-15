@@ -1,7 +1,9 @@
 import asyncio
 import datetime
+import logging
 from decimal import Decimal
 from typing import (
+    Any,
     AsyncContextManager,
     AsyncIterator,
     Awaitable,
@@ -432,3 +434,36 @@ class TestCreditsNotificationEnforcer:
             )
             in mock_notifications_client.sent_notifications
         )
+
+    @pytest.mark.asyncio
+    async def test_no_credits_not_notified(
+        self,
+        jobs_service: JobsService,
+        mock_auth_client: MockAuthClient,
+        mock_notifications_client: MockNotificationsClient,
+        job_request_factory: Callable[[], JobRequest],
+        caplog: Any,
+    ) -> None:
+        user = AuthUser(
+            name="test_user",
+            clusters=[AuthCluster(name="test-cluster", quota=AuthQuota(credits=None))],
+        )
+
+        enforcer = CreditsNotificationsEnforcer(
+            jobs_service,
+            mock_auth_client,
+            mock_notifications_client,
+            notification_threshold=Decimal("2000"),
+        )
+        job, _ = await jobs_service.create_job(
+            job_request_factory(), user, cluster_name="test-cluster"
+        )
+        mock_auth_client.user_to_return = user
+        await enforcer.enforce()
+        assert not any(
+            isinstance(notification, CreditsWillRunOutSoon)
+            for notification in mock_notifications_client.sent_notifications
+        )
+        assert not any(record.levelno >= logging.ERROR for record in caplog.records), [
+            record for record in caplog.records
+        ]

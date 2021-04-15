@@ -55,10 +55,10 @@ class CreditsNotificationsEnforcer(JobPolicyEnforcer):
         self._sent: Dict[Tuple[str, str], Optional[Decimal]] = defaultdict(lambda: None)
 
     async def _notify_user_if_needed(
-        self, username: str, cluster_name: str, credits: Decimal
+        self, username: str, cluster_name: str, credits: Optional[Decimal]
     ) -> None:
         notification_key = (username, cluster_name)
-        if credits >= self._threshold:
+        if credits is None or credits >= self._threshold:
             return
         # Note: this check is also performed in notifications service
         # using redis storage, so it's OK to use in memory dict here:
