@@ -44,7 +44,7 @@ setup:
 lint: format
 	mypy platform_api tests setup.py alembic
 
-show_envs: format
+show_envs:
 	env | sort
 	echo $(env | sort)
 
