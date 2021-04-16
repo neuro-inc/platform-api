@@ -23,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: show envs 1
-        run: env | sort
+        run: make show_envs
       - name: Install python
         uses: actions/setup-python@v2
         with:
@@ -40,7 +40,7 @@ jobs:
         env:
           CI_LINT_RUN: 1
       - name: show envs 2
-        run: env | sort
+        run: make show_envs
       - name: Run unit tests
         run: make test_unit
       - name: Upload coverage to Codecov
@@ -87,7 +87,7 @@ jobs:
       - name: Run integration tests
         run: make test_integration
       - name: show envs 3
-        run: env | sort
+        run: make show_envs
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v1
         with:

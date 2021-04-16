@@ -44,6 +44,11 @@ setup:
 lint: format
 	mypy platform_api tests setup.py alembic
 
+show_envs: format
+	env | sort
+	echo $(env | sort)
+
+
 format:
 ifdef CI_LINT_RUN
 	pre-commit run --all-files --show-diff-on-failure
