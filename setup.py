@@ -13,7 +13,7 @@ install_requires = (
     "cryptography==3.3.2",
     "aiorwlock==1.0.0",
     "notifications-client==21.3.15b1",
-    "platform-logging==0.3",
+    "platform-logging==21.4.2",
     "aiohttp-cors==0.7.0",
     "aiozipkin==1.0.0",
     "asyncpg==0.22.0",
