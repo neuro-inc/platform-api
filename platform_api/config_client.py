@@ -18,14 +18,14 @@ class ConfigClient:
         conn_timeout_s: int = 300,
         read_timeout_s: int = 100,
         conn_pool_size: int = 100,
-        trace_config: Optional[aiohttp.TraceConfig] = None,
+        trace_configs: Sequence[aiohttp.TraceConfig] = (),
     ):
         self._base_url = base_url
         self._service_token = service_token
         self._conn_timeout_s = conn_timeout_s
         self._read_timeout_s = read_timeout_s
         self._conn_pool_size = conn_pool_size
-        self._trace_config = trace_config
+        self._trace_configs = trace_configs
         self._client: Optional[aiohttp.ClientSession] = None
 
     async def __aenter__(self) -> "ConfigClient":
@@ -44,10 +44,6 @@ class ConfigClient:
     def _init(self) -> None:
         if self._client:
             return
-        if self._trace_config:
-            trace_configs = [self._trace_config]
-        else:
-            trace_configs = []
         connector = aiohttp.TCPConnector(limit=self._conn_pool_size)
         timeout = aiohttp.ClientTimeout(
             connect=self._conn_timeout_s, total=self._read_timeout_s
@@ -56,7 +52,7 @@ class ConfigClient:
             headers=self._generate_headers(self._service_token),
             connector=connector,
             timeout=timeout,
-            trace_configs=trace_configs,
+            trace_configs=list(self._trace_configs),
         )
 
     def _generate_headers(self, token: Optional[str] = None) -> "CIMultiDict[str]":

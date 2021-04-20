@@ -275,14 +275,13 @@ async def create_app(
 
     async def _init_app(app: aiohttp.web.Application) -> AsyncIterator[None]:
         async with AsyncExitStack() as exit_stack:
-            trace_config = aiozipkin.make_trace_config(tracer)
 
             logger.info("Initializing Auth client")
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
                     url=config.auth.server_endpoint_url,
                     token=config.auth.service_token,
-                    trace_config=trace_config,
+                    trace_configs=trace_configs,
                 )
             )
             app["jobs_app"]["auth_client"] = auth_client
@@ -296,7 +295,7 @@ async def create_app(
             notifications_client = NotificationsClient(
                 url=config.notifications.url,
                 token=config.notifications.token,
-                trace_config=trace_config,
+                trace_configs=trace_configs,
             )
             await exit_stack.enter_async_context(notifications_client)
 
@@ -308,7 +307,7 @@ async def create_app(
                 ConfigClient(
                     base_url=config.config_url,
                     service_token=config.auth.service_token,
-                    trace_config=trace_config,
+                    trace_configs=trace_configs,
                 )
             )
 
@@ -361,7 +360,7 @@ async def create_app(
                 AdminClient(
                     base_url=config.admin_url,
                     service_token=config.auth.service_token,
-                    trace_config=trace_config,
+                    trace_configs=trace_configs,
                 )
             )
             await exit_stack.enter_async_context(
