@@ -70,7 +70,7 @@ class ConfigApiHandler:
     def register(self, app: aiohttp.web.Application) -> None:
         app.add_routes(
             (
-                aiohttp.web.get("/", self.handle_config),
+                aiohttp.web.get("", self.handle_config),
                 aiohttp.web.post("/clusters/sync", self.handle_clusters_sync),
             )
         )
