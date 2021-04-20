@@ -106,7 +106,7 @@ spec:
         {{- end }}
         {{- if .Values.NP_SENTRY_SAMPLE_RATE }}
         - name: NP_SENTRY_SAMPLE_RATE
-          value: {{ .Values.NP_SENTRY_SAMPLE_RATE }}
+          value: {{ .Values.NP_SENTRY_SAMPLE_RATE | quote }}
         {{- end }}
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets: {{ toYaml .Values.imagePullSecrets | nindent 6 }}

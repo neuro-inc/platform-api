@@ -2,8 +2,6 @@ NP_CLUSTER_NAME:
 NP_PLATFORM_API_URL:
 NP_AUTH_URL: http://platformauthapi:8080
 NP_AUTH_PUBLIC_URL:
-NP_SENTRY_URL:
-NP_SENTRY_CLUSTER:
 NP_PLATFORM_CONFIG_URI: http://platformconfig:8080/api/v1
 NP_KUBE_URL: https://kubernetes.default.svc
 NP_KUBE_AUTH_TYPE: token

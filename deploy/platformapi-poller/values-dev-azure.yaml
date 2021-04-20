@@ -2,7 +2,8 @@ NP_CLUSTER_NAME: default
 NP_PLATFORM_API_URL: https://dev.neu.ro/api/v1
 NP_AUTH_PUBLIC_URL: https://dev.neu.ro/api/v1/users
 NP_SENTRY_URL: "https://11316dd021994d7085c50e86c2ae404c@o454648.ingest.sentry.io/5597106"
-NP_SENTRY_CLUSTER: "dev-azure"
+NP_SENTRY_CLUSTER_NAME: "dev-azure"
+NP_SENTRY_SAMPLE_RATE: 0.1
 NP_KUBE_POD_PRIORITY_CLASS_NAME: platform-job
 NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL: https://dev.neu.ro/oauth/authorize
 NP_REGISTRY_URL: https://registry-dev.neu.ro
