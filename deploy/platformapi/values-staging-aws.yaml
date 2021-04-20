@@ -9,8 +9,9 @@ NP_OAUTH_AUDIENCE: https://platform.staging.neuromation.io
 NP_OAUTH_SUCCESS_REDIRECT_URL: https://staging.neu.ro/oauth/login
 NP_OAUTH_HEADLESS_CALLBACK_URL: https://staging.neu.ro/oauth/show-code
 NP_CORS_ORIGINS: https://neu.ro,https://release--neuro-web.netlify.com,https://app.neu.ro
-NP_API_ZIPKIN_URL: 'http://zipkin:9411'
-NP_API_ZIPKIN_SAMPLE_RATE: '0.1'  # 10% of traces are saved
+NP_SENTRY_URL: "https://007c28df2e15451baefdd022386bbb47@o489136.ingest.sentry.io/5553359"
+NP_SENTRY_CLUSTER_NAME: "staging-aws"
+NP_SENTRY_SAMPLE_RATE: 0.1
 
 platform:
   token:

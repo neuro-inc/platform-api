@@ -44,7 +44,6 @@ from platform_api.config import (
     OAuthConfig,
     PostgresConfig,
     ServerConfig,
-    ZipkinConfig,
 )
 from platform_api.orchestrator.job_request import JobNotFoundException
 from platform_api.orchestrator.kube_client import (
@@ -793,7 +792,6 @@ def config_factory(
             config_url=config_url,
             admin_url=admin_url,
             api_base_url=api_base_url,
-            zipkin=ZipkinConfig(URL("https://zipkin:9411"), 1.0),
             **kwargs,
         )
 

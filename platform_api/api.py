@@ -7,14 +7,19 @@ import aiohttp.web
 import aiohttp_cors
 import aiozipkin
 import pkg_resources
-import sentry_sdk
 from aiohttp.web import HTTPUnauthorized
 from aiohttp_security import check_permission
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from notifications_client import Client as NotificationsClient
-from platform_logging import init_logging
-from sentry_sdk.integrations.aiohttp import AioHttpIntegration
+from platform_logging import (
+    create_zipkin_tracer,
+    init_logging,
+    make_sentry_trace_config,
+    notrace,
+    setup_sentry,
+    setup_zipkin,
+)
 
 from platform_api.orchestrator.job_policy_enforcer import (
     BillingEnforcer,
@@ -42,7 +47,6 @@ from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import JobsStorage, PostgresJobsStorage
 from .postgres import create_postgres_pool
 from .resource import Preset
-from .trace import store_span_middleware
 from .user import authorized_user, untrusted_user
 
 
@@ -50,6 +54,15 @@ logger = logging.getLogger(__name__)
 
 
 class ApiHandler:
+    def register(self, app: aiohttp.web.Application) -> None:
+        app.add_routes((aiohttp.web.get("/ping", self.handle_ping),))
+
+    @notrace
+    async def handle_ping(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        return aiohttp.web.Response()
+
+
+class ConfigApiHandler:
     def __init__(self, *, app: aiohttp.web.Application, config: Config):
         self._app = app
         self._config = config
@@ -57,9 +70,8 @@ class ApiHandler:
     def register(self, app: aiohttp.web.Application) -> None:
         app.add_routes(
             (
-                aiohttp.web.get("/ping", self.handle_ping),
-                aiohttp.web.get("/config", self.handle_config),
-                aiohttp.web.post("/config/clusters/sync", self.handle_clusters_sync),
+                aiohttp.web.get("", self.handle_config),
+                aiohttp.web.post("/clusters/sync", self.handle_clusters_sync),
             )
         )
 
@@ -70,9 +82,6 @@ class ApiHandler:
     @property
     def _cluster_update_notifier(self) -> ClusterUpdateNotifier:
         return self._app["cluster_update_notifier"]
-
-    async def handle_ping(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        return aiohttp.web.Response()
 
     async def handle_clusters_sync(
         self, request: aiohttp.web.Request
@@ -199,11 +208,18 @@ async def handle_exceptions(
         )
 
 
-async def create_api_v1_app(config: Config) -> aiohttp.web.Application:
+async def create_api_v1_app() -> aiohttp.web.Application:
     api_v1_app = aiohttp.web.Application()
-    api_v1_handler = ApiHandler(app=api_v1_app, config=config)
+    api_v1_handler = ApiHandler()
     api_v1_handler.register(api_v1_app)
     return api_v1_app
+
+
+async def create_config_app(config: Config) -> aiohttp.web.Application:
+    config_app = aiohttp.web.Application()
+    config_handler = ConfigApiHandler(app=config_app, config=config)
+    config_handler.register(config_app)
+    return config_app
 
 
 async def create_jobs_app(config: Config) -> aiohttp.web.Application:
@@ -227,20 +243,6 @@ async def create_tags_app(config: Config) -> aiohttp.web.Application:
     return tags_app
 
 
-async def create_tracer(config: Config) -> aiozipkin.Tracer:
-    endpoint = aiozipkin.create_endpoint(
-        "platformapi",  # the same name as pod prefix on a cluster
-        ipv4=config.server.host,
-        port=config.server.port,
-    )
-
-    zipkin_address = config.zipkin.url / "api/v2/spans"
-    tracer = await aiozipkin.create(
-        str(zipkin_address), endpoint, sample_rate=config.zipkin.sample_rate
-    )
-    return tracer
-
-
 package_version = pkg_resources.get_distribution("platform-api").version
 
 
@@ -256,18 +258,30 @@ async def create_app(
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
 
-    tracer = await create_tracer(config)
+    trace_configs = []
+
+    if config.zipkin:
+        tracer = await create_zipkin_tracer(
+            config.zipkin.app_name,
+            config.server.host,
+            config.server.port,
+            config.zipkin.url,
+            config.zipkin.sample_rate,
+        )
+        trace_configs.append(aiozipkin.make_trace_config(tracer))
+
+    if config.sentry:
+        trace_configs.append(make_sentry_trace_config())
 
     async def _init_app(app: aiohttp.web.Application) -> AsyncIterator[None]:
         async with AsyncExitStack() as exit_stack:
-            trace_config = aiozipkin.make_trace_config(tracer)
 
             logger.info("Initializing Auth client")
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
                     url=config.auth.server_endpoint_url,
                     token=config.auth.service_token,
-                    trace_config=trace_config,
+                    trace_configs=trace_configs,
                 )
             )
             app["jobs_app"]["auth_client"] = auth_client
@@ -281,7 +295,7 @@ async def create_app(
             notifications_client = NotificationsClient(
                 url=config.notifications.url,
                 token=config.notifications.token,
-                trace_config=trace_config,
+                trace_configs=trace_configs,
             )
             await exit_stack.enter_async_context(notifications_client)
 
@@ -293,7 +307,7 @@ async def create_app(
                 ConfigClient(
                     base_url=config.config_url,
                     service_token=config.auth.service_token,
-                    trace_config=trace_config,
+                    trace_configs=trace_configs,
                 )
             )
 
@@ -315,7 +329,7 @@ async def create_app(
             jobs_storage: JobsStorage = PostgresJobsStorage(postgres_pool)
 
             cluster_update_notifier = ClusterUpdateNotifier(postgres_pool)
-            app["api_v1_app"]["cluster_update_notifier"] = cluster_update_notifier
+            app["config_app"]["cluster_update_notifier"] = cluster_update_notifier
 
             logger.info("Initializing JobsService")
             jobs_service = JobsService(
@@ -336,7 +350,7 @@ async def create_app(
             )
             await exit_stack.enter_async_context(cluster_updater)
 
-            app["api_v1_app"]["jobs_service"] = jobs_service
+            app["config_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
             app["stats_app"]["jobs_service"] = jobs_service
             app["tags_app"]["jobs_service"] = jobs_service
@@ -346,7 +360,7 @@ async def create_app(
                 AdminClient(
                     base_url=config.admin_url,
                     service_token=config.auth.service_token,
-                    trace_config=trace_config,
+                    trace_configs=trace_configs,
                 )
             )
             await exit_stack.enter_async_context(
@@ -372,8 +386,15 @@ async def create_app(
 
     app.cleanup_ctx.append(_init_app)
 
-    api_v1_app = await create_api_v1_app(config)
+    api_v1_app = await create_api_v1_app()
     app["api_v1_app"] = api_v1_app
+    api_v1_routes = (
+        api_v1_app.router.routes()
+    )  # save ping endpoints to skip later for zipkin
+
+    config_app = await create_config_app(config)
+    app["config_app"] = config_app
+    api_v1_app.add_subapp("/config", config_app)
 
     jobs_app = await create_jobs_app(config=config)
     app["jobs_app"] = jobs_app
@@ -391,8 +412,9 @@ async def create_app(
 
     _setup_cors(app, config.cors)
 
-    aiozipkin.setup(app, tracer)
-    app.middlewares.append(store_span_middleware)
+    if config.zipkin:
+        assert tracer
+        setup_zipkin(api_v1_app, tracer, skip_routes=api_v1_routes)
 
     app.on_response_prepare.append(add_version_to_header)
 
@@ -423,9 +445,12 @@ def main() -> None:
     loop = asyncio.get_event_loop()
 
     if config.sentry:
-        sentry_sdk.init(dsn=config.sentry.url, integrations=[AioHttpIntegration()])
-        sentry_sdk.set_tag("cluster", config.sentry.cluster)
-        sentry_sdk.set_tag("app", "platformapi")
+        setup_sentry(
+            config.sentry.url,
+            app_name=config.sentry.app_name,
+            cluster_name=config.sentry.cluster_name,
+            sample_rate=config.sentry.sample_rate,
+        )
 
     app = loop.run_until_complete(create_app(config))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)

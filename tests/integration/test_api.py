@@ -178,7 +178,7 @@ class TestApi:
         cluster_configs_payload: List[Dict[str, Any]],
         cluster_user: _User,
     ) -> None:
-        cluster_registry: ClusterConfigRegistry = api.runner._app["api_v1_app"][
+        cluster_registry: ClusterConfigRegistry = api.runner._app["config_app"][
             "jobs_service"
         ]._cluster_registry
 
