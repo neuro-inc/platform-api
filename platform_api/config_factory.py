@@ -62,10 +62,17 @@ class EnvironConfigFactory:
         )
 
     def create_sentry(self) -> Optional[SentryConfig]:
-        sentry_url = self._environ.get("NP_SENTRY_URL")
-        sentry_cluster = self._environ.get("NP_SENTRY_CLUSTER")
-        if sentry_url and sentry_cluster:
-            return SentryConfig(sentry_url, sentry_cluster)
+        url = self._environ.get("NP_SENTRY_URL")
+        cluster_name = self._environ.get("NP_SENTRY_CLUSTER_NAME")
+        if url and cluster_name:
+            return SentryConfig(
+                url=URL(url),
+                cluster_name=cluster_name,
+                app_name=self._environ.get("NP_SENTRY_APP_NAME", SentryConfig.app_name),
+                sample_rate=float(
+                    self._environ.get("NP_SENTRY_SAMPLE_RATE", SentryConfig.sample_rate)
+                ),
+            )
         return None
 
     def create_poller(self) -> PollerConfig:
@@ -81,6 +88,7 @@ class EnvironConfigFactory:
             scheduler=self.create_job_scheduler(),
             config_url=config_url,
             cluster_name=cluster_name,
+            zipkin=self.create_zipkin(),
             sentry=self.create_sentry(),
             registry_config=self.create_registry(),
             storage_config=self.create_storage(),
@@ -154,10 +162,16 @@ class EnvironConfigFactory:
             public_endpoint_url=public_endpoint_url,
         )
 
-    def create_zipkin(self) -> ZipkinConfig:
-        url = URL(self._environ["NP_API_ZIPKIN_URL"])
-        sample_rate = float(self._environ["NP_API_ZIPKIN_SAMPLE_RATE"])
-        return ZipkinConfig(url=url, sample_rate=sample_rate)
+    def create_zipkin(self) -> Optional[ZipkinConfig]:
+        if "NP_ZIPKIN_URL" not in self._environ:
+            return None
+
+        url = URL(self._environ["NP_ZIPKIN_URL"])
+        app_name = self._environ.get("NP_ZIPKIN_APP_NAME", ZipkinConfig.app_name)
+        sample_rate = float(
+            self._environ.get("NP_ZIPKIN_SAMPLE_RATE", ZipkinConfig.sample_rate)
+        )
+        return ZipkinConfig(url=url, app_name=app_name, sample_rate=sample_rate)
 
     def try_create_oauth(self) -> Optional[OAuthConfig]:
         auth_url = self._environ.get("NP_OAUTH_AUTH_URL")

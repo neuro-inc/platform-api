@@ -19,7 +19,8 @@ class ServerConfig:
 @dataclass(frozen=True)
 class ZipkinConfig:
     url: URL
-    sample_rate: float
+    app_name: str = "platformapi"
+    sample_rate: float = 0
 
 
 @dataclass(frozen=True)
@@ -127,8 +128,10 @@ class JobsSchedulerConfig:
 
 @dataclass(frozen=True)
 class SentryConfig:
-    url: str
-    cluster: str
+    url: URL
+    cluster_name: str
+    app_name: str = "platformapi"
+    sample_rate: float = 0
 
 
 @dataclass(frozen=True)
@@ -137,7 +140,6 @@ class Config:
 
     database: DatabaseConfig
     auth: AuthConfig
-    zipkin: ZipkinConfig
     notifications: NotificationsConfig
     job_policy_enforcer: JobPolicyEnforcerConfig
 
@@ -152,6 +154,7 @@ class Config:
 
     scheduler: JobsSchedulerConfig = JobsSchedulerConfig()
 
+    zipkin: Optional[ZipkinConfig] = None
     sentry: Optional[SentryConfig] = None
 
 
@@ -173,6 +176,7 @@ class PollerConfig:
 
     scheduler: JobsSchedulerConfig = JobsSchedulerConfig()
 
+    zipkin: Optional[ZipkinConfig] = None
     sentry: Optional[SentryConfig] = None
 
 

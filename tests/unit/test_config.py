@@ -12,6 +12,7 @@ from platform_api.cluster_config import (
     StorageConfig,
     StorageType,
 )
+from platform_api.config import SentryConfig, ZipkinConfig
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_client import SecretVolume
 from platform_api.orchestrator.kube_config import KubeClientAuthType
@@ -173,8 +174,6 @@ class TestEnvironConfigFactory:
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_TOKEN": "compute-token",
             "NP_ENFORCER_CREDIT_NOTIFICATION_THRESHOLD": "200.33",
-            "NP_API_ZIPKIN_URL": "https://zipkin:9411",
-            "NP_API_ZIPKIN_SAMPLE_RATE": "1",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -215,6 +214,9 @@ class TestEnvironConfigFactory:
 
         assert not config.cors.allowed_origins
 
+        assert config.zipkin is None
+        assert config.sentry is None
+
     def test_create_value_error_invalid_port(self) -> None:
         environ = {
             "NP_API_PORT": "port",
@@ -224,8 +226,6 @@ class TestEnvironConfigFactory:
             "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
-            "NP_API_ZIPKIN_URL": "https://zipkin:9411",
-            "NP_API_ZIPKIN_SAMPLE_RATE": "1",
         }
         with pytest.raises(ValueError):
             EnvironConfigFactory(environ=environ).create()
@@ -250,8 +250,9 @@ class TestEnvironConfigFactory:
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_TOKEN": "compute-token",
             "NP_CORS_ORIGINS": "https://domain1.com,http://do.main",
-            "NP_API_ZIPKIN_URL": "https://zipkin:9411",
-            "NP_API_ZIPKIN_SAMPLE_RATE": "1",
+            "NP_ZIPKIN_URL": "https://zipkin:9411",
+            "NP_SENTRY_URL": "https://sentry",
+            "NP_SENTRY_CLUSTER_NAME": "test",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -283,6 +284,9 @@ class TestEnvironConfigFactory:
         assert config.auth.service_name == "servicename"
 
         assert config.cors.allowed_origins == ["https://domain1.com", "http://do.main"]
+
+        assert config.zipkin
+        assert config.sentry
 
     def test_alembic_with_escaped_symbol(self) -> None:
         config = EnvironConfigFactory(environ={}).create_alembic(
@@ -414,6 +418,59 @@ class TestEnvironConfigFactory:
             node_label_gpu="gpu-label",
             node_label_preemptible="preemptible-label",
             node_label_node_pool="node-pool-label",
+        )
+
+    def test_create_zipkin_none(self) -> None:
+        result = EnvironConfigFactory({}).create_zipkin()
+
+        assert result is None
+
+    def test_create_zipkin_default(self) -> None:
+        env = {"NP_ZIPKIN_URL": "https://zipkin:9411"}
+        result = EnvironConfigFactory(env).create_zipkin()
+
+        assert result == ZipkinConfig(url=URL("https://zipkin:9411"))
+
+    def test_create_zipkin_custom(self) -> None:
+        env = {
+            "NP_ZIPKIN_URL": "https://zipkin:9411",
+            "NP_ZIPKIN_APP_NAME": "api",
+            "NP_ZIPKIN_SAMPLE_RATE": "1",
+        }
+        result = EnvironConfigFactory(env).create_zipkin()
+
+        assert result == ZipkinConfig(
+            url=URL("https://zipkin:9411"), app_name="api", sample_rate=1
+        )
+
+    def test_create_sentry_none(self) -> None:
+        result = EnvironConfigFactory({}).create_sentry()
+
+        assert result is None
+
+    def test_create_sentry_default(self) -> None:
+        env = {
+            "NP_SENTRY_URL": "https://sentry",
+            "NP_SENTRY_CLUSTER_NAME": "test",
+        }
+        result = EnvironConfigFactory(env).create_sentry()
+
+        assert result == SentryConfig(url=URL("https://sentry"), cluster_name="test")
+
+    def test_create_sentry_custom(self) -> None:
+        env = {
+            "NP_SENTRY_URL": "https://sentry",
+            "NP_SENTRY_APP_NAME": "api",
+            "NP_SENTRY_CLUSTER_NAME": "test",
+            "NP_SENTRY_SAMPLE_RATE": "1",
+        }
+        result = EnvironConfigFactory(env).create_sentry()
+
+        assert result == SentryConfig(
+            url=URL("https://sentry"),
+            app_name="api",
+            cluster_name="test",
+            sample_rate=1,
         )
 
 

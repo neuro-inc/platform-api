@@ -84,10 +84,14 @@ spec:
 {{- end }}
         - name: NP_CORS_ORIGINS
           value: "{{ .Values.NP_CORS_ORIGINS }}"
+        {{- if .Values.NP_API_ZIPKIN_URL }}
         - name: NP_API_ZIPKIN_URL
-          value: "{{ .Values.NP_API_ZIPKIN_URL }}"
+          value: {{ .Values.NP_API_ZIPKIN_URL }}
+        {{- end }}
+        {{- if .Values.NP_API_ZIPKIN_SAMPLE_RATE }}
         - name: NP_API_ZIPKIN_SAMPLE_RATE
-          value: "{{ .Values.NP_API_ZIPKIN_SAMPLE_RATE }}"
+          value: {{ .Values.NP_API_ZIPKIN_SAMPLE_RATE | quote }}
+        {{- end }}
         - name: NP_DB_POSTGRES_DSN
 {{- if .Values.postgres.dsn }}
 {{ toYaml .Values.postgres.dsn | indent 10 }}
@@ -96,9 +100,13 @@ spec:
         - name: NP_SENTRY_URL
           value: {{ .Values.NP_SENTRY_URL }}
         {{- end }}
-        {{- if .Values.NP_SENTRY_CLUSTER }}
-        - name: NP_SENTRY_CLUSTER
-          value: {{ .Values.NP_SENTRY_CLUSTER }}
+        {{- if .Values.NP_SENTRY_CLUSTER_NAME }}
+        - name: NP_SENTRY_CLUSTER_NAME
+          value: {{ .Values.NP_SENTRY_CLUSTER_NAME }}
+        {{- end }}
+        {{- if .Values.NP_SENTRY_SAMPLE_RATE }}
+        - name: NP_SENTRY_SAMPLE_RATE
+          value: {{ .Values.NP_SENTRY_SAMPLE_RATE }}
         {{- end }}
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets: {{ toYaml .Values.imagePullSecrets | nindent 6 }}
