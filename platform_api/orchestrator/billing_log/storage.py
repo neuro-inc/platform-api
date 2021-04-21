@@ -6,14 +6,13 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, AsyncIterator, Dict, List, Optional, Sequence
 
-import asyncpgsa
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
-import sqlalchemy.sql as sasql
-from asyncpg import Connection, Pool, UniqueViolationError
-from asyncpg.cursor import CursorFactory
+from asyncpg import Pool, UniqueViolationError
 from asyncpg.protocol.protocol import Record
 from sqlalchemy import asc, desc
+
+from platform_api.orchestrator.base_postgres_storage import BasePostgresStorage
 
 
 logger = logging.getLogger(__name__)
@@ -133,41 +132,12 @@ class BillingLogTables:
         )
 
 
-class PostgresBillingLogStorage(BillingLogStorage):
+class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
     BILLING_SYNC_RECORD_TYPE = "BillingLogSyncRecord"
 
     def __init__(self, pool: Pool, tables: Optional[BillingLogTables] = None) -> None:
-        self._pool = pool
+        super().__init__(pool)
         self._tables = tables or BillingLogTables.create()
-
-    # Database helpers
-
-    # TODO: refactor out to base class
-
-    async def _execute(
-        self, query: sasql.ClauseElement, conn: Optional[Connection] = None
-    ) -> str:
-        query_string, params = asyncpgsa.compile_query(query)
-        conn = conn or self._pool
-        return await conn.execute(query_string, *params)
-
-    async def _fetchrow(
-        self, query: sasql.ClauseElement, conn: Optional[Connection] = None
-    ) -> Optional[Record]:
-        query_string, params = asyncpgsa.compile_query(query)
-        conn = conn or self._pool
-        return await conn.fetchrow(query_string, *params)
-
-    async def _fetch(
-        self, query: sasql.ClauseElement, conn: Optional[Connection] = None
-    ) -> List[Record]:
-        query_string, params = asyncpgsa.compile_query(query)
-        conn = conn or self._pool
-        return await conn.fetch(query_string, *params)
-
-    def _cursor(self, query: sasql.ClauseElement, conn: Connection) -> CursorFactory:
-        query_string, params = asyncpgsa.compile_query(query)
-        return conn.cursor(query_string, *params)
 
     # Parsing/serialization
 
@@ -204,6 +174,8 @@ class PostgresBillingLogStorage(BillingLogStorage):
     def _record_to_sync_record(self, record: Record) -> BillingLogSyncRecord:
         assert record["type"] == self.BILLING_SYNC_RECORD_TYPE
         return BillingLogSyncRecord(last_entry_id=record["last_entry_id"])
+
+    # Public functions
 
     async def get_or_create_sync_record(self) -> BillingLogSyncRecord:
         try:
