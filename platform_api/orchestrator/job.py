@@ -695,7 +695,7 @@ class Job:
         status_item = self._status_history.current
         if status_item.status == JobStatus.PENDING:
             if status_item.reason == JobStatusReason.INVALID_IMAGE_NAME:
-                return "Invalid image name"
+                return f"Invalid image name '{self.request.container.image}'"
             # collect jobs stuck in ErrImagePull loop
             first_pull_error = None
             for item in reversed(self.status_history.all):
@@ -710,7 +710,7 @@ class Job:
                     now - first_pull_error.transition_time
                     > self._image_pull_error_delay
                 ):
-                    return "Image can not be pulled"
+                    return f"Image '{self.request.container.image}' can not be pulled"
         return None
 
     def collect_if_needed(self) -> None:
