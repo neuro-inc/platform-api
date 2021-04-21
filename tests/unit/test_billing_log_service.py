@@ -123,17 +123,18 @@ class TestBillingLogProcessing:
         job, _ = await jobs_service.create_job(
             job_request_factory(), test_user, cluster_name="test-cluster"
         )
-        last_id = await service.add_entries(
-            [
-                BillingLogEntry(
-                    idempotency_key="key",
-                    job_id=job.id,
-                    charge=Decimal("1.00"),
-                    fully_billed=True,
-                    last_billed=datetime.now(tz=timezone.utc),
-                )
-            ]
-        )
+        async with service.entries_inserter() as inserter:
+            last_id = await inserter.insert(
+                [
+                    BillingLogEntry(
+                        idempotency_key="key",
+                        job_id=job.id,
+                        charge=Decimal("1.00"),
+                        fully_billed=True,
+                        last_billed=datetime.now(tz=timezone.utc),
+                    )
+                ]
+            )
 
         async with worker:
             await asyncio.wait_for(service.wait_until_processed(last_id), timeout=1)
@@ -161,17 +162,18 @@ class TestBillingLogProcessing:
 
         async with worker:
             task = asyncio.create_task(service.wait_until_processed(1))
-            await service.add_entries(
-                [
-                    BillingLogEntry(
-                        idempotency_key="key",
-                        job_id=job.id,
-                        charge=Decimal("1.00"),
-                        fully_billed=True,
-                        last_billed=datetime.now(tz=timezone.utc),
-                    )
-                ]
-            )
+            async with service.entries_inserter() as inserter:
+                await inserter.insert(
+                    [
+                        BillingLogEntry(
+                            idempotency_key="key",
+                            job_id=job.id,
+                            charge=Decimal("1.00"),
+                            fully_billed=True,
+                            last_billed=datetime.now(tz=timezone.utc),
+                        )
+                    ]
+                )
             await asyncio.wait_for(task, timeout=1)
             updated_job = await jobs_service.get_job(job.id)
             assert updated_job.total_price_credits == Decimal("1.00")
@@ -199,18 +201,19 @@ class TestBillingLogProcessing:
             new_entry=InMemoryNotifier()  # Disconnect from worker
         )
 
-        async with worker:
-            last_id = await service.add_entries(
-                [
-                    BillingLogEntry(
-                        idempotency_key="key",
-                        job_id=job.id,
-                        charge=Decimal("1.00"),
-                        fully_billed=True,
-                        last_billed=datetime.now(tz=timezone.utc),
-                    )
-                ]
-            )
+        async with worker, service:
+            async with service.entries_inserter() as inserter:
+                last_id = await inserter.insert(
+                    [
+                        BillingLogEntry(
+                            idempotency_key="key",
+                            job_id=job.id,
+                            charge=Decimal("1.00"),
+                            fully_billed=True,
+                            last_billed=datetime.now(tz=timezone.utc),
+                        )
+                    ]
+                )
             await asyncio.wait_for(service.wait_until_processed(last_id), timeout=1)
             updated_job = await jobs_service.get_job(job.id)
             assert updated_job.total_price_credits == Decimal("1.00")
@@ -235,23 +238,24 @@ class TestBillingLogProcessing:
         )
 
         async with worker:
-            tasks = [
-                asyncio.create_task(
-                    service.add_entries(
-                        [
-                            BillingLogEntry(
-                                idempotency_key=f"key{index}",
-                                job_id=job.id,
-                                charge=Decimal("1.00"),
-                                fully_billed=False,
-                                last_billed=datetime.now(tz=timezone.utc),
-                            )
-                        ]
+            async with service.entries_inserter() as inserter:
+                tasks = [
+                    asyncio.create_task(
+                        inserter.insert(
+                            [
+                                BillingLogEntry(
+                                    idempotency_key=f"key{index}",
+                                    job_id=job.id,
+                                    charge=Decimal("1.00"),
+                                    fully_billed=False,
+                                    last_billed=datetime.now(tz=timezone.utc),
+                                )
+                            ]
+                        )
                     )
-                )
-                for index in range(10)
-            ]
-            last_id = max(await asyncio.gather(*tasks))
+                    for index in range(10)
+                ]
+                last_id = max(await asyncio.gather(*tasks))
             await asyncio.wait_for(service.wait_until_processed(last_id), timeout=1)
             updated_job = await jobs_service.get_job(job.id)
             assert updated_job.total_price_credits == Decimal("10.00")

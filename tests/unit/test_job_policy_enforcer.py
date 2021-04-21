@@ -449,7 +449,8 @@ class TestBillingEnforcer:
             idempotency_key="key",
             last_billed=now,
         )
-        await billing_service.add_entries([entry])
+        async with billing_service.entries_inserter() as inserter:
+            await inserter.insert([entry])
         # Should not proceed if there is pending item
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(enforcer.enforce(), timeout=0.2)

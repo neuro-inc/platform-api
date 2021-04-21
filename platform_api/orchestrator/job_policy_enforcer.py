@@ -194,28 +194,28 @@ class BillingEnforcer(JobPolicyEnforcer):
         await run_and_log_exceptions(coros)
 
     async def _bill_single(self, job_id: str) -> None:
-        # TODO: Make it concurrent safe!
 
-        last_id = await self._billing_service.get_last_entry_id(job_id)
-        await self._billing_service.wait_until_processed(last_entry_id=last_id)
+        async with self._billing_service.entries_inserter() as inserter:
+            last_id = await self._billing_service.get_last_entry_id(job_id)
+            await self._billing_service.wait_until_processed(last_entry_id=last_id)
 
-        job = await self._jobs_service.get_job(job_id)
-        now = datetime.now(timezone.utc)
-        new_runtime = job.get_run_time(only_after=job.last_billed, now=now)
-        microseconds = int(new_runtime.total_seconds() * 1e6)
-        hours = Decimal(microseconds) / int(1e6) / 3600
-        charge = hours * job.price_credits_per_hour
-        await self._billing_service.add_entries(
-            [
-                BillingLogEntry(
-                    idempotency_key=str(uuid.uuid4()),
-                    job_id=job.id,
-                    last_billed=now,
-                    charge=charge,
-                    fully_billed=job.status.is_finished,
-                )
-            ]
-        )
+            job = await self._jobs_service.get_job(job_id)
+            now = datetime.now(timezone.utc)
+            new_runtime = job.get_run_time(only_after=job.last_billed, now=now)
+            microseconds = int(new_runtime.total_seconds() * 1e6)
+            hours = Decimal(microseconds) / int(1e6) / 3600
+            charge = hours * job.price_credits_per_hour
+            await inserter.insert(
+                [
+                    BillingLogEntry(
+                        idempotency_key=str(uuid.uuid4()),
+                        job_id=job.id,
+                        last_billed=now,
+                        charge=charge,
+                        fully_billed=job.status.is_finished,
+                    )
+                ]
+            )
 
 
 class JobPolicyEnforcePoller:

@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -50,7 +51,9 @@ class TestBillingLogStorage:
             self._make_log_entry(job_id="test3", key="key3"),
             self._make_log_entry(job_id="test4", key="key4"),
         ]
-        last_id = await storage.create_entries(entries)
+        async with storage.entries_inserter() as inserter:
+            last_id = await inserter.insert(entries)
+
         assert last_id == 4
         expected_entries = [
             replace(entry, id=index) for index, entry in enumerate(entries, 1)
@@ -73,14 +76,16 @@ class TestBillingLogStorage:
 
     @pytest.mark.asyncio
     async def test_get_last_id(self, storage: BillingLogStorage) -> None:
-        last_id = await storage.create_entries(
-            [
-                self._make_log_entry(job_id="test1", key="key1"),
-                self._make_log_entry(job_id="test2", key="key2"),
-                self._make_log_entry(job_id="test1", key="key3"),
-                self._make_log_entry(job_id="test2", key="key4"),
-            ]
-        )
+        entries = [
+            self._make_log_entry(job_id="test1", key="key1"),
+            self._make_log_entry(job_id="test2", key="key2"),
+            self._make_log_entry(job_id="test1", key="key3"),
+            self._make_log_entry(job_id="test2", key="key4"),
+        ]
+
+        async with storage.entries_inserter() as inserter:
+            last_id = await inserter.insert(entries)
+
         assert last_id == 4
 
         assert 4 == await storage.get_last_entry_id()
@@ -90,3 +95,27 @@ class TestBillingLogStorage:
 
         # Job without entries:
         assert 0 == await storage.get_last_entry_id("test3")
+
+    @pytest.mark.asyncio
+    async def test_concurrent_add(self, storage: BillingLogStorage) -> None:
+        async def adder(job_id: str) -> None:
+            async with storage.entries_inserter() as inserter:
+                for _ in range(4):
+                    await inserter.insert(
+                        [self._make_log_entry(job_id=job_id, key="key")]
+                    )
+                    await asyncio.sleep(0.01)
+
+        tasks = [asyncio.create_task(adder(f"job-{index}")) for index in range(10)]
+        await asyncio.gather(*tasks)
+
+        assert 40 == await storage.get_last_entry_id()
+
+        group_to_job = {}
+        async for entry in storage.iter_entries():
+            assert entry.id is not None
+            group_id = (entry.id - 1) // 4
+            if group_id not in group_to_job:
+                group_to_job[group_id] = entry.job_id
+            else:
+                assert group_to_job[group_id] == entry.job_id, group_id

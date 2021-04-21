@@ -1,14 +1,24 @@
+import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, AsyncIterator, Dict, List, Optional, Sequence
+from typing import (
+    Any,
+    AsyncContextManager,
+    AsyncIterator,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+)
 
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
-from asyncpg import Pool, UniqueViolationError
+from asyncpg import Connection, Pool, UniqueViolationError
 from asyncpg.protocol.protocol import Record
 from sqlalchemy import asc, desc
 
@@ -47,11 +57,18 @@ class BillingLogStorage(ABC):
     async def update_sync_record(self, record: BillingLogSyncRecord) -> None:
         pass
 
+    class EntriesInserter:
+        @abstractmethod
+        async def insert(
+            self,
+            entries: Sequence[BillingLogEntry],
+        ) -> int:
+            pass
+
     @abstractmethod
-    async def create_entries(
+    def entries_inserter(
         self,
-        entries: Sequence[BillingLogEntry],
-    ) -> int:
+    ) -> AsyncContextManager["BillingLogStorage.EntriesInserter"]:
         pass
 
     @abstractmethod
@@ -69,6 +86,7 @@ class InMemoryBillingLogStorage(BillingLogStorage):
     def __init__(self) -> None:
         self._entries: List[BillingLogEntry] = []
         self._sync_record: Optional[BillingLogSyncRecord] = None
+        self._inserter_lock = asyncio.Lock()
 
     async def get_or_create_sync_record(self) -> BillingLogSyncRecord:
         if self._sync_record is None:
@@ -80,11 +98,22 @@ class InMemoryBillingLogStorage(BillingLogStorage):
             raise BillingLogSyncRecordNotFound
         self._sync_record = record
 
-    async def create_entries(self, entries: Sequence[BillingLogEntry]) -> int:
-        next_index = await self.get_last_entry_id() + 1
-        for index, entry in enumerate(entries, next_index):
-            self._entries.append(replace(entry, id=index))
-        return await self.get_last_entry_id()
+    class EntriesInserter(BillingLogStorage.EntriesInserter):
+        def __init__(self, storage: "InMemoryBillingLogStorage") -> None:
+            self._storage = storage
+
+        async def insert(self, entries: Sequence[BillingLogEntry]) -> int:
+            next_index = await self._storage.get_last_entry_id() + 1
+            for index, entry in enumerate(entries, next_index):
+                self._storage._entries.append(replace(entry, id=index))
+            return await self._storage.get_last_entry_id()
+
+    @asynccontextmanager
+    async def entries_inserter(
+        self,
+    ) -> AsyncIterator[BillingLogStorage.EntriesInserter]:
+        async with self._inserter_lock:
+            yield InMemoryBillingLogStorage.EntriesInserter(self)
 
     async def iter_entries(
         self, *, with_ids_greater: int = 0, limit: Optional[int] = None
@@ -203,22 +232,32 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
         if not result:
             raise BillingLogSyncRecordNotFound
 
-    async def create_entries(self, entries: Sequence[BillingLogEntry]) -> int:
+    class EntriesInserter(BillingLogStorage.EntriesInserter):
+        def __init__(self, storage: "PostgresBillingLogStorage", conn: Connection):
+            self._storage = storage
+            self._conn = conn
 
-        values = [self._log_entry_to_values(entry) for entry in entries]
+        async def insert(self, entries: Sequence[BillingLogEntry]) -> int:
+            values = [self._storage._log_entry_to_values(entry) for entry in entries]
+            query = (
+                self._storage._tables.billing_log.insert()
+                .values(values)
+                .returning(self._storage._tables.billing_log.c.id)
+            )
+            records = await self._storage._fetch(query, conn=self._conn)
+            return records[-1]["id"]
+
+    @asynccontextmanager
+    async def entries_inserter(
+        self,
+    ) -> AsyncIterator[BillingLogStorage.EntriesInserter]:
         async with self._pool.acquire() as conn, conn.transaction():
             await self._execute(
                 f"LOCK TABLE {self._tables.billing_log.name} IN SHARE "
                 "UPDATE EXCLUSIVE MODE",
                 conn=conn,
             )
-            query = (
-                self._tables.billing_log.insert()
-                .values(values)
-                .returning(self._tables.billing_log.c.id)
-            )
-            records = await self._fetch(query, conn=conn)
-        return records[-1]["id"]
+            yield PostgresBillingLogStorage.EntriesInserter(self, conn)
 
     async def iter_entries(
         self, *, with_ids_greater: int = 0, limit: Optional[int] = None

@@ -1,7 +1,7 @@
 import asyncio
 import logging
-from contextlib import suppress
-from typing import Any, AsyncContextManager, Optional, Sequence
+from contextlib import asynccontextmanager, suppress
+from typing import Any, AsyncContextManager, AsyncIterator, Optional, Sequence
 
 from platform_api.admin_client import AdminClient
 from platform_api.orchestrator.billing_log.storage import (
@@ -50,18 +50,28 @@ class BillingLogService:
     async def _on_processed(self) -> None:
         record = await self._storage.get_or_create_sync_record()
         self._last_entry_id = record.last_entry_id
-        print("processed", self._last_entry_id)
         async with self._progress_cond:
             self._progress_cond.notify_all()
 
-    async def add_entries(self, entries: Sequence[BillingLogEntry]) -> int:
-        last_id = await self._storage.create_entries(entries)
-        await self._new_entry_notifier.notify()
-        return last_id
+    class Inserter:
+        def __init__(
+            self, inserter: BillingLogStorage.EntriesInserter, notifier: Notifier
+        ):
+            self._inserter = inserter
+            self._notifier = notifier
+
+        async def insert(self, entries: Sequence[BillingLogEntry]) -> int:
+            last_id = await self._inserter.insert(entries)
+            await self._notifier.notify()
+            return last_id
+
+    @asynccontextmanager
+    async def entries_inserter(self) -> AsyncIterator["BillingLogService.Inserter"]:
+        async with self._storage.entries_inserter() as inserter:
+            yield BillingLogService.Inserter(inserter, self._new_entry_notifier)
 
     async def wait_until_processed(self, last_entry_id: int) -> None:
         while self._last_entry_id < last_entry_id:
-            print("In wait loop", self._last_entry_id, last_entry_id)
             async with self._progress_cond:
                 await self._progress_cond.wait()
 
