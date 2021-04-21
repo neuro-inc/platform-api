@@ -1,9 +1,19 @@
+import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
-from typing import AsyncIterator, List, Optional, Sequence
+from typing import Any, AsyncIterator, Dict, List, Optional, Sequence
+
+import asyncpgsa
+import sqlalchemy as sa
+import sqlalchemy.dialects.postgresql as sapg
+import sqlalchemy.sql as sasql
+from asyncpg import Connection, Pool, UniqueViolationError
+from asyncpg.cursor import CursorFactory
+from asyncpg.protocol.protocol import Record
+from sqlalchemy import asc, desc
 
 
 logger = logging.getLogger(__name__)
@@ -23,6 +33,10 @@ class BillingLogEntry:
     fully_billed: bool
 
     id: Optional[int] = None
+
+
+class BillingLogSyncRecordNotFound(Exception):
+    pass
 
 
 class BillingLogStorage(ABC):
@@ -63,7 +77,8 @@ class InMemoryBillingLogStorage(BillingLogStorage):
         return self._sync_record
 
     async def update_sync_record(self, record: BillingLogSyncRecord) -> None:
-        assert self._sync_record, "Tried to update sync record before creation"
+        if self._sync_record is None:
+            raise BillingLogSyncRecordNotFound
         self._sync_record = record
 
     async def create_entries(self, entries: Sequence[BillingLogEntry]) -> int:
@@ -87,4 +102,172 @@ class InMemoryBillingLogStorage(BillingLogStorage):
         for from_end, entry in enumerate(reversed(self._entries)):
             if entry.job_id == job_id:
                 return len(self._entries) - from_end
+        return 0
+
+
+@dataclass(frozen=True)
+class BillingLogTables:
+    billing_log: sa.Table
+    sync_record: sa.Table
+
+    @classmethod
+    def create(cls) -> "BillingLogTables":
+        metadata = sa.MetaData()
+        billing_log = sa.Table(
+            "billing_log",
+            metadata,
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("job_id", sa.String(), nullable=False),
+            # All other fields
+            sa.Column("payload", sapg.JSONB(), nullable=False),
+        )
+        sync_record = sa.Table(
+            "sync_record",
+            metadata,
+            sa.Column("type", sa.String(), primary_key=True),
+            sa.Column("last_entry_id", sa.Integer()),
+        )
+        return cls(
+            billing_log=billing_log,
+            sync_record=sync_record,
+        )
+
+
+class PostgresBillingLogStorage(BillingLogStorage):
+    BILLING_SYNC_RECORD_TYPE = "BillingLogSyncRecord"
+
+    def __init__(self, pool: Pool, tables: Optional[BillingLogTables] = None) -> None:
+        self._pool = pool
+        self._tables = tables or BillingLogTables.create()
+
+    # Database helpers
+
+    # TODO: refactor out to base class
+
+    async def _execute(
+        self, query: sasql.ClauseElement, conn: Optional[Connection] = None
+    ) -> str:
+        query_string, params = asyncpgsa.compile_query(query)
+        conn = conn or self._pool
+        return await conn.execute(query_string, *params)
+
+    async def _fetchrow(
+        self, query: sasql.ClauseElement, conn: Optional[Connection] = None
+    ) -> Optional[Record]:
+        query_string, params = asyncpgsa.compile_query(query)
+        conn = conn or self._pool
+        return await conn.fetchrow(query_string, *params)
+
+    async def _fetch(
+        self, query: sasql.ClauseElement, conn: Optional[Connection] = None
+    ) -> List[Record]:
+        query_string, params = asyncpgsa.compile_query(query)
+        conn = conn or self._pool
+        return await conn.fetch(query_string, *params)
+
+    def _cursor(self, query: sasql.ClauseElement, conn: Connection) -> CursorFactory:
+        query_string, params = asyncpgsa.compile_query(query)
+        return conn.cursor(query_string, *params)
+
+    # Parsing/serialization
+
+    def _log_entry_to_values(self, entry: BillingLogEntry) -> Dict[str, Any]:
+        return {
+            "job_id": entry.job_id,
+            "payload": {
+                "idempotency_key": entry.idempotency_key,
+                "charge": str(entry.charge),
+                "last_billed": entry.last_billed.isoformat(),
+                "fully_billed": entry.fully_billed,
+            },
+        }
+
+    def _record_to_log_entry(self, record: Record) -> BillingLogEntry:
+        payload = json.loads(record["payload"])
+        return BillingLogEntry(
+            id=record["id"],
+            job_id=record["job_id"],
+            idempotency_key=payload["idempotency_key"],
+            charge=Decimal(payload["charge"]),
+            last_billed=datetime.fromisoformat(payload["last_billed"]),
+            fully_billed=payload["fully_billed"],
+        )
+
+    def _sync_record_to_values(
+        self, sync_record: BillingLogSyncRecord
+    ) -> Dict[str, Any]:
+        return {
+            "type": self.BILLING_SYNC_RECORD_TYPE,
+            "last_entry_id": sync_record.last_entry_id,
+        }
+
+    def _record_to_sync_record(self, record: Record) -> BillingLogSyncRecord:
+        assert record["type"] == self.BILLING_SYNC_RECORD_TYPE
+        return BillingLogSyncRecord(last_entry_id=record["last_entry_id"])
+
+    async def get_or_create_sync_record(self) -> BillingLogSyncRecord:
+        try:
+            empty = BillingLogSyncRecord(0)
+            values = self._sync_record_to_values(empty)
+            query = self._tables.sync_record.insert().values(values)
+            await self._execute(query)
+        except UniqueViolationError:
+            pass
+        query = self._tables.sync_record.select()
+        record = await self._fetchrow(query)
+        if not record:
+            return await self.get_or_create_sync_record()
+        return self._record_to_sync_record(record)
+
+    async def update_sync_record(self, record: BillingLogSyncRecord) -> None:
+        values = self._sync_record_to_values(record)
+        query = (
+            self._tables.sync_record.update()
+            .values(values)
+            .where(self._tables.sync_record.c.type == self.BILLING_SYNC_RECORD_TYPE)
+            .returning(self._tables.sync_record.c.type)
+        )
+        result = await self._fetchrow(query)
+        if not result:
+            raise BillingLogSyncRecordNotFound
+
+    async def create_entries(self, entries: Sequence[BillingLogEntry]) -> int:
+
+        values = [self._log_entry_to_values(entry) for entry in entries]
+        async with self._pool.acquire() as conn, conn.transaction():
+            await self._execute(
+                f"LOCK TABLE {self._tables.billing_log.name} IN SHARE "
+                "UPDATE EXCLUSIVE MODE",
+                conn=conn,
+            )
+            query = (
+                self._tables.billing_log.insert()
+                .values(values)
+                .returning(self._tables.billing_log.c.id)
+            )
+            records = await self._fetch(query, conn=conn)
+        return records[-1]["id"]
+
+    async def iter_entries(
+        self, *, with_ids_greater: int = 0, limit: Optional[int] = None
+    ) -> AsyncIterator[BillingLogEntry]:
+        query = self._tables.billing_log.select()
+        if with_ids_greater:
+            query = query.where(self._tables.billing_log.c.id > with_ids_greater)
+        query = query.order_by(asc(self._tables.billing_log.c.id))
+        if limit:
+            query = query.limit(limit)
+        async with self._pool.acquire() as conn, conn.transaction():
+            async for record in self._cursor(query, conn=conn):
+                yield self._record_to_log_entry(record)
+
+    async def get_last_entry_id(self, job_id: Optional[str] = None) -> int:
+        query = self._tables.billing_log.select()
+        if job_id:
+            query = query.where(self._tables.billing_log.c.job_id == job_id)
+        query = query.order_by(desc(self._tables.billing_log.c.id))
+        query = query.limit(1)
+        record = await self._fetchrow(query)
+        if record:
+            return record["id"]
         return 0

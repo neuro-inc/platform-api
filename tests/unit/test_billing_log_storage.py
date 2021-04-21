@@ -8,6 +8,7 @@ from platform_api.orchestrator.billing_log.storage import (
     BillingLogEntry,
     BillingLogStorage,
     BillingLogSyncRecord,
+    BillingLogSyncRecordNotFound,
     InMemoryBillingLogStorage,
 )
 
@@ -24,6 +25,13 @@ class TestBillingLogStorage:
         await storage.update_sync_record(BillingLogSyncRecord(10))
         record = await storage.get_or_create_sync_record()
         assert record.last_entry_id == 10
+
+    @pytest.mark.asyncio
+    async def test_sync_record_update_not_existing(
+        self, storage: BillingLogStorage
+    ) -> None:
+        with pytest.raises(BillingLogSyncRecordNotFound):
+            await storage.update_sync_record(BillingLogSyncRecord(10))
 
     def _make_log_entry(self, *, job_id: str, key: str) -> BillingLogEntry:
         return BillingLogEntry(
