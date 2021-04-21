@@ -2,6 +2,7 @@ import abc
 import asyncio
 import contextlib
 import logging
+import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -21,8 +22,9 @@ from typing import (
 from neuro_auth_client import AuthClient
 from notifications_client import Client as NotificationsClient, CreditsWillRunOutSoon
 
-from platform_api.admin_client import AdminClient
 from platform_api.config import JobPolicyEnforcerConfig
+from platform_api.orchestrator.billing_log.service import BillingLogService
+from platform_api.orchestrator.billing_log.storage import BillingLogEntry
 from platform_api.orchestrator.job import Job, JobStatusReason
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
@@ -180,40 +182,39 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
 
 
 class BillingEnforcer(JobPolicyEnforcer):
-    def __init__(self, service: JobsService, admin_client: AdminClient):
-        self._service = service
-        self._admin_client = admin_client
+    def __init__(self, jobs_service: JobsService, billing_service: BillingLogService):
+        self._jobs_service = jobs_service
+        self._billing_service = billing_service
 
     async def enforce(self) -> None:
         coros = [
-            self._bill_single_wrapper(job)
-            async for job in self._service.get_not_billed_jobs()
+            self._bill_single(job.id)
+            async for job in self._jobs_service.get_not_billed_jobs()
         ]
         await run_and_log_exceptions(coros)
 
-    async def _bill_single_wrapper(self, job: Job) -> None:
-        try:
-            await self._bill_single(job)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception(f"Failed to bill job {job.id}:")
+    async def _bill_single(self, job_id: str) -> None:
+        # TODO: Make it concurrent safe!
 
-    async def _bill_single(self, job: Job) -> None:
-        new_runtime = job.get_run_time(only_after=job.last_billed)
+        last_id = await self._billing_service.get_last_entry_id(job_id)
+        await self._billing_service.wait_until_processed(last_entry_id=last_id)
+
+        job = await self._jobs_service.get_job(job_id)
         now = datetime.now(timezone.utc)
-        # ? Rounding ?
+        new_runtime = job.get_run_time(only_after=job.last_billed, now=now)
         microseconds = int(new_runtime.total_seconds() * 1e6)
         hours = Decimal(microseconds) / int(1e6) / 3600
-        new_charge = hours * job.price_credits_per_hour
-        await self._admin_client.change_user_credits(
-            job.cluster_name, job.owner, -new_charge
-        )
-        await self._service.update_job_billing(
-            job_id=job.id,
-            last_billed=now,
-            new_charge=new_charge,
-            fully_billed=job.status.is_finished,
+        charge = hours * job.price_credits_per_hour
+        await self._billing_service.add_entries(
+            [
+                BillingLogEntry(
+                    idempotency_key=str(uuid.uuid4()),
+                    job_id=job.id,
+                    last_billed=now,
+                    charge=charge,
+                    fully_billed=job.status.is_finished,
+                )
+            ]
         )
 
 

@@ -50,6 +50,7 @@ class BillingLogService:
     async def _on_processed(self) -> None:
         record = await self._storage.get_or_create_sync_record()
         self._last_entry_id = record.last_entry_id
+        print("processed", self._last_entry_id)
         async with self._progress_cond:
             self._progress_cond.notify_all()
 
@@ -60,8 +61,12 @@ class BillingLogService:
 
     async def wait_until_processed(self, last_entry_id: int) -> None:
         while self._last_entry_id < last_entry_id:
+            print("In wait loop", self._last_entry_id, last_entry_id)
             async with self._progress_cond:
                 await self._progress_cond.wait()
+
+    async def get_last_entry_id(self, job_id: Optional[str] = None) -> int:
+        return await self._storage.get_last_entry_id(job_id)
 
 
 class BillingLogWorker:

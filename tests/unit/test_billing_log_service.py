@@ -160,7 +160,8 @@ class TestBillingLogProcessing:
         )
 
         async with worker:
-            last_id = await service.add_entries(
+            task = asyncio.create_task(service.wait_until_processed(1))
+            await service.add_entries(
                 [
                     BillingLogEntry(
                         idempotency_key="key",
@@ -171,7 +172,7 @@ class TestBillingLogProcessing:
                     )
                 ]
             )
-            await asyncio.wait_for(service.wait_until_processed(last_id), timeout=1)
+            await asyncio.wait_for(task, timeout=1)
             updated_job = await jobs_service.get_job(job.id)
             assert updated_job.total_price_credits == Decimal("1.00")
             assert updated_job.fully_billed
