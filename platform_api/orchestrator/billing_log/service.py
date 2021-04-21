@@ -187,7 +187,10 @@ class BillingLogWorker:
         job = await self._jobs_service.get_job(entry.job_id)
 
         await self._admin_client.change_user_credits(
-            job.cluster_name, job.owner, -entry.charge
+            cluster_name=job.cluster_name,
+            username=job.owner,
+            credits_delta=-entry.charge,
+            idempotency_key=entry.idempotency_key,
         )
         await self._jobs_service.update_job_billing(
             job_id=job.id,

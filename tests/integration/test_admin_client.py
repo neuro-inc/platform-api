@@ -12,7 +12,7 @@ from .conftest import ApiRunner
 
 
 async def create_admin_app(
-    cluster_name: str, username: str, amount: Decimal
+    cluster_name: str, username: str, amount: Decimal, key: str
 ) -> aiohttp.web.Application:
     app = aiohttp.web.Application()
 
@@ -22,6 +22,7 @@ async def create_admin_app(
         assert request.match_info["uname"] == username
         payload = await request.json()
         assert payload["additional_quota"]["credits"] == str(amount)
+        assert request.query.get("idempotency_key") == key
         return aiohttp.web.Response()
 
     app.add_routes(
@@ -33,9 +34,9 @@ async def create_admin_app(
 
 @asynccontextmanager
 async def create_admin_api(
-    cluster_name: str, username: str, amount: Decimal
+    cluster_name: str, username: str, amount: Decimal, key: str
 ) -> AsyncIterator[URL]:
-    app = await create_admin_app(cluster_name, username, amount)
+    app = await create_admin_app(cluster_name, username, amount, key)
     runner = ApiRunner(app, port=8085)
     api_address = await runner.run()
     yield URL(f"http://{api_address.host}:{api_address.port}/api/v1")
@@ -50,6 +51,7 @@ class TestAdminClient:
         cluster_name = "test-cluster"
         username = "username"
         amount = Decimal("20.11")
-        async with create_admin_api(cluster_name, username, amount) as url:
+        key = "key"
+        async with create_admin_api(cluster_name, username, amount, key) as url:
             async with AdminClient(base_url=url) as client:
-                await client.change_user_credits(cluster_name, username, amount)
+                await client.change_user_credits(cluster_name, username, amount, key)

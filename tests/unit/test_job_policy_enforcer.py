@@ -401,6 +401,36 @@ class TestBillingEnforcer:
         assert not entries[0].fully_billed
 
     @pytest.mark.asyncio
+    async def test_idempotency_key_unique(
+        self,
+        test_user: AuthUser,
+        jobs_service: JobsService,
+        cluster_config: ClusterConfig,
+        billing_service: BillingLogService,
+        billing_log_storage: BillingLogStorage,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        enforcer = BillingEnforcer(jobs_service, billing_service)
+        job, _ = await jobs_service.create_job(
+            job_request_factory(), test_user, cluster_name="test-cluster"
+        )
+        now = datetime.datetime.now(datetime.timezone.utc)
+        await jobs_service.set_job_status(
+            job.id, JobStatusItem(JobStatus.RUNNING, transition_time=now)
+        )
+        await billing_log_storage.get_or_create_sync_record()
+        for index in range(1000):
+            await enforcer.enforce()
+            await billing_log_storage.update_sync_record(
+                BillingLogSyncRecord(index + 1)
+            )
+            await billing_service._entry_done_notifier.notify()
+        keys = {
+            entry.idempotency_key async for entry in billing_log_storage.iter_entries()
+        }
+        assert len(keys) == 1000
+
+    @pytest.mark.asyncio
     async def test_jobs_charged_fully(
         self,
         test_user: AuthUser,

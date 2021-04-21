@@ -24,12 +24,16 @@ from platform_api.utils.update_notifier import InMemoryNotifier, Notifier
 
 class MockAdminClient(AdminClient):
     def __init__(self) -> None:
-        self.change_log: List[Tuple[str, str, Decimal]] = []
+        self.change_log: List[Tuple[str, str, Decimal, str]] = []
 
     async def change_user_credits(
-        self, cluster_name: str, username: str, delta: Decimal
+        self,
+        cluster_name: str,
+        username: str,
+        credits_delta: Decimal,
+        idempotency_key: str,
     ) -> None:
-        self.change_log.append((cluster_name, username, delta))
+        self.change_log.append((cluster_name, username, credits_delta, idempotency_key))
 
 
 class BillingServiceFactory(Protocol):
@@ -145,6 +149,7 @@ class TestBillingLogProcessing:
             assert admin_client.change_log[0][0] == job.cluster_name
             assert admin_client.change_log[0][1] == job.owner
             assert -admin_client.change_log[0][2] == Decimal("1.00")
+            assert admin_client.change_log[0][3] == "key"
 
     @pytest.mark.asyncio
     async def test_syncs_new_entries(
@@ -182,6 +187,7 @@ class TestBillingLogProcessing:
             assert admin_client.change_log[0][0] == job.cluster_name
             assert admin_client.change_log[0][1] == job.owner
             assert -admin_client.change_log[0][2] == Decimal("1.00")
+            assert admin_client.change_log[0][3] == "key"
 
     @pytest.mark.asyncio
     async def test_syncs_by_timeout(
@@ -222,6 +228,7 @@ class TestBillingLogProcessing:
             assert admin_client.change_log[0][0] == job.cluster_name
             assert admin_client.change_log[0][1] == job.owner
             assert -admin_client.change_log[0][2] == Decimal("1.00")
+            assert admin_client.change_log[0][3] == "key"
 
     @pytest.mark.asyncio
     async def test_syncs_concurrent(
@@ -265,3 +272,5 @@ class TestBillingLogProcessing:
                 assert admin_request[0] == job.cluster_name
                 assert admin_request[1] == job.owner
                 assert -admin_request[2] == Decimal("1.00")
+            keys = {it[3] for it in admin_client.change_log}
+            assert keys == {f"key{index}" for index in range(10)}
