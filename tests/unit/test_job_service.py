@@ -917,9 +917,12 @@ class TestJobsService:
     @pytest.mark.parametrize(
         "reason,description",
         [
-            (JobStatusReason.ERR_IMAGE_PULL, "Image can not be pulled"),
-            (JobStatusReason.IMAGE_PULL_BACK_OFF, "Image can not be pulled"),
-            (JobStatusReason.INVALID_IMAGE_NAME, "Invalid image name"),
+            (JobStatusReason.ERR_IMAGE_PULL, "Image 'testimage' can not be pulled"),
+            (
+                JobStatusReason.IMAGE_PULL_BACK_OFF,
+                "Image 'testimage' can not be pulled",
+            ),
+            (JobStatusReason.INVALID_IMAGE_NAME, "Invalid image name 'testimage'"),
         ],
     )
     async def test_update_jobs_statuses_pending_errimagepull(
@@ -1057,7 +1060,7 @@ class TestJobsService:
         assert not job.materialized
         status_item = job.status_history.last
         assert status_item.reason == JobStatusReason.COLLECTED
-        assert status_item.description == "Image can not be pulled"
+        assert status_item.description == "Image 'testimage' can not be pulled"
 
     @pytest.mark.asyncio
     async def test_update_jobs_statuses_pending_scale_up(
@@ -2291,7 +2294,7 @@ class TestJobServiceNotification:
                 status=JobStatus.FAILED,
                 transition_time=job.status_history.current.transition_time,
                 reason=JobStatusReason.COLLECTED,
-                description="Image can not be pulled",
+                description="Image 'testimage' can not be pulled",
                 exit_code=None,
                 prev_status=JobStatus.PENDING,
                 prev_transition_time=mock.ANY,
