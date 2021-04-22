@@ -3,6 +3,6 @@
 aiodocker==0.19.1
 codecov==2.1.11
 pytest==6.2.3
-pytest-asyncio==0.15.0
+pytest-asyncio==0.15.1
 pytest-cov==2.11.1
 requests==2.25.1
