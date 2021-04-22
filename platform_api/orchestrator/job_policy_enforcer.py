@@ -182,9 +182,15 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
 
 
 class BillingEnforcer(JobPolicyEnforcer):
-    def __init__(self, jobs_service: JobsService, billing_service: BillingLogService):
+    def __init__(
+        self,
+        jobs_service: JobsService,
+        billing_service: BillingLogService,
+        proceed_wait_timeout_s: float = 15,
+    ):
         self._jobs_service = jobs_service
         self._billing_service = billing_service
+        self._proceed_wait_timeout_s = proceed_wait_timeout_s
 
     async def enforce(self) -> None:
         coros = [
@@ -199,7 +205,7 @@ class BillingEnforcer(JobPolicyEnforcer):
             last_id = await self._billing_service.get_last_entry_id(job_id)
             await asyncio.wait_for(
                 self._billing_service.wait_until_processed(last_entry_id=last_id),
-                timeout=1,  # TODO: make it configurable
+                timeout=self._proceed_wait_timeout_s,
             )
 
             job = await self._jobs_service.get_job(job_id)
