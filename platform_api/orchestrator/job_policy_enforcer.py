@@ -197,7 +197,10 @@ class BillingEnforcer(JobPolicyEnforcer):
 
         async with self._billing_service.entries_inserter() as inserter:
             last_id = await self._billing_service.get_last_entry_id(job_id)
-            await self._billing_service.wait_until_processed(last_entry_id=last_id)
+            await asyncio.wait_for(
+                self._billing_service.wait_until_processed(last_entry_id=last_id),
+                timeout=1,  # TODO: make it configurable
+            )
 
             job = await self._jobs_service.get_job(job_id)
             now = datetime.now(timezone.utc)
