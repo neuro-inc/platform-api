@@ -30,12 +30,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
 )
 
 from .admin_client import AdminClient
-from .cluster import (
-    ClusterConfig,
-    ClusterConfigRegistry,
-    ClusterUpdateNotifier,
-    ClusterUpdater,
-)
+from .cluster import ClusterConfig, ClusterConfigRegistry, ClusterUpdater
 from .config import Config, CORSConfig
 from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
@@ -48,6 +43,11 @@ from .orchestrator.jobs_storage import JobsStorage, PostgresJobsStorage
 from .postgres import create_postgres_pool
 from .resource import Preset
 from .user import authorized_user, untrusted_user
+from .utils.update_notifier import (
+    Notifier,
+    PostgresChannelNotifier,
+    ResubscribingNotifier,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ class ConfigApiHandler:
         return self._app["jobs_service"]
 
     @property
-    def _cluster_update_notifier(self) -> ClusterUpdateNotifier:
+    def _cluster_update_notifier(self) -> Notifier:
         return self._app["cluster_update_notifier"]
 
     async def handle_clusters_sync(
@@ -91,7 +91,7 @@ class ConfigApiHandler:
         logger.info("Checking whether %r has %r", user, permission)
         await check_permission(request, permission.action, [permission])
 
-        await self._cluster_update_notifier.notify_cluster_update()
+        await self._cluster_update_notifier.notify()
 
         return aiohttp.web.Response(text="OK")
 
@@ -328,7 +328,10 @@ async def create_app(
             logger.info("Initializing JobsStorage")
             jobs_storage: JobsStorage = PostgresJobsStorage(postgres_pool)
 
-            cluster_update_notifier = ClusterUpdateNotifier(postgres_pool)
+            cluster_update_notifier = ResubscribingNotifier(
+                PostgresChannelNotifier(postgres_pool, "cluster_update_required"),
+                check_interval=15,
+            )
             app["config_app"]["cluster_update_notifier"] = cluster_update_notifier
 
             logger.info("Initializing JobsService")
