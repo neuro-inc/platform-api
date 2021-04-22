@@ -319,7 +319,7 @@ class TestApi:
                 ],
             }
             expected_payload: Dict[str, Any] = {
-                "admin_url": "http://localhost:8080/apis/admin/v1",
+                "admin_url": "http://0.0.0.0:8085/api/v1/",
                 "clusters": [
                     expected_cluster_payload,
                     {**expected_cluster_payload, **{"name": "testcluster2"}},
@@ -442,7 +442,7 @@ class TestApi:
                     "http://127.0.0.1:54541",
                     "http://127.0.0.1:54542",
                 ],
-                "admin_url": "http://localhost:8080/apis/admin/v1",
+                "admin_url": "http://0.0.0.0:8085/api/v1/",
                 "clusters": [expected_cluster_payload],
                 **expected_cluster_payload,
             }
