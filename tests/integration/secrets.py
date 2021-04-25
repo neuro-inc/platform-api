@@ -3,7 +3,7 @@ import base64
 import subprocess
 import sys
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Callable
+from typing import Any, AsyncContextManager, AsyncIterator, Callable
 
 import aiodocker
 import aiodocker.containers
@@ -179,8 +179,8 @@ async def create_secrets_client(
 @pytest.fixture
 async def secrets_client_factory(
     secrets_server_url: URL,
-) -> Callable[[_User], AsyncIterator[SecretsClient]]:
-    def _f(user: _User) -> AsyncIterator[SecretsClient]:
+) -> Callable[[_User], AsyncContextManager[SecretsClient]]:
+    def _f(user: _User) -> AsyncContextManager[SecretsClient]:
         return create_secrets_client(secrets_server_url, user.name, user.token)
 
     return _f

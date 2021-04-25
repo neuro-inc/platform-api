@@ -143,7 +143,7 @@ class TestJobPolicyEnforcePoller:
     @pytest.fixture
     async def run_enforce_polling(
         self, job_policy_enforcer_config: JobPolicyEnforcerConfig
-    ) -> Callable[[JobPolicyEnforcer], AsyncIterator[JobPolicyEnforcePoller]]:
+    ) -> Callable[[JobPolicyEnforcer], AsyncContextManager[JobPolicyEnforcePoller]]:
         @asynccontextmanager
         async def _factory(
             enforcer: JobPolicyEnforcer,

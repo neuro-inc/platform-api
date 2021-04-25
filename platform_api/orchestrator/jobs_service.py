@@ -304,6 +304,8 @@ class JobsService:
             if max_run_time_minutes is not None:
                 record.max_run_time_minutes = max_run_time_minutes
             else:
+                assert additional_max_run_time_minutes
+                record.max_run_time_minutes = record.max_run_time_minutes or 0
                 record.max_run_time_minutes += additional_max_run_time_minutes
 
     async def _get_cluster_job(self, record: JobRecord) -> Job:
