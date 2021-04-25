@@ -1,14 +1,14 @@
 import asyncio
 import subprocess
 import sys
-from typing import Any, AsyncIterator, Callable
+from contextlib import asynccontextmanager
+from typing import Any, AsyncContextManager, AsyncIterator, Callable
 
 import aiodocker
 import aiodocker.containers
 import aiohttp
 import pytest
 from aiohttp import ClientError
-from async_generator import asynccontextmanager
 from async_timeout import timeout
 from yarl import URL
 
@@ -183,8 +183,8 @@ async def create_disk_api_client(
 @pytest.fixture
 async def disk_client_factory(
     disk_server_url: URL,
-) -> Callable[[_User], AsyncIterator[DiskAPIClient]]:
-    def _f(user: _User) -> AsyncIterator[DiskAPIClient]:
+) -> Callable[[_User], AsyncContextManager[DiskAPIClient]]:
+    def _f(user: _User) -> AsyncContextManager[DiskAPIClient]:
         return create_disk_api_client(user.cluster_name, disk_server_url, user.token)
 
     return _f

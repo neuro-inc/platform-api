@@ -1,8 +1,7 @@
 import json
+from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import AsyncIterator, Dict, Iterable, List, Optional, Tuple
-
-from async_generator import asynccontextmanager
 
 from platform_api.orchestrator.job import JobRecord
 from platform_api.orchestrator.job_request import JobError

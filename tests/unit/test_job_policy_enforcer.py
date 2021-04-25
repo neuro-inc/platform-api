@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import logging
+from contextlib import asynccontextmanager
 from decimal import Decimal
 from typing import (
     Any,
@@ -16,7 +17,6 @@ from typing import (
 )
 
 import pytest
-from async_generator import asynccontextmanager
 from neuro_auth_client import (
     Cluster as AuthCluster,
     Quota as AuthQuota,
@@ -143,7 +143,7 @@ class TestJobPolicyEnforcePoller:
     @pytest.fixture
     async def run_enforce_polling(
         self, job_policy_enforcer_config: JobPolicyEnforcerConfig
-    ) -> Callable[[JobPolicyEnforcer], AsyncIterator[JobPolicyEnforcePoller]]:
+    ) -> Callable[[JobPolicyEnforcer], AsyncContextManager[JobPolicyEnforcePoller]]:
         @asynccontextmanager
         async def _factory(
             enforcer: JobPolicyEnforcer,

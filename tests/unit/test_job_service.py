@@ -1825,6 +1825,7 @@ class TestJobsServiceCluster:
             def _f(*args: Any, **kwargs: Any) -> Exception:
                 raise RuntimeError("test")
 
+            assert isinstance(cluster.orchestrator, MockOrchestrator)
             cluster.orchestrator.raise_on_get_job_status = True
             cluster.orchestrator.get_job_status_exc_factory = _f
 
@@ -2066,6 +2067,7 @@ class TestJobsServiceCluster:
             def _f(*args: Any, **kwargs: Any) -> Exception:
                 raise RuntimeError("test")
 
+            assert isinstance(cluster.orchestrator, MockOrchestrator)
             cluster.orchestrator.raise_on_delete = True
             cluster.orchestrator.delete_job_exc_factory = _f
 

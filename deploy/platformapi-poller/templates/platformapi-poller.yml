@@ -57,37 +57,27 @@ spec:
           value: {{ .Values.NP_PLATFORM_CONFIG_URI }}
         - name: NP_AUTH_PUBLIC_URL
           value: {{ .Values.NP_AUTH_PUBLIC_URL }}
-        {{- if .Values.NP_ZIPKIN_URL }}
+        {{- if .Values.zipkin }}
         - name: NP_ZIPKIN_URL
-          value: {{ .Values.NP_ZIPKIN_URL }}
+          value: {{ .Values.zipkin.url }}
+        {{- if .Values.k8sSuffix }}
         - name: NP_ZIPKIN_APP_NAME
-        {{- if .Values.NP_ZIPKIN_APP_NAME }}
-          value: {{ .Values.NP_ZIPKIN_APP_NAME }}
-        {{- else }}
-          value: platformapi-poller{{ .Values.k8sSuffix }}
+          value: platform-api-poller{{ .Values.k8sSuffix }}
         {{- end }}
-        {{- end }}
-        {{- if .Values.NP_ZIPKIN_SAMPLE_RATE }}
         - name: NP_ZIPKIN_SAMPLE_RATE
-          value: {{ .Values.NP_ZIPKIN_SAMPLE_RATE | quote }}
+          value: {{ .Values.zipkin.sampleRate | default 0 | quote }}
         {{- end }}
-        {{- if .Values.NP_SENTRY_URL }}
-        - name: NP_SENTRY_URL
-          value: {{ .Values.NP_SENTRY_URL }}
+        {{- if .Values.sentry }}
+        - name: NP_SENTRY_DSN
+          value: {{ .Values.sentry.dsn }}
+        {{- if .Values.k8sSuffix }}
         - name: NP_SENTRY_APP_NAME
-        {{- if .Values.NP_SENTRY_APP_NAME }}
-          value: {{ .Values.NP_SENTRY_APP_NAME }}
-        {{- else }}
-          value: platformapi-poller{{ .Values.k8sSuffix }}
+          value: platform-api-poller{{ .Values.k8sSuffix }}
         {{- end }}
-        {{- end }}
-        {{- if .Values.NP_SENTRY_CLUSTER_NAME }}
         - name: NP_SENTRY_CLUSTER_NAME
-          value: {{ .Values.NP_SENTRY_CLUSTER_NAME }}
-        {{- end }}
-        {{- if .Values.NP_SENTRY_SAMPLE_RATE }}
+          value: {{ .Values.sentry.clusterName }}
         - name: NP_SENTRY_SAMPLE_RATE
-          value: {{ .Values.NP_SENTRY_SAMPLE_RATE | quote }}
+          value: {{ .Values.sentry.sampleRate | default 0 | quote }}
         {{- end }}
         {{- if .Values.NP_CLUSTER_NAME }}
         - name: NP_CLUSTER_NAME

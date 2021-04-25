@@ -6,6 +6,8 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
+import aiohttp
+
 from platform_api.cluster_config import (
     OrchestratorConfig,
     RegistryConfig,
@@ -118,6 +120,7 @@ class KubeOrchestrator(Orchestrator):
         registry_config: RegistryConfig,
         orchestrator_config: OrchestratorConfig,
         kube_config: KubeConfig,
+        trace_configs: Optional[List[aiohttp.TraceConfig]] = None,
     ) -> None:
         self._loop = asyncio.get_event_loop()
         self._storage_config = storage_config
@@ -141,6 +144,7 @@ class KubeOrchestrator(Orchestrator):
             conn_timeout_s=kube_config.client_conn_timeout_s,
             read_timeout_s=kube_config.client_read_timeout_s,
             conn_pool_size=kube_config.client_conn_pool_size,
+            trace_configs=trace_configs,
         )
 
         self._storage_volume = self.create_storage_volume()

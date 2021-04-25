@@ -1,5 +1,6 @@
 import json
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from typing import (
@@ -17,7 +18,6 @@ import asyncpgsa
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
 import sqlalchemy.sql as sasql
-from async_generator import asynccontextmanager
 from asyncpg import Connection, SerializationError, UniqueViolationError
 from asyncpg.cursor import CursorFactory
 from asyncpg.pool import Pool

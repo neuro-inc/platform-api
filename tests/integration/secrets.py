@@ -2,14 +2,14 @@ import asyncio
 import base64
 import subprocess
 import sys
-from typing import Any, AsyncIterator, Callable
+from contextlib import asynccontextmanager
+from typing import Any, AsyncContextManager, AsyncIterator, Callable
 
 import aiodocker
 import aiodocker.containers
 import aiohttp
 import pytest
 from aiohttp import ClientError
-from async_generator import asynccontextmanager
 from async_timeout import timeout
 from yarl import URL
 
@@ -179,8 +179,8 @@ async def create_secrets_client(
 @pytest.fixture
 async def secrets_client_factory(
     secrets_server_url: URL,
-) -> Callable[[_User], AsyncIterator[SecretsClient]]:
-    def _f(user: _User) -> AsyncIterator[SecretsClient]:
+) -> Callable[[_User], AsyncContextManager[SecretsClient]]:
+    def _f(user: _User) -> AsyncContextManager[SecretsClient]:
         return create_secrets_client(secrets_server_url, user.name, user.token)
 
     return _f

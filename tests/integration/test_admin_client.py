@@ -1,9 +1,9 @@
+from contextlib import asynccontextmanager
 from decimal import Decimal
 from typing import AsyncIterator
 
 import aiohttp.web
 import pytest
-from async_generator import asynccontextmanager
 from yarl import URL
 
 from platform_api.admin_client import AdminClient

@@ -20,3 +20,8 @@ ingress:
   extraAnnotations:
     external-dns.platform.neuromation.io: "true"
   hosts: [dev.neu.ro]
+
+sentry:
+  dsn: https://11316dd021994d7085c50e86c2ae404c@o454648.ingest.sentry.io/5597106
+  clusterName: dev
+  sampleRate: 0.1

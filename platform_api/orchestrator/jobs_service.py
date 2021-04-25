@@ -1,12 +1,12 @@
 import base64
 import json
 import logging
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
-from async_generator import asynccontextmanager
 from neuro_auth_client import (
     AuthClient,
     Cluster as AuthCluster,
@@ -304,6 +304,8 @@ class JobsService:
             if max_run_time_minutes is not None:
                 record.max_run_time_minutes = max_run_time_minutes
             else:
+                assert additional_max_run_time_minutes
+                record.max_run_time_minutes = record.max_run_time_minutes or 0
                 record.max_run_time_minutes += additional_max_run_time_minutes
 
     async def _get_cluster_job(self, record: JobRecord) -> Job:
