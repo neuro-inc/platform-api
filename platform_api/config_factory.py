@@ -48,7 +48,6 @@ class EnvironConfigFactory:
             server=self.create_server(),
             database=self.create_database(),
             auth=auth,
-            zipkin=self.create_zipkin(),
             oauth=self.try_create_oauth(),
             jobs=jobs,
             job_policy_enforcer=self.create_job_policy_enforcer(),
@@ -58,22 +57,26 @@ class EnvironConfigFactory:
             config_url=config_url,
             admin_url=admin_url,
             api_base_url=api_base_url,
-            sentry=self.create_sentry(),
+            zipkin=self.create_zipkin("platform-api"),
+            sentry=self.create_sentry("platform-api"),
         )
 
-    def create_sentry(self) -> Optional[SentryConfig]:
-        url = self._environ.get("NP_SENTRY_URL")
-        cluster_name = self._environ.get("NP_SENTRY_CLUSTER_NAME")
-        if url and cluster_name:
-            return SentryConfig(
-                url=URL(url),
-                cluster_name=cluster_name,
-                app_name=self._environ.get("NP_SENTRY_APP_NAME", SentryConfig.app_name),
-                sample_rate=float(
-                    self._environ.get("NP_SENTRY_SAMPLE_RATE", SentryConfig.sample_rate)
-                ),
-            )
-        return None
+    def create_sentry(self, default_app_name: str) -> Optional[SentryConfig]:
+        if "NP_SENTRY_DSN" not in self._environ:
+            return None
+
+        dsn = URL(self._environ["NP_SENTRY_DSN"])
+        app_name = self._environ.get("NP_SENTRY_APP_NAME", default_app_name)
+        cluster_name = self._environ["NP_SENTRY_CLUSTER_NAME"]
+        sample_rate = float(
+            self._environ.get("NP_SENTRY_SAMPLE_RATE", SentryConfig.sample_rate)
+        )
+        return SentryConfig(
+            dsn=dsn,
+            cluster_name=cluster_name,
+            app_name=app_name,
+            sample_rate=sample_rate,
+        )
 
     def create_poller(self) -> PollerConfig:
         auth = self.create_auth()
@@ -88,8 +91,8 @@ class EnvironConfigFactory:
             scheduler=self.create_job_scheduler(),
             config_url=config_url,
             cluster_name=cluster_name,
-            zipkin=self.create_zipkin(),
-            sentry=self.create_sentry(),
+            zipkin=self.create_zipkin("platform-api-poller"),
+            sentry=self.create_sentry("platform-api-poller"),
             registry_config=self.create_registry(),
             storage_config=self.create_storage(),
             kube_config=self.create_kube(),
@@ -162,12 +165,12 @@ class EnvironConfigFactory:
             public_endpoint_url=public_endpoint_url,
         )
 
-    def create_zipkin(self) -> Optional[ZipkinConfig]:
+    def create_zipkin(self, default_app_name: str) -> Optional[ZipkinConfig]:
         if "NP_ZIPKIN_URL" not in self._environ:
             return None
 
         url = URL(self._environ["NP_ZIPKIN_URL"])
-        app_name = self._environ.get("NP_ZIPKIN_APP_NAME", ZipkinConfig.app_name)
+        app_name = self._environ.get("NP_ZIPKIN_APP_NAME", default_app_name)
         sample_rate = float(
             self._environ.get("NP_ZIPKIN_SAMPLE_RATE", ZipkinConfig.sample_rate)
         )

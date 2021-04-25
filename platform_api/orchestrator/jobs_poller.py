@@ -143,16 +143,24 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
 class HttpJobsPollerApi(JobsPollerApi):
     _client: Optional[aiohttp.ClientSession] = None
 
-    def __init__(self, url: URL, token: str, cluster_name: str):
+    def __init__(
+        self,
+        url: URL,
+        token: str,
+        cluster_name: str,
+        trace_configs: Optional[List[aiohttp.TraceConfig]] = None,
+    ):
         self._base_url = url
         self._token = token
         self._cluster_name = cluster_name
+        self._trace_configs = trace_configs
 
     async def init(self) -> None:
         if self._client:
             return
         self._client = aiohttp.ClientSession(
-            headers={"Authorization": "Bearer " + self._token}
+            headers={"Authorization": "Bearer " + self._token},
+            trace_configs=self._trace_configs,
         )
 
     async def close(self) -> None:

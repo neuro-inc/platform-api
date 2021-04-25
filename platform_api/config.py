@@ -19,7 +19,7 @@ class ServerConfig:
 @dataclass(frozen=True)
 class ZipkinConfig:
     url: URL
-    app_name: str = "platformapi"
+    app_name: str
     sample_rate: float = 0
 
 
@@ -128,9 +128,9 @@ class JobsSchedulerConfig:
 
 @dataclass(frozen=True)
 class SentryConfig:
-    url: URL
+    dsn: URL
     cluster_name: str
-    app_name: str = "platformapi"
+    app_name: str
     sample_rate: float = 0
 
 

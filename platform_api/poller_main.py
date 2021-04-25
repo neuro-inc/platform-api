@@ -1,20 +1,21 @@
 import asyncio
 import logging
 from contextlib import AsyncExitStack
-from typing import AsyncIterator, Callable, Optional
+from typing import AsyncIterator, Callable, List, Optional
 
 import aiohttp.web
-import aiozipkin
+from aiohttp.web_urldispatcher import AbstractRoute
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
 from platform_logging import (
     init_logging,
     make_sentry_trace_config,
+    make_zipkin_trace_config,
     notrace,
     setup_sentry,
     setup_zipkin,
+    setup_zipkin_tracer,
 )
-from platform_logging.trace import create_zipkin_tracer
 
 from .api import add_version_to_header, handle_exceptions
 from .cluster import Cluster, ClusterConfig, ClusterHolder, SingleClusterUpdater
@@ -29,24 +30,16 @@ from .orchestrator.poller_service import JobsScheduler
 logger = logging.getLogger(__name__)
 
 
-class PingHandler:
-    def __init__(self, *, app: aiohttp.web.Application, config: PollerConfig):
+class Handler:
+    def __init__(self, app: aiohttp.web.Application):
         self._app = app
-        self._config = config
 
-    def register(self, app: aiohttp.web.Application) -> None:
-        app.add_routes((aiohttp.web.get("/ping", self.handle_ping),))
+    def register(self, app: aiohttp.web.Application) -> List[AbstractRoute]:
+        return app.add_routes((aiohttp.web.get("/ping", self.handle_ping),))
 
     @notrace
     async def handle_ping(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         return aiohttp.web.Response()
-
-
-async def create_ping_app(config: PollerConfig) -> aiohttp.web.Application:
-    ping_app = aiohttp.web.Application()
-    ping_handler = PingHandler(app=ping_app, config=config)
-    ping_handler.register(ping_app)
-    return ping_app
 
 
 def create_cluster_factory(
@@ -58,9 +51,22 @@ def create_cluster_factory(
             storage_config=config.storage_config,
             cluster_config=cluster_config,
             kube_config=config.kube_config,
+            trace_configs=make_tracing_trace_configs(config),
         )
 
     return _create_cluster
+
+
+def make_tracing_trace_configs(config: PollerConfig) -> List[aiohttp.TraceConfig]:
+    trace_configs = []
+
+    if config.zipkin:
+        trace_configs.append(make_zipkin_trace_config())
+
+    if config.sentry:
+        trace_configs.append(make_sentry_trace_config())
+
+    return trace_configs
 
 
 async def create_app(
@@ -68,21 +74,6 @@ async def create_app(
 ) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
-
-    trace_configs = []
-
-    if config.zipkin:
-        tracer = await create_zipkin_tracer(
-            config.zipkin.app_name,
-            config.server.host,
-            config.server.port,
-            config.zipkin.url,
-            config.zipkin.sample_rate,
-        )
-        trace_configs.append(aiozipkin.make_trace_config(tracer))
-
-    if config.sentry:
-        trace_configs.append(make_sentry_trace_config())
 
     async def _init_app(app: aiohttp.web.Application) -> AsyncIterator[None]:
         async with AsyncExitStack() as exit_stack:
@@ -92,7 +83,7 @@ async def create_app(
                 AuthClient(
                     url=config.auth.server_endpoint_url,
                     token=config.auth.service_token,
-                    trace_configs=trace_configs,
+                    trace_configs=make_tracing_trace_configs(config),
                 )
             )
 
@@ -110,6 +101,7 @@ async def create_app(
                 ConfigClient(
                     base_url=config.config_url,
                     service_token=config.auth.service_token,
+                    trace_configs=make_tracing_trace_configs(config),
                 )
             )
 
@@ -119,6 +111,7 @@ async def create_app(
                     url=config.platform_api_url,
                     token=config.auth.service_token,
                     cluster_name=config.cluster_name,
+                    trace_configs=make_tracing_trace_configs(config),
                 )
             )
 
@@ -153,36 +146,44 @@ async def create_app(
 
     app.cleanup_ctx.append(_init_app)
 
-    api_v1_app = await create_ping_app(config)
-    api_v1_routes = (
-        api_v1_app.router.routes()
-    )  # save ping endpoints to skip later for zipkin
+    api_v1_app = aiohttp.web.Application()
+    api_v1_handler = Handler(api_v1_app)
+    probes_routes = api_v1_handler.register(api_v1_app)
 
     app.add_subapp("/api/v1", api_v1_app)
 
-    if config.zipkin:
-        assert tracer
-        setup_zipkin(app, tracer, skip_routes=api_v1_routes)
-
     app.on_response_prepare.append(add_version_to_header)
 
+    if config.zipkin:
+        setup_zipkin(app, skip_routes=probes_routes)
+
     return app
+
+
+def setup_tracing(config: PollerConfig) -> None:
+    if config.zipkin:
+        setup_zipkin_tracer(
+            config.zipkin.app_name,
+            config.server.host,
+            config.server.port,
+            config.zipkin.url,
+            config.zipkin.sample_rate,
+        )
+
+    if config.sentry:
+        setup_sentry(
+            config.sentry.dsn,
+            app_name=config.sentry.app_name,
+            cluster_name=config.sentry.cluster_name,
+            sample_rate=config.sentry.sample_rate,
+        )
 
 
 def main() -> None:
     init_logging()
     config = EnvironConfigFactory().create_poller()
     logging.info("Loaded config: %r", config)
-
     loop = asyncio.get_event_loop()
-
-    if config.sentry:
-        setup_sentry(
-            config.sentry.url,
-            app_name=config.sentry.app_name,
-            cluster_name=config.sentry.cluster_name,
-            sample_rate=config.sentry.sample_rate,
-        )
-
+    setup_tracing(config)
     app = loop.run_until_complete(create_app(config))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)
