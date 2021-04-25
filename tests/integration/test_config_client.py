@@ -1,8 +1,8 @@
+from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Dict, List
 
 import aiohttp
 import pytest
-from async_generator import asynccontextmanager
 from yarl import URL
 
 from platform_api.config_client import ConfigClient

@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import (
     AsyncGenerator,
@@ -15,7 +16,6 @@ import aiodocker
 import pytest
 from aiohttp import ClientError
 from aiohttp.hdrs import AUTHORIZATION
-from async_generator import asynccontextmanager
 from async_timeout import timeout
 from jose import jwt
 from neuro_auth_client import (

@@ -1,13 +1,13 @@
 import abc
 import logging
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import AsyncIterator, Callable, Dict, List, Optional, Tuple, Union
 
 from aiohttp import ClientResponseError
-from async_generator import asynccontextmanager
 from neuro_auth_client import AuthClient
 
 from platform_api.cluster import (

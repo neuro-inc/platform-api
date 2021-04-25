@@ -1,6 +1,7 @@
 import asyncio
 import subprocess
 import sys
+from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Callable
 
 import aiodocker
@@ -8,7 +9,6 @@ import aiodocker.containers
 import aiohttp
 import pytest
 from aiohttp import ClientError
-from async_generator import asynccontextmanager
 from async_timeout import timeout
 from yarl import URL
 

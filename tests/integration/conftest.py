@@ -1,6 +1,7 @@
 import asyncio
 import json
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -22,7 +23,6 @@ import aiohttp
 import aiohttp.pytest_plugin
 import aiohttp.web
 import pytest
-from async_generator import asynccontextmanager
 from async_timeout import timeout
 from yarl import URL
 

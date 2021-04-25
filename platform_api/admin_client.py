@@ -1,8 +1,8 @@
+from contextlib import asynccontextmanager
 from decimal import Decimal
 from typing import Any, AsyncIterator, Optional, Sequence
 
 import aiohttp
-from async_generator import asynccontextmanager
 from multidict import CIMultiDict
 from yarl import URL
 

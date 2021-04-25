@@ -1,10 +1,10 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
+from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Sequence
 
 from aiorwlock import RWLock
-from async_generator import asynccontextmanager
 
 from .cluster_config import ClusterConfig
 from .config import Config

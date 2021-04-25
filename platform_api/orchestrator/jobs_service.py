@@ -1,12 +1,12 @@
 import base64
 import json
 import logging
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
-from async_generator import asynccontextmanager
 from neuro_auth_client import (
     AuthClient,
     Cluster as AuthCluster,

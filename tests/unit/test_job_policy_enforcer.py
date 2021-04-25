@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import logging
+from contextlib import asynccontextmanager
 from decimal import Decimal
 from typing import (
     Any,
@@ -16,7 +17,6 @@ from typing import (
 )
 
 import pytest
-from async_generator import asynccontextmanager
 from neuro_auth_client import (
     Cluster as AuthCluster,
     Quota as AuthQuota,
