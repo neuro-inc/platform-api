@@ -20,6 +20,7 @@ from typing import (
 
 from neuro_auth_client import AuthClient
 from notifications_client import Client as NotificationsClient, CreditsWillRunOutSoon
+from platform_logging import new_trace, trace
 
 from platform_api.admin_client import AdminClient
 from platform_api.config import JobPolicyEnforcerConfig
@@ -73,6 +74,7 @@ class CreditsNotificationsEnforcer(JobPolicyEnforcer):
         )
         self._sent[notification_key] = credits
 
+    @trace
     async def enforce(self) -> None:
         running_jobs = self._jobs_service.iter_all_jobs(
             job_filter=JobFilter(
@@ -103,6 +105,7 @@ class RuntimeLimitEnforcer(JobPolicyEnforcer):
     def __init__(self, service: JobsService):
         self._service = service
 
+    @trace
     async def enforce(self) -> None:
         active_jobs = await self._service.get_all_jobs(
             job_filter=JobFilter(
@@ -144,6 +147,7 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
             res[key(item)].append(item)
         return res
 
+    @trace
     async def enforce(self) -> None:
         jobs = await self._service.get_all_jobs(
             job_filter=JobFilter(
@@ -184,6 +188,7 @@ class BillingEnforcer(JobPolicyEnforcer):
         self._service = service
         self._admin_client = admin_client
 
+    @trace
     async def enforce(self) -> None:
         coros = [
             self._bill_single_wrapper(job)
@@ -258,6 +263,7 @@ class JobPolicyEnforcePoller:
                 delay = 0
             await asyncio.sleep(delay)
 
+    @new_trace
     async def _run_once(self) -> None:
         for enforcer in self._enforcers:
             try:

@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Mapping, Optional
 import aiohttp
 from iso8601 import iso8601
 from multidict import MultiDict
+from platform_logging import new_trace
 from yarl import URL
 
 from ..cluster import SingleClusterUpdater
@@ -280,6 +281,7 @@ class JobsPoller:
             await self._run_once()
             await self._wait()
 
+    @new_trace
     async def _run_once(self) -> None:
         try:
             await self._cluster_updater.do_update()
