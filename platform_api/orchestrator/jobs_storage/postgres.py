@@ -165,10 +165,11 @@ class PostgresJobsStorage(JobsStorage):
             if e.constraint_name == "jobs_name_owner_uq":
                 # We need to retrieve conflicting job from database to
                 # build JobStorageJobFoundError
-                query = self._tables.jobs.select().where(
-                    self._tables.jobs.c.name == values["name"]
-                    and self._tables.jobs.c.owner == values["owner"]
-                    and self._tables.jobs.c.status in JobStatus.active_values()
+                query = (
+                    self._tables.jobs.select()
+                    .where(self._tables.jobs.c.name == values["name"])
+                    .where(self._tables.jobs.c.owner == values["owner"])
+                    .where(self._tables.jobs.c.status.in_(JobStatus.active_values()))
                 )
                 record = await self._fetchrow(query)
                 if record:
