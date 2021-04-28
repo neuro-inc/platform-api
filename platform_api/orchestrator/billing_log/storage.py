@@ -20,6 +20,7 @@ import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
 from asyncpg import Connection, Pool, UniqueViolationError
 from asyncpg.protocol.protocol import Record
+from platform_logging import trace, trace_cm
 from sqlalchemy import asc, desc
 
 from platform_api.orchestrator.base_postgres_storage import BasePostgresStorage
@@ -206,6 +207,7 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
 
     # Public functions
 
+    @trace
     async def get_or_create_sync_record(self) -> BillingLogSyncRecord:
         try:
             empty = BillingLogSyncRecord(0)
@@ -220,6 +222,7 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
             return await self.get_or_create_sync_record()
         return self._record_to_sync_record(record)
 
+    @trace
     async def update_sync_record(self, record: BillingLogSyncRecord) -> None:
         values = self._sync_record_to_values(record)
         query = (
@@ -251,7 +254,10 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
     async def entries_inserter(
         self,
     ) -> AsyncIterator[BillingLogStorage.EntriesInserter]:
-        async with self._pool.acquire() as conn, conn.transaction():
+        tracing_name = PostgresBillingLogStorage.entries_inserter.__qualname__
+        async with trace_cm(
+            tracing_name
+        ), self._pool.acquire() as conn, conn.transaction():
             await self._execute(
                 f"LOCK TABLE {self._tables.billing_log.name} IN SHARE "
                 "UPDATE EXCLUSIVE MODE",
@@ -262,16 +268,19 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
     async def iter_entries(
         self, *, with_ids_greater: int = 0, limit: Optional[int] = None
     ) -> AsyncIterator[BillingLogEntry]:
-        query = self._tables.billing_log.select()
-        if with_ids_greater:
-            query = query.where(self._tables.billing_log.c.id > with_ids_greater)
-        query = query.order_by(asc(self._tables.billing_log.c.id))
-        if limit:
-            query = query.limit(limit)
-        async with self._pool.acquire() as conn, conn.transaction():
-            async for record in self._cursor(query, conn=conn):
-                yield self._record_to_log_entry(record)
+        tracing_name = PostgresBillingLogStorage.iter_entries.__qualname__
+        async with trace_cm(tracing_name):
+            query = self._tables.billing_log.select()
+            if with_ids_greater:
+                query = query.where(self._tables.billing_log.c.id > with_ids_greater)
+            query = query.order_by(asc(self._tables.billing_log.c.id))
+            if limit:
+                query = query.limit(limit)
+            async with self._pool.acquire() as conn, conn.transaction():
+                async for record in self._cursor(query, conn=conn):
+                    yield self._record_to_log_entry(record)
 
+    @trace
     async def get_last_entry_id(self, job_id: Optional[str] = None) -> int:
         query = self._tables.billing_log.select()
         if job_id:
