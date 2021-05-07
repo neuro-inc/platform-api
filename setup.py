@@ -17,7 +17,7 @@ install_requires = (
     "aiohttp-cors==0.7.0",
     "aiozipkin==1.0.0",
     "asyncpg==0.22.0",
-    "sqlalchemy==1.3.23",
+    "sqlalchemy==1.4.14",
     "asyncpgsa==0.27.1",
     "alembic==1.5.8",
     "psycopg2-binary==2.8.6",
