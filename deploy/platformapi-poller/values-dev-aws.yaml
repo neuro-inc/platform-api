@@ -22,6 +22,6 @@ ingress:
   hosts: [dev.neu.ro]
 
 sentry:
-  dsn: https://50b58a0c0dff40dea937db7da8f09055@o489136.ingest.sentry.io/5530426
+  dsn: https://432bc48cd2444be7afec5efeb1fc03a6@o489136.ingest.sentry.io/5530426
   clusterName: dev
   sampleRate: 0.01
