@@ -209,18 +209,19 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
 
     @trace
     async def get_or_create_sync_record(self) -> BillingLogSyncRecord:
-        try:
-            empty = BillingLogSyncRecord(0)
-            values = self._sync_record_to_values(empty)
-            query = self._tables.sync_record.insert().values(values)
-            await self._execute(query)
-        except UniqueViolationError:
-            pass
         query = self._tables.sync_record.select()
         record = await self._fetchrow(query)
         if not record:
+            try:
+                empty = BillingLogSyncRecord(0)
+                values = self._sync_record_to_values(empty)
+                query = self._tables.sync_record.insert().values(values)
+                await self._execute(query)
+            except UniqueViolationError:
+                pass
             return await self.get_or_create_sync_record()
-        return self._record_to_sync_record(record)
+        else:
+            return self._record_to_sync_record(record)
 
     @trace
     async def update_sync_record(self, record: BillingLogSyncRecord) -> None:
