@@ -194,9 +194,7 @@ class BillingEnforcer(JobPolicyEnforcer):
 
     async def enforce(self) -> None:
         coros = [
-            asyncio.wait_for(
-                self._bill_single(job.id), timeout=self._proceed_wait_timeout_s
-            )
+            self._bill_single(job.id)
             async for job in self._jobs_service.get_not_billed_jobs()
         ]
         await run_and_log_exceptions(coros)
