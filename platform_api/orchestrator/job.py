@@ -814,10 +814,18 @@ class Job:
     def is_restartable(self) -> bool:
         return self._record.is_restartable
 
-    def get_run_time(self, only_after: Optional[datetime] = None) -> timedelta:
+    def get_run_time(
+        self, only_after: Optional[datetime] = None, now: Optional[datetime] = None
+    ) -> timedelta:
+        def datetime_factory() -> datetime:
+            if now:
+                return now
+            else:
+                return self._current_datetime_factory()
+
         return self._record.get_run_time(
             only_after=only_after,
-            current_datetime_factory=self._current_datetime_factory,
+            current_datetime_factory=datetime_factory,
         )
 
     @property

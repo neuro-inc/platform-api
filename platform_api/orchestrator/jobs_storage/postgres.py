@@ -14,12 +14,10 @@ from typing import (
     Optional,
 )
 
-import asyncpgsa
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
 import sqlalchemy.sql as sasql
 from asyncpg import Connection, SerializationError, UniqueViolationError
-from asyncpg.cursor import CursorFactory
 from asyncpg.pool import Pool
 from asyncpg.protocol.protocol import Record
 from sqlalchemy import Boolean, Integer, and_, asc, desc, or_, select
@@ -28,6 +26,7 @@ from platform_api.orchestrator.job import AggregatedRunTime, JobRecord
 from platform_api.orchestrator.job_request import JobError, JobStatus
 from platform_api.orchestrator.jobs_storage import JobFilter
 
+from ..base_postgres_storage import BasePostgresStorage
 from .base import (
     ClusterOwnerNameSet,
     JobsStorage,
@@ -81,37 +80,10 @@ class JobTables:
         )
 
 
-class PostgresJobsStorage(JobsStorage):
+class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
     def __init__(self, pool: Pool, tables: Optional[JobTables] = None) -> None:
-        self._pool = pool
+        super().__init__(pool)
         self._tables = tables or JobTables.create()
-
-    # Database helpers
-
-    async def _execute(
-        self, query: sasql.ClauseElement, conn: Optional[Connection] = None
-    ) -> str:
-        query_string, params = asyncpgsa.compile_query(query)
-        conn = conn or self._pool
-        return await conn.execute(query_string, *params)
-
-    async def _fetchrow(
-        self, query: sasql.ClauseElement, conn: Optional[Connection] = None
-    ) -> Optional[Record]:
-        query_string, params = asyncpgsa.compile_query(query)
-        conn = conn or self._pool
-        return await conn.fetchrow(query_string, *params)
-
-    async def _fetch(
-        self, query: sasql.ClauseElement, conn: Optional[Connection] = None
-    ) -> List[Record]:
-        query_string, params = asyncpgsa.compile_query(query)
-        conn = conn or self._pool
-        return await conn.fetch(query_string, *params)
-
-    def _cursor(self, query: sasql.ClauseElement, conn: Connection) -> CursorFactory:
-        query_string, params = asyncpgsa.compile_query(query)
-        return conn.cursor(query_string, *params)
 
     # Parsing/serialization
 

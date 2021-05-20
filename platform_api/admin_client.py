@@ -70,10 +70,17 @@ class AdminClient:
             yield response
 
     async def change_user_credits(
-        self, cluster_name: str, username: str, credits_delta: Decimal
+        self,
+        cluster_name: str,
+        username: str,
+        credits_delta: Decimal,
+        idempotency_key: str,
     ) -> None:
         payload = {"additional_quota": {"credits": str(credits_delta)}}
         async with self._request(
-            "PATCH", f"clusters/{cluster_name}/users/{username}/quota", json=payload
+            "PATCH",
+            f"clusters/{cluster_name}/users/{username}/quota",
+            json=payload,
+            params={"idempotency_key": idempotency_key},
         ) as response:
             response.raise_for_status()
