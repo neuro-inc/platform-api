@@ -1,10 +1,10 @@
 NP_API_URL: https://ml.cloud.mts.ru/api/v1
 NP_ADMIN_URL: https://ml.cloud.mts.ru/apis/admin/v1
 NP_AUTH_PUBLIC_URL: https://ml.cloud.mts.ru/api/v1/users
-NP_OAUTH_AUTH_URL: https://login.neu.ro/authorize
-NP_OAUTH_TOKEN_URL: https://login.neu.ro/oauth/token
-NP_OAUTH_LOGOUT_URL: https://login.neu.ro/v2/logout?returnTo=https://app.neu.ro/cli-logout
-NP_OAUTH_CLIENT_ID: uJV0pm5JPdHkXsSd525rlhFDVcEuUnaV
+NP_OAUTH_AUTH_URL: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/auth
+NP_OAUTH_TOKEN_URL: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/token
+NP_OAUTH_LOGOUT_URL: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/logout
+NP_OAUTH_CLIENT_ID: neuro-client
 NP_OAUTH_AUDIENCE: https://platform.staging.neuromation.io
 NP_OAUTH_SUCCESS_REDIRECT_URL: https://ml.cloud.mts.ru/oauth/login
 NP_OAUTH_HEADLESS_CALLBACK_URL: https://ml.cloud.mts.ru/oauth/show-code
