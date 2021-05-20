@@ -198,11 +198,8 @@ class BillingEnforcer(JobPolicyEnforcer):
 
     @trace
     async def enforce(self) -> None:
-        coros = [
-            self._bill_single(job.id)
-            async for job in self._jobs_service.get_not_billed_jobs()
-        ]
-        await run_and_log_exceptions(coros)
+        async for job in self._jobs_service.get_not_billed_jobs():
+            await self._bill_single(job.id)
 
     async def _bill_single(self, job_id: str) -> None:
         async with self._billing_service.entries_inserter() as inserter:
