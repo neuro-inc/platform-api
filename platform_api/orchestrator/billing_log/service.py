@@ -148,7 +148,7 @@ class BillingLogWorker:
             try:
                 await self._process()
             except asyncio.CancelledError:
-                pass
+                raise
             except Exception:
                 logger.exception("Processing billing entries failed")
                 await self._sleep_retry()
