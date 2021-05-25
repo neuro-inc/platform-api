@@ -276,7 +276,7 @@ class KubeOrchestrator(Orchestrator):
         logger.info(
             "Job %s is scheduled to run in pool types %s",
             job.id,
-            ", ".join([p.name for p in pool_types]),
+            ", ".join(p.name for p in pool_types),
         )
         tolerations = self._get_pod_tolerations(
             job, tolerate_unreachable_node=tolerate_unreachable_node
@@ -367,9 +367,9 @@ class KubeOrchestrator(Orchestrator):
     ) -> PodDescriptor:
         if not pod.resources:
             return pod
-        max_node_cpu = max([p.available_cpu or 0 for p in pool_types])
-        max_node_memory_mb = max([p.available_memory_mb or 0 for p in pool_types])
-        max_node_gpu = max([p.gpu or 0 for p in pool_types])
+        max_node_cpu = max(p.available_cpu or 0 for p in pool_types)
+        max_node_memory_mb = max(p.available_memory_mb or 0 for p in pool_types)
+        max_node_gpu = max(p.gpu or 0 for p in pool_types)
         pod_gpu = pod.resources.gpu or 0
         if (
             max_node_cpu > pod.resources.cpu
