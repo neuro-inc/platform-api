@@ -308,10 +308,10 @@ class TestJobsStorage:
         jobs = await storage.get_all_jobs()
 
         job_reprs = sorted(
-            [job.to_primitive() for job in jobs], key=lambda job: job["id"]
+            (job.to_primitive() for job in jobs), key=lambda job: job["id"]
         )
         original_job_reprs = sorted(
-            [job.to_primitive() for job in original_jobs], key=lambda job: job["id"]
+            (job.to_primitive() for job in original_jobs), key=lambda job: job["id"]
         )
         assert job_reprs == original_job_reprs
 
@@ -615,7 +615,7 @@ class TestJobsStorage:
     ) -> None:
         def sort_jobs_as_primitives(array: List[JobRecord]) -> List[Dict[str, Any]]:
             return sorted(
-                [job.to_primitive() for job in array], key=lambda job: job["id"]
+                (job.to_primitive() for job in array), key=lambda job: job["id"]
             )
 
         jobs = await self.prepare_filtering_test(storage)
