@@ -24,4 +24,4 @@ ingress:
 sentry:
   dsn: https://432bc48cd2444be7afec5efeb1fc03a6@o489136.ingest.sentry.io/5530426
   clusterName: dev
-  sampleRate: 0.01
+  sampleRate: 0.002
