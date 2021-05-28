@@ -3,15 +3,15 @@ registries:
   python-index-devpi-dev-neu-ro-testuser-dev:
     type: python-index
     url: https://devpi-dev.neu.ro/testuser/dev
-    username: "${{secrets.PYTHON_INDEX_DEVPI_DEV_NEU_RO_TESTUSER_DEV_USERNAME}}"
-    password: "${{secrets.PYTHON_INDEX_DEVPI_DEV_NEU_RO_TESTUSER_DEV_PASSWORD}}"
+    username: ${{secrets.PYTHON_INDEX_DEVPI_DEV_NEU_RO_TESTUSER_DEV_USERNAME}}
+    password: ${{secrets.PYTHON_INDEX_DEVPI_DEV_NEU_RO_TESTUSER_DEV_PASSWORD}}
 
 updates:
 - package-ecosystem: pip
-  directory: "/"
+  directory: /
   schedule:
     interval: daily
-    time: "03:00"
+    time: 03:00
   open-pull-requests-limit: 10
   ignore:
   - dependency-name: black
@@ -60,3 +60,9 @@ updates:
     - 1.5.2
   registries:
   - python-index-devpi-dev-neu-ro-testuser-dev
+- package-ecosystem: github-actions
+  directory: /
+  schedule:
+    interval: daily
+    time: 03:00
+  open-pull-requests-limit: 10
