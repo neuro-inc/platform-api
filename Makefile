@@ -12,18 +12,22 @@ HELM_ENV ?= dev
 
 TAG ?= latest
 
-IMAGE_NAME ?= platformapi
-IMAGE ?= $(IMAGE_NAME):$(TAG)
+IMAGE_NAME = platformapi
 
-CLOUD_IMAGE_REPO_gke   ?= $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)/$(IMAGE_NAME)
-CLOUD_IMAGE_REPO_aws   ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(IMAGE_NAME)
-CLOUD_IMAGE_REPO_azure ?= $(AZURE_ACR_NAME).azurecr.io/$(IMAGE_NAME)
-CLOUD_IMAGE_REPO_mts   ?= $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME)
-CLOUD_IMAGE_REPO       ?= $(CLOUD_IMAGE_REPO_$(CLOUD_PROVIDER))
-CLOUD_IMAGE            ?= $(CLOUD_IMAGE_REPO):$(TAG)
+CLOUD_IMAGE_REPO_gke   = $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)
+CLOUD_IMAGE_REPO_aws   = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+CLOUD_IMAGE_REPO_azure = $(AZURE_ACR_NAME).azurecr.io
+CLOUD_IMAGE_REPO       = $(CLOUD_IMAGE_REPO_$(CLOUD_PROVIDER))
 
-ARTIFACTORY_IMAGE_REPO = $(ARTIFACTORY_DOCKER_REPO)/$(IMAGE_NAME)
-ARTIFACTORY_IMAGE      = $(ARTIFACTORY_IMAGE_REPO):$(TAG)
+ARTIFACTORY_IMAGE_REPO = $(ARTIFACTORY_DOCKER_REPO)
+
+ifneq ($(CLOUD_IMAGE_REPO),)
+IMAGE_REPO = $(CLOUD_IMAGE_REPO)/$(IMAGE_NAME)
+else ifneq ($(ARTIFACTORY_IMAGE_REPO),)
+IMAGE_REPO = $(ARTIFACTORY_IMAGE_REPO)/$(IMAGE_NAME)
+else
+IMAGE_REPO = $(IMAGE_NAME)
+endif
 
 HELM_CHART ?= platformapi
 RELEASE_SUFFIX ?=
@@ -60,9 +64,16 @@ test_integration:
 
 docker_build:
 	python setup.py sdist
-	docker build -f Dockerfile.k8s -t $(IMAGE) \
+	docker build -f Dockerfile.k8s -t $(IMAGE_NAME):latest \
 		--build-arg PIP_EXTRA_INDEX_URL \
 		--build-arg DIST_FILENAME=`python setup.py --fullname`.tar.gz .
+
+docker_push: docker_build
+	docker tag $(IMAGE_NAME):latest $(IMAGE_REPO):$(TAG)
+	docker push $(IMAGE_REPO):$(TAG)
+
+	docker tag $(IMAGE_NAME):latest $(IMAGE_REPO):latest
+	docker push $(IMAGE_REPO):latest
 
 run_api_k8s:
 	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
@@ -110,17 +121,6 @@ docker_pull_test_images:
 	docker tag $(PLATFORMSECRETS_IMAGE) platformsecrets:latest
 	docker tag $(PLATFORMDISKAPI_IMAGE) platformdiskapi:latest
 
-docker_push: docker_build
-	docker tag $(IMAGE) $(CLOUD_IMAGE)
-	docker push $(CLOUD_IMAGE)
-
-	docker tag $(IMAGE) $(CLOUD_IMAGE_REPO):latest
-	docker push $(CLOUD_IMAGE_REPO):latest
-
-artifactory_docker_push: docker_build
-	docker tag $(IMAGE) $(ARTIFACTORY_IMAGE)
-	docker push $(ARTIFACTORY_IMAGE)
-
 helm_install:
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v $(HELM_VERSION)
 	helm init --client-only
@@ -137,18 +137,18 @@ _helm_fetch:
 	helm dependency update temp_deploy/$(HELM_CHART)
 
 _helm_expand_vars:
-	export IMAGE_REPO=$(ARTIFACTORY_IMAGE_REPO); \
+	export IMAGE_REPO=$(IMAGE_REPO); \
 	export IMAGE_TAG=$(TAG); \
 	export DOCKER_SERVER=$(ARTIFACTORY_DOCKER_REPO); \
 	cat deploy/$(HELM_CHART)/values-template.yaml | envsubst > temp_deploy/$(HELM_CHART)/values.yaml
 
 helm_deploy: _helm_fetch _helm_expand_vars
 	helm upgrade $(HELM_CHART)$(RELEASE_SUFFIX) temp_deploy/$(HELM_CHART) \
-		-f deploy/$(HELM_CHART)/values-$(HELM_ENV)-$(CLOUD_PROVIDER).yaml \
-		--set "image.repository=$(CLOUD_IMAGE_REPO)" \
+		-f deploy/$(HELM_CHART)/values-$(HELM_ENV).yaml \
+		--set "image.repository=$(IMAGE_REPO)" \
 		--set "NP_CLUSTER_NAME=$(CLUSTER_NAME)" \
 		--set "k8sSuffix=$(RELEASE_SUFFIX)" \
-		--set "postgres-db-init.migrations.image.repository=$(CLOUD_IMAGE_REPO)" \
+		--set "postgres-db-init.migrations.image.repository=$(IMAGE_REPO)" \
 		--namespace platform --install --wait --timeout 600
 
 artifactory_helm_push: _helm_fetch _helm_expand_vars

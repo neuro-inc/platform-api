@@ -56,11 +56,4 @@ postgres-db-init:
 ingress:
   enabled: true
 
-  extraAnnotations:
-    external-dns.platform.neuromation.io: "true"
   hosts: [ml.cloud.mts.ru]
-
-sentry:
-#  dsn: https://007c28df2e15451baefdd022386bbb47@o489136.ingest.sentry.io/5553359
-#  clusterName: staging
-#  sampleRate: 0.1
