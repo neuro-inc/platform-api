@@ -8,8 +8,6 @@ ARTIFACTORY_DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
 ARTIFACTORY_HELM_REPO ?= https://neuro.jfrog.io/artifactory/helm-local-public
 ARTIFACTORY_HELM_VIRTUAL_REPO ?= https://neuro.jfrog.io/artifactory/helm-virtual-public
 
-HELM_ENV ?= dev
-
 TAG ?= latest
 
 IMAGE_NAME = platformapi
