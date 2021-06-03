@@ -59,4 +59,4 @@ ingress:
 sentry:
   dsn: https://80b17e5f9cae4243a4a8b791e6481c9a@o489136.ingest.sentry.io/5553359
   clusterName: staging
-  sampleRate: 0.01
+  sampleRate: 0.002

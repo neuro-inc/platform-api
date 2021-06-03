@@ -1,5 +1,6 @@
 import asyncio
 import json
+from collections import defaultdict
 from decimal import Decimal
 from typing import (
     Any,
@@ -11,6 +12,7 @@ from typing import (
     Iterator,
     List,
     Optional,
+    Tuple,
 )
 from unittest import mock
 
@@ -31,12 +33,14 @@ from neuro_auth_client import Cluster as AuthCluster, Permission, Quota
 from yarl import URL
 
 from platform_api.cluster import ClusterConfigRegistry
+from platform_api.cluster_config import ClusterConfig
 from platform_api.config import Config
 from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
 from tests.conftest import random_str
 from tests.integration.secrets import SecretsClient
 from tests.integration.test_config_client import create_config_api
 
+from .admin import AdminServer
 from .api import ApiConfig, AuthApiConfig, JobsClient
 from .auth import AuthClient, _User
 from .conftest import MyKubeClient
@@ -315,7 +319,7 @@ class TestApi:
                 ],
             }
             expected_payload: Dict[str, Any] = {
-                "admin_url": "http://localhost:8080/apis/admin/v1",
+                "admin_url": "http://0.0.0.0:8085/api/v1/",
                 "clusters": [
                     expected_cluster_payload,
                     {**expected_cluster_payload, **{"name": "testcluster2"}},
@@ -438,7 +442,7 @@ class TestApi:
                     "http://127.0.0.1:54541",
                     "http://127.0.0.1:54542",
                 ],
-                "admin_url": "http://localhost:8080/apis/admin/v1",
+                "admin_url": "http://0.0.0.0:8085/api/v1/",
                 "clusters": [expected_cluster_payload],
                 **expected_cluster_payload,
             }
@@ -4943,3 +4947,59 @@ class TestRuntimeLimitEnforcer:
 
         await user_jobs_client.delete_job(job_2["id"], assert_success=False)
         await user_jobs_client.delete_job(job_3["id"], assert_success=False)
+
+
+class TestBillingEnforcer:
+    @pytest.mark.asyncio
+    async def test_enforce_billing(
+        self,
+        api: ApiConfig,
+        config: Config,
+        cluster_config: ClusterConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        regular_user_factory: Callable[[], Awaitable[_User]],
+        mock_admin_server: AdminServer,
+    ) -> None:
+        durations = [30, 25, 20, 15, 10, 5]
+
+        test_jobs: List[Tuple[Dict[str, Any], _User, JobsClient, int]] = []
+        for duration in durations:
+            job_submit["container"]["command"] = f"sleep {duration}s"
+            user = await regular_user_factory()
+            user_jobs_client = jobs_client_factory(user)
+            test_jobs.append(
+                (
+                    await user_jobs_client.create_job(job_submit),
+                    user,
+                    user_jobs_client,
+                    duration,
+                )
+            )
+
+        for job, _, user_jobs_client, _ in test_jobs:
+            await user_jobs_client.long_polling_by_job_id(
+                job_id=job["id"],
+                status="succeeded",
+            )
+
+        # Wait for 5 ticks for jobs to become charged
+        await asyncio.sleep(config.job_policy_enforcer.interval_sec * 5)
+
+        user_to_charge: Dict[str, Decimal] = defaultdict(Decimal)
+        for request in mock_admin_server.requests:
+            user_to_charge[request.username] += -request.amount
+
+        per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
+        second = Decimal("1") / 3600
+        for _, user, _, duration in test_jobs:
+            real_charge = user_to_charge[user.name]
+            expected_charge = duration * second * per_hour
+            # As we track runtime using jobs poller, the tracked runtime
+            # will have some drift from real value
+            allowed_drift = 5 * second * per_hour
+            assert abs(expected_charge - real_charge) < allowed_drift, (
+                f"Wrong charge for duration {duration}: "
+                f"delta from right value is {expected_charge - real_charge}"
+            )
