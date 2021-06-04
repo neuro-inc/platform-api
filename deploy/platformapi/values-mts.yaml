@@ -1,0 +1,59 @@
+NP_API_URL: https://ml.cloud.mts.ru/api/v1
+NP_ADMIN_URL: https://ml.cloud.mts.ru/apis/admin/v1
+NP_AUTH_PUBLIC_URL: https://ml.cloud.mts.ru/api/v1/users
+NP_OAUTH_AUTH_URL: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/auth
+NP_OAUTH_TOKEN_URL: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/token
+NP_OAUTH_LOGOUT_URL: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/logout
+NP_OAUTH_CLIENT_ID: neuro-client
+NP_OAUTH_AUDIENCE: https://platform.staging.neuromation.io
+NP_OAUTH_SUCCESS_REDIRECT_URL: https://ml.cloud.mts.ru/oauth/login
+NP_OAUTH_HEADLESS_CALLBACK_URL: https://ml.cloud.mts.ru/oauth/show-code
+NP_CORS_ORIGINS: https://ml.cloud.mts.ru,https://app.ml.cloud.mts.ru
+
+jobPriorityClass:
+  enabled: true
+
+platform:
+  token:
+    valueFrom:
+      secretKeyRef:
+        name: platformservices-secret
+        key: compute_token
+
+postgres:
+  dsn:
+    valueFrom:
+      secretKeyRef:
+        name: platformapi-postgres
+        key: platformapi-service-dsn
+
+postgres-db-init:
+  adminDsn:
+    valueFrom:
+      secretKeyRef:
+        name: postgres
+        key: admin-dsn
+  migrationsRunnerDsn:
+    valueFrom:
+      secretKeyRef:
+        name: platformapi-postgres
+        key: platformapi-migrations-dsn
+  serviceDsn:
+    valueFrom:
+      secretKeyRef:
+        name: platformapi-postgres
+        key: platformapi-service-dsn
+
+  migrations:
+    env:
+      - name: NP_DB_POSTGRES_DSN
+        valueFrom:
+          secretKeyRef:
+            name: platformapi-postgres
+            key: platformapi-migrations-dsn
+
+
+ingress:
+  enabled: true
+
+  hosts: [ml.cloud.mts.ru]
