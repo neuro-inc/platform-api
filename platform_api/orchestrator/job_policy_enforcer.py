@@ -31,7 +31,7 @@ from platform_api.orchestrator.job_request import JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.user import get_cluster
-from platform_api.utils.asyncio import run_and_log_exceptions
+from platform_api.utils.asyncio import auto_close_aiter, run_and_log_exceptions
 
 
 logger = logging.getLogger(__name__)
@@ -198,8 +198,10 @@ class BillingEnforcer(JobPolicyEnforcer):
 
     @trace
     async def enforce(self) -> None:
-        async for job in self._jobs_service.get_not_billed_jobs():
-            await self._bill_single(job.id)
+        not_billed_jobs = self._jobs_service.get_not_billed_jobs()
+        async with auto_close_aiter(not_billed_jobs):
+            async for job in not_billed_jobs:
+                await self._bill_single(job.id)
 
     async def _bill_single(self, job_id: str) -> None:
         async with self._billing_service.entries_inserter() as inserter:

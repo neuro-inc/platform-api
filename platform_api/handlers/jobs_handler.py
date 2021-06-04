@@ -60,6 +60,7 @@ from platform_api.orchestrator.jobs_storage import (
 from platform_api.resource import Preset, TPUResource
 from platform_api.user import authorized_user, make_job_uri, untrusted_user
 
+from ..utils.asyncio import auto_close_aiter
 from .job_request_builder import create_container_from_payload
 from .validators import (
     create_cluster_name_validator,
@@ -724,10 +725,13 @@ class JobsHandler:
             response.headers["Content-Type"] = "application/x-ndjson"
             await response.prepare(request)
             try:
-                async for job in jobs:
-                    response_payload = convert_job_to_job_response(job)
-                    self._job_response_validator.check(response_payload)
-                    await response.write(json.dumps(response_payload).encode() + b"\n")
+                async with auto_close_aiter(jobs):
+                    async for job in jobs:
+                        response_payload = convert_job_to_job_response(job)
+                        self._job_response_validator.check(response_payload)
+                        await response.write(
+                            json.dumps(response_payload).encode() + b"\n"
+                        )
             except asyncio.CancelledError:
                 raise
             except Exception as e:
