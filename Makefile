@@ -8,27 +8,20 @@ ARTIFACTORY_DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
 ARTIFACTORY_HELM_REPO ?= https://neuro.jfrog.io/artifactory/helm-local-public
 ARTIFACTORY_HELM_VIRTUAL_REPO ?= https://neuro.jfrog.io/artifactory/helm-virtual-public
 
-TAG ?= latest
+IMAGE_REPO_gke         = $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)
+IMAGE_REPO_aws         = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+IMAGE_REPO_azure       = $(AZURE_ACR_NAME).azurecr.io
+IMAGE_REPO_artifactory = $(ARTIFACTORY_DOCKER_REPO)
+
+IMAGE_REGISTRY ?= artifactory
 
 IMAGE_NAME = platformapi
-
-CLOUD_IMAGE_REPO_gke   = $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)
-CLOUD_IMAGE_REPO_aws   = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
-CLOUD_IMAGE_REPO_azure = $(AZURE_ACR_NAME).azurecr.io
-CLOUD_IMAGE_REPO       = $(CLOUD_IMAGE_REPO_$(CLOUD_PROVIDER))
-
-ARTIFACTORY_IMAGE_REPO = $(ARTIFACTORY_DOCKER_REPO)
-
-ifneq ($(CLOUD_IMAGE_REPO),)
-IMAGE_REPO = $(CLOUD_IMAGE_REPO)/$(IMAGE_NAME)
-else ifneq ($(ARTIFACTORY_IMAGE_REPO),)
-IMAGE_REPO = $(ARTIFACTORY_IMAGE_REPO)/$(IMAGE_NAME)
-else
-IMAGE_REPO = $(IMAGE_NAME)
-endif
+IMAGE_REPO = $(IMAGE_REPO_$(IMAGE_REGISTRY))/$(IMAGE_NAME)
 
 HELM_CHART ?= platformapi
 RELEASE_SUFFIX ?=
+
+TAG ?= latest
 
 PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
