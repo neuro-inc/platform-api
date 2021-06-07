@@ -5,7 +5,7 @@ NP_OAUTH_AUTH_URL: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/ope
 NP_OAUTH_TOKEN_URL: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/token
 NP_OAUTH_LOGOUT_URL: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/logout
 NP_OAUTH_CLIENT_ID: neuro-client
-NP_OAUTH_AUDIENCE: https://platform.staging.neuromation.io
+NP_OAUTH_AUDIENCE: https://platform.ml.cloud.mts.ru
 NP_OAUTH_SUCCESS_REDIRECT_URL: https://ml.cloud.mts.ru/oauth/login
 NP_OAUTH_HEADLESS_CALLBACK_URL: https://ml.cloud.mts.ru/oauth/show-code
 NP_CORS_ORIGINS: https://ml.cloud.mts.ru,https://app.ml.cloud.mts.ru
