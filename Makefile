@@ -119,6 +119,7 @@ helm_install:
 	@helm repo add neuro $(ARTIFACTORY_HELM_VIRTUAL_REPO) \
 		--username ${ARTIFACTORY_USERNAME} \
 		--password ${ARTIFACTORY_PASSWORD}
+	helm repo update
 
 _helm_fetch:
 	rm -rf temp_deploy
@@ -147,3 +148,10 @@ artifactory_helm_push: _helm_fetch _helm_expand_vars
 	helm push-artifactory $(HELM_CHART)-$(TAG).tgz $(ARTIFACTORY_HELM_REPO) \
 		--username $(ARTIFACTORY_USERNAME) \
 		--password $(ARTIFACTORY_PASSWORD)
+
+artifactory_helm_deploy:
+	helm upgrade $(HELM_CHART) neuro/$(HELM_CHART) \
+		-f deploy/$(HELM_CHART)/values-$(HELM_ENV).yaml \
+		--set "image.repository=$(IMAGE_REPO)" \
+		--set "postgres-db-init.migrations.image.repository=$(IMAGE_REPO)" \
+		--version $(TAG) --namespace platform --install --wait --timeout 600

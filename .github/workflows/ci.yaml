@@ -293,7 +293,7 @@ jobs:
     - name: Install helm
       run: make helm_install
     - name: Deploy to kubernetes
-      run: make helm_deploy
+      run: make artifactory_helm_deploy
 
   deploy_mts:
     name: Deploy to MTS
@@ -323,4 +323,4 @@ jobs:
     - name: Install helm
       run: make helm_install
     - name: Deploy to kubernetes
-      run: make helm_deploy
+      run: make artifactory_helm_deploy
