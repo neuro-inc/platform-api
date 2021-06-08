@@ -103,6 +103,8 @@ jobs:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     env:
+      ARTIFACTORY_DOCKER_REPO: ${{ secrets.ARTIFACTORY_DOCKER_REPO }}
+      ARTIFACTORY_HELM_REPO: ${{ secrets.ARTIFACTORY_HELM_REPO }}
       ARTIFACTORY_HELM_VIRTUAL_REPO: ${{ secrets.ARTIFACTORY_HELM_VIRTUAL_REPO }}
       ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
       ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
