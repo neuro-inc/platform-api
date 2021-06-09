@@ -501,6 +501,39 @@ class TestJobs:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
+    async def test_create_job_owner_with_slash(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        regular_user_factory: Callable[[Optional[str]], Awaitable[_User]],
+        jobs_client_factory: Callable[[_User], JobsClient],
+    ) -> None:
+        base_username = "username-here"
+        await regular_user_factory(base_username)
+        user = await regular_user_factory(
+            f"{base_username}/service-accounts/some-really-long-name"
+        )
+        jobs_client = jobs_client_factory(user)
+        url = api.jobs_base_url
+        job_name = "test-name"
+        job_submit["name"] = job_name
+        async with client.post(url, headers=user.headers, json=job_submit) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["id"]
+            assert result["owner"] == user.name
+            assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
+            assert (
+                result["http_url_named"]
+                == f"http://{job_name}--{base_username}.jobs.neu.ro"
+            )
+
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
     async def test_create_job_with_pass_config(
         self,
         api: ApiConfig,

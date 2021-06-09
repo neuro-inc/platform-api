@@ -146,6 +146,7 @@ class TestUserNameValidator:
             ("123", 1),
             ("with123numbers", 1),
             ("with123nums-and-dash", 1),
+            ("with123numbers/test/parts", 1),
         ],
     )
     def test_create_user_name_validator__ok(self, pair: Tuple[str, int]) -> None:
@@ -163,6 +164,7 @@ class TestUserNameValidator:
             ("a", 1),
             ("a", 2),
             ("a", (USER_NAME_MAX_LENGTH + 1)),
+            ("a" * (USER_NAME_MAX_LENGTH + 1) + "/test/parts", 1),
             ("too-long-string", 1000),
             ("a-b-c.com", 1),
             ("a_b_c", 1),

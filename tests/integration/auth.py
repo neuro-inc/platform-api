@@ -21,6 +21,7 @@ from jose import jwt
 from neuro_auth_client import (
     AuthClient,
     Cluster as AuthCluster,
+    Permission,
     Quota,
     User as AuthClientUser,
 )
@@ -185,22 +186,19 @@ async def regular_user_factory(
         user = AuthClientUser(name=name, clusters=auth_clusters)
         await auth_client.add_user(user, token=admin_token)
         # Grant cluster-specific permissions
-        headers = auth_client._generate_headers(admin_token)
-        payload = []
+        permissions = []
+
         for cluster in auth_clusters:
-            payload.extend(
+            permissions.extend(
                 [
-                    {"uri": f"storage://{cluster.name}/{name}", "action": "manage"},
-                    {"uri": f"image://{cluster.name}/{name}", "action": "manage"},
-                    {"uri": f"job://{cluster.name}/{name}", "action": "manage"},
-                    {"uri": f"secret://{cluster.name}/{name}", "action": "manage"},
-                    {"uri": f"disk://{cluster.name}/{name}", "action": "write"},
+                    Permission(uri=f"storage://{cluster.name}/{name}", action="manage"),
+                    Permission(uri=f"image://{cluster.name}/{name}", action="manage"),
+                    Permission(uri=f"job://{cluster.name}/{name}", action="manage"),
+                    Permission(uri=f"secret://{cluster.name}/{name}", action="manage"),
+                    Permission(uri=f"disk://{cluster.name}/{name}", action="write"),
                 ]
             )
-        async with auth_client._request(
-            "POST", f"/api/v1/users/{name}/permissions", headers=headers, json=payload
-        ) as p:
-            assert p.status == 201
+        await auth_client.grant_user_permissions(name, permissions, token=admin_token)
         user_token = token_factory(user.name)
         return _User(name=user.name, clusters=user.clusters, token=user_token)
 

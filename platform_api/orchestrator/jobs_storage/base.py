@@ -52,6 +52,7 @@ class JobFilter:
         default_factory=cast(Type[ClusterOwnerNameSet], dict)
     )
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
+    base_owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     tags: Set[str] = field(default_factory=cast(Type[Set[str]], set))
     name: Optional[str] = None
     ids: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
@@ -64,6 +65,8 @@ class JobFilter:
         if self.statuses and job.status not in self.statuses:
             return False
         if self.owners and job.owner not in self.owners:
+            return False
+        if self.base_owners and job.base_owner not in self.base_owners:
             return False
         if self.clusters:
             owners = self.clusters.get(job.cluster_name)

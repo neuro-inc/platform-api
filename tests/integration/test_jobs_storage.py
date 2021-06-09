@@ -231,6 +231,35 @@ class TestJobsStorage:
                 pass
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("first_job_status", [JobStatus.PENDING, JobStatus.RUNNING])
+    async def test_try_create_job__same_name_and_base_owner_with_active_job__conflict(
+        self, storage: JobsStorage, first_job_status: JobStatus
+    ) -> None:
+
+        owner = "test-user"
+        job_name = "some-test-job-name"
+
+        first_job = self._create_job(
+            name=job_name, status=first_job_status, owner=owner
+        )
+        async with storage.try_create_job(first_job):
+            pass
+        job = await storage.get_job(first_job.id)
+        assert job.id == first_job.id
+        assert job.status == first_job_status
+
+        second_job = self._create_pending_job(
+            job_name=job_name, owner=f"{owner}/anything"
+        )
+        with pytest.raises(
+            JobStorageJobFoundError,
+            match=f"job with name '{job_name}' and owner '{first_job.owner}'"
+            f" already exists: '{first_job.id}'",
+        ):
+            async with storage.try_create_job(second_job):
+                pass
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "first_job_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
     )
@@ -244,6 +273,37 @@ class TestJobsStorage:
             name=job_name, status=first_job_status, owner=owner
         )
         second_job = self._create_pending_job(owner=owner, job_name=job_name)
+
+        # create first job:
+        async with storage.try_create_job(first_job):
+            pass
+        job = await storage.get_job(first_job.id)
+        assert job.id == first_job.id
+        assert job.status == first_job_status
+
+        # create second job:
+        async with storage.try_create_job(second_job):
+            pass
+        job = await storage.get_job(second_job.id)
+        assert job.id == second_job.id
+        assert job.status == JobStatus.PENDING
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "first_job_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
+    )
+    async def test_try_create_job__same_name_and_base_owner_with_a_terminated_job__ok(
+        self, storage: JobsStorage, first_job_status: JobStatus
+    ) -> None:
+        owner = "test-user"
+        job_name = "some-test-job-name"
+
+        first_job = self._create_job(
+            name=job_name, status=first_job_status, owner=owner
+        )
+        second_job = self._create_pending_job(
+            owner=f"{owner}/anything", job_name=job_name
+        )
 
         # create first job:
         async with storage.try_create_job(first_job):
@@ -533,6 +593,19 @@ class TestJobsStorage:
             self._create_failed_job(owner="user3", job_name="jobname3"),
             self._create_cancelled_job(owner="user3", job_name="jobname3"),
             self._create_pending_job(owner="user3", job_name="jobname3"),
+            # user4/service-accounts/test, jobname3:
+            self._create_succeeded_job(
+                owner="user4/service-accounts/test", job_name="jobname4"
+            ),
+            self._create_failed_job(
+                owner="user4/service-accounts/test", job_name="jobname4"
+            ),
+            self._create_cancelled_job(
+                owner="user4/service-accounts/test", job_name="jobname4"
+            ),
+            self._create_pending_job(
+                owner="user4/service-accounts/test", job_name="jobname4"
+            ),
         ]
         for job in jobs:
             async with storage.try_create_job(job):
@@ -547,6 +620,19 @@ class TestJobsStorage:
         job_filter = JobFilter(owners=owners)
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         expected = [job.id for job in jobs if job.owner in owners]
+        assert expected
+        assert job_ids == expected
+
+    @pytest.mark.asyncio
+    async def test_get_all_filter_by_single_base_owner(
+        self, storage: JobsStorage
+    ) -> None:
+        jobs = await self.prepare_filtering_test(storage)
+
+        base_owners = {"user4"}
+        job_filter = JobFilter(base_owners=base_owners)
+        job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
+        expected = [job.id for job in jobs if job.base_owner in base_owners]
         assert expected
         assert job_ids == expected
 
