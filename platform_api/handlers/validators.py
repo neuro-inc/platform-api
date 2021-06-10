@@ -12,7 +12,8 @@ from platform_api.resource import TPUResource
 
 
 JOB_NAME_PATTERN = r"\A[a-z](?:-?[a-z0-9])*\Z"
-USER_NAME_PART_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
+USER_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
+ROLE_NAME_PATTERN = r"\A[a-z0-9](?:[-/]?[a-z0-9])*\Z"
 CLUSTER_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
 JOB_TAG_PATTERN = r"\A(?:\S)*\Z"
 
@@ -37,16 +38,20 @@ def create_job_name_validator(
     )
 
 
+def create_base_owner_name_validator() -> t.Trafaret:
+    # NOTE: this validator is almost the same as the one used in platform-auth
+    return t.String(min_length=3, max_length=USER_NAME_MAX_LENGTH) & t.Regexp(
+        USER_NAME_PATTERN
+    )
+
+
 def create_user_name_validator() -> t.Trafaret:
     def _validate(username: str) -> str:
-        parts = username.split("/")
-        t.String(max_length=USER_NAME_MAX_LENGTH).check(parts[0])
-        for part in parts:
-            t.Regexp(USER_NAME_PART_PATTERN).check(part)
+        base_owner_name = username.split("/", 0)[0]
+        t.String(min_length=3, max_length=USER_NAME_MAX_LENGTH).check(base_owner_name)
         return username
 
-    # NOTE: this validator is almost the same as the one used in platform-auth
-    return t.String(min_length=3) & t.Call(_validate)
+    return t.String(min_length=3) & t.Regexp(ROLE_NAME_PATTERN) & t.Call(_validate)
 
 
 def create_cluster_name_validator() -> t.Trafaret:
