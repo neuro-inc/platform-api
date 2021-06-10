@@ -328,7 +328,7 @@ class JobRecord:
 
     @property
     def base_owner(self) -> str:
-        return self.owner.split("/")[0]
+        return self.owner.split("/", 1)[0]
 
     @property
     def status(self) -> JobStatus:
@@ -623,7 +623,7 @@ class Job:
 
     @property
     def base_owner(self) -> str:
-        return self._owner.split("/")[0]
+        return self._owner.split("/", 1)[0]
 
     @property
     def cluster_name(self) -> str:
