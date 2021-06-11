@@ -3610,7 +3610,7 @@ class TestJobs:
         job_submit["container"]["command"] = "sleep 30m"
 
         jobs_ids = []
-        n_jobs = 5
+        n_jobs = 3
         for i in range(n_jobs):
             async with client.post(
                 api.jobs_base_url, headers=regular_user.headers, json=job_submit
