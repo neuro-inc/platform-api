@@ -207,7 +207,7 @@ class KubeOrchestrator(Orchestrator):
         return f"user--{user_name}--secrets"
 
     def _get_user_resource_name(self, job: Job) -> str:
-        return (self._docker_secret_name_prefix + job.owner).lower()
+        return (self._docker_secret_name_prefix + job.owner.replace("/", "--")).lower()
 
     def _get_docker_secret_name(self, job: Job) -> str:
         return self._get_user_resource_name(job)
@@ -390,7 +390,7 @@ class KubeOrchestrator(Orchestrator):
         return replace(pod, resources=new_resources)
 
     def _get_user_pod_labels(self, job: Job) -> Dict[str, str]:
-        return {"platform.neuromation.io/user": job.owner}
+        return {"platform.neuromation.io/user": job.owner.replace("/", "--")}
 
     def _get_job_labels(self, job: Job) -> Dict[str, str]:
         return {"platform.neuromation.io/job": job.id}
@@ -451,7 +451,7 @@ class KubeOrchestrator(Orchestrator):
     def _get_service_name_for_named(self, job: Job) -> str:
         from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
 
-        return f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.owner}"
+        return f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.base_owner}"
 
     async def start_job(
         self, job: Job, tolerate_unreachable_node: bool = False

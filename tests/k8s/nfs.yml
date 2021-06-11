@@ -22,7 +22,7 @@ spec:
             add: ["SYS_ADMIN"]
         env:
         - name: NFS_EXPORT_0
-          value: "/var/storage    *(fsid=0,rw,sync,no_subtree_check)"
+          value: "/var/storage    *(fsid=0,rw,sync,no_subtree_check,no_root_squash)"
         volumeMounts:
         - name: storage
           mountPath: /var/storage

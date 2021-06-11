@@ -8,6 +8,7 @@ from platform_api.handlers.jobs_handler import create_job_response_validator
 from platform_api.handlers.validators import (
     JOB_NAME_MAX_LENGTH,
     USER_NAME_MAX_LENGTH,
+    create_base_owner_name_validator,
     create_job_name_validator,
     create_mount_path_validator,
     create_path_uri_validator,
@@ -148,10 +149,35 @@ class TestUserNameValidator:
             ("with123nums-and-dash", 1),
         ],
     )
-    def test_create_user_name_validator__ok(self, pair: Tuple[str, int]) -> None:
+    def test_user_name_validators__ok(self, pair: Tuple[str, int]) -> None:
         value = pair[0] * pair[1]
         validator = create_user_name_validator()
         assert validator.check(value)
+        validator = create_base_owner_name_validator()
+        assert validator.check(value)
+
+    @pytest.mark.parametrize(
+        "pair",
+        [
+            ("test/foo/bar", 1),
+        ],
+    )
+    def test_role_name_validator__ok(self, pair: Tuple[str, int]) -> None:
+        value = pair[0] * pair[1]
+        validator = create_user_name_validator()
+        assert validator.check(value)
+
+    @pytest.mark.parametrize(
+        "pair",
+        [
+            ("test/foo/bar", 1),
+        ],
+    )
+    def test_base_owner_validator__fail(self, pair: Tuple[str, int]) -> None:
+        value = pair[0] * pair[1]
+        validator = create_base_owner_name_validator()
+        with pytest.raises(t.DataError):
+            assert validator.check(value)
 
     @pytest.mark.parametrize(
         "pair",
@@ -163,6 +189,7 @@ class TestUserNameValidator:
             ("a", 1),
             ("a", 2),
             ("a", (USER_NAME_MAX_LENGTH + 1)),
+            ("a" * (USER_NAME_MAX_LENGTH + 1) + "/test/parts", 1),
             ("too-long-string", 1000),
             ("a-b-c.com", 1),
             ("a_b_c", 1),
@@ -196,9 +223,12 @@ class TestUserNameValidator:
             ("46CAC3A6-2956-481B-B4AA-A80A6EAF2CDE", 1),  # regression test
         ],
     )
-    def test_create_user_name_validator__fail(self, pair: Tuple[str, int]) -> None:
+    def test_user_name_validators__fail(self, pair: Tuple[str, int]) -> None:
         value = pair[0] * pair[1]
         validator = create_user_name_validator()
+        with pytest.raises(t.DataError):
+            assert validator.check(value)
+        validator = create_base_owner_name_validator()
         with pytest.raises(t.DataError):
             assert validator.check(value)
 

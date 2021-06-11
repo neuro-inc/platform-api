@@ -835,8 +835,11 @@ class TestJobFilterFactory:
         query = MultiDict([("name", "test-job"), ("name", "other-job")])
         assert factory(query) == JobFilter(name="test-job")
 
-        query = MultiDict([("owner", "alice"), ("owner", "bob")])
-        assert factory(query) == JobFilter(owners={"bob", "alice"})
+        query = MultiDict([("owner", "alice"), ("owner", "bob/test/foo")])
+        assert factory(query) == JobFilter(owners={"bob/test/foo", "alice"})
+
+        query = MultiDict([("base_owner", "alice"), ("base_owner", "bob")])
+        assert factory(query) == JobFilter(base_owners={"bob", "alice"})
 
         query = MultiDict([("name", "test-job"), ("owner", "alice"), ("owner", "bob")])
         assert factory(query) == JobFilter(owners={"bob", "alice"}, name="test-job")
@@ -888,7 +891,7 @@ class TestJobFilterFactory:
         factory = JobFilterFactory().create_from_query
 
         query: Any = MultiDict([("hostname", "test-job--john-doe.example.org")])
-        assert factory(query) == JobFilter(name="test-job", owners={"john-doe"})
+        assert factory(query) == JobFilter(name="test-job", base_owners={"john-doe"})
 
         query = MultiDict([("hostname", "test-job-id.example.org")])
         assert factory(query) == JobFilter(ids={"test-job-id"})
@@ -899,7 +902,7 @@ class TestJobFilterFactory:
                 ("hostname", "test-job-id.example.org"),
             ]
         )
-        assert factory(query) == JobFilter(name="test-job", owners={"john-doe"})
+        assert factory(query) == JobFilter(name="test-job", base_owners={"john-doe"})
 
         query = MultiDict(
             [
@@ -922,7 +925,7 @@ class TestJobFilterFactory:
         assert factory(query) == JobFilter(
             statuses={JobStatus.FAILED, JobStatus.SUCCEEDED},
             name="test-job",
-            owners={"john-doe"},
+            base_owners={"john-doe"},
         )
 
         query = MultiDict(

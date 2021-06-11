@@ -63,6 +63,7 @@ from platform_api.user import authorized_user, make_job_uri, untrusted_user
 from ..utils.asyncio import auto_close_aiter
 from .job_request_builder import create_container_from_payload
 from .validators import (
+    create_base_owner_name_validator,
     create_cluster_name_validator,
     create_container_request_validator,
     create_container_response_validator,
@@ -896,6 +897,7 @@ class JobFilterFactory:
     def __init__(self) -> None:
         self._job_name_validator = create_job_name_validator()
         self._user_name_validator = create_user_name_validator()
+        self._base_owner_name_validator = create_base_owner_name_validator()
         self._cluster_name_validator = create_cluster_name_validator()
 
     def create_from_query(self, query: MultiDictProxy) -> JobFilter:  # type: ignore
@@ -911,6 +913,10 @@ class JobFilterFactory:
                 self._user_name_validator.check(owner)
                 for owner in query.getall("owner", [])
             }
+            base_owners = {
+                self._base_owner_name_validator.check(owner)
+                for owner in query.getall("base_owner", [])
+            }
             clusters: ClusterOwnerNameSet = {
                 self._cluster_name_validator.check(cluster_name): {}
                 for cluster_name in query.getall("cluster_name", [])
@@ -921,6 +927,7 @@ class JobFilterFactory:
                 statuses=statuses,
                 clusters=clusters,
                 owners=owners,
+                base_owners=base_owners,
                 name=job_name,
                 tags=tags,
                 since=iso8601.parse_date(since) if since else JobFilter.since,
@@ -933,16 +940,16 @@ class JobFilterFactory:
                 raise ValueError("Invalid request")
 
         label = hostname.partition(".")[0]
-        job_name, sep, owner = label.rpartition(JOB_USER_NAMES_SEPARATOR)
+        job_name, sep, base_owner = label.rpartition(JOB_USER_NAMES_SEPARATOR)
         if not sep:
             return JobFilter(
                 statuses=statuses, ids={label}, tags=tags, materialized=materialized
             )
         job_name = self._job_name_validator.check(job_name)
-        owner = self._user_name_validator.check(owner)
+        base_owner = self._base_owner_name_validator.check(base_owner)
         return JobFilter(
             statuses=statuses,
-            owners={owner},
+            base_owners={base_owner},
             name=job_name,
             tags=tags,
             materialized=materialized,

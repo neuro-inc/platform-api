@@ -77,8 +77,7 @@ class Disk:
         uri = URL(disk_uri)
         cluster_name = uri.host
         assert cluster_name, uri  # for lint
-        parts = PurePath(uri.path).parts
-        user_name, disk_id = parts[1], parts[2]
+        user_name, _, disk_id = uri.path.lstrip("/").rpartition("/")
         return cls(disk_id=disk_id, cluster_name=cluster_name, user_name=user_name)
 
 
@@ -136,8 +135,7 @@ class Secret:
         uri = URL(secret_uri)
         cluster_name = uri.host
         assert cluster_name, uri  # for lint
-        parts = PurePath(uri.path).parts
-        user_name, secret_key = parts[1], parts[2]
+        user_name, _, secret_key = uri.path.lstrip("/").rpartition("/")
         return cls(
             secret_key=secret_key, cluster_name=cluster_name, user_name=user_name
         )

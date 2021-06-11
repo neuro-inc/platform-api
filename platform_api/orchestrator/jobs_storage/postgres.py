@@ -20,7 +20,7 @@ import sqlalchemy.sql as sasql
 from asyncpg import Connection, SerializationError, UniqueViolationError
 from asyncpg.pool import Pool
 from asyncpg.protocol.protocol import Record
-from sqlalchemy import Boolean, Integer, and_, asc, desc, or_, select
+from sqlalchemy import Boolean, Integer, and_, asc, desc, func, or_, select
 
 from platform_api.orchestrator.job import AggregatedRunTime, JobRecord
 from platform_api.orchestrator.job_request import JobError, JobStatus
@@ -137,17 +137,20 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             if e.constraint_name == "jobs_name_owner_uq":
                 # We need to retrieve conflicting job from database to
                 # build JobStorageJobFoundError
+                base_owner = values["owner"].split("/")[0]
                 query = (
                     self._tables.jobs.select()
                     .where(self._tables.jobs.c.name == values["name"])
-                    .where(self._tables.jobs.c.owner == values["owner"])
+                    .where(
+                        func.split_part(self._tables.jobs.c.owner, "/", 1) == base_owner
+                    )
                     .where(self._tables.jobs.c.status.in_(JobStatus.active_values()))
                 )
                 record = await self._fetchrow(query)
                 if record:
                     raise JobStorageJobFoundError(
                         job_name=values["name"],
-                        job_owner=values["owner"],
+                        job_owner=base_owner,
                         found_job_id=record["id"],
                     )
                 else:
@@ -430,6 +433,11 @@ class JobFilterClauseBuilder:
     def filter_owners(self, owners: AbstractSet[str]) -> None:
         self._clauses.append(self._tables.jobs.c.owner.in_(owners))
 
+    def filter_base_owners(self, base_owners: AbstractSet[str]) -> None:
+        self._clauses.append(
+            func.split_part(self._tables.jobs.c.owner, "/", 1).in_(base_owners)
+        )
+
     def filter_clusters(self, clusters: ClusterOwnerNameSet) -> None:
         cluster_clauses = []
         clusters_empty_owners = []
@@ -495,6 +503,8 @@ class JobFilterClauseBuilder:
             builder.filter_statuses(job_filter.statuses)
         if job_filter.owners:
             builder.filter_owners(job_filter.owners)
+        if job_filter.base_owners:
+            builder.filter_base_owners(job_filter.base_owners)
         if job_filter.clusters:
             builder.filter_clusters(job_filter.clusters)
         if job_filter.name:

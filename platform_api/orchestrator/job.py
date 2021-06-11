@@ -18,7 +18,7 @@ from .job_request import ContainerResources, JobError, JobRequest, JobStatus
 
 
 # For named jobs, their hostname is of the form of
-# `{job-id}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
+# `{job-name}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
 
 
 JOB_USER_NAMES_SEPARATOR = "--"
@@ -327,6 +327,10 @@ class JobRecord:
         return self.request.job_id
 
     @property
+    def base_owner(self) -> str:
+        return self.owner.split("/", 1)[0]
+
+    @property
     def status(self) -> JobStatus:
         return self.status_history.current.status
 
@@ -618,6 +622,10 @@ class Job:
         return self._owner
 
     @property
+    def base_owner(self) -> str:
+        return self._owner.split("/", 1)[0]
+
+    @property
     def cluster_name(self) -> str:
         return self._record.cluster_name
 
@@ -749,7 +757,7 @@ class Job:
         from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
 
         return self._orchestrator_config.jobs_domain_name_template.format(
-            job_id=f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.owner}"
+            job_id=f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.base_owner}"
         )
 
     @property
