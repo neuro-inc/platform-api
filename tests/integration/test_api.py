@@ -509,7 +509,7 @@ class TestJobs:
         regular_user_factory: Callable[[Optional[str]], Awaitable[_User]],
         jobs_client_factory: Callable[[_User], JobsClient],
     ) -> None:
-        base_username = "username-here"
+        base_username = random_str()
         await regular_user_factory(base_username)
         user = await regular_user_factory(
             f"{base_username}/service-accounts/some-really-long-name"
@@ -754,7 +754,7 @@ class TestJobs:
         secrets_client_factory: Callable[[_User], SecretsClient],
         _run_job_with_secrets: Callable[..., Awaitable[None]],
     ) -> None:
-        base_username = "username-here"
+        base_username = random_str()
         await regular_user_factory(base_username)
         user = await regular_user_factory(
             f"{base_username}/service-accounts/some-really-long-name"
@@ -806,7 +806,7 @@ class TestJobs:
         secrets_client_factory: Callable[[_User], SecretsClient],
         _run_job_with_secrets: Callable[..., Awaitable[None]],
     ) -> None:
-        base_username = "username-here"
+        base_username = random_str()
         await regular_user_factory(base_username)
         user = await regular_user_factory(
             f"{base_username}/service-accounts/some-really-long-name"
@@ -887,7 +887,7 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         disk_client_factory: Callable[[_User], DiskAPIClient],
     ) -> None:
-        base_username = "username-here"
+        base_username = random_str()
         await regular_user_factory(base_username)
         user = await regular_user_factory(
             f"{base_username}/service-accounts/some-really-long-name"
