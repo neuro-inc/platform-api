@@ -89,7 +89,7 @@ def create_path_uri_validator(
     cluster_name: str = "",
     check_cluster: bool = True,
     assert_username: Optional[str] = None,
-    assert_parts_count: Optional[int] = None,
+    assert_parts_count_ge: Optional[int] = None,
 ) -> t.Trafaret:
     assert storage_scheme
     if check_cluster:
@@ -112,9 +112,9 @@ def create_path_uri_validator(
                 f"Invalid URI cluster: '{uri.netloc}' != '{cluster_name}'"
             )
         path = unquote(uri.path)
-        if assert_parts_count:
+        if assert_parts_count_ge:
             parts = PurePath(path).parts
-            if len(parts) != assert_parts_count:
+            if len(parts) < assert_parts_count_ge:
                 raise t.DataError("Invalid URI path: Wrong number of path items")
         if assert_username is not None:
             # validate `username` in `scheme://cluster/username/path/to`
@@ -167,7 +167,7 @@ def create_volumes_validator(
     cluster_name: str = "",
     check_cluster: bool = True,
     assert_username: Optional[str] = None,
-    assert_parts_count: Optional[int] = None,
+    assert_parts_count_ge: Optional[int] = None,
 ) -> t.Trafaret:
     template_dict = {
         uri_key: create_path_uri_validator(
@@ -175,7 +175,7 @@ def create_volumes_validator(
             cluster_name=cluster_name,
             check_cluster=check_cluster,
             assert_username=assert_username,
-            assert_parts_count=assert_parts_count,
+            assert_parts_count_ge=assert_parts_count_ge,
         ),
         "dst_path": create_mount_path_validator(),
     }
@@ -302,7 +302,7 @@ def create_container_validator(
                     storage_scheme="secret",
                     cluster_name=cluster_name,
                     check_cluster=check_cluster,
-                    assert_parts_count=3,
+                    assert_parts_count_ge=3,
                 ),
             ),
             t.Key("secret_volumes", optional=True): create_volumes_validator(
@@ -312,7 +312,7 @@ def create_container_validator(
                 cluster_name=cluster_name,
                 check_cluster=check_cluster,
                 # Should exactly include ("/", "username", "secret_name")
-                assert_parts_count=3,
+                assert_parts_count_ge=3,
             ),
             t.Key("disk_volumes", optional=True): create_volumes_validator(
                 uri_key="src_disk_uri",
@@ -321,7 +321,7 @@ def create_container_validator(
                 cluster_name=cluster_name,
                 check_cluster=check_cluster,
                 # Should exactly include ("/", "username", "disk_name")
-                assert_parts_count=3,
+                assert_parts_count_ge=3,
             ),
             t.Key("working_dir", optional=True): create_working_dir_validator(),
         }
