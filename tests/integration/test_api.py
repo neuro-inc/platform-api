@@ -30,6 +30,7 @@ from aiohttp.web import (
 )
 from aiohttp.web_exceptions import HTTPCreated, HTTPNotFound
 from neuro_auth_client import Cluster as AuthCluster, Permission, Quota
+from re_assert import Matches
 from yarl import URL
 
 from platform_api.cluster import ClusterConfigRegistry
@@ -1271,8 +1272,7 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
-            err = f"Invalid URI scheme: '{wrong_scheme}' != 'disk'"
-            assert err in msg["error"], msg
+            Matches(f"Invalid URI scheme: .+{wrong_scheme}.+ != .+disk") == msg["error"]
 
     @pytest.mark.asyncio
     async def test_create_job_with_disk_volume_wrong_cluster_fail(
