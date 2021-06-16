@@ -34,7 +34,7 @@ include k8s.mk
 
 setup:
 	pip install -U pip
-	pip install --no-binary cryptography -r requirements/test.txt
+	pip install -r requirements/test.txt
 	pre-commit install
 
 lint: format
