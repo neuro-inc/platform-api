@@ -120,7 +120,7 @@ class Secret:
 
     @property
     def k8s_secret_name(self) -> str:
-        return f"user--{self.user_name}--secrets"
+        return f"user--{self.user_name.replace('/', '--')}--secrets"
 
     def to_uri(self) -> URL:
         return (

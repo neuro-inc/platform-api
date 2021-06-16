@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import operator
+import secrets
 from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -200,11 +201,15 @@ class KubeOrchestrator(Orchestrator):
     @classmethod
     def create_secret_volume(cls, user_name: str) -> SecretVolume:
         name = cls._get_k8s_secret_name(user_name)
-        return SecretVolume(name=name, k8s_secret_name=name)
+        if len(name) > 63:
+            volume_name = name[:50] + secrets.token_hex(6)
+        else:
+            volume_name = name
+        return SecretVolume(name=volume_name, k8s_secret_name=name)
 
     @classmethod
     def _get_k8s_secret_name(cls, user_name: str) -> str:
-        return f"user--{user_name}--secrets"
+        return f"user--{user_name.replace('/', '--')}--secrets"
 
     def _get_user_resource_name(self, job: Job) -> str:
         return (self._docker_secret_name_prefix + job.owner.replace("/", "--")).lower()
@@ -423,10 +428,9 @@ class KubeOrchestrator(Orchestrator):
                 pvc = await self._client.get_raw_pvc(
                     disk.disk_id, self._kube_config.namespace
                 )
-                if (
-                    pvc["metadata"]["labels"]["platform.neuromation.io/user"]
-                    != disk.user_name
-                ):
+                if pvc["metadata"]["labels"][
+                    "platform.neuromation.io/user"
+                ] != disk.user_name.replace("/", "--"):
                     missing.append(disk)
             except (StatusException, KeyError):
                 missing.append(disk)
