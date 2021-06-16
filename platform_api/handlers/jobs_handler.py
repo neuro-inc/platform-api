@@ -134,7 +134,7 @@ def create_job_request_validator(
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=1),
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
             t.Key("restart_policy", default=str(JobRestartPolicy.NEVER)): t.Enum(
-                *[str(policy) for policy in JobRestartPolicy]
+                *(str(policy) for policy in JobRestartPolicy)
             )
             >> JobRestartPolicy,
         },
@@ -207,7 +207,7 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
             {
                 # Presets are always not empty
                 t.Key("preset_name", optional=True, default=presets[0].name): t.Enum(
-                    *[p.name for p in presets]
+                    *(p.name for p in presets)
                 )
             }
         ).allow_extra("*")

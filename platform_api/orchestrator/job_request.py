@@ -332,7 +332,7 @@ class Container:
 
     def get_secrets(self) -> List[Secret]:
         return list(
-            {*self.secret_env.values(), *[v.secret for v in self.secret_volumes]}
+            {*self.secret_env.values(), *(v.secret for v in self.secret_volumes)}
         )
 
     def get_user_secrets(self) -> Dict[str, List[Secret]]:
