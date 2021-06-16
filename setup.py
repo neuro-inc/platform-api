@@ -32,7 +32,7 @@ setup(
         "git_describe_command": "git describe --dirty --tags --long --match v*.*.*",
     },
     packages=find_packages(),
-    python_requires=">=3.7.0",
+    python_requires=">=3.8.0",
     setup_requires=setup_requires,
     install_requires=install_requires,
     entry_points={
