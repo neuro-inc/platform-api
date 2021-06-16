@@ -1329,7 +1329,7 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
-            assert Matches(f"Invalid path: .+{invalid_path}.+") == msg["error"]
+            assert Matches(f".+Invalid path: .+{invalid_path}.+") == msg["error"]
 
     @pytest.mark.asyncio
     async def test_create_job_with_disk_volume_invalid_mount_relative_fail(
