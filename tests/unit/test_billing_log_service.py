@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Any, AsyncIterator, Callable, List, Mapping, Tuple
 
 import pytest
-from neuro_auth_client import User
+from neuro_auth_client import Cluster, User
 from typing_extensions import Protocol
 
 from platform_api.admin_client import AdminClient
@@ -148,6 +148,46 @@ class TestBillingLogProcessing:
             assert len(admin_client.change_log) == 1
             assert admin_client.change_log[0][0] == job.cluster_name
             assert admin_client.change_log[0][1] == job.owner
+            assert -admin_client.change_log[0][2] == Decimal("1.00")
+            assert admin_client.change_log[0][3] == "key"
+
+    @pytest.mark.asyncio
+    async def test_sub_user_correct_user_charted(
+        self,
+        test_user: User,
+        jobs_service: JobsService,
+        job_request_factory: Callable[[], JobRequest],
+        admin_client: MockAdminClient,
+        service: BillingLogService,
+        worker: BillingLogWorker,
+    ) -> None:
+        sub_user = User(
+            name=f"{test_user.name}/roles/test", clusters=[Cluster(name="test-cluster")]
+        )
+        job, _ = await jobs_service.create_job(
+            job_request_factory(), sub_user, cluster_name="test-cluster"
+        )
+        async with service.entries_inserter() as inserter:
+            last_id = await inserter.insert(
+                [
+                    BillingLogEntry(
+                        idempotency_key="key",
+                        job_id=job.id,
+                        charge=Decimal("1.00"),
+                        fully_billed=True,
+                        last_billed=datetime.now(tz=timezone.utc),
+                    )
+                ]
+            )
+
+        async with worker:
+            await asyncio.wait_for(service.wait_until_processed(last_id), timeout=1)
+            updated_job = await jobs_service.get_job(job.id)
+            assert updated_job.total_price_credits == Decimal("1.00")
+            assert updated_job.fully_billed
+            assert len(admin_client.change_log) == 1
+            assert admin_client.change_log[0][0] == job.cluster_name
+            assert admin_client.change_log[0][1] == test_user.name
             assert -admin_client.change_log[0][2] == Decimal("1.00")
             assert admin_client.change_log[0][3] == "key"
 

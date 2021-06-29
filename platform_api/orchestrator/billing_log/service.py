@@ -188,7 +188,7 @@ class BillingLogWorker:
 
         await self._admin_client.change_user_credits(
             cluster_name=job.cluster_name,
-            username=job.owner,
+            username=job.base_owner,
             credits_delta=-entry.charge,
             idempotency_key=entry.idempotency_key,
         )
