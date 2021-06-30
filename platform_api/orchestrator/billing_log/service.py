@@ -197,7 +197,7 @@ class BillingLogWorker:
             )
         except ClientResponseError as e:
             if e.status == 404:
-                # User was remove from cluster
+                # User was removed from the cluster
                 # TODO: send special request to store info about this debt
                 logger.exception("Was unable to bill a user: user removed from cluster")
             else:
