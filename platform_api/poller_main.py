@@ -139,6 +139,7 @@ async def create_app(
 
             if cluster:
                 await cluster_holder.update(cluster)
+                cluster_updater.disable_updates_for_test = True
             else:
                 await cluster_updater.do_update()
 

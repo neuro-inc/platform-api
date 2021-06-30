@@ -138,10 +138,12 @@ class SingleClusterUpdater:
         self._config_client = config_client
         self._cluster_name = cluster_name
 
-        self._is_active: Optional[asyncio.Future[None]] = None
-        self._task: Optional[asyncio.Future[None]] = None
+        self.disable_updates_for_test = False
 
     async def do_update(self) -> None:
+        if self.disable_updates_for_test:
+            return
+
         cluster_config = await self._config_client.get_cluster(self._cluster_name)
         if cluster_config:
             await self._cluster_holder.update(cluster_config)
