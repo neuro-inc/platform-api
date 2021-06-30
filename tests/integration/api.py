@@ -267,6 +267,11 @@ class JobsClient:
                 pytest.fail(f"Status {status} cannot be reached, resp: {response}")
             current_time = time.monotonic() - t0
             if current_time > max_time:
+                # DEBUG:
+                import os
+
+                os.system("kubectl describe nodes")
+                os.system(f"kubectl -n platformapi-tests describe pod {job_id}")
                 pytest.fail(f"too long: {current_time:.3f} sec; resp: {response}")
             await asyncio.sleep(max(interval_s, time.monotonic() - t0))
             interval_s *= 1.5

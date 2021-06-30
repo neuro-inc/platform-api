@@ -131,17 +131,17 @@ async def create_app(
                 cluster_name=config.cluster_name,
             )
 
-            logger.info("Initializing JobsPoller")
-            jobs_poller = JobsPoller(
-                jobs_poller_service=jobs_poller_service, cluster_updater=cluster_updater
-            )
-            await exit_stack.enter_async_context(jobs_poller)
-
             if cluster:
                 await cluster_holder.update(cluster)
                 cluster_updater.disable_updates_for_test = True
             else:
                 await cluster_updater.do_update()
+
+            logger.info("Initializing JobsPoller")
+            jobs_poller = JobsPoller(
+                jobs_poller_service=jobs_poller_service, cluster_updater=cluster_updater
+            )
+            await exit_stack.enter_async_context(jobs_poller)
 
             yield
 
