@@ -3,6 +3,8 @@ import logging
 from contextlib import asynccontextmanager, suppress
 from typing import Any, AsyncContextManager, AsyncIterator, Optional, Sequence
 
+from aiohttp import ClientResponseError
+
 from platform_api.admin_client import AdminClient
 from platform_api.orchestrator.billing_log.storage import (
     BillingLogEntry,
@@ -186,12 +188,20 @@ class BillingLogWorker:
     async def _perform_one(self, entry: BillingLogEntry) -> None:
         job = await self._jobs_service.get_job(entry.job_id)
 
-        await self._admin_client.change_user_credits(
-            cluster_name=job.cluster_name,
-            username=job.base_owner,
-            credits_delta=-entry.charge,
-            idempotency_key=entry.idempotency_key,
-        )
+        try:
+            await self._admin_client.change_user_credits(
+                cluster_name=job.cluster_name,
+                username=job.base_owner,
+                credits_delta=-entry.charge,
+                idempotency_key=entry.idempotency_key,
+            )
+        except ClientResponseError as e:
+            if e.status == 404:
+                # User was removed from the cluster
+                # TODO: send special request to store info about this debt
+                logger.exception("Was unable to bill a user: user removed from cluster")
+            else:
+                raise
         await self._jobs_service.update_job_billing(
             job_id=job.id,
             last_billed=entry.last_billed,
