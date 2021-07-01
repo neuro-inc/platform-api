@@ -59,8 +59,8 @@ from platform_api.orchestrator.jobs_storage import (
 )
 from platform_api.resource import Preset, TPUResource
 from platform_api.user import authorized_user, make_job_uri, untrusted_user
+from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
-from ..utils.asyncio import auto_close_aiter
 from .job_request_builder import create_container_from_payload
 from .validators import (
     create_base_owner_name_validator,
@@ -702,58 +702,59 @@ class JobsHandler:
             )
 
         reverse = _parse_bool(request.query.get("reverse", "0"))
+        limit: Optional[int] = None
         if "limit" in request.query:
             limit = int(request.query["limit"])
             if limit <= 0:
                 raise ValueError("limit should be > 0")
 
-            async def limit_filter(it: AsyncIterator[Job]) -> AsyncIterator[Job]:
-                count = limit
-                async for x in it:
-                    yield x
-                    count -= 1
-                    if not count:
-                        break
+        async with self._iter_filtered_jobs(bulk_job_filter, reverse, limit) as jobs:
+            if limit is not None:
 
-            jobs = limit_filter(
-                self._iter_filtered_jobs(bulk_job_filter, reverse, limit)
-            )
-        else:
-            jobs = self._iter_filtered_jobs(bulk_job_filter, reverse, None)
+                async def limit_filter(
+                    it: AsyncIterator[Job], count: int
+                ) -> AsyncIterator[Job]:
+                    async for x in it:
+                        yield x
+                        count -= 1
+                        if not count:
+                            break
 
-        if self._accepts_ndjson(request):
-            response = aiohttp.web.StreamResponse()
-            response.headers["Content-Type"] = "application/x-ndjson"
-            await response.prepare(request)
-            try:
-                async with auto_close_aiter(jobs):
+                jobs = limit_filter(jobs, limit)
+
+            if self._accepts_ndjson(request):
+                response = aiohttp.web.StreamResponse()
+                response.headers["Content-Type"] = "application/x-ndjson"
+                await response.prepare(request)
+                try:
                     async for job in jobs:
                         response_payload = convert_job_to_job_response(job)
                         self._job_response_validator.check(response_payload)
                         await response.write(
                             json.dumps(response_payload).encode() + b"\n"
                         )
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                msg_str = (
-                    f"Unexpected exception {e.__class__.__name__}: {str(e)}. "
-                    f"Path with query: {request.path_qs}."
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    msg_str = (
+                        f"Unexpected exception {e.__class__.__name__}: {str(e)}. "
+                        f"Path with query: {request.path_qs}."
+                    )
+                    logging.exception(msg_str)
+                    payload = {"error": msg_str}
+                    await response.write(json.dumps(payload).encode())
+                await response.write_eof()
+                return response
+            else:
+                response_payload = {
+                    "jobs": [convert_job_to_job_response(job) async for job in jobs]
+                }
+                self._bulk_jobs_response_validator.check(response_payload)
+                return aiohttp.web.json_response(
+                    data=response_payload, status=aiohttp.web.HTTPOk.status_code
                 )
-                logging.exception(msg_str)
-                payload = {"error": msg_str}
-                await response.write(json.dumps(payload).encode())
-            await response.write_eof()
-            return response
-        else:
-            response_payload = {
-                "jobs": [convert_job_to_job_response(job) async for job in jobs]
-            }
-            self._bulk_jobs_response_validator.check(response_payload)
-            return aiohttp.web.json_response(
-                data=response_payload, status=aiohttp.web.HTTPOk.status_code
-            )
 
+    @asyncgeneratorcontextmanager
     async def _iter_filtered_jobs(
         self, bulk_job_filter: "BulkJobFilter", reverse: bool, limit: Optional[int]
     ) -> AsyncIterator[Job]:
@@ -777,16 +778,17 @@ class JobsHandler:
 
         if bulk_job_filter.bulk_filter:
             with log_debug_time(f"Read bulk jobs with {bulk_job_filter.bulk_filter}"):
-                async for job in self._jobs_service.iter_all_jobs(
+                async with self._jobs_service.iter_all_jobs(
                     bulk_job_filter.bulk_filter, reverse=reverse, limit=limit
-                ):
-                    key = job_key(job)
-                    # Merge shared jobs and bulk jobs in the creation order
-                    while shared_jobs and (
-                        shared_jobs[-1] > key if reverse else shared_jobs[-1] < key
-                    ):
-                        yield shared_jobs.pop()[-1]
-                    yield job
+                ) as it:
+                    async for job in it:
+                        key = job_key(job)
+                        # Merge shared jobs and bulk jobs in the creation order
+                        while shared_jobs and (
+                            shared_jobs[-1] > key if reverse else shared_jobs[-1] < key
+                        ):
+                            yield shared_jobs.pop()[-1]
+                        yield job
 
         for key in reversed(shared_jobs):
             yield key[-1]

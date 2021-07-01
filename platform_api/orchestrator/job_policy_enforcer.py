@@ -31,7 +31,7 @@ from platform_api.orchestrator.job_request import JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.user import get_cluster
-from platform_api.utils.asyncio import auto_close_aiter, run_and_log_exceptions
+from platform_api.utils.asyncio import run_and_log_exceptions
 
 
 logger = logging.getLogger(__name__)
@@ -78,14 +78,13 @@ class CreditsNotificationsEnforcer(JobPolicyEnforcer):
 
     @trace
     async def enforce(self) -> None:
-        running_jobs = self._jobs_service.iter_all_jobs(
-            job_filter=JobFilter(
-                statuses={JobStatus(item) for item in JobStatus.active_values()}
-            )
-        )
         user_to_clusters: Dict[str, Set[str]] = defaultdict(set)
-        async for job in running_jobs:
-            user_to_clusters[job.owner].add(job.cluster_name)
+        job_filter = JobFilter(
+            statuses={JobStatus(item) for item in JobStatus.active_values()}
+        )
+        async with self._jobs_service.iter_all_jobs(job_filter) as running_jobs:
+            async for job in running_jobs:
+                user_to_clusters[job.owner].add(job.cluster_name)
         await run_and_log_exceptions(
             self._enforce_for_user(username, clusters)
             for username, clusters in user_to_clusters.items()
@@ -198,8 +197,7 @@ class BillingEnforcer(JobPolicyEnforcer):
 
     @trace
     async def enforce(self) -> None:
-        it = self._jobs_service.get_not_billed_jobs()
-        async with auto_close_aiter(it):
+        async with self._jobs_service.get_not_billed_jobs() as it:
             not_billed_jobs = [job.id async for job in it]
         for job_id in not_billed_jobs:
             await self._bill_single(job_id)

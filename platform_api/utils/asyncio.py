@@ -1,7 +1,18 @@
 import asyncio
+import functools
 import logging
-from contextlib import asynccontextmanager, suppress
-from typing import Any, AsyncGenerator, AsyncIterator, Awaitable, Iterable, TypeVar
+import sys
+from types import TracebackType
+from typing import (
+    Any,
+    AsyncContextManager,
+    Awaitable,
+    Callable,
+    Iterable,
+    Optional,
+    Type,
+    TypeVar,
+)
 
 
 async def run_and_log_exceptions(coros: Iterable[Awaitable[Any]]) -> None:
@@ -16,12 +27,31 @@ T_co = TypeVar("T_co", covariant=True)
 T_contra = TypeVar("T_contra", contravariant=True)
 
 
-@asynccontextmanager
-async def auto_close_aiter(
-    gen: AsyncGenerator[T_co, T_contra]
-) -> AsyncIterator[AsyncGenerator[T_co, T_contra]]:
-    try:
-        yield gen
-    finally:
-        with suppress(StopIteration):
-            await gen.aclose()
+if sys.version_info >= (3, 10):
+    from contextlib import aclosing
+else:
+
+    class aclosing(AsyncContextManager[T_co]):
+        def __init__(self, thing: T_co):
+            self.thing = thing
+
+        async def __aenter__(self) -> T_co:
+            return self.thing
+
+        async def __aexit__(
+            self,
+            exc_type: Optional[Type[BaseException]],
+            exc: Optional[BaseException],
+            tb: Optional[TracebackType],
+        ) -> None:
+            await self.thing.aclose()  # type: ignore
+
+
+def asyncgeneratorcontextmanager(
+    func: Callable[..., T_co]
+) -> Callable[..., AsyncContextManager[T_co]]:
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> AsyncContextManager[T_co]:
+        return aclosing(func(*args, **kwargs))
+
+    return wrapper

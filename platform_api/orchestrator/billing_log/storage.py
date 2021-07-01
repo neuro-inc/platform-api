@@ -24,6 +24,7 @@ from platform_logging import trace, trace_cm
 from sqlalchemy import asc, desc
 
 from platform_api.orchestrator.base_postgres_storage import BasePostgresStorage
+from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
 
 logger = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ class BillingLogStorage(ABC):
     @abstractmethod
     def iter_entries(
         self, *, with_ids_greater: int = 0, limit: Optional[int] = None
-    ) -> AsyncIterator[BillingLogEntry]:
+    ) -> AsyncContextManager[AsyncIterator[BillingLogEntry]]:
         pass
 
     @abstractmethod
@@ -116,6 +117,7 @@ class InMemoryBillingLogStorage(BillingLogStorage):
         async with self._inserter_lock:
             yield InMemoryBillingLogStorage.EntriesInserter(self)
 
+    @asyncgeneratorcontextmanager
     async def iter_entries(
         self, *, with_ids_greater: int = 0, limit: Optional[int] = None
     ) -> AsyncIterator[BillingLogEntry]:
@@ -266,6 +268,7 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
             )
             yield PostgresBillingLogStorage.EntriesInserter(self, conn)
 
+    @asyncgeneratorcontextmanager
     async def iter_entries(
         self, *, with_ids_greater: int = 0, limit: Optional[int] = None
     ) -> AsyncIterator[BillingLogEntry]:

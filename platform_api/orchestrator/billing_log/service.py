@@ -165,12 +165,10 @@ class BillingLogWorker:
 
     async def _process_one(self) -> bool:
         sync_record = await self._storage.get_or_create_sync_record()
-        entries = [
-            entry
-            async for entry in self._storage.iter_entries(
-                with_ids_greater=sync_record.last_entry_id, limit=1
-            )
-        ]
+        async with self._storage.iter_entries(
+            with_ids_greater=sync_record.last_entry_id, limit=1
+        ) as it:
+            entries = [entry async for entry in it]
         if not entries:
             return True
 
