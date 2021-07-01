@@ -24,6 +24,7 @@ from neuro_auth_client import (
 from notifications_client import CreditsWillRunOutSoon
 from yarl import URL
 
+from platform_api.cluster import ClusterConfigRegistry
 from platform_api.cluster_config import ClusterConfig
 from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.billing_log.service import BillingLogService
@@ -41,6 +42,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
     JobPolicyEnforcePoller,
     JobPolicyEnforcer,
     RuntimeLimitEnforcer,
+    StopOnClusterRemoveEnforcer,
 )
 from platform_api.orchestrator.job_request import JobRequest, JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
@@ -582,3 +584,92 @@ class TestCreditsNotificationEnforcer:
         assert not any(record.levelno >= logging.ERROR for record in caplog.records), [
             record for record in caplog.records
         ]
+
+
+class TestStopOnClusterRemoveEnforcer:
+    @pytest.fixture()
+    def billing_log_storage(self) -> BillingLogStorage:
+        return InMemoryBillingLogStorage()
+
+    @pytest.fixture()
+    async def billing_service(
+        self, billing_log_storage: BillingLogStorage
+    ) -> AsyncIterator[BillingLogService]:
+        async with BillingLogService(
+            storage=billing_log_storage,
+            new_entry=InMemoryNotifier(),
+            entry_done=InMemoryNotifier(),
+        ) as service:
+            yield service
+
+    @pytest.mark.asyncio
+    async def test_job_untouched_by_default(
+        self,
+        test_user: AuthUser,
+        jobs_service: JobsService,
+        mock_auth_client: MockAuthClient,
+        cluster_config_registry: ClusterConfigRegistry,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        enforcer = StopOnClusterRemoveEnforcer(
+            jobs_service, cluster_config_registry, mock_auth_client
+        )
+        job, _ = await jobs_service.create_job(
+            job_request_factory(), test_user, cluster_name="test-cluster"
+        )
+
+        await enforcer.enforce()
+
+        job = await jobs_service.get_job(job.id)
+        assert job.status == JobStatus.PENDING
+
+    @pytest.mark.asyncio
+    async def test_job_removed_cluster_gone(
+        self,
+        test_user: AuthUser,
+        jobs_service: JobsService,
+        mock_auth_client: MockAuthClient,
+        cluster_config_registry: ClusterConfigRegistry,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        enforcer = StopOnClusterRemoveEnforcer(
+            jobs_service, cluster_config_registry, mock_auth_client
+        )
+        job, _ = await jobs_service.create_job(
+            job_request_factory(), test_user, cluster_name="test-cluster"
+        )
+
+        cluster_config_registry.remove("test-cluster")
+        await enforcer.enforce()
+
+        job = await jobs_service.get_job(job.id)
+        assert job.status == JobStatus.FAILED
+        assert job.status_history.current.reason == JobStatusReason.CLUSTER_NOT_FOUND
+
+    @pytest.mark.asyncio
+    async def test_job_with_pass_config_removed_cluster_gone(
+        self,
+        test_user: AuthUser,
+        jobs_service: JobsService,
+        mock_auth_client: MockAuthClient,
+        cluster_config_registry: ClusterConfigRegistry,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        enforcer = StopOnClusterRemoveEnforcer(
+            jobs_service, cluster_config_registry, mock_auth_client
+        )
+        job, _ = await jobs_service.create_job(
+            job_request_factory(),
+            test_user,
+            cluster_name="test-cluster",
+            pass_config=True,
+        )
+
+        cluster_config_registry.remove("test-cluster")
+        await enforcer.enforce()
+
+        job = await jobs_service.get_job(job.id)
+        assert job.status == JobStatus.FAILED
+        assert job.status_history.current.reason == JobStatusReason.CLUSTER_NOT_FOUND
+        token_uri = f"token://{job.cluster_name}/job/{job.id}"
+        assert mock_auth_client._revokes[0] == (job.owner, [token_uri])
