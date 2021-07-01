@@ -10,6 +10,7 @@ async def run_and_log_exceptions(coros: Iterable[Awaitable[Any]]) -> None:
     for task in tasks:
         if task.exception():
             logging.exception(task.exception())
+            print(task.exception())
 
 
 T_co = TypeVar("T_co", covariant=True)

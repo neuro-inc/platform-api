@@ -209,6 +209,7 @@ class HttpJobsPollerApi(JobsPollerApi):
             "description": status.description,
             "exit_code": status.exit_code,
         }
+        print(f"Pushing status {payload} for {job_id}")
         async with self._client.put(url, json=payload) as resp:
             if resp.status == 400:
                 raise JobStorageTransactionError(
@@ -219,12 +220,14 @@ class HttpJobsPollerApi(JobsPollerApi):
         assert self._client
         url = self._base_url / "jobs" / job_id / "materialized"
         payload = {"materialized": materialized}
+        print(f"Pushing materialized {payload} for {job_id}")
         async with self._client.put(url, json=payload) as resp:
             if resp.status == 400:
                 raise JobStorageTransactionError(
                     "Failed to update materialized field of job "
                     f"{job_id} to {materialized}"
                 )
+            print(f"Successfully set materialized status for {job_id}, {resp}")
 
 
 class JobsPoller:

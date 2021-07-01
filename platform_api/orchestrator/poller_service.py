@@ -228,6 +228,7 @@ class JobsPollerService:
     ) -> None:
         unfinished = await self._api.get_unfinished_jobs()
         result = await self._scheduler.schedule(unfinished)
+        print(result)
 
         await run_and_log_exceptions(
             self._update_job_status_wrapper(record) for record in result.jobs_to_update
@@ -256,10 +257,13 @@ class JobsPollerService:
         )
 
     async def _update_job_status_wrapper(self, job_record: JobRecord) -> None:
+        print(f"Wrapper of {job_record.id}")
         try:
             async with self._update_job(job_record) as record:
                 try:
+                    print("Getting cluster")
                     async with self._get_cluster(record.cluster_name) as cluster:
+                        print(f"Got cluster {cluster}")
                         job = self._make_job(record, cluster)
                         await self._update_job_status(cluster.orchestrator, job)
                         job.collect_if_needed()
@@ -302,11 +306,14 @@ class JobsPollerService:
             logger.warning("Ignoring an attempt to update a finished job %s", job.id)
             return
 
+        print(f"Updating job {job.id}")
+
         logger.info("Updating job %s", job.id)
 
         old_status_item = job.status_history.current
 
         if not job.materialized:
+            print("Not materialized branch")
             try:
                 await self._check_secrets(job, orchestrator)
                 await self._check_disks(job, orchestrator)
@@ -327,8 +334,12 @@ class JobsPollerService:
                 job.materialized = False
                 await self._revoke_pass_config(job)
         else:
+            print("Materialized branch")
             try:
                 status_item = await orchestrator.get_job_status(job)
+                print(
+                    f"Got job {job.id} status {status_item.status} {status_item.reason}"
+                )
                 # TODO: In case job is found, but container is not in state Pending
                 # We shall go and check for the events assigned to the pod
                 # "pod didn't trigger scale-up (it wouldn't fit if a new node is added)"
