@@ -286,7 +286,9 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
         query = self._tables.billing_log.select()
         if job_id:
             query = query.where(self._tables.billing_log.c.job_id == job_id)
-        query = query.order_by(desc(self._tables.billing_log.c.id))
+        # The + 0 magic is to force postgres to sort result instead
+        # of using index backward scan on primary key.
+        query = query.order_by(desc(self._tables.billing_log.c.id + 0))
         query = query.limit(1)
         record = await self._fetchrow(query)
         if record:

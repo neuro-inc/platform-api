@@ -198,10 +198,11 @@ class BillingEnforcer(JobPolicyEnforcer):
 
     @trace
     async def enforce(self) -> None:
-        not_billed_jobs = self._jobs_service.get_not_billed_jobs()
-        async with auto_close_aiter(not_billed_jobs):
-            async for job in not_billed_jobs:
-                await self._bill_single(job.id)
+        it = self._jobs_service.get_not_billed_jobs()
+        async with auto_close_aiter(it):
+            not_billed_jobs = [job.id async for job in it]
+        for job_id in not_billed_jobs:
+            await self._bill_single(job_id)
 
     async def _bill_single(self, job_id: str) -> None:
         async with self._billing_service.entries_inserter() as inserter:
