@@ -168,6 +168,20 @@ class JobsPollerApi(abc.ABC):
         raise NotImplementedError
 
 
+async def _revoke_pass_config(
+    auth_client: AuthClient, job: Union[JobRecord, Job]
+) -> None:
+    if job.pass_config:
+        token_uri = f"token://{job.cluster_name}/job/{job.id}"
+        try:
+            await auth_client.revoke_user_permissions(job.owner, [token_uri])
+        except ClientResponseError as e:
+            if e.status == 400 and e.message == "Operation has no effect":
+                # Token permission was already revoked
+                return
+            raise
+
+
 class JobsPollerService:
     def __init__(
         self,
@@ -369,14 +383,7 @@ class JobsPollerService:
             pass
 
     async def _revoke_pass_config(self, job: Union[JobRecord, Job]) -> None:
-        if job.pass_config:
-            token_uri = f"token://{job.cluster_name}/job/{job.id}"
-            try:
-                await self._auth_client.revoke_user_permissions(job.owner, [token_uri])
-            except ClientResponseError as e:
-                if e.status == 400 and e.message == "Operation has no effect":
-                    # Token permission was already revoked
-                    pass
+        await _revoke_pass_config(self._auth_client, job)
 
     async def _delete_cluster_job(self, record: JobRecord) -> None:
         try:

@@ -23,13 +23,15 @@ from neuro_auth_client import AuthClient
 from notifications_client import Client as NotificationsClient, CreditsWillRunOutSoon
 from platform_logging import new_trace, trace
 
+from platform_api.cluster import ClusterConfigRegistry
 from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.billing_log.service import BillingLogService
 from platform_api.orchestrator.billing_log.storage import BillingLogEntry
-from platform_api.orchestrator.job import Job, JobStatusReason
+from platform_api.orchestrator.job import Job, JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
+from platform_api.orchestrator.poller_service import _revoke_pass_config
 from platform_api.user import get_cluster
 from platform_api.utils.asyncio import run_and_log_exceptions
 
@@ -229,6 +231,36 @@ class BillingEnforcer(JobPolicyEnforcer):
                     )
                 ]
             )
+
+
+class StopOnClusterRemoveEnforcer(JobPolicyEnforcer):
+    def __init__(
+        self,
+        jobs_service: JobsService,
+        cluster_config_registry: ClusterConfigRegistry,
+        auth_client: AuthClient,
+    ):
+        self._jobs_service = jobs_service
+        self._clusters_registry = cluster_config_registry
+        self._auth_client = auth_client
+
+    @trace
+    async def enforce(self) -> None:
+        jobs = await self._jobs_service.get_all_jobs(
+            job_filter=JobFilter(
+                statuses={JobStatus(item) for item in JobStatus.active_values()}
+            )
+        )
+        known_clusters = set(self._clusters_registry.cluster_names)
+        for job in jobs:
+            if job.cluster_name not in known_clusters:
+                status_item = JobStatusItem.create(
+                    JobStatus.FAILED,
+                    reason=JobStatusReason.CLUSTER_NOT_FOUND,
+                )
+                await self._jobs_service.set_job_status(job.id, status_item)
+                await self._jobs_service.set_job_materialized(job.id, False)
+                await _revoke_pass_config(self._auth_client, job)
 
 
 class JobPolicyEnforcePoller:

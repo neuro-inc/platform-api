@@ -28,6 +28,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
     CreditsNotificationsEnforcer,
     JobPolicyEnforcePoller,
     RuntimeLimitEnforcer,
+    StopOnClusterRemoveEnforcer,
 )
 
 from .admin_client import AdminClient
@@ -408,6 +409,11 @@ async def create_app(
                             notification_threshold=(
                                 config.job_policy_enforcer.credit_notification_threshold
                             ),
+                        ),
+                        StopOnClusterRemoveEnforcer(
+                            jobs_service=jobs_service,
+                            auth_client=auth_client,
+                            cluster_config_registry=cluster_config_registry,
                         ),
                     ],
                 )
