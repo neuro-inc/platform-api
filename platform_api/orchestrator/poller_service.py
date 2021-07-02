@@ -178,7 +178,8 @@ async def _revoke_pass_config(
         except ClientResponseError as e:
             if e.status == 400 and e.message == "Operation has no effect":
                 # Token permission was already revoked
-                pass
+                return
+            raise
 
 
 class JobsPollerService:
