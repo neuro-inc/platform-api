@@ -26,6 +26,7 @@ from platform_api.utils.update_notifier import InMemoryNotifier, Notifier
 class MockAdminClient(AdminClient):
     def __init__(self) -> None:
         self.change_log: List[Tuple[str, str, Decimal, str]] = []
+        self.debts_log: List[Tuple[str, str, Decimal, str]] = []
         self.raise_404: bool = False
 
     async def change_user_credits(
@@ -38,6 +39,15 @@ class MockAdminClient(AdminClient):
         if self.raise_404:
             raise ClientResponseError(None, (), status=404)  # type: ignore
         self.change_log.append((cluster_name, username, credits_delta, idempotency_key))
+
+    async def add_debt(
+        self,
+        cluster_name: str,
+        username: str,
+        credits: Decimal,
+        idempotency_key: str,
+    ) -> None:
+        self.debts_log.append((cluster_name, username, credits, idempotency_key))
 
 
 class BillingServiceFactory(Protocol):
@@ -228,6 +238,10 @@ class TestBillingLogProcessing:
             updated_job = await jobs_service.get_job(job.id)
             assert updated_job.total_price_credits == Decimal("1.00")
             assert updated_job.fully_billed
+            assert admin_client.debts_log[0][0] == job.cluster_name
+            assert admin_client.debts_log[0][1] == test_user.name
+            assert admin_client.debts_log[0][2] == Decimal("1.00")
+            assert admin_client.debts_log[0][3] == "key"
 
     @pytest.mark.asyncio
     async def test_syncs_new_entries(

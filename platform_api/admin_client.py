@@ -84,3 +84,19 @@ class AdminClient:
             params={"idempotency_key": idempotency_key},
         ) as response:
             response.raise_for_status()
+
+    async def add_debt(
+        self,
+        cluster_name: str,
+        username: str,
+        credits: Decimal,
+        idempotency_key: str,
+    ) -> None:
+        payload = {"user_name": username, "credits": str(credits)}
+        async with self._request(
+            "POST",
+            f"clusters/{cluster_name}/debts",
+            json=payload,
+            params={"idempotency_key": idempotency_key},
+        ) as response:
+            response.raise_for_status()
