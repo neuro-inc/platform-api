@@ -175,10 +175,12 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
             except StopIteration:
                 logger.warning(
                     f"User {username} has jobs in cluster {cluster_name}, "
-                    f"but has no access to this cluster"
+                    f"but has no access to this cluster. Jobs will be cancelled"
                 )
-                continue
-            if cluster.quota.credits is not None and cluster.quota.credits <= 0:
+                cluster = None
+            if cluster is None or (
+                cluster.quota.credits is not None and cluster.quota.credits <= 0
+            ):
                 for job in cluster_jobs:
                     await self._service.cancel_job(
                         job.id, JobStatusReason.QUOTA_EXHAUSTED

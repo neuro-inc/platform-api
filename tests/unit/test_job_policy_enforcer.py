@@ -353,6 +353,25 @@ class TestHasCreditsEnforcer:
 
         await check_cancelled(jobs, JobStatusReason.QUOTA_EXHAUSTED)
 
+    @pytest.mark.asyncio
+    async def test_user_has_no_access_to_cluster_kill_all(
+        self,
+        test_user: AuthUser,
+        has_credits_enforcer: CreditsLimitEnforcer,
+        mock_auth_client: MockAuthClient,
+        make_jobs: Callable[[AuthUser, int], Awaitable[List[Job]]],
+        check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
+    ) -> None:
+        jobs = await make_jobs(test_user, 5)
+
+        mock_auth_client.user_to_return = self.make_auth_user(
+            test_user, {"test-another-cluster": None}
+        )
+
+        await has_credits_enforcer.enforce()
+
+        await check_cancelled(jobs, JobStatusReason.QUOTA_EXHAUSTED)
+
 
 class TestBillingEnforcer:
     @pytest.fixture()
