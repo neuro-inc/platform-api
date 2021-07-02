@@ -60,18 +60,21 @@ class TestBillingLogStorage:
         ]
 
         fetched_entries = []
-        async for entry in storage.iter_entries(with_ids_greater=0):
-            fetched_entries.append(entry)
+        async with storage.iter_entries(with_ids_greater=0) as it:
+            async for entry in it:
+                fetched_entries.append(entry)
         assert fetched_entries == expected_entries
 
         fetched_entries = []
-        async for entry in storage.iter_entries(with_ids_greater=1):
-            fetched_entries.append(entry)
+        async with storage.iter_entries(with_ids_greater=1) as it:
+            async for entry in it:
+                fetched_entries.append(entry)
         assert fetched_entries == expected_entries[1:]
 
         fetched_entries = []
-        async for entry in storage.iter_entries(with_ids_greater=1, limit=2):
-            fetched_entries.append(entry)
+        async with storage.iter_entries(with_ids_greater=1, limit=2) as it:
+            async for entry in it:
+                fetched_entries.append(entry)
         assert fetched_entries == expected_entries[1:3]
 
     @pytest.mark.asyncio
@@ -112,10 +115,11 @@ class TestBillingLogStorage:
         assert 40 == await storage.get_last_entry_id()
 
         group_to_job = {}
-        async for entry in storage.iter_entries():
-            assert entry.id is not None
-            group_id = (entry.id - 1) // 4
-            if group_id not in group_to_job:
-                group_to_job[group_id] = entry.job_id
-            else:
-                assert group_to_job[group_id] == entry.job_id, group_id
+        async with storage.iter_entries() as it:
+            async for entry in it:
+                assert entry.id is not None
+                group_id = (entry.id - 1) // 4
+                if group_id not in group_to_job:
+                    group_to_job[group_id] = entry.job_id
+                else:
+                    assert group_to_job[group_id] == entry.job_id, group_id

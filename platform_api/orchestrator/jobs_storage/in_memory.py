@@ -5,6 +5,7 @@ from typing import AsyncIterator, Dict, Iterable, List, Optional, Tuple
 
 from platform_api.orchestrator.job import JobRecord
 from platform_api.orchestrator.job_request import JobError
+from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
 from .base import JobFilter, JobsStorage, JobStorageJobFoundError
 
@@ -60,6 +61,7 @@ class InMemoryJobsStorage(JobsStorage):
         yield job
         await self.set_job(job)
 
+    @asyncgeneratorcontextmanager
     async def iter_all_jobs(
         self,
         job_filter: Optional[JobFilter] = None,
@@ -99,11 +101,8 @@ class InMemoryJobsStorage(JobsStorage):
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
     ) -> List[JobRecord]:
-        return [
-            job
-            async for job in self.iter_all_jobs()
-            if job.should_be_deleted(delay=delay)
-        ]
+        async with self.iter_all_jobs() as it:
+            return [job async for job in it if job.should_be_deleted(delay=delay)]
 
     async def get_tags(self, owner: str) -> List[str]:
         return self._owner_to_tags.get(owner, [])

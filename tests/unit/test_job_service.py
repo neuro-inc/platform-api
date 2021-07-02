@@ -1729,7 +1729,8 @@ class TestJobsService:
         await jobs_service.update_job_billing(
             job1.id, last_billed=now, fully_billed=True, new_charge=Decimal("5.00")
         )
-        job_ids = [job.id async for job in jobs_service.get_not_billed_jobs()]
+        async with jobs_service.get_not_billed_jobs() as it:
+            job_ids = [job.id async for job in it]
         assert job_ids == [job2.id]
 
 

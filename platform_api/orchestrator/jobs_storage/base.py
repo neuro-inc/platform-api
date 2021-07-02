@@ -156,7 +156,7 @@ class JobsStorage(ABC):
         *,
         reverse: bool = False,
         limit: Optional[int] = None,
-    ) -> AsyncIterator[JobRecord]:
+    ) -> AsyncContextManager[AsyncIterator[JobRecord]]:
         pass
 
     @abstractmethod
@@ -172,12 +172,8 @@ class JobsStorage(ABC):
         reverse: bool = False,
         limit: Optional[int] = None,
     ) -> List[JobRecord]:
-        return [
-            job
-            async for job in self.iter_all_jobs(
-                job_filter, reverse=reverse, limit=limit
-            )
-        ]
+        async with self.iter_all_jobs(job_filter, reverse=reverse, limit=limit) as it:
+            return [job async for job in it]
 
     # Only used in tests
     async def get_running_jobs(self) -> List[JobRecord]:
@@ -216,10 +212,11 @@ class JobsStorage(ABC):
         self, owner: str
     ) -> Dict[str, AggregatedRunTime]:
         aggregated_run_times: Dict[str, RunTimeEntry] = defaultdict(RunTimeEntry)
-        async for job in self.iter_all_jobs(JobFilter(owners={owner})):
-            aggregated_run_times[job.cluster_name].increase_by(
-                RunTimeEntry.for_job(job)
-            )
+        async with self.iter_all_jobs(JobFilter(owners={owner})) as it:
+            async for job in it:
+                aggregated_run_times[job.cluster_name].increase_by(
+                    RunTimeEntry.for_job(job)
+                )
         return {
             cluster_name: run_time_entry.to_aggregated_run_time()
             for cluster_name, run_time_entry in aggregated_run_times.items()

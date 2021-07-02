@@ -23,6 +23,7 @@ from yarl import URL
 from platform_api.cluster import ClusterConfig, ClusterConfigRegistry, ClusterNotFound
 from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import JobsConfig
+from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
 from ..user import get_cluster
 from .job import (
@@ -343,6 +344,7 @@ class JobsService:
                 logger.warning("Failed to mark a job %s as canceled. Retrying.", job_id)
         logger.warning("Failed to mark a job %s as canceled. Giving up.", job_id)
 
+    @asyncgeneratorcontextmanager
     async def iter_all_jobs(
         self,
         job_filter: Optional[JobFilter] = None,
@@ -350,22 +352,25 @@ class JobsService:
         reverse: bool = False,
         limit: Optional[int] = None,
     ) -> AsyncIterator[Job]:
-        async for record in self._jobs_storage.iter_all_jobs(
+        async with self._jobs_storage.iter_all_jobs(
             job_filter, reverse=reverse, limit=limit
-        ):
-            yield await self._get_cluster_job(record)
+        ) as it:
+            async for record in it:
+                yield await self._get_cluster_job(record)
 
     async def get_all_jobs(
         self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
     ) -> List[Job]:
-        return [job async for job in self.iter_all_jobs(job_filter, reverse=reverse)]
+        async with self.iter_all_jobs(job_filter, reverse=reverse) as it:
+            return [job async for job in it]
 
     async def get_job_by_name(self, job_name: str, owner: AuthUser) -> Job:
         job_filter = JobFilter(owners={owner.name}, name=job_name)
-        async for record in self._jobs_storage.iter_all_jobs(
+        async with self._jobs_storage.iter_all_jobs(
             job_filter, reverse=True, limit=1
-        ):
-            return await self._get_cluster_job(record)
+        ) as it:
+            async for record in it:
+                return await self._get_cluster_job(record)
         raise JobError(f"no such job {job_name}")
 
     async def get_jobs_by_ids(
@@ -442,8 +447,10 @@ class JobsService:
             record.last_billed = last_billed
             record.fully_billed = fully_billed
 
+    @asyncgeneratorcontextmanager
     async def get_not_billed_jobs(self) -> AsyncIterator[Job]:
-        async for record in self._jobs_storage.iter_all_jobs(
+        async with self._jobs_storage.iter_all_jobs(
             JobFilter(fully_billed=False)
-        ):
-            yield await self._get_cluster_job(record)
+        ) as it:
+            async for record in it:
+                yield await self._get_cluster_job(record)

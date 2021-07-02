@@ -25,6 +25,7 @@ from sqlalchemy import Boolean, Integer, and_, asc, desc, func, or_, select
 from platform_api.orchestrator.job import AggregatedRunTime, JobRecord
 from platform_api.orchestrator.job_request import JobError, JobStatus
 from platform_api.orchestrator.jobs_storage import JobFilter
+from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
 from ..base_postgres_storage import BasePostgresStorage
 from .base import (
@@ -226,6 +227,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
     def _clause_for_filter(self, job_filter: JobFilter) -> sasql.ClauseElement:
         return JobFilterClauseBuilder.by_job_filter(job_filter, self._tables)
 
+    @asyncgeneratorcontextmanager
     async def iter_all_jobs(
         self,
         job_filter: Optional[JobFilter] = None,
@@ -257,8 +259,9 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             return []
         job_filter = replace(job_filter, ids=set(job_ids))
         all_jobs = []
-        async for job in self.iter_all_jobs(job_filter):
-            all_jobs.append(job)
+        async with self.iter_all_jobs(job_filter) as it:
+            async for job in it:
+                all_jobs.append(job)
         # Restore ordering
         id_to_job = {job.id: job for job in all_jobs}
         all_jobs = [id_to_job[job_id] for job_id in job_ids if job_id in id_to_job]
@@ -272,9 +275,10 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             materialized=True,
         )
         for_deletion = []
-        async for job in self.iter_all_jobs(job_filter):
-            if job.should_be_deleted(delay=delay):
-                for_deletion.append(job)
+        async with self.iter_all_jobs(job_filter) as it:
+            async for job in it:
+                if job.should_be_deleted(delay=delay):
+                    for_deletion.append(job)
         return for_deletion
 
     async def get_tags(self, owner: str) -> List[str]:
@@ -341,10 +345,11 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             owners={owner},
             statuses={JobStatus(value) for value in JobStatus.active_values()},
         )
-        async for job in self.iter_all_jobs(running_filter):
-            aggregated_run_times[job.cluster_name].increase_by(
-                RunTimeEntry.for_job(job)
-            )
+        async with self.iter_all_jobs(running_filter) as it:
+            async for job in it:
+                aggregated_run_times[job.cluster_name].increase_by(
+                    RunTimeEntry.for_job(job)
+                )
 
         # Collect data from cache
         query = self._tables.jobs_runtime_cache.select().where(

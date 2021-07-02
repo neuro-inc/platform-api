@@ -412,7 +412,8 @@ class TestBillingEnforcer:
         per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
         second = Decimal("1") / 3600
         await enforcer.enforce()
-        entries = [entry async for entry in billing_log_storage.iter_entries()]
+        async with billing_log_storage.iter_entries() as it:
+            entries = [entry async for entry in it]
         assert len(entries) == 1
         assert entries[0].job_id == job.id
         assert entries[0].charge >= Decimal("1.5") * per_hour
@@ -444,9 +445,8 @@ class TestBillingEnforcer:
                 BillingLogSyncRecord(index + 1)
             )
             await billing_service._entry_done_notifier.notify()
-        keys = {
-            entry.idempotency_key async for entry in billing_log_storage.iter_entries()
-        }
+        async with billing_log_storage.iter_entries() as it:
+            keys = {entry.idempotency_key async for entry in it}
         assert len(keys) == 1000
 
     @pytest.mark.asyncio
@@ -469,7 +469,8 @@ class TestBillingEnforcer:
         )
 
         await enforcer.enforce()
-        entries = [entry async for entry in billing_log_storage.iter_entries()]
+        async with billing_log_storage.iter_entries() as it:
+            entries = [entry async for entry in it]
         assert len(entries) == 1
         assert entries[0].fully_billed
 
@@ -516,7 +517,8 @@ class TestBillingEnforcer:
         await billing_log_storage.update_sync_record(BillingLogSyncRecord(1))
         await billing_service._entry_done_notifier.notify()
         await asyncio.wait_for(task, timeout=0.2)
-        entries = [entry async for entry in billing_log_storage.iter_entries()]
+        async with billing_log_storage.iter_entries() as it:
+            entries = [entry async for entry in it]
         assert len(entries) == 2
 
         per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
