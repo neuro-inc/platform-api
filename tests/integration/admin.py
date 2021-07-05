@@ -18,6 +18,14 @@ class AdminChargeRequest:
     amount: Decimal
 
 
+@dataclass(frozen=True)
+class AdminDebtRequest:
+    idempotency_key: Optional[str]
+    cluster_name: str
+    username: str
+    amount: Decimal
+
+
 class AdminServer(NamedTuple):
     address: ApiAddress
     app: aiohttp.web.Application
@@ -49,6 +57,22 @@ async def mock_admin_server() -> AsyncIterator[AdminServer]:
         )
         return aiohttp.web.Response()
 
+    async def _handle_add_debt(request: aiohttp.web.Request) -> aiohttp.web.Response:
+        cluster_name = request.match_info["cname"]
+        payload = await request.json()
+        username = payload["user_name"]
+        amount = Decimal(payload["credits"])
+        idempotency_key = request.query.get("idempotency_key")
+        app["requests"].append(
+            AdminDebtRequest(
+                idempotency_key=idempotency_key,
+                cluster_name=cluster_name,
+                username=username,
+                amount=amount,
+            )
+        )
+        return aiohttp.web.Response()
+
     def _create_app() -> aiohttp.web.Application:
         app = aiohttp.web.Application()
         app["requests"] = []
@@ -57,6 +81,7 @@ async def mock_admin_server() -> AsyncIterator[AdminServer]:
                 aiohttp.web.patch(
                     "/api/v1/clusters/{cname}/users/{uname}/quota", _handle_quota_patch
                 ),
+                aiohttp.web.post("/api/v1/clusters/{cname}/debts", _handle_add_debt),
             )
         )
         return app

@@ -196,8 +196,12 @@ class BillingLogWorker:
         except ClientResponseError as e:
             if e.status == 404:
                 # User was removed from the cluster
-                # TODO: send special request to store info about this debt
-                logger.exception("Was unable to bill a user: user removed from cluster")
+                await self._admin_client.add_debt(
+                    cluster_name=job.cluster_name,
+                    username=job.base_owner,
+                    credits=entry.charge,
+                    idempotency_key=entry.idempotency_key,
+                )
             else:
                 raise
         await self._jobs_service.update_job_billing(
