@@ -50,13 +50,6 @@ class ApiConfig(NamedTuple):
         return self.endpoint + "/config/clusters/sync"
 
     @property
-    def stats_base_url(self) -> str:
-        return f"{self.endpoint}/stats"
-
-    def stats_for_user_url(self, username: str) -> str:
-        return f"{self.stats_base_url}/users/{username}"
-
-    @property
     def tags_base_url(self) -> str:
         return f"{self.endpoint}/tags"
 
