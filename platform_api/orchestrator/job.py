@@ -1,6 +1,5 @@
 import enum
 import logging
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -866,17 +865,6 @@ class Job:
             orchestrator_config=orchestrator_config,
             record=record,
         )
-
-
-@dataclass(frozen=True)
-class JobStats:
-    cpu: float
-    memory: float
-
-    gpu_duty_cycle: Optional[int] = None
-    gpu_memory: Optional[float] = None
-
-    timestamp: float = field(default_factory=time.time)
 
 
 def maybe_job_id(value: str) -> bool:

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from itertools import islice
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -7,12 +7,7 @@ from asyncpg.pool import Pool
 
 from platform_api.config import PostgresConfig
 from platform_api.config_factory import EnvironConfigFactory
-from platform_api.orchestrator.job import (
-    JobRecord,
-    JobStatusHistory,
-    JobStatusItem,
-    current_datetime_factory,
-)
+from platform_api.orchestrator.job import JobRecord, current_datetime_factory
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
@@ -28,7 +23,7 @@ from platform_api.orchestrator.jobs_storage import (
 )
 from platform_api.orchestrator.jobs_storage.postgres import PostgresJobsStorage
 from platform_api.postgres import MigrationRunner, create_postgres_pool
-from tests.conftest import not_raises, random_str
+from tests.conftest import not_raises
 
 
 class TestJobsStorage:
@@ -1434,187 +1429,6 @@ class TestJobsStorage:
         job = await storage.get_job(second_job.id)
         assert job.id == second_job.id
         assert job.status == JobStatus.RUNNING
-
-    @pytest.mark.asyncio
-    async def test_get_aggregated_run_time_for_user(self, storage: JobsStorage) -> None:
-        test_started_at = current_datetime_factory()
-        owner = f"test-user-{random_str()}"
-
-        job_started_delay = timedelta(hours=1)
-        time_pending_delta = timedelta(minutes=3)
-        time_running_delta = timedelta(minutes=20)
-
-        job_started_at = current_datetime_factory() - job_started_delay
-        job_running_at = job_started_at + time_pending_delta
-        job_finished_at = job_running_at + time_running_delta
-
-        expected_alive_job_runtime = job_started_delay - time_pending_delta
-        expected_finished_job_runtime = time_running_delta
-
-        def create_job(cluster_name: str, with_gpu: bool, finished: bool) -> JobRecord:
-            status_history = [
-                JobStatusItem.create(JobStatus.PENDING, transition_time=job_started_at),
-                JobStatusItem.create(JobStatus.RUNNING, transition_time=job_running_at),
-            ]
-            if finished:
-                status_history.append(
-                    JobStatusItem.create(
-                        JobStatus.SUCCEEDED, transition_time=job_finished_at
-                    )
-                )
-            return JobRecord.create(
-                owner=owner,
-                request=self._create_job_request(with_gpu),
-                cluster_name=cluster_name,
-                status_history=JobStatusHistory(status_history),
-            )
-
-        jobs_with_gpu = [
-            create_job(cluster_name="test-cluster1", with_gpu=True, finished=False),
-            create_job(cluster_name="test-cluster1", with_gpu=True, finished=False),
-            create_job(cluster_name="test-cluster1", with_gpu=True, finished=True),
-            create_job(cluster_name="test-cluster1", with_gpu=True, finished=True),
-            create_job(cluster_name="test-cluster2", with_gpu=True, finished=False),
-            create_job(cluster_name="test-cluster2", with_gpu=True, finished=False),
-            create_job(cluster_name="test-cluster2", with_gpu=True, finished=True),
-            create_job(cluster_name="test-cluster2", with_gpu=True, finished=True),
-        ]
-        jobs_no_gpu = [
-            create_job(cluster_name="test-cluster1", with_gpu=False, finished=False),
-            create_job(cluster_name="test-cluster1", with_gpu=False, finished=False),
-            create_job(cluster_name="test-cluster1", with_gpu=False, finished=True),
-            create_job(cluster_name="test-cluster1", with_gpu=False, finished=True),
-            create_job(cluster_name="test-cluster2", with_gpu=False, finished=False),
-            create_job(cluster_name="test-cluster2", with_gpu=False, finished=False),
-            create_job(cluster_name="test-cluster2", with_gpu=False, finished=True),
-            create_job(cluster_name="test-cluster2", with_gpu=False, finished=True),
-        ]
-        for job in jobs_with_gpu + jobs_no_gpu:
-            async with storage.try_create_job(job):
-                pass
-
-        actual_run_time = await storage.get_aggregated_run_time(owner)
-        actual_run_times = await storage.get_aggregated_run_time_by_clusters(owner)
-
-        test_elapsed = current_datetime_factory() - test_started_at
-
-        # 4x terminated GPU jobs, 4x GPU alive jobs
-        expected = 4 * expected_alive_job_runtime + 4 * expected_finished_job_runtime
-        actual_gpu = actual_run_time.total_gpu_run_time_delta
-        actual_non_gpu = actual_run_time.total_non_gpu_run_time_delta
-
-        actual_run_time1 = actual_run_times["test-cluster1"]
-        expected1 = 2 * expected_alive_job_runtime + 2 * expected_finished_job_runtime
-        actual_gpu1 = actual_run_time1.total_gpu_run_time_delta
-        actual_non_gpu1 = actual_run_time1.total_non_gpu_run_time_delta
-
-        actual_run_time2 = actual_run_times["test-cluster2"]
-        expected2 = 2 * expected_alive_job_runtime + 2 * expected_finished_job_runtime
-        actual_gpu2 = actual_run_time2.total_gpu_run_time_delta
-        actual_non_gpu2 = actual_run_time2.total_non_gpu_run_time_delta
-
-        # NOTE (ajuszkowski, 4-Apr-2019) Because we don't serialize all fields of `Job`
-        # (specifically, `Job.current_datetime_factory`, see issue #560),
-        # all deserialized `Job` instances get the default value of
-        # `current_datetime_factory`, so we cannot assert exact value
-        # of `Job.get_run_time()` in this test
-        # 4x running jobs -> 4 * test_elapsed
-        assert expected <= actual_gpu <= expected + 4 * test_elapsed
-        assert expected <= actual_non_gpu <= expected + 4 * test_elapsed
-
-        # 2x running jobs -> 2 * test_elapsed
-        assert expected1 <= actual_gpu1 <= expected1 + 2 * test_elapsed
-        assert expected1 <= actual_non_gpu1 <= expected1 + 2 * test_elapsed
-
-        # 2x running jobs -> 2 * test_elapsed
-        assert expected2 <= actual_gpu2 <= expected2 + 2 * test_elapsed
-        assert expected2 <= actual_non_gpu2 <= expected2 + 2 * test_elapsed
-
-    @pytest.mark.asyncio
-    async def test_get_aggregated_run_time_caching(self, storage: JobsStorage) -> None:
-        started_at = current_datetime_factory() - timedelta(hours=10)
-        owner = f"test-user-{random_str()}"
-
-        async def add_job(
-            running_at: datetime,
-            with_gpu: bool = False,
-            finished_at: Optional[datetime] = None,
-            cluster_name: str = "test-cluster",
-        ) -> timedelta:
-            status_history = [
-                JobStatusItem.create(JobStatus.PENDING, transition_time=started_at),
-                JobStatusItem.create(JobStatus.RUNNING, transition_time=running_at),
-            ]
-            if finished_at:
-                status_history.append(
-                    JobStatusItem.create(
-                        JobStatus.SUCCEEDED, transition_time=finished_at
-                    )
-                )
-            job = JobRecord.create(
-                owner=owner,
-                request=self._create_job_request(with_gpu),
-                cluster_name=cluster_name,
-                status_history=JobStatusHistory(status_history),
-            )
-            async with storage.try_create_job(job):
-                pass
-            return job.get_run_time()
-
-        # No jobs
-        result = await storage.get_aggregated_run_time_by_clusters(owner)
-        assert result == {}
-
-        # Add completed jobs (gpu and non gpu)
-        await add_job(
-            started_at, finished_at=started_at + timedelta(hours=1), with_gpu=False
-        )
-        await add_job(
-            started_at, finished_at=started_at + timedelta(hours=2), with_gpu=True
-        )
-
-        result = await storage.get_aggregated_run_time_by_clusters(owner)
-        assert result["test-cluster"].total_non_gpu_run_time_delta == timedelta(hours=1)
-        assert result["test-cluster"].total_gpu_run_time_delta == timedelta(hours=2)
-
-        # Add some more completed jobs
-        await add_job(
-            started_at + timedelta(hours=2),
-            finished_at=started_at + timedelta(hours=4),
-            with_gpu=False,
-        )
-        await add_job(
-            started_at + timedelta(hours=2),
-            finished_at=started_at + timedelta(hours=3),
-            with_gpu=True,
-        )
-
-        result = await storage.get_aggregated_run_time_by_clusters(owner)
-        assert result["test-cluster"].total_non_gpu_run_time_delta == timedelta(hours=3)
-        assert result["test-cluster"].total_gpu_run_time_delta == timedelta(hours=3)
-
-        # Add job that completed seconds ago
-        await add_job(
-            started_at,
-            finished_at=started_at + timedelta(hours=9, seconds=3590),
-            with_gpu=False,
-        )
-
-        result = await storage.get_aggregated_run_time_by_clusters(owner)
-        assert result["test-cluster"].total_non_gpu_run_time_delta == timedelta(
-            hours=12, seconds=3590
-        )
-        assert result["test-cluster"].total_gpu_run_time_delta == timedelta(hours=3)
-
-        # Add running jobs
-        await add_job(started_at + timedelta(hours=9), with_gpu=False)
-        await add_job(started_at + timedelta(hours=9), with_gpu=True)
-
-        result = await storage.get_aggregated_run_time_by_clusters(owner)
-        assert result["test-cluster"].total_non_gpu_run_time_delta >= timedelta(
-            hours=13, seconds=3590
-        )
-        assert result["test-cluster"].total_gpu_run_time_delta >= timedelta(hours=4)
 
     @pytest.mark.asyncio
     async def test_get_jobs_by_ids_missing_only(self, storage: JobsStorage) -> None:
