@@ -977,6 +977,34 @@ class TestJobsStorage:
         assert job_ids == [jobs[0].id, jobs[2].id]
 
     @pytest.mark.asyncio
+    async def test_get_all_filter_by_being_dropped(self, storage: JobsStorage) -> None:
+        jobs = [
+            self._create_job(being_dropped=True),
+            self._create_job(being_dropped=False),
+            self._create_job(being_dropped=True),
+        ]
+        for job in jobs:
+            async with storage.try_create_job(job):
+                pass
+        job_filter = JobFilter(being_dropped=True)
+        job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
+        assert job_ids == [jobs[0].id, jobs[2].id]
+
+    @pytest.mark.asyncio
+    async def test_get_all_filter_by_logs_removed(self, storage: JobsStorage) -> None:
+        jobs = [
+            self._create_job(logs_removed=True),
+            self._create_job(logs_removed=False),
+            self._create_job(logs_removed=True),
+        ]
+        for job in jobs:
+            async with storage.try_create_job(job):
+                pass
+        job_filter = JobFilter(logs_removed=True)
+        job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
+        assert job_ids == [jobs[0].id, jobs[2].id]
+
+    @pytest.mark.asyncio
     async def test_get_all_filter_by_cluster_and_owner(
         self, storage: JobsStorage
     ) -> None:

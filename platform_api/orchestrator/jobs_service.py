@@ -381,13 +381,6 @@ class JobsService:
         )
         return [await self._get_cluster_job(record) for record in records]
 
-    async def drop_job(self, job_id: str) -> None:
-        # TODO: drop logs/add entry to queue
-        record = await self._jobs_storage.get_job(job_id)
-        if not record.is_finished:
-            raise JobError("Cannot drop unfinished job")
-        await self._jobs_storage.drop_job(job_id)
-
     async def get_user_cluster_configs(self, user: AuthUser) -> List[ClusterConfig]:
         configs = []
         for user_cluster in user.clusters:
@@ -461,3 +454,22 @@ class JobsService:
         ) as it:
             async for record in it:
                 yield await self._get_cluster_job(record)
+
+    async def drop_job(
+        self,
+        job_id: str,
+    ) -> None:
+        async with self._jobs_storage.try_update_job(job_id) as record:
+            record.being_dropped = True
+
+    async def drop_progress(
+        self, job_id: str, *, logs_removed: Optional[bool] = None
+    ) -> None:
+        async with self._jobs_storage.try_update_job(job_id) as record:
+            if not record.being_dropped:
+                raise JobError(f"Job {job_id} is not being dropped")
+            if logs_removed:
+                record.logs_removed = logs_removed
+        all_resources_cleaned = record.logs_removed
+        if all_resources_cleaned:
+            await self._jobs_storage.drop_job(job_id)

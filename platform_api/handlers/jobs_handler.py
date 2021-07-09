@@ -256,6 +256,8 @@ def create_job_response_validator() -> t.Trafaret:
             "scheduler_enabled": t.Bool,
             "preemptible_node": t.Bool,
             "materialized": t.Bool,
+            "being_dropped": t.Bool,
+            "logs_removed": t.Bool,
             t.Key("is_preemptible", optional=True): t.Bool,
             t.Key("is_preemptible_node_required", optional=True): t.Bool,
             "pass_config": t.Bool,
@@ -312,6 +314,14 @@ def create_job_update_max_run_time_minutes_validator() -> t.Trafaret:
             }
         )
         >> _check_exactly_one
+    )
+
+
+def create_drop_progress_validator() -> t.Trafaret:
+    return t.Dict(
+        {
+            t.Key("logs_removed", optional=True): t.Bool,
+        }
     )
 
 
@@ -424,6 +434,8 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         "restart_policy": str(job.restart_policy),
         "privileged": job.privileged,
         "materialized": job.materialized,
+        "being_dropped": job.being_dropped,
+        "logs_removed": job.logs_removed,
     }
     if job.name:
         response_payload["name"] = job.name
@@ -499,6 +511,7 @@ class JobsHandler:
         self._job_update_run_time_validator = (
             create_job_update_max_run_time_minutes_validator()
         )
+        self._drop_progress_validator = create_drop_progress_validator()
         self._bulk_jobs_response_validator = t.Dict(
             {"jobs": t.List(self._job_response_validator)}
         )
@@ -525,6 +538,7 @@ class JobsHandler:
                     self.handle_put_max_run_time_minutes,
                 ),
                 aiohttp.web.post("/{job_id}/drop", self.handle_drop_job),
+                aiohttp.web.post("/{job_id}/drop_progress", self.handle_drop_progress),
             )
         )
 
@@ -905,6 +919,19 @@ class JobsHandler:
         else:
             raise aiohttp.web.HTTPNoContent()
 
+    async def handle_drop_progress(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.StreamResponse:
+        job = await self._resolve_job(request, "write")
+
+        orig_payload = await request.json()
+        request_payload = self._drop_progress_validator.check(orig_payload)
+
+        await self._jobs_service.drop_progress(
+            job.id, logs_removed=request_payload.get("logs_removed")
+        )
+        raise aiohttp.web.HTTPNoContent()
+
 
 class JobFilterException(ValueError):
     pass
@@ -921,9 +948,10 @@ class JobFilterFactory:
         statuses = {JobStatus(s) for s in query.getall("status", [])}
         tags = set(query.getall("tag", []))
         hostname = query.get("hostname")
-        materialized = None
-        if "materialized" in query:
-            materialized = query["materialized"].lower() == "true"
+        bool_filters = {}
+        for name in ["materialized", "being_dropped", "logs_removed"]:
+            if name in query:
+                bool_filters[name] = query[name].lower() == "true"
         if hostname is None:
             job_name = self._job_name_validator.check(query.get("name"))
             owners = {
@@ -949,7 +977,7 @@ class JobFilterFactory:
                 tags=tags,
                 since=iso8601.parse_date(since) if since else JobFilter.since,
                 until=iso8601.parse_date(until) if until else JobFilter.until,
-                materialized=materialized,
+                **bool_filters,
             )
 
         for key in ("name", "owner", "cluster_name", "since", "until"):
@@ -960,7 +988,10 @@ class JobFilterFactory:
         job_name, sep, base_owner = label.rpartition(JOB_USER_NAMES_SEPARATOR)
         if not sep:
             return JobFilter(
-                statuses=statuses, ids={label}, tags=tags, materialized=materialized
+                statuses=statuses,
+                ids={label},
+                tags=tags,
+                **bool_filters,
             )
         job_name = self._job_name_validator.check(job_name)
         base_owner = self._base_owner_name_validator.check(base_owner)
@@ -969,7 +1000,7 @@ class JobFilterFactory:
             base_owners={base_owner},
             name=job_name,
             tags=tags,
-            materialized=materialized,
+            **bool_filters,
         )
 
 

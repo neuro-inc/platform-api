@@ -4306,6 +4306,12 @@ class TestJobs:
         await jobs_client.drop_job(job_id=job_id)
 
         jobs = await jobs_client.get_all_jobs()
+        assert len(jobs) == 1
+        assert jobs[0]["being_dropped"]
+        assert not jobs[0]["logs_removed"]
+        await jobs_client.drop_progress(job_id=job_id, logs_removed=True)
+
+        jobs = await jobs_client.get_all_jobs()
         assert len(jobs) == 0
 
     @pytest.mark.asyncio
