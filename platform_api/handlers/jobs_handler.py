@@ -524,6 +524,7 @@ class JobsHandler:
                     "/{job_id}/max_run_time_minutes",
                     self.handle_put_max_run_time_minutes,
                 ),
+                aiohttp.web.post("/{job_id}/drop", self.handle_drop_job),
             )
         )
 
@@ -882,6 +883,20 @@ class JobsHandler:
             return aiohttp.web.json_response(
                 payload, status=aiohttp.web.HTTPConflict.status_code
             )
+        except JobError as e:
+            payload = {"error": str(e)}
+            return aiohttp.web.json_response(
+                payload, status=aiohttp.web.HTTPBadRequest.status_code
+            )
+        else:
+            raise aiohttp.web.HTTPNoContent()
+
+    async def handle_drop_job(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.StreamResponse:
+        job = await self._resolve_job(request, "write")
+        try:
+            await self._jobs_service.drop_job(job.id)
         except JobError as e:
             payload = {"error": str(e)}
             return aiohttp.web.json_response(

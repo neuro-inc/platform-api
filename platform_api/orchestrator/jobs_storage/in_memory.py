@@ -55,6 +55,11 @@ class InMemoryJobsStorage(JobsStorage):
             raise JobError(f"no such job {job_id}")
         return self._parse_job_payload(payload)
 
+    async def drop_job(self, job_id: str) -> None:
+        payload = self._job_records.pop(job_id, None)
+        if payload is None:
+            raise JobError(f"no such job {job_id}")
+
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[JobRecord]:
         job = await self.get_job(job_id)

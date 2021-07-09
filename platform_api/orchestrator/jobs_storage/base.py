@@ -146,6 +146,10 @@ class JobsStorage(ABC):
         pass
 
     @abstractmethod
+    async def drop_job(self, job_id: str) -> None:
+        pass
+
+    @abstractmethod
     def try_update_job(self, job_id: str) -> AsyncContextManager[JobRecord]:
         pass
 

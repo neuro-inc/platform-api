@@ -188,6 +188,16 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         record = await self._select_row(job_id)
         return self._record_to_job(record)
 
+    async def drop_job(self, job_id: str) -> None:
+        query = (
+            self._tables.jobs.delete()
+            .where(self._tables.jobs.c.id == job_id)
+            .returning(self._tables.jobs.c.id)
+        )
+        result = await self._fetchrow(query)
+        if result is None:
+            raise JobError(f"no such job {job_id}")
+
     @asynccontextmanager
     async def try_create_job(self, job: JobRecord) -> AsyncIterator[JobRecord]:
         # No need to do any checks -- INSERT cannot be executed twice

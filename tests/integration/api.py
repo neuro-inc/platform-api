@@ -317,6 +317,19 @@ class JobsClient:
                     response.status == HTTPNoContent.status_code
                 ), await response.text()
 
+    async def drop_job(
+        self,
+        job_id: str,
+        assert_success: bool = True,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> None:
+        url = self._api_config.generate_job_url(job_id) + "/drop"
+        async with self._client.post(url, headers=headers or self._headers) as response:
+            if assert_success:
+                assert (
+                    response.status == HTTPNoContent.status_code
+                ), await response.text()
+
 
 @pytest.fixture
 async def jobs_client_factory(

@@ -4286,6 +4286,29 @@ class TestJobs:
             assert result["error"] == f"no such job {job_id}"
 
     @pytest.mark.asyncio
+    async def test_drop_job(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["id"]
+            await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.drop_job(job_id=job_id)
+
+        jobs = await jobs_client.get_all_jobs()
+        assert len(jobs) == 0
+
+    @pytest.mark.asyncio
     async def test_create_validation_failure(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
