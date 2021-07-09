@@ -4492,6 +4492,8 @@ class TestJobs:
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
                 "privileged": False,
+                "being_dropped": False,
+                "logs_removed": False,
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -4539,6 +4541,8 @@ class TestJobs:
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
             "privileged": False,
+            "being_dropped": False,
+            "logs_removed": False,
         }
 
     @pytest.mark.asyncio
@@ -4632,6 +4636,8 @@ class TestJobs:
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
             "privileged": False,
+            "being_dropped": False,
+            "logs_removed": False,
         }
 
     @pytest.mark.asyncio
@@ -4737,6 +4743,8 @@ class TestJobs:
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
                 "privileged": False,
+                "being_dropped": False,
+                "logs_removed": False,
             }
 
     @pytest.mark.asyncio
@@ -4836,6 +4844,8 @@ class TestJobs:
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
                 "privileged": False,
+                "being_dropped": False,
+                "logs_removed": False,
             }
 
 
