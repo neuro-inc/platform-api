@@ -60,6 +60,8 @@ class JobFilter:
     until: datetime = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc)
     materialized: Optional[bool] = None
     fully_billed: Optional[bool] = None
+    being_dropped: Optional[bool] = None
+    logs_removed: Optional[bool] = None
 
     def check(self, job: JobRecord) -> bool:
         if self.statuses and job.status not in self.statuses:
@@ -91,6 +93,10 @@ class JobFilter:
             return self.materialized == job.materialized
         if self.fully_billed is not None:
             return self.fully_billed == job.fully_billed
+        if self.being_dropped is not None:
+            return self.being_dropped == job.being_dropped
+        if self.logs_removed is not None:
+            return self.logs_removed == job.logs_removed
         return True
 
 
@@ -143,6 +149,10 @@ class JobsStorage(ABC):
 
     @abstractmethod
     async def get_job(self, job_id: str) -> JobRecord:
+        pass
+
+    @abstractmethod
+    async def drop_job(self, job_id: str) -> None:
         pass
 
     @abstractmethod

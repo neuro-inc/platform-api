@@ -101,6 +101,24 @@ class TestJobsStorage:
         assert job.status == original_job.status
 
     @pytest.mark.asyncio
+    async def test_drop_job(self, storage: JobsStorage) -> None:
+        original_job = self._create_pending_job()
+        await storage.set_job(original_job)
+
+        job = await storage.get_job(original_job.id)
+        assert job.id == original_job.id
+
+        await storage.drop_job(original_job.id)
+        with pytest.raises(JobError):
+            await storage.get_job(original_job.id)
+
+    @pytest.mark.asyncio
+    async def test_drop_unexisting_job(self, storage: JobsStorage) -> None:
+        original_job = self._create_pending_job()
+        with pytest.raises(JobError):
+            await storage.drop_job(original_job.id)
+
+    @pytest.mark.asyncio
     async def test_try_create_job__no_name__ok(self, storage: JobsStorage) -> None:
 
         pending_job = self._create_pending_job()
@@ -955,6 +973,34 @@ class TestJobsStorage:
             async with storage.try_create_job(job):
                 pass
         job_filter = JobFilter(fully_billed=True)
+        job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
+        assert job_ids == [jobs[0].id, jobs[2].id]
+
+    @pytest.mark.asyncio
+    async def test_get_all_filter_by_being_dropped(self, storage: JobsStorage) -> None:
+        jobs = [
+            self._create_job(being_dropped=True),
+            self._create_job(being_dropped=False),
+            self._create_job(being_dropped=True),
+        ]
+        for job in jobs:
+            async with storage.try_create_job(job):
+                pass
+        job_filter = JobFilter(being_dropped=True)
+        job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
+        assert job_ids == [jobs[0].id, jobs[2].id]
+
+    @pytest.mark.asyncio
+    async def test_get_all_filter_by_logs_removed(self, storage: JobsStorage) -> None:
+        jobs = [
+            self._create_job(logs_removed=True),
+            self._create_job(logs_removed=False),
+            self._create_job(logs_removed=True),
+        ]
+        for job in jobs:
+            async with storage.try_create_job(job):
+                pass
+        job_filter = JobFilter(logs_removed=True)
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[0].id, jobs[2].id]
 

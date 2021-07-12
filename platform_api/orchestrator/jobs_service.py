@@ -454,3 +454,22 @@ class JobsService:
         ) as it:
             async for record in it:
                 yield await self._get_cluster_job(record)
+
+    async def drop_job(
+        self,
+        job_id: str,
+    ) -> None:
+        async with self._jobs_storage.try_update_job(job_id) as record:
+            record.being_dropped = True
+
+    async def drop_progress(
+        self, job_id: str, *, logs_removed: Optional[bool] = None
+    ) -> None:
+        async with self._jobs_storage.try_update_job(job_id) as record:
+            if not record.being_dropped:
+                raise JobError(f"Job {job_id} is not being dropped")
+            if logs_removed:
+                record.logs_removed = logs_removed
+        all_resources_cleaned = record.logs_removed
+        if all_resources_cleaned:
+            await self._jobs_storage.drop_job(job_id)

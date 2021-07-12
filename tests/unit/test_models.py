@@ -850,6 +850,18 @@ class TestJobFilterFactory:
         query = MultiDict([("materialized", "False")])
         assert factory(query) == JobFilter(materialized=False)
 
+        query = MultiDict([("being_dropped", "True")])
+        assert factory(query) == JobFilter(being_dropped=True)
+
+        query = MultiDict([("being_dropped", "False")])
+        assert factory(query) == JobFilter(being_dropped=False)
+
+        query = MultiDict([("logs_removed", "True")])
+        assert factory(query) == JobFilter(logs_removed=True)
+
+        query = MultiDict([("logs_removed", "False")])
+        assert factory(query) == JobFilter(logs_removed=False)
+
     def test_create_from_query_with_status(self) -> None:
         factory = JobFilterFactory().create_from_query
 
@@ -1539,6 +1551,8 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "uri": f"job://test-cluster/compute/{job.id}",
         "restart_policy": "never",
         "privileged": False,
+        "being_dropped": False,
+        "logs_removed": False,
     }
 
 
@@ -1645,6 +1659,8 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
         "restart_policy": "never",
         "privileged": False,
+        "being_dropped": False,
+        "logs_removed": False,
     }
 
 
@@ -1711,6 +1727,8 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "uri": f"job://test-cluster/{owner_name}/{job.id}",
         "restart_policy": "never",
         "privileged": False,
+        "being_dropped": False,
+        "logs_removed": False,
     }
 
 

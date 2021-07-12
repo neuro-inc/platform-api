@@ -270,6 +270,8 @@ class TestJobResponseValidator:
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
             "privileged": False,
+            "being_dropped": False,
+            "logs_removed": False,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -310,6 +312,8 @@ class TestJobResponseValidator:
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
             "privileged": False,
+            "being_dropped": False,
+            "logs_removed": False,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -348,6 +352,8 @@ class TestJobResponseValidator:
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
             "privileged": False,
+            "being_dropped": False,
+            "logs_removed": False,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -390,6 +396,8 @@ class TestJobResponseValidator:
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
             "privileged": False,
+            "being_dropped": False,
+            "logs_removed": False,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -430,6 +438,8 @@ class TestJobResponseValidator:
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
             "privileged": False,
+            "being_dropped": False,
+            "logs_removed": False,
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -512,6 +522,8 @@ class TestJobResponseValidator:
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
             "privileged": False,
+            "being_dropped": False,
+            "logs_removed": False,
         }
         validator = create_job_response_validator()
         assert validator.check(response)

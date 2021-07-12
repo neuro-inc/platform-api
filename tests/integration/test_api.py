@@ -4286,6 +4286,35 @@ class TestJobs:
             assert result["error"] == f"no such job {job_id}"
 
     @pytest.mark.asyncio
+    async def test_drop_job(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["id"]
+            await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.drop_job(job_id=job_id)
+
+        jobs = await jobs_client.get_all_jobs()
+        assert len(jobs) == 1
+        assert jobs[0]["being_dropped"]
+        assert not jobs[0]["logs_removed"]
+        await jobs_client.drop_progress(job_id=job_id, logs_removed=True)
+
+        jobs = await jobs_client.get_all_jobs()
+        assert len(jobs) == 0
+
+    @pytest.mark.asyncio
     async def test_create_validation_failure(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
@@ -4463,6 +4492,8 @@ class TestJobs:
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
                 "privileged": False,
+                "being_dropped": False,
+                "logs_removed": False,
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -4510,6 +4541,8 @@ class TestJobs:
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
             "privileged": False,
+            "being_dropped": False,
+            "logs_removed": False,
         }
 
     @pytest.mark.asyncio
@@ -4603,6 +4636,8 @@ class TestJobs:
             "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
             "restart_policy": "never",
             "privileged": False,
+            "being_dropped": False,
+            "logs_removed": False,
         }
 
     @pytest.mark.asyncio
@@ -4708,6 +4743,8 @@ class TestJobs:
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
                 "privileged": False,
+                "being_dropped": False,
+                "logs_removed": False,
             }
 
     @pytest.mark.asyncio
@@ -4807,6 +4844,8 @@ class TestJobs:
                 "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
                 "privileged": False,
+                "being_dropped": False,
+                "logs_removed": False,
             }
 
 

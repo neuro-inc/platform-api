@@ -297,6 +297,10 @@ class JobRecord:
     last_billed: Optional[datetime] = None
     total_price_credits: Decimal = Decimal("0")
 
+    # Retention (allows other services as platform-monitoring to cleanup jobs resources)
+    being_dropped: bool = False
+    logs_removed: bool = False
+
     # for testing only
     allow_empty_cluster_name: bool = False
 
@@ -479,6 +483,10 @@ class JobRecord:
             result["tags"] = self.tags
         if self.last_billed:
             result["last_billed"] = self.last_billed.isoformat()
+        if self.being_dropped:
+            result["being_dropped"] = self.being_dropped
+        if self.logs_removed:
+            result["logs_removed"] = self.logs_removed
         return result
 
     @classmethod
@@ -518,6 +526,8 @@ class JobRecord:
             last_billed=datetime.fromisoformat(payload["last_billed"])
             if "last_billed" in payload
             else None,
+            being_dropped=payload.get("being_dropped", False),
+            logs_removed=payload.get("logs_removed", False),
         )
 
     @staticmethod
@@ -693,6 +703,22 @@ class Job:
     @materialized.setter
     def materialized(self, value: bool) -> None:
         self._record.materialized = value
+
+    @property
+    def being_dropped(self) -> bool:
+        return self._record.being_dropped
+
+    @being_dropped.setter
+    def being_dropped(self, value: bool) -> None:
+        self._record.being_dropped = value
+
+    @property
+    def logs_removed(self) -> bool:
+        return self._record.logs_removed
+
+    @logs_removed.setter
+    def logs_removed(self, value: bool) -> None:
+        self._record.logs_removed = value
 
     @property
     def schedule_timeout(self) -> Optional[float]:

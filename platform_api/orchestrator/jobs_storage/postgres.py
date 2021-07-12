@@ -188,6 +188,16 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         record = await self._select_row(job_id)
         return self._record_to_job(record)
 
+    async def drop_job(self, job_id: str) -> None:
+        query = (
+            self._tables.jobs.delete()
+            .where(self._tables.jobs.c.id == job_id)
+            .returning(self._tables.jobs.c.id)
+        )
+        result = await self._fetchrow(query)
+        if result is None:
+            raise JobError(f"no such job {job_id}")
+
     @asynccontextmanager
     async def try_create_job(self, job: JobRecord) -> AsyncIterator[JobRecord]:
         # No need to do any checks -- INSERT cannot be executed twice
@@ -496,6 +506,18 @@ class JobFilterClauseBuilder:
             == fully_billed
         )
 
+    def filter_being_dropped(self, being_dropped: bool) -> None:
+        self._clauses.append(
+            self._tables.jobs.c.payload["being_dropped"].astext.cast(Boolean)
+            == being_dropped
+        )
+
+    def filter_logs_removed(self, logs_removed: bool) -> None:
+        self._clauses.append(
+            self._tables.jobs.c.payload["logs_removed"].astext.cast(Boolean)
+            == logs_removed
+        )
+
     def build(self) -> sasql.ClauseElement:
         return and_(*self._clauses)
 
@@ -522,6 +544,10 @@ class JobFilterClauseBuilder:
             builder.filter_materialized(job_filter.materialized)
         if job_filter.fully_billed is not None:
             builder.filter_fully_billed(job_filter.fully_billed)
+        if job_filter.being_dropped is not None:
+            builder.filter_being_dropped(job_filter.being_dropped)
+        if job_filter.logs_removed is not None:
+            builder.filter_logs_removed(job_filter.logs_removed)
         builder.filter_since(job_filter.since)
         builder.filter_until(job_filter.until)
         return builder.build()
