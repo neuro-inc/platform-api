@@ -990,6 +990,10 @@ class TestJobsStorage:
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[0].id, jobs[2].id]
 
+        job_filter = JobFilter(being_dropped=False)
+        job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
+        assert job_ids == [jobs[1].id]
+
     @pytest.mark.asyncio
     async def test_get_all_filter_by_logs_removed(self, storage: JobsStorage) -> None:
         jobs = [
@@ -1003,6 +1007,10 @@ class TestJobsStorage:
         job_filter = JobFilter(logs_removed=True)
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[0].id, jobs[2].id]
+
+        job_filter = JobFilter(logs_removed=False)
+        job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
+        assert job_ids == [jobs[1].id]
 
     @pytest.mark.asyncio
     async def test_get_all_filter_by_cluster_and_owner(

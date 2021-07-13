@@ -494,29 +494,24 @@ class JobFilterClauseBuilder:
     def filter_until(self, until: datetime) -> None:
         self._clauses.append(self._tables.jobs.c.created_at <= until)
 
+    def _filter_bool_from_payload(self, field: str, filter_val: bool) -> None:
+        val_sql = self._tables.jobs.c.payload[field].astext.cast(Boolean)
+        if filter_val:
+            self._clauses.append(val_sql == filter_val)
+        else:
+            self._clauses.append(or_(val_sql == filter_val, val_sql == None))  # noqa
+
     def filter_materialized(self, materialized: bool) -> None:
-        self._clauses.append(
-            self._tables.jobs.c.payload["materialized"].astext.cast(Boolean)
-            == materialized
-        )
+        self._filter_bool_from_payload("materialized", materialized)
 
     def filter_fully_billed(self, fully_billed: bool) -> None:
-        self._clauses.append(
-            self._tables.jobs.c.payload["fully_billed"].astext.cast(Boolean)
-            == fully_billed
-        )
+        self._filter_bool_from_payload("fully_billed", fully_billed)
 
     def filter_being_dropped(self, being_dropped: bool) -> None:
-        self._clauses.append(
-            self._tables.jobs.c.payload["being_dropped"].astext.cast(Boolean)
-            == being_dropped
-        )
+        self._filter_bool_from_payload("being_dropped", being_dropped)
 
     def filter_logs_removed(self, logs_removed: bool) -> None:
-        self._clauses.append(
-            self._tables.jobs.c.payload["logs_removed"].astext.cast(Boolean)
-            == logs_removed
-        )
+        self._filter_bool_from_payload("logs_removed", logs_removed)
 
     def build(self) -> sasql.ClauseElement:
         return and_(*self._clauses)
