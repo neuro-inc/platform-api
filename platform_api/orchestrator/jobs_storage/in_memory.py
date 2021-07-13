@@ -1,6 +1,6 @@
 import json
 from contextlib import asynccontextmanager
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import AsyncIterator, Dict, Iterable, List, Optional, Tuple
 
 from platform_api.orchestrator.job import JobRecord
@@ -108,6 +108,24 @@ class InMemoryJobsStorage(JobsStorage):
     ) -> List[JobRecord]:
         async with self.iter_all_jobs() as it:
             return [job async for job in it if job.should_be_deleted(delay=delay)]
+
+    async def get_jobs_for_drop(
+        self,
+        *,
+        delay: timedelta = timedelta(),
+    ) -> List[JobRecord]:
+        now = datetime.now(timezone.utc)
+        jobs = []
+        async with self.iter_all_jobs() as it:
+            async for job in it:
+                if (
+                    not job.materialized
+                    and job.is_finished
+                    and job.finished_at
+                    and job.finished_at + delay < now
+                ):
+                    jobs.append(job)
+        return jobs
 
     async def get_tags(self, owner: str) -> List[str]:
         return self._owner_to_tags.get(owner, [])

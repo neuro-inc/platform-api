@@ -291,6 +291,21 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
                     for_deletion.append(job)
         return for_deletion
 
+    async def get_jobs_for_drop(
+        self, *, delay: timedelta = timedelta()
+    ) -> List[JobRecord]:
+        job_filter = JobFilter(
+            statuses={JobStatus(item) for item in JobStatus.finished_values()},
+            materialized=False,
+        )
+        now = datetime.now(timezone.utc)
+        query = (
+            self._tables.jobs.select()
+            .where(self._clause_for_filter(job_filter))
+            .where(self._tables.jobs.c.finished_at < now - delay)
+        )
+        return [self._record_to_job(record) for record in await self._fetch(query)]
+
     async def get_tags(self, owner: str) -> List[str]:
         # This methods has the following requirements:
         # - it should return all job tags for the given owner

@@ -4,7 +4,7 @@ import contextlib
 import logging
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import (
     Any,
@@ -261,6 +261,24 @@ class StopOnClusterRemoveEnforcer(JobPolicyEnforcer):
                 await self._jobs_service.set_job_status(job.id, status_item)
                 await self._jobs_service.set_job_materialized(job.id, False)
                 await _revoke_pass_config(self._auth_client, job)
+
+
+class RetentionPolicyEnforcer(JobPolicyEnforcer):
+    def __init__(
+        self,
+        jobs_service: JobsService,
+        retention_delay: timedelta,
+    ):
+        self._jobs_service = jobs_service
+        self._retention_delay = retention_delay
+
+    @trace
+    async def enforce(self) -> None:
+        job_ids = await self._jobs_service.get_job_ids_for_drop(
+            delay=self._retention_delay
+        )
+        for job_id in job_ids:
+            await self._jobs_service.drop_job(job_id)
 
 
 class JobPolicyEnforcePoller:
