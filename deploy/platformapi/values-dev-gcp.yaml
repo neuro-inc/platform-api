@@ -11,6 +11,7 @@ NP_OAUTH_AUDIENCE: https://platform.dev.neuromation.io
 NP_OAUTH_SUCCESS_REDIRECT_URL: https://dev.neu.ro/oauth/login
 NP_OAUTH_HEADLESS_CALLBACK_URL: https://dev.neu.ro/oauth/show-code
 NP_CORS_ORIGINS: https://neu.ro,https://master--neuro-web.netlify.app,http://localhost:8000,https://master--mts-web.netlify.app,https://master--megafon-web.netlify.app,https://master--minzdav-web.netlify.app
+NP_ENFORCER_RETENTION_DELAY_DAYS: 30
 
 platform:
   token:
