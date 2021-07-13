@@ -5241,6 +5241,9 @@ class TestRetentionEnforcer:
         await user_jobs_client.delete_job(job_id)
         await user_jobs_client.long_polling_by_job_id(job_id, status="cancelled")
 
+        job = await user_jobs_client.get_job_by_id(job_id)
+        assert not job["being_dropped"]
+
         async def _wait_set_for_drop() -> None:
             while True:
                 job = await user_jobs_client.get_job_by_id(job_id)

@@ -96,7 +96,7 @@ class JobPolicyEnforcerConfig:
     token: str
     interval_sec: float = 60
     credit_notification_threshold: Decimal = Decimal("10")
-    retention_delay_days: int = 180  # Half of a year
+    retention_delay_days: float = 180  # Half of a year
 
     @property
     def retention_delay(self) -> timedelta:

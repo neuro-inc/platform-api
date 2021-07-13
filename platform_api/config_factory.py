@@ -121,7 +121,7 @@ class EnvironConfigFactory:
                 self._environ.get("NP_ENFORCER_CREDIT_NOTIFICATION_THRESHOLD")
                 or JobPolicyEnforcerConfig.credit_notification_threshold
             ),
-            retention_delay_days=int(
+            retention_delay_days=float(
                 self._environ.get("NP_ENFORCER_RETENTION_DELAY_DAYS")
                 or JobPolicyEnforcerConfig.retention_delay_days
             ),
