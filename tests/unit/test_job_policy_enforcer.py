@@ -41,6 +41,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
     CreditsNotificationsEnforcer,
     JobPolicyEnforcePoller,
     JobPolicyEnforcer,
+    RetentionPolicyEnforcer,
     RuntimeLimitEnforcer,
     StopOnClusterRemoveEnforcer,
 )
@@ -608,21 +609,6 @@ class TestCreditsNotificationEnforcer:
 
 
 class TestStopOnClusterRemoveEnforcer:
-    @pytest.fixture()
-    def billing_log_storage(self) -> BillingLogStorage:
-        return InMemoryBillingLogStorage()
-
-    @pytest.fixture()
-    async def billing_service(
-        self, billing_log_storage: BillingLogStorage
-    ) -> AsyncIterator[BillingLogService]:
-        async with BillingLogService(
-            storage=billing_log_storage,
-            new_entry=InMemoryNotifier(),
-            entry_done=InMemoryNotifier(),
-        ) as service:
-            yield service
-
     @pytest.mark.asyncio
     async def test_job_untouched_by_default(
         self,
@@ -694,3 +680,77 @@ class TestStopOnClusterRemoveEnforcer:
         assert job.status_history.current.reason == JobStatusReason.CLUSTER_NOT_FOUND
         token_uri = f"token://{job.cluster_name}/job/{job.id}"
         assert mock_auth_client._revokes[0] == (job.owner, [token_uri])
+
+
+class TestRetentionPolicyEnforcer:
+    @pytest.mark.asyncio
+    async def test_job_untouched_by_default(
+        self,
+        test_user: AuthUser,
+        jobs_service: JobsService,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        enforcer = RetentionPolicyEnforcer(jobs_service, datetime.timedelta(days=1))
+        job, _ = await jobs_service.create_job(
+            job_request_factory(), test_user, cluster_name="test-cluster"
+        )
+
+        await enforcer.enforce()
+
+        job = await jobs_service.get_job(job.id)
+        assert job.status == JobStatus.PENDING
+
+    @pytest.mark.asyncio
+    async def test_job_not_marked_to_drop_if_delay_is_smaller(
+        self,
+        test_user: AuthUser,
+        jobs_service: JobsService,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        enforcer = RetentionPolicyEnforcer(jobs_service, datetime.timedelta(days=3))
+        job, _ = await jobs_service.create_job(
+            job_request_factory(), test_user, cluster_name="test-cluster"
+        )
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        await jobs_service.set_job_status(
+            job.id,
+            JobStatusItem(
+                JobStatus.SUCCEEDED, transition_time=now - datetime.timedelta(days=2)
+            ),
+        )
+        await jobs_service.set_job_materialized(job.id, False)
+
+        await enforcer.enforce()
+
+        job = await jobs_service.get_job(job.id)
+        assert not job.being_dropped
+
+    @pytest.mark.asyncio
+    async def test_job_marked_to_drop(
+        self,
+        test_user: AuthUser,
+        jobs_service: JobsService,
+        job_request_factory: Callable[[], JobRequest],
+    ) -> None:
+        enforcer = RetentionPolicyEnforcer(jobs_service, datetime.timedelta(days=1))
+        job, _ = await jobs_service.create_job(
+            job_request_factory(), test_user, cluster_name="test-cluster"
+        )
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        await jobs_service.set_job_status(
+            job.id,
+            JobStatusItem(
+                JobStatus.SUCCEEDED, transition_time=now - datetime.timedelta(days=2)
+            ),
+        )
+        await jobs_service.set_job_materialized(job.id, False)
+
+        job = await jobs_service.get_job(job.id)
+        assert not job.being_dropped
+
+        await enforcer.enforce()
+
+        job = await jobs_service.get_job(job.id)
+        assert job.being_dropped

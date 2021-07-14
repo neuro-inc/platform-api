@@ -27,6 +27,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
     CreditsLimitEnforcer,
     CreditsNotificationsEnforcer,
     JobPolicyEnforcePoller,
+    RetentionPolicyEnforcer,
     RuntimeLimitEnforcer,
     StopOnClusterRemoveEnforcer,
 )
@@ -414,6 +415,10 @@ async def create_app(
                             jobs_service=jobs_service,
                             auth_client=auth_client,
                             cluster_config_registry=cluster_config_registry,
+                        ),
+                        RetentionPolicyEnforcer(
+                            jobs_service=jobs_service,
+                            retention_delay=config.job_policy_enforcer.retention_delay,
                         ),
                     ],
                 )

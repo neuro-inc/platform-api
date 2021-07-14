@@ -203,6 +203,12 @@ class JobsStorage(ABC):
     ) -> List[JobRecord]:
         pass
 
+    @abstractmethod
+    async def get_jobs_for_drop(
+        self, *, delay: timedelta = timedelta()
+    ) -> List[JobRecord]:
+        pass
+
     async def get_aggregated_run_time(self, owner: str) -> AggregatedRunTime:
         run_times = await self.get_aggregated_run_time_by_clusters(owner)
         gpu_run_time, non_gpu_run_time = timedelta(), timedelta()

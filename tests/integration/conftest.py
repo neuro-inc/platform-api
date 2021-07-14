@@ -777,6 +777,7 @@ def config_factory(
             token=token_factory("compute"),
             interval_sec=1,
             credit_notification_threshold=Decimal("0.1"),
+            retention_delay_days=20 / (24 * 60 * 60),  # 20 seconds
         )
         database_config = DatabaseConfig(postgres=postgres_config)
         config_url = URL("http://localhost:8082/api/v1")

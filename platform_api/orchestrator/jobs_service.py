@@ -3,7 +3,7 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
@@ -454,6 +454,12 @@ class JobsService:
         ) as it:
             async for record in it:
                 yield await self._get_cluster_job(record)
+
+    async def get_job_ids_for_drop(self, *, delay: timedelta) -> List[str]:
+        return [
+            record.id
+            for record in await self._jobs_storage.get_jobs_for_drop(delay=delay)
+        ]
 
     async def drop_job(
         self,

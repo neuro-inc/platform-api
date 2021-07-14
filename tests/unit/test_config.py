@@ -174,6 +174,7 @@ class TestEnvironConfigFactory:
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_TOKEN": "compute-token",
             "NP_ENFORCER_CREDIT_NOTIFICATION_THRESHOLD": "200.33",
+            "NP_ENFORCER_RETENTION_DELAY_DAYS": "200",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -194,6 +195,7 @@ class TestEnvironConfigFactory:
         assert config.job_policy_enforcer.credit_notification_threshold == (
             Decimal("200.33")
         )
+        assert config.job_policy_enforcer.retention_delay_days == 200
         assert config.notifications.url == URL("http://notifications:8080")
         assert config.notifications.token == "token"
 

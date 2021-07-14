@@ -5213,3 +5213,41 @@ class TestBillingEnforcer:
                 f"Wrong charge for duration {duration}: "
                 f"delta from right value is {expected_charge - real_charge}"
             )
+
+
+class TestRetentionEnforcer:
+    @pytest.mark.asyncio
+    async def test_enforce_retention(
+        self,
+        api: ApiConfig,
+        auth_api: AuthApiConfig,
+        config: Config,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        regular_user_with_custom_quota: _User,
+    ) -> None:
+        user = regular_user_with_custom_quota
+        user_jobs_client = jobs_client_factory(user)
+
+        job_submit["container"]["command"] = "sleep 100"
+
+        job = await user_jobs_client.create_job(job_submit)
+        job_id = job["id"]
+        await user_jobs_client.long_polling_by_job_id(
+            job_id=job_id,
+            status="running",
+        )
+        await user_jobs_client.delete_job(job_id)
+        await user_jobs_client.long_polling_by_job_id(job_id, status="cancelled")
+
+        job = await user_jobs_client.get_job_by_id(job_id)
+        assert not job["being_dropped"]
+
+        async def _wait_set_for_drop() -> None:
+            while True:
+                job = await user_jobs_client.get_job_by_id(job_id)
+                if job["being_dropped"]:
+                    return
+
+        await asyncio.wait_for(_wait_set_for_drop(), timeout=30)

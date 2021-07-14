@@ -1192,6 +1192,49 @@ class TestJobsStorage:
         assert job.materialized
 
     @pytest.mark.asyncio
+    async def test_get_for_drop_empty(self, storage: JobsStorage) -> None:
+        jobs = await storage.get_jobs_for_drop()
+        assert not jobs
+
+    @pytest.mark.asyncio
+    async def test_get_for_drop(self, storage: JobsStorage) -> None:
+        pending_job = self._create_pending_job()
+        running_job = self._create_running_job()
+        succeeded_job = self._create_succeeded_job()
+
+        now = current_datetime_factory()
+        now_f = lambda: now  # noqa
+        f1 = lambda: now - timedelta(days=1)  # noqa
+        f2 = lambda: now - timedelta(days=2)  # noqa
+        f3 = lambda: now - timedelta(days=3)  # noqa
+
+        deleted_job_1 = self._create_succeeded_job(
+            materialized=False,
+            current_datetime_factory=f1,
+        )
+        deleted_job_2 = self._create_succeeded_job(
+            materialized=False,
+            current_datetime_factory=f2,
+        )
+        deleted_job_3 = self._create_succeeded_job(
+            materialized=False,
+            current_datetime_factory=f3,
+        )
+        for job in [
+            pending_job,
+            running_job,
+            succeeded_job,
+            deleted_job_1,
+            deleted_job_2,
+            deleted_job_3,
+        ]:
+            await storage.set_job(job)
+
+        jobs = await storage.get_jobs_for_drop(delay=timedelta(days=2))
+        assert len(jobs) == 2
+        assert {deleted_job_2.id, deleted_job_3.id} == {job.id for job in jobs}
+
+    @pytest.mark.asyncio
     async def test_get_tags_empty(self, storage: JobsStorage) -> None:
         for job in [
             self._create_job(owner="u", tags=["b"]),
