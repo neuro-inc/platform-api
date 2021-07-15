@@ -100,7 +100,7 @@ jobs:
   deploy_dev:
     name: Deploy to dev
     runs-on: ubuntu-latest
-    needs: test
+#    needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/adjust-cluster-name'
     env:
       ARTIFACTORY_DOCKER_REPO: ${{ secrets.ARTIFACTORY_DOCKER_REPO }}
