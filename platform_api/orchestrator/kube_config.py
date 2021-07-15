@@ -42,6 +42,8 @@ class KubeConfig:
     node_label_job: Optional[str] = None
     node_label_node_pool: Optional[str] = None
 
+    image_pull_secret_name: Optional[str] = None
+
     def __post_init__(self) -> None:
         if not self.endpoint_url or (
             self.jobs_ingress_class == "traefik" and not self.jobs_ingress_oauth_url

@@ -314,11 +314,15 @@ class KubeOrchestrator(Orchestrator):
         if job.preset_name:
             meta_env["NEURO_JOB_PRESET"] = job.preset_name
 
+        pull_secrets = [self._get_docker_secret_name(job)]
+        if self._kube_config.image_pull_secret_name:
+            pull_secrets += [self._kube_config.image_pull_secret_name]
+
         pod = PodDescriptor.from_job_request(
             self._storage_volume,
             job.request,
             secret_volume_factory=self.create_secret_volume,
-            image_pull_secret_names=[self._get_docker_secret_name(job)],
+            image_pull_secret_names=pull_secrets,
             tolerations=tolerations,
             node_affinity=node_affinity,
             labels=labels,

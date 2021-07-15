@@ -308,6 +308,7 @@ class EnvironConfigFactory:
             node_label_preemptible=self._environ.get("NP_KUBE_NODE_LABEL_PREEMPTIBLE"),
             node_label_job=self._environ.get("NP_KUBE_NODE_LABEL_JOB"),
             node_label_node_pool=self._environ.get("NP_KUBE_NODE_LABEL_NODE_POOL"),
+            image_pull_secret_name=self._environ.get("NP_KUBE_IMAGE_PULL_SECRET"),
         )
 
     def create_registry(self) -> RegistryConfig:

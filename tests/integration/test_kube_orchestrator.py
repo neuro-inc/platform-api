@@ -223,6 +223,26 @@ class TestKubeOrchestrator:
         assert status == JobStatus.SUCCEEDED
 
     @pytest.mark.asyncio
+    async def test_start_job_image_pull_secret(
+        self, job_nginx: MyJob, kube_orchestrator: KubeOrchestrator
+    ) -> None:
+        kube_orchestrator._kube_config = replace(
+            kube_orchestrator._kube_config, image_pull_secret_name="test-secret"
+        )
+
+        await job_nginx.start()
+        await self.wait_for_success(job_nginx)
+
+        pod = await kube_orchestrator._client.get_pod(job_nginx.id)
+        assert set(pod.image_pull_secrets) == {
+            SecretRef(f"neurouser-{job_nginx.owner}"),
+            SecretRef("test-secret"),
+        }
+
+        status = await job_nginx.delete()
+        assert status == JobStatus.SUCCEEDED
+
+    @pytest.mark.asyncio
     async def test_start_job_broken_image(
         self, kube_orchestrator: KubeOrchestrator
     ) -> None:
