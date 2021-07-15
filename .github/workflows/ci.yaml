@@ -2,7 +2,7 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [master]
+    branches: [master,adjust-cluster-name]
     tags: [v*.*.*, poller/v*.*.*]
   pull_request:
     branches: [master]
@@ -101,7 +101,7 @@ jobs:
     name: Deploy to dev
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/adjust-cluster-name'
     env:
       ARTIFACTORY_DOCKER_REPO: ${{ secrets.ARTIFACTORY_DOCKER_REPO }}
       ARTIFACTORY_HELM_REPO: ${{ secrets.ARTIFACTORY_HELM_REPO }}
@@ -113,7 +113,7 @@ jobs:
       AZURE_ACR_NAME: ${{ secrets.AZURE_DEV_ACR_NAME }}
       AZURE_REGION: ${{ secrets.AZURE_DEV_REGION }}
       AZURE_RG_NAME: ${{ secrets.AZURE_DEV_RG_NAME }}
-      CLUSTER_NAME: dev
+      CLUSTER_NAME: ${{ secrets.DEV_CLUSTER_NAME }}
       HELM_ENV: dev-${{ secrets.CLOUD_PROVIDER_DEV }}
       HELM_VERSION: ${{ secrets.HELM_VERSION }}
       CLOUD_PROVIDER: ${{ secrets.CLOUD_PROVIDER_DEV }}
@@ -263,7 +263,7 @@ jobs:
       AZURE_ACR_NAME: ${{ secrets.AZURE_STAGING_ACR_NAME }}
       AZURE_REGION: ${{ secrets.AZURE_STAGING_REGION }}
       AZURE_RG_NAME: ${{ secrets.AZURE_STAGING_RG_NAME }}
-      CLUSTER_NAME: staging
+      CLUSTER_NAME: ${{ secrets.STAGING_CLUSTER_NAME }}
       HELM_ENV: staging-${{ secrets.CLOUD_PROVIDER_STAGING }}
       HELM_VERSION: ${{ secrets.HELM_VERSION }}
       CLOUD_PROVIDER: ${{ secrets.CLOUD_PROVIDER_STAGING }}
