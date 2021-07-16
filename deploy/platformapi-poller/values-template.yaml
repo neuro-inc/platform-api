@@ -15,6 +15,7 @@ NP_KUBE_NODE_LABEL_JOB: platform.neuromation.io/job
 NP_KUBE_NODE_LABEL_GPU: platform.neuromation.io/accelerator
 NP_KUBE_NODE_LABEL_PREEMPTIBLE: platform.neuromation.io/preemptible
 NP_KUBE_NODE_LABEL_NODE_POOL: platform.neuromation.io/nodepool
+NP_KUBE_IMAGE_PULL_SECRET:
 
 k8sSuffix:
 

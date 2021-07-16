@@ -153,6 +153,10 @@ spec:
         - name: NP_KUBE_NODE_LABEL_NODE_POOL
           value: {{ .Values.NP_KUBE_NODE_LABEL_NODE_POOL | quote }}
         {{- end }}
+        {{- if .Values.NP_KUBE_IMAGE_PULL_SECRET }}
+        - name: NP_KUBE_IMAGE_PULL_SECRET
+          value: {{ .Values.NP_KUBE_IMAGE_PULL_SECRET | quote }}
+        {{- end }}
         - name: NP_REGISTRY_URL
           value: {{ .Values.NP_REGISTRY_URL | quote }}
         {{- if .Values.NP_REGISTRY_EMAIL }}
