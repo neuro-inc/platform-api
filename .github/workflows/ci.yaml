@@ -2,7 +2,7 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [master,adjust-cluster-name]
+    branches: [master]
     tags: [v*.*.*, poller/v*.*.*]
   pull_request:
     branches: [master]
@@ -100,8 +100,8 @@ jobs:
   deploy_dev:
     name: Deploy to dev
     runs-on: ubuntu-latest
-#    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/adjust-cluster-name'
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     env:
       ARTIFACTORY_DOCKER_REPO: ${{ secrets.ARTIFACTORY_DOCKER_REPO }}
       ARTIFACTORY_HELM_REPO: ${{ secrets.ARTIFACTORY_HELM_REPO }}
