@@ -83,7 +83,7 @@ spec:
 {{ toYaml .Values.platform.token | indent 10 }}
 {{- end }}
         - name: NP_ENFORCER_RETENTION_DELAY_DAYS
-          value: "{{ .Values.NP_ENFORCER_RETENTION_DELAY_DAYS }}"
+          value: {{ .Values.NP_ENFORCER_RETENTION_DELAY_DAYS | quote }}
         - name: NP_CORS_ORIGINS
           value: "{{ .Values.NP_CORS_ORIGINS }}"
         - name: NP_DB_POSTGRES_DSN
