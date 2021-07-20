@@ -4,8 +4,6 @@ from typing import Any
 import pytest
 
 from platform_api.orchestrator.job import (
-    DEFAULT_ORPHANED_JOB_OWNER,
-    AggregatedRunTime,
     JobRecord,
     JobRequest,
     JobStatus,
@@ -186,100 +184,6 @@ class TestInMemoryJobsStorage:
         with pytest.raises(JobStorageJobFoundError):
             async with jobs_storage.try_create_job(job):
                 pass
-
-    @pytest.mark.asyncio
-    async def test_get_aggregated_run_time(self) -> None:
-        jobs_storage = InMemoryJobsStorage()
-        await jobs_storage.set_job(
-            self._create_finished_job(
-                cluster_name="test-cluster-1",
-                is_gpu_job=False,
-                run_time=timedelta(minutes=1),
-            )
-        )
-        await jobs_storage.set_job(
-            self._create_finished_job(
-                cluster_name="test-cluster-1",
-                is_gpu_job=False,
-                run_time=timedelta(minutes=2),
-            )
-        )
-        await jobs_storage.set_job(
-            self._create_finished_job(
-                cluster_name="test-cluster-1",
-                is_gpu_job=True,
-                run_time=timedelta(minutes=3),
-            )
-        )
-        await jobs_storage.set_job(
-            self._create_finished_job(
-                cluster_name="test-cluster-1",
-                is_gpu_job=True,
-                run_time=timedelta(minutes=4),
-            )
-        )
-        await jobs_storage.set_job(
-            self._create_finished_job(
-                cluster_name="test-cluster-2", run_time=timedelta(minutes=5)
-            )
-        )
-        result = await jobs_storage.get_aggregated_run_time(DEFAULT_ORPHANED_JOB_OWNER)
-
-        assert result == AggregatedRunTime(
-            total_gpu_run_time_delta=timedelta(minutes=7),
-            total_non_gpu_run_time_delta=timedelta(minutes=8),
-        )
-
-    @pytest.mark.asyncio
-    async def test_get_aggregated_run_time_by_clusters(self) -> None:
-        jobs_storage = InMemoryJobsStorage()
-        await jobs_storage.set_job(
-            self._create_finished_job(
-                cluster_name="test-cluster-1",
-                is_gpu_job=False,
-                run_time=timedelta(minutes=1),
-            )
-        )
-        await jobs_storage.set_job(
-            self._create_finished_job(
-                cluster_name="test-cluster-1",
-                is_gpu_job=False,
-                run_time=timedelta(minutes=2),
-            )
-        )
-        await jobs_storage.set_job(
-            self._create_finished_job(
-                cluster_name="test-cluster-1",
-                is_gpu_job=True,
-                run_time=timedelta(minutes=3),
-            )
-        )
-        await jobs_storage.set_job(
-            self._create_finished_job(
-                cluster_name="test-cluster-1",
-                is_gpu_job=True,
-                run_time=timedelta(minutes=4),
-            )
-        )
-        await jobs_storage.set_job(
-            self._create_finished_job(
-                cluster_name="test-cluster-2", run_time=timedelta(minutes=5)
-            )
-        )
-        result = await jobs_storage.get_aggregated_run_time_by_clusters(
-            DEFAULT_ORPHANED_JOB_OWNER
-        )
-
-        assert result == {
-            "test-cluster-1": AggregatedRunTime(
-                total_gpu_run_time_delta=timedelta(minutes=7),
-                total_non_gpu_run_time_delta=timedelta(minutes=3),
-            ),
-            "test-cluster-2": AggregatedRunTime(
-                total_gpu_run_time_delta=timedelta(),
-                total_non_gpu_run_time_delta=timedelta(minutes=5),
-            ),
-        }
 
 
 class TestJobFilter:
