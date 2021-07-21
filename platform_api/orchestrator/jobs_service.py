@@ -455,10 +455,14 @@ class JobsService:
             async for record in it:
                 yield await self._get_cluster_job(record)
 
-    async def get_job_ids_for_drop(self, *, delay: timedelta) -> List[str]:
+    async def get_job_ids_for_drop(
+        self, *, delay: timedelta, limit: Optional[int] = None
+    ) -> List[str]:
         return [
             record.id
-            for record in await self._jobs_storage.get_jobs_for_drop(delay=delay)
+            for record in await self._jobs_storage.get_jobs_for_drop(
+                delay=delay, limit=limit
+            )
         ]
 
     async def drop_job(

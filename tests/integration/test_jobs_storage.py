@@ -1229,6 +1229,10 @@ class TestJobsStorage:
         assert len(jobs) == 2
         assert {deleted_job_2.id, deleted_job_3.id} == {job.id for job in jobs}
 
+        jobs = await storage.get_jobs_for_drop(delay=timedelta(days=2), limit=1)
+        assert len(jobs) == 1
+        assert {deleted_job_2.id, deleted_job_3.id}.issuperset({job.id for job in jobs})
+
     @pytest.mark.asyncio
     async def test_get_tags_empty(self, storage: JobsStorage) -> None:
         for job in [

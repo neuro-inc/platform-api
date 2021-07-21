@@ -165,7 +165,7 @@ class JobsStorage(ABC):
 
     @abstractmethod
     async def get_jobs_for_drop(
-        self, *, delay: timedelta = timedelta()
+        self, *, delay: timedelta = timedelta(), limit: Optional[int] = None
     ) -> List[JobRecord]:
         pass
 

@@ -277,7 +277,10 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         return for_deletion
 
     async def get_jobs_for_drop(
-        self, *, delay: timedelta = timedelta()
+        self,
+        *,
+        delay: timedelta = timedelta(),
+        limit: Optional[int] = None,
     ) -> List[JobRecord]:
         job_filter = JobFilter(
             statuses={JobStatus(item) for item in JobStatus.finished_values()},
@@ -289,6 +292,8 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             .where(self._clause_for_filter(job_filter))
             .where(self._tables.jobs.c.finished_at < now - delay)
         )
+        if limit:
+            query = query.limit(limit)
         return [self._record_to_job(record) for record in await self._fetch(query)]
 
     async def get_tags(self, owner: str) -> List[str]:

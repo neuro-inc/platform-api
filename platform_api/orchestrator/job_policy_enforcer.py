@@ -275,7 +275,7 @@ class RetentionPolicyEnforcer(JobPolicyEnforcer):
     @trace
     async def enforce(self) -> None:
         job_ids = await self._jobs_service.get_job_ids_for_drop(
-            delay=self._retention_delay
+            delay=self._retention_delay, limit=100
         )
         for job_id in job_ids:
             await self._jobs_service.drop_job(job_id)

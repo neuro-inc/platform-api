@@ -113,6 +113,7 @@ class InMemoryJobsStorage(JobsStorage):
         self,
         *,
         delay: timedelta = timedelta(),
+        limit: Optional[int] = None,
     ) -> List[JobRecord]:
         now = datetime.now(timezone.utc)
         jobs = []
@@ -125,6 +126,8 @@ class InMemoryJobsStorage(JobsStorage):
                     and job.finished_at + delay < now
                 ):
                     jobs.append(job)
+        if limit:
+            jobs = jobs[:limit]
         return jobs
 
     async def get_tags(self, owner: str) -> List[str]:
