@@ -8,7 +8,7 @@ NP_OAUTH_CLIENT_ID: uJV0pm5JPdHkXsSd525rlhFDVcEuUnaV
 NP_OAUTH_AUDIENCE: https://platform.staging.neuromation.io
 NP_OAUTH_SUCCESS_REDIRECT_URL: https://staging.neu.ro/oauth/login
 NP_OAUTH_HEADLESS_CALLBACK_URL: https://staging.neu.ro/oauth/show-code
-NP_CORS_ORIGINS: https://neu.ro,https://release--neuro-web.netlify.com,https://app.neu.ro
+NP_CORS_ORIGINS: https://neu.ro,https://release--neuro-web.netlify.com,https://app.neu.ro,https://mts.neu.ro
 
 platform:
   token:
