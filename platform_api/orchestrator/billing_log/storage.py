@@ -142,7 +142,7 @@ class InMemoryBillingLogStorage(BillingLogStorage):
         return 0
 
     async def drop_entries(self, *, with_ids_lower: int) -> None:
-        to_drop = with_ids_lower - self._dropped_cnt - 1
+        to_drop = with_ids_lower - self._dropped_cnt
         if to_drop <= 0:
             return
         self._entries = self._entries[to_drop:]
