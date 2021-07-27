@@ -47,7 +47,7 @@ jobs:
     - name: Run unit tests
       run: make test_unit
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v2.0.2
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: .coverage-unit.xml
@@ -90,7 +90,7 @@ jobs:
     - name: Run integration tests
       run: make test_integration
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v2.0.2
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: .coverage-integration.xml
