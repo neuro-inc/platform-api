@@ -23,7 +23,9 @@ from .config import PollerConfig
 from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .kube_cluster import KubeCluster
+from .orchestrator.job_request import JobError
 from .orchestrator.jobs_poller import HttpJobsPollerApi, JobsPoller, JobsPollerService
+from .orchestrator.jobs_storage.base import JobStorageTransactionError
 from .orchestrator.poller_service import JobsScheduler
 
 
@@ -177,6 +179,7 @@ def setup_tracing(config: PollerConfig) -> None:
             app_name=config.sentry.app_name,
             cluster_name=config.sentry.cluster_name,
             sample_rate=config.sentry.sample_rate,
+            exclude=[JobError, JobStorageTransactionError],
         )
 
 

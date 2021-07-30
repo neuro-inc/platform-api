@@ -41,9 +41,10 @@ from .handlers import JobsHandler
 from .handlers.tags_handler import TagsHandler
 from .orchestrator.billing_log.service import BillingLogService, BillingLogWorker
 from .orchestrator.billing_log.storage import PostgresBillingLogStorage
-from .orchestrator.job_request import JobException
+from .orchestrator.job_request import JobError, JobException
 from .orchestrator.jobs_service import JobsService, JobsServiceException
 from .orchestrator.jobs_storage import JobsStorage, PostgresJobsStorage
+from .orchestrator.jobs_storage.base import JobStorageTransactionError
 from .postgres import create_postgres_pool
 from .resource import Preset
 from .user import authorized_user, untrusted_user
@@ -479,6 +480,7 @@ def setup_tracing(config: Config) -> None:
             app_name=config.sentry.app_name,
             cluster_name=config.sentry.cluster_name,
             sample_rate=config.sentry.sample_rate,
+            exclude=[JobError, JobStorageTransactionError],
         )
 
 
