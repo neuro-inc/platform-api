@@ -7,7 +7,7 @@ import aiohttp.web
 from aiohttp.web_urldispatcher import AbstractRoute
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
-from platform_logging import (
+from neuro_logging import (
     init_logging,
     make_sentry_trace_config,
     make_zipkin_trace_config,

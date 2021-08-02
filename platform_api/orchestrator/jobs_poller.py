@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Mapping, Optional
 import aiohttp
 from iso8601 import iso8601
 from multidict import MultiDict
-from platform_logging import new_trace
+from neuro_logging import new_trace
 from yarl import URL
 
 from ..cluster import SingleClusterUpdater
