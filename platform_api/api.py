@@ -11,8 +11,7 @@ from aiohttp.web_urldispatcher import AbstractRoute
 from aiohttp_security import check_permission
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
-from notifications_client import Client as NotificationsClient
-from platform_logging import (
+from neuro_logging import (
     init_logging,
     make_sentry_trace_config,
     make_zipkin_trace_config,
@@ -21,6 +20,7 @@ from platform_logging import (
     setup_zipkin,
     setup_zipkin_tracer,
 )
+from notifications_client import Client as NotificationsClient
 
 from platform_api.orchestrator.job_policy_enforcer import (
     BillingEnforcer,

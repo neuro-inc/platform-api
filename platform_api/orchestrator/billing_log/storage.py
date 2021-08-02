@@ -20,7 +20,7 @@ import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
 from asyncpg import Connection, Pool, UniqueViolationError
 from asyncpg.protocol.protocol import Record
-from platform_logging import trace, trace_cm
+from neuro_logging import trace, trace_cm
 from sqlalchemy import asc, desc
 
 from platform_api.orchestrator.base_postgres_storage import BasePostgresStorage
