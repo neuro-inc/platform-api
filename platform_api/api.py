@@ -149,6 +149,7 @@ class ConfigApiHandler:
             "secrets_url": str(cluster_config.ingress.secrets_url),
             "metrics_url": str(cluster_config.ingress.metrics_url),
             "disks_url": str(cluster_config.ingress.disks_url),
+            "buckets_url": str(cluster_config.ingress.buckets_url),
             "resource_presets": presets,
         }
 

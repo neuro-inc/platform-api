@@ -80,6 +80,7 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
             "metrics": {"url": "https://metrics.dev.neu.ro"},
             "blob_storage": {"url": "https://dev.neu.ro/api/v1/blob"},
             "disks": {"url": "https://dev.neu.ro/api/v1/disk"},
+            "buckets": {"url": "https://dev.neu.ro/api/v1/buckets"},
         }
     ]
 
@@ -238,6 +239,7 @@ class TestApi:
                 "secrets_url": "https://neu.ro/api/v1/secrets",
                 "metrics_url": "https://neu.ro/api/v1/metrics",
                 "disks_url": "https://neu.ro/api/v1/disk",
+                "buckets_url": "https://neu.ro/api/v1/buckets",
                 "resource_presets": [
                     {
                         "name": "gpu-small",
@@ -349,6 +351,7 @@ class TestApi:
                 "secrets_url": "https://neu.ro/api/v1/secrets",
                 "metrics_url": "https://neu.ro/api/v1/metrics",
                 "disks_url": "https://neu.ro/api/v1/disk",
+                "buckets_url": "https://neu.ro/api/v1/buckets",
                 "resource_presets": [
                     {
                         "name": "gpu-small",

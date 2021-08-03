@@ -812,6 +812,7 @@ def cluster_config_factory(
             secrets_url=URL("https://neu.ro/api/v1/secrets"),
             metrics_url=URL("https://neu.ro/api/v1/metrics"),
             disks_url=URL("https://neu.ro/api/v1/disk"),
+            buckets_url=URL("https://neu.ro/api/v1/buckets"),
         )
         return ClusterConfig(
             name=cluster_name, orchestrator=orchestrator_config, ingress=ingress_config

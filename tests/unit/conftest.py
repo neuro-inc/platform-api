@@ -338,6 +338,7 @@ def cluster_config() -> ClusterConfig:
             secrets_url=URL(),
             metrics_url=URL(),
             disks_url=URL(),
+            buckets_url=URL(),
         ),
     )
 
