@@ -158,6 +158,7 @@ class IngressConfig:
     secrets_url: URL
     metrics_url: URL
     disks_url: URL
+    buckets_url: URL
 
     @property
     def registry_host(self) -> str:
