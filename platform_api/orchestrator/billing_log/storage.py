@@ -80,6 +80,10 @@ class BillingLogStorage(ABC):
         pass
 
     @abstractmethod
+    async def drop_entries(self, *, with_ids_le: int) -> None:
+        pass
+
+    @abstractmethod
     async def get_last_entry_id(self, job_id: Optional[str] = None) -> int:
         pass
 
@@ -89,6 +93,7 @@ class InMemoryBillingLogStorage(BillingLogStorage):
         self._entries: List[BillingLogEntry] = []
         self._sync_record: Optional[BillingLogSyncRecord] = None
         self._inserter_lock = asyncio.Lock()
+        self._dropped_cnt: int = 0
 
     async def get_or_create_sync_record(self) -> BillingLogSyncRecord:
         if self._sync_record is None:
@@ -121,6 +126,7 @@ class InMemoryBillingLogStorage(BillingLogStorage):
     async def iter_entries(
         self, *, with_ids_greater: int = 0, limit: Optional[int] = None
     ) -> AsyncIterator[BillingLogEntry]:
+        with_ids_greater = max(0, with_ids_greater - self._dropped_cnt)
         entries = self._entries[with_ids_greater:]
         if limit is not None:
             entries = entries[:limit]
@@ -129,11 +135,18 @@ class InMemoryBillingLogStorage(BillingLogStorage):
 
     async def get_last_entry_id(self, job_id: Optional[str] = None) -> int:
         if job_id is None:
-            return len(self._entries)
+            return self._dropped_cnt + len(self._entries)
         for from_end, entry in enumerate(reversed(self._entries)):
             if entry.job_id == job_id:
-                return len(self._entries) - from_end
+                return self._dropped_cnt + len(self._entries) - from_end
         return 0
+
+    async def drop_entries(self, *, with_ids_le: int) -> None:
+        to_drop = with_ids_le - self._dropped_cnt
+        if to_drop <= 0:
+            return
+        self._entries = self._entries[to_drop:]
+        self._dropped_cnt += to_drop
 
 
 @dataclass(frozen=True)
@@ -297,3 +310,10 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
         if record:
             return record["id"]
         return 0
+
+    @trace
+    async def drop_entries(self, *, with_ids_le: int) -> None:
+        query = self._tables.billing_log.delete().where(
+            self._tables.billing_log.c.id <= with_ids_le
+        )
+        await self._execute(query)

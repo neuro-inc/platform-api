@@ -180,6 +180,7 @@ class BillingLogWorker:
 
         new_record = BillingLogSyncRecord(last_entry_id=last_entry_id)
         await self._storage.update_sync_record(new_record)
+        await self._storage.drop_entries(with_ids_le=last_entry_id)
         await self._entry_done_notifier.notify()
         return False
 

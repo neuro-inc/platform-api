@@ -123,3 +123,38 @@ class TestBillingLogStorage:
                     group_to_job[group_id] = entry.job_id
                 else:
                     assert group_to_job[group_id] == entry.job_id, group_id
+
+    @pytest.mark.asyncio
+    async def test_delete_entries(self, storage: BillingLogStorage) -> None:
+        entries = [
+            self._make_log_entry(job_id="test1", key="key1"),
+            self._make_log_entry(job_id="test2", key="key2"),
+            self._make_log_entry(job_id="test3", key="key3"),
+            self._make_log_entry(job_id="test4", key="key4"),
+        ]
+        async with storage.entries_inserter() as inserter:
+            await inserter.insert(entries)
+
+        expected_entries = [
+            replace(entry, id=index) for index, entry in enumerate(entries, 1)
+        ]
+
+        await storage.drop_entries(with_ids_le=1)
+
+        assert await storage.get_last_entry_id() == expected_entries[3].id
+
+        fetched_entries = []
+        async with storage.iter_entries() as it:
+            async for entry in it:
+                fetched_entries.append(entry)
+
+        assert fetched_entries == expected_entries[1:]
+
+        await storage.drop_entries(with_ids_le=3)
+
+        fetched_entries = []
+        async with storage.iter_entries() as it:
+            async for entry in it:
+                fetched_entries.append(entry)
+
+        assert fetched_entries == expected_entries[3:]
