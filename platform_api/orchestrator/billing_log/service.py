@@ -11,6 +11,7 @@ from platform_api.orchestrator.billing_log.storage import (
     BillingLogStorage,
     BillingLogSyncRecord,
 )
+from platform_api.orchestrator.job_request import JobError
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.utils.update_notifier import Notifier
 
@@ -185,7 +186,10 @@ class BillingLogWorker:
         return False
 
     async def _perform_one(self, entry: BillingLogEntry) -> None:
-        job = await self._jobs_service.get_job(entry.job_id)
+        try:
+            job = await self._jobs_service.get_job(entry.job_id)
+        except JobError:
+            return  # Job was removed from DB, nothing we can do here.
 
         try:
             await self._admin_client.change_user_credits(

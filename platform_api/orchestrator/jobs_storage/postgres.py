@@ -285,6 +285,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         job_filter = JobFilter(
             statuses={JobStatus(item) for item in JobStatus.finished_values()},
             materialized=False,
+            fully_billed=True,
         )
         now = datetime.now(timezone.utc)
         query = (
