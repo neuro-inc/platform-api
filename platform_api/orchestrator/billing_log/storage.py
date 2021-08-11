@@ -80,7 +80,7 @@ class BillingLogStorage(ABC):
         pass
 
     @abstractmethod
-    async def drop_entries(self, *, with_ids_lower: int) -> None:
+    async def drop_entries(self, *, with_ids_le: int) -> None:
         pass
 
     @abstractmethod
@@ -141,8 +141,8 @@ class InMemoryBillingLogStorage(BillingLogStorage):
                 return self._dropped_cnt + len(self._entries) - from_end
         return 0
 
-    async def drop_entries(self, *, with_ids_lower: int) -> None:
-        to_drop = with_ids_lower - self._dropped_cnt
+    async def drop_entries(self, *, with_ids_le: int) -> None:
+        to_drop = with_ids_le - self._dropped_cnt
         if to_drop <= 0:
             return
         self._entries = self._entries[to_drop:]
@@ -312,8 +312,8 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
         return 0
 
     @trace
-    async def drop_entries(self, *, with_ids_lower: int) -> None:
+    async def drop_entries(self, *, with_ids_le: int) -> None:
         query = self._tables.billing_log.delete().where(
-            self._tables.billing_log.c.id < with_ids_lower
+            self._tables.billing_log.c.id <= with_ids_le
         )
         await self._execute(query)

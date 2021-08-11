@@ -139,7 +139,7 @@ class TestBillingLogStorage:
             replace(entry, id=index) for index, entry in enumerate(entries, 1)
         ]
 
-        await storage.drop_entries(with_ids_lower=1)
+        await storage.drop_entries(with_ids_le=1)
 
         assert await storage.get_last_entry_id() == expected_entries[3].id
 
@@ -149,3 +149,12 @@ class TestBillingLogStorage:
                 fetched_entries.append(entry)
 
         assert fetched_entries == expected_entries[1:]
+
+        await storage.drop_entries(with_ids_le=3)
+
+        fetched_entries = []
+        async with storage.iter_entries() as it:
+            async for entry in it:
+                fetched_entries.append(entry)
+
+        assert fetched_entries == expected_entries[3:]
