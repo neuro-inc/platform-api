@@ -1205,14 +1205,17 @@ class TestJobsStorage:
 
         deleted_job_1 = self._create_succeeded_job(
             materialized=False,
+            fully_billed=True,
             current_datetime_factory=f1,
         )
         deleted_job_2 = self._create_succeeded_job(
             materialized=False,
+            fully_billed=True,
             current_datetime_factory=f2,
         )
         deleted_job_3 = self._create_succeeded_job(
             materialized=False,
+            fully_billed=False,
             current_datetime_factory=f3,
         )
         for job in [
@@ -1226,12 +1229,16 @@ class TestJobsStorage:
             await storage.set_job(job)
 
         jobs = await storage.get_jobs_for_drop(delay=timedelta(days=2))
-        assert len(jobs) == 2
-        assert {deleted_job_2.id, deleted_job_3.id} == {job.id for job in jobs}
-
-        jobs = await storage.get_jobs_for_drop(delay=timedelta(days=2), limit=1)
         assert len(jobs) == 1
-        assert {deleted_job_2.id, deleted_job_3.id}.issuperset({job.id for job in jobs})
+        assert {deleted_job_2.id} == {job.id for job in jobs}
+
+        jobs = await storage.get_jobs_for_drop(delay=timedelta(hours=1))
+        assert len(jobs) == 2
+        assert {deleted_job_1.id, deleted_job_2.id} == {job.id for job in jobs}
+
+        jobs = await storage.get_jobs_for_drop(delay=timedelta(days=1), limit=1)
+        assert len(jobs) == 1
+        assert {deleted_job_1.id, deleted_job_2.id}.issuperset({job.id for job in jobs})
 
     @pytest.mark.asyncio
     async def test_get_tags_empty(self, storage: JobsStorage) -> None:
