@@ -951,7 +951,7 @@ class JobFilterFactory:
         bool_filters = {}
         for name in ["materialized", "being_dropped", "logs_removed"]:
             if name in query:
-                bool_filters[name] = query[name].lower() == "true"
+                bool_filters[name] = _parse_bool(query[name])
         if hostname is None:
             job_name = self._job_name_validator.check(query.get("name"))
             owners = {
@@ -977,7 +977,7 @@ class JobFilterFactory:
                 tags=tags,
                 since=iso8601.parse_date(since) if since else JobFilter.since,
                 until=iso8601.parse_date(until) if until else JobFilter.until,
-                **bool_filters,
+                **bool_filters,  # type: ignore
             )
 
         for key in ("name", "owner", "cluster_name", "since", "until"):
@@ -991,7 +991,7 @@ class JobFilterFactory:
                 statuses=statuses,
                 ids={label},
                 tags=tags,
-                **bool_filters,
+                **bool_filters,  # type: ignore
             )
         job_name = self._job_name_validator.check(job_name)
         base_owner = self._base_owner_name_validator.check(base_owner)
@@ -1000,7 +1000,7 @@ class JobFilterFactory:
             base_owners={base_owner},
             name=job_name,
             tags=tags,
-            **bool_filters,
+            **bool_filters,  # type: ignore
         )
 
 
