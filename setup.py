@@ -23,7 +23,7 @@ install_requires = (
     "psycopg2-binary==2.8.6",
     "sentry-sdk==1.1.0",
     "typing-extensions==3.10.0.0",
-    "neuro-admin-client==21.9.2",
+    "neuro-admin-client==21.9.2.1",
 )
 
 setup(
