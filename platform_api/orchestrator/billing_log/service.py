@@ -4,8 +4,8 @@ from contextlib import asynccontextmanager, suppress
 from typing import Any, AsyncContextManager, AsyncIterator, Optional, Sequence
 
 from aiohttp import ClientResponseError
+from neuro_admin_client import AdminClient
 
-from platform_api.admin_client import AdminClient
 from platform_api.orchestrator.billing_log.storage import (
     BillingLogEntry,
     BillingLogStorage,

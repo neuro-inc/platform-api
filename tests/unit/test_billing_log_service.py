@@ -5,10 +5,10 @@ from typing import Any, AsyncIterator, Callable, List, Mapping, Tuple
 
 import pytest
 from aiohttp import ClientResponseError
+from neuro_admin_client import AdminClient
 from neuro_auth_client import Cluster, User
 from typing_extensions import Protocol
 
-from platform_api.admin_client import AdminClient
 from platform_api.orchestrator.billing_log.service import (
     BillingLogService,
     BillingLogWorker,

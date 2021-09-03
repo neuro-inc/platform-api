@@ -1,8 +1,7 @@
 from decimal import Decimal
 
 import pytest
-
-from platform_api.admin_client import AdminClient
+from neuro_admin_client import AdminClient
 
 from .admin import AdminChargeRequest, AdminDebtRequest, AdminServer
 

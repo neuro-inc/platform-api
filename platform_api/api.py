@@ -9,6 +9,7 @@ import pkg_resources
 from aiohttp.web import HTTPUnauthorized
 from aiohttp.web_urldispatcher import AbstractRoute
 from aiohttp_security import check_permission
+from neuro_admin_client import AdminClient
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from neuro_logging import (
@@ -32,7 +33,6 @@ from platform_api.orchestrator.job_policy_enforcer import (
     StopOnClusterRemoveEnforcer,
 )
 
-from .admin_client import AdminClient
 from .cluster import ClusterConfig, ClusterConfigRegistry, ClusterUpdater
 from .config import Config, CORSConfig
 from .config_client import ConfigClient
