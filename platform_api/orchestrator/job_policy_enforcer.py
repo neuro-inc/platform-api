@@ -21,7 +21,10 @@ from typing import (
 
 from neuro_auth_client import AuthClient
 from neuro_logging import new_trace, trace
-from notifications_client import Client as NotificationsClient, CreditsWillRunOutSoon
+from neuro_notifications_client import (
+    Client as NotificationsClient,
+    CreditsWillRunOutSoon,
+)
 
 from platform_api.cluster import ClusterConfigRegistry
 from platform_api.config import JobPolicyEnforcerConfig

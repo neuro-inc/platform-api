@@ -7,12 +7,12 @@ install_requires = (
     "aiohttp==3.7.4.post0",
     "iso8601==0.1.14",
     "trafaret==1.2.0",
-    "neuro_auth_client==21.5.17",
+    "neuro-auth-client==21.5.17",
     # Circle CI fails on the latest cryptography version
     # because the server has too old OpenSSL version
     "cryptography==3.3.2",
     "aiorwlock==1.0.0",
-    "notifications-client==21.5.17.post1",
+    "neuro-notifications-client==21.9.11.1",
     "neuro-logging==21.8.4.1",
     "aiohttp-cors==0.7.0",
     "aiozipkin==1.1.0",
@@ -23,12 +23,12 @@ install_requires = (
     "psycopg2-binary==2.8.6",
     "sentry-sdk==1.1.0",
     "typing-extensions==3.10.0.0",
-    "neuro_admin_client==21.9.2.1",
+    "neuro-admin-client==21.9.2.1",
 )
 
 setup(
     name="platform-api",
-    url="https://github.com/neuromation/platform-api",
+    url="https://github.com/neuro-inc/platform-api",
     use_scm_version={
         "git_describe_command": "git describe --dirty --tags --long --match v*.*.*",
     },

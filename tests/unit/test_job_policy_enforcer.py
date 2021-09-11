@@ -21,7 +21,7 @@ from neuro_auth_client import (
     Quota as AuthQuota,
     User as AuthUser,
 )
-from notifications_client import CreditsWillRunOutSoon
+from neuro_notifications_client import CreditsWillRunOutSoon
 from yarl import URL
 
 from platform_api.cluster import ClusterConfigRegistry

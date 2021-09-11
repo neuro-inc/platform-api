@@ -13,7 +13,7 @@ from neuro_auth_client import (
     Permission,
     User as AuthUser,
 )
-from notifications_client import (
+from neuro_notifications_client import (
     Client as NotificationsClient,
     JobCannotStartNoCredits,
     JobTransition,

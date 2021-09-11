@@ -5,7 +5,7 @@ from unittest import mock
 import aiohttp.web
 import pytest
 from neuro_auth_client import Quota
-from notifications_client import CreditsWillRunOutSoon, JobCannotStartNoCredits
+from neuro_notifications_client import CreditsWillRunOutSoon, JobCannotStartNoCredits
 
 from platform_api.config import Config
 

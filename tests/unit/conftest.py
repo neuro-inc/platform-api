@@ -22,8 +22,8 @@ from neuro_auth_client import (
     Quota as AuthQuota,
     User as AuthUser,
 )
-from notifications_client import Client as NotificationsClient
-from notifications_client.notifications import Notification
+from neuro_notifications_client import Client as NotificationsClient
+from neuro_notifications_client.notifications import Notification
 from yarl import URL
 
 from platform_api.cluster import (

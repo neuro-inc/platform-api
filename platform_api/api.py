@@ -21,7 +21,7 @@ from neuro_logging import (
     setup_zipkin,
     setup_zipkin_tracer,
 )
-from notifications_client import Client as NotificationsClient
+from neuro_notifications_client import Client as NotificationsClient
 
 from platform_api.orchestrator.job_policy_enforcer import (
     BillingEnforcer,

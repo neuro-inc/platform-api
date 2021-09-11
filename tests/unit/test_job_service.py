@@ -16,7 +16,7 @@ from neuro_auth_client import (
     Quota as AuthQuota,
     User as AuthUser,
 )
-from notifications_client import (
+from neuro_notifications_client import (
     Client as NotificationsClient,
     JobCannotStartNoCredits,
     JobTransition,
