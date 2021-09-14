@@ -20,7 +20,7 @@ install_requires = (
     "sqlalchemy==1.3.23",
     "asyncpgsa==0.27.1",
     "alembic==1.6.2",
-    "psycopg2-binary==2.8.6",
+    "psycopg2-binary==2.9.1",
     "sentry-sdk==1.1.0",
     "typing-extensions==3.10.0.0",
     "neuro-admin-client==21.9.2.1",
