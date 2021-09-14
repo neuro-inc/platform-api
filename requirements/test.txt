@@ -2,7 +2,7 @@
 -r syntax.txt
 aiodocker==0.19.1
 codecov==2.1.12
-pytest==6.2.4
+pytest==6.2.5
 pytest-asyncio==0.15.1
 pytest-cov==2.12.0
 requests==2.25.1
