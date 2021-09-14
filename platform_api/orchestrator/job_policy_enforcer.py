@@ -19,7 +19,7 @@ from typing import (
     TypeVar,
 )
 
-from neuro_auth_client import AuthClient
+from neuro_auth_client import AuthClient, Cluster
 from neuro_logging import new_trace, trace
 from neuro_notifications_client import (
     Client as NotificationsClient,
@@ -172,6 +172,7 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
         for cluster_name, cluster_jobs in self._groupby(
             user_jobs, lambda job: job.cluster_name
         ).items():
+            cluster: Optional[Cluster]
             try:
                 cluster = next(
                     cluster for cluster in user.clusters if cluster.name == cluster_name
