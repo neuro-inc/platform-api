@@ -16,7 +16,7 @@ install_requires = (
     "neuro-logging==21.8.4.1",
     "aiohttp-cors==0.7.0",
     "aiozipkin==1.1.0",
-    "asyncpg==0.23.0",
+    "asyncpg==0.24.0",
     "sqlalchemy==1.3.23",
     "asyncpgsa==0.27.1",
     "alembic==1.6.2",
