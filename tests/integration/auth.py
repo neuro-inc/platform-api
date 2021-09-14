@@ -183,7 +183,7 @@ async def regular_user_factory(
         quota = quota or Quota()
         if auth_clusters is None:
             auth_clusters = [AuthCluster(name=cluster_name, quota=quota)]
-        user = AuthClientUser(name=name, clusters=auth_clusters)
+        user = AuthClientUser(name=name, clusters=list(auth_clusters))
         await auth_client.add_user(user, token=admin_token)
         # Grant cluster-specific permissions
         permissions = []
