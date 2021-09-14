@@ -1,6 +1,7 @@
 [![codecov](https://codecov.io/gh/neuromation/platform-api/branch/master/graph/badge.svg?token=UhSf3Bzfe0)](https://codecov.io/gh/neuromation/platform-api)
 # Platform API
 
+
 ## Local Development
 1. Install minikube (https://github.com/kubernetes/minikube#installation);
 2. Launch minikube:
