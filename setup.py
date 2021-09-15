@@ -10,7 +10,7 @@ install_requires = (
     "neuro-auth-client==21.9.13.1",
     # Circle CI fails on the latest cryptography version
     # because the server has too old OpenSSL version
-    "cryptography==3.3.2",
+    "cryptography==3.4.8",
     "aiorwlock==1.0.0",
     "neuro-notifications-client==21.9.11.1",
     "neuro-logging==21.8.4.1",
