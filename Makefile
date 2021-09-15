@@ -36,7 +36,7 @@ setup:
 	pre-commit install
 
 lint: format
-	mypy platform_api tests setup.py alembic
+	mypy --show-error-codes platform_api tests setup.py alembic
 
 format:
 ifdef CI_LINT_RUN
