@@ -22,7 +22,7 @@ install_requires = (
     "alembic==1.6.2",
     "psycopg2-binary==2.9.1",
     "sentry-sdk==1.3.1",
-    "typing-extensions==3.10.0.0",
+    "typing-extensions==3.10.0.2",
     "neuro-admin-client==21.9.10",
 )
 
