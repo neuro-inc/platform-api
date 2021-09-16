@@ -16,6 +16,8 @@ RUN pip install --user $DIST_FILENAME
 
 FROM python:3.8.10-buster AS service
 
+LABEL org.opencontainers.image.source = "https://github.com/neuro-inc/platform-api"
+
 WORKDIR /neuromation
 
 COPY --from=installer /root/.local/ /root/.local/
