@@ -32,7 +32,8 @@ jobs:
       uses: actions/cache@v2.1.6
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-py-3.8.10-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('setup.py') }}
+        key: ${{ runner.os }}-py-3.8.10-${{ hashFiles('requirements/*.txt') }}-${{
+          hashFiles('setup.py') }}
     - name: Install dependencies
       run: make setup
     - name: Lint
@@ -168,6 +169,7 @@ jobs:
         CLUSTER_NAME: default2
         RELEASE_SUFFIX: -default2
 
+    concurrency: deploy_dev
   release_public:
     name: Release Public REPOs
     runs-on: ubuntu-latest
