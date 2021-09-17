@@ -37,7 +37,9 @@ jobs:
     - name: Install dependencies
       run: make setup
     - name: Lint
-      run: make lint
+      run: |
+        echo "::add-matcher::.github/actionlint-matcher.json"
+        make run
       env:
         CI_LINT_RUN: 1
     - name: Run unit tests
