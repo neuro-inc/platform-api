@@ -4,4 +4,4 @@ flake8-isort==4.0.0
 isort==5.9.3
 mypy==0.910
 pre-commit==2.15.0
-types-setuptools==57.0.2
+types-setuptools==57.4.0
