@@ -1,0 +1,49 @@
+name: Release Image
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    concurrency: release_image
+    steps:
+    - name: Purge old artifacts
+      uses: kolpav/purge-artifacts-action@v1
+      with:
+        token: ${{ secrets.GH_TOKEN }}
+        expire-in: 30mins
+    - name: Release image
+      id: release
+      uses: neuro-inc/release-image-action@v21.9.36
+      with:
+        image: platformapi
+        token: ${{ secrets.GH_TOKEN }}
+    - name: Checkout commit
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ github.sha }}
+        fetch-depth: 0
+    - name: Github Release
+      if: ${{ ! steps.release.outputs.skip }}
+      run: |
+        if [[ -n $PRERELEASE ]]; then
+          gh release create "$TAG" --prerelease --notes "docker pull ghcr.io/neuro-inc/platformapi:$VERSION"
+        else
+          gh release create "$TAG" --notes "docker pull ghcr.io/neuro-inc/platformapi:$VERSION"
+        fi
+      shell: bash
+      env:
+        TAG: ${{ steps.release.outputs.tag }}
+        VERSION: ${{ steps.release.outputs.version }}
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        PRERELEASE: ${{ steps.release.outputs.prerelease }}
