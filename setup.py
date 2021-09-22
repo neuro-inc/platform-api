@@ -21,7 +21,7 @@ install_requires = (
     "asyncpgsa==0.27.1",
     "alembic==1.7.3",
     "psycopg2-binary==2.9.1",
-    "sentry-sdk==1.3.1",
+    "sentry-sdk==1.4.0",
     "typing-extensions==3.10.0.2",
     "neuro-admin-client==21.9.10",
 )
