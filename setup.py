@@ -11,7 +11,7 @@ install_requires = (
     # Circle CI fails on the latest cryptography version
     # because the server has too old OpenSSL version
     "cryptography==3.4.8",
-    "aiorwlock==1.0.0",
+    "aiorwlock==1.1.0",
     "neuro-notifications-client==21.9.11.1",
     "neuro-logging==21.8.4.1",
     "aiohttp-cors==0.7.0",
