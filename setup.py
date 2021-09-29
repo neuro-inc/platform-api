@@ -13,7 +13,7 @@ install_requires = (
     "cryptography==3.4.8",
     "aiorwlock==1.1.0",
     "neuro-notifications-client==21.9.11.1",
-    "neuro-logging==21.8.4.1",
+    "neuro-logging==21.9",
     "aiohttp-cors==0.7.0",
     "aiozipkin==1.1.0",
     "asyncpg==0.24.0",
