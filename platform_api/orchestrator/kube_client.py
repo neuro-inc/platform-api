@@ -701,6 +701,26 @@ class PodDescriptor:
     privileged: bool = False
 
     @classmethod
+    def _process_storage_volumes(
+        cls,
+        container: Container,
+        storage_volume_factory: Optional[Callable[[ContainerVolume], Volume]] = None,
+    ) -> Tuple[List[Volume], List[VolumeMount]]:
+        if not storage_volume_factory:
+            return [], []
+
+        volumes = []
+        volume_mounts = []
+
+        for container_volume in container.volumes:
+            volume = storage_volume_factory(container_volume)
+            if volume not in volumes:
+                volumes.append(volume)
+            volume_mounts.append(volume.create_mount(container_volume))
+
+        return volumes, volume_mounts
+
+    @classmethod
     def _process_secret_volumes(
         cls,
         container: Container,
@@ -744,8 +764,8 @@ class PodDescriptor:
     @classmethod
     def from_job_request(
         cls,
-        volume: Volume,
         job_request: JobRequest,
+        storage_volume_factory: Optional[Callable[[ContainerVolume], Volume]] = None,
         secret_volume_factory: Optional[Callable[[str], SecretVolume]] = None,
         image_pull_secret_names: Optional[List[str]] = None,
         node_selector: Optional[Dict[str, str]] = None,
@@ -759,6 +779,9 @@ class PodDescriptor:
     ) -> "PodDescriptor":
         container = job_request.container
 
+        storage_volumes, storage_volume_mounts = cls._process_storage_volumes(
+            container, storage_volume_factory
+        )
         secret_volumes, secret_volume_mounts = cls._process_secret_volumes(
             container, secret_volume_factory
         )
@@ -766,12 +789,9 @@ class PodDescriptor:
             container.disk_volumes
         )
 
-        volumes = [volume, *secret_volumes, *disk_volumes]
+        volumes = [*storage_volumes, *secret_volumes, *disk_volumes]
         volume_mounts = [
-            *(
-                volume.create_mount(container_volume)
-                for container_volume in container.volumes
-            ),
+            *storage_volume_mounts,
             *secret_volume_mounts,
             *disk_volume_mounts,
         ]

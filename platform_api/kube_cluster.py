@@ -1,6 +1,6 @@
 import logging
 from contextlib import AsyncExitStack
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 import aiohttp
 
@@ -19,13 +19,13 @@ class KubeCluster(Cluster):
     def __init__(
         self,
         registry_config: RegistryConfig,
-        storage_config: StorageConfig,
+        storage_configs: Sequence[StorageConfig],
         cluster_config: ClusterConfig,
         kube_config: KubeConfig,
         trace_configs: Optional[List[aiohttp.TraceConfig]] = None,
     ) -> None:
         self._registry_config = registry_config
-        self._storage_config = storage_config
+        self._storage_configs = storage_configs
         self._cluster_config = cluster_config
         self._kube_config = kube_config
         self._trace_configs = trace_configs
@@ -47,7 +47,7 @@ class KubeCluster(Cluster):
     async def _init_orchestrator(self) -> None:
         logger.info(f"Cluster '{self.name}': initializing Orchestrator")
         orchestrator = KubeOrchestrator(
-            storage_config=self._storage_config,
+            storage_configs=self._storage_configs,
             registry_config=self._registry_config,
             orchestrator_config=self._cluster_config.orchestrator,
             kube_config=self._kube_config,

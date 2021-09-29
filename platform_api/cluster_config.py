@@ -29,6 +29,8 @@ class StorageConfig:
 
     pvc_name: Optional[str] = None
 
+    path: Optional[PurePath] = None
+
     def __post_init__(self) -> None:
         self._check_nfs_attrs()
 

@@ -174,7 +174,7 @@ class PollerConfig:
     config_url: URL
 
     registry_config: RegistryConfig
-    storage_config: StorageConfig
+    storage_configs: Sequence[StorageConfig]
     kube_config: KubeConfig
 
     jobs: JobsConfig = JobsConfig()

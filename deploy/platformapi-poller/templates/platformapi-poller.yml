@@ -163,21 +163,21 @@ spec:
         - name: NP_REGISTRY_EMAIL
           value: {{ .Values.NP_REGISTRY_EMAIL | quote }}
         {{- end }}
-        - name: NP_STORAGE_TYPE
+        - name: NP_STORAGE_TYPE_0
           value: {{ .Values.NP_STORAGE_TYPE | quote }}
         {{- if eq .Values.NP_STORAGE_TYPE "pvc" }}
-        - name: NP_PVC_NAME
-          value: {{ .Values.NP_PVC_NAME | quote }}
+        - name: NP_STORAGE_PVC_NAME_0
+          value: {{ .Values.NP_STORAGE_PVC_NAME | quote }}
         {{- end }}
         {{- if eq .Values.NP_STORAGE_TYPE "nfs" }}
-        - name: NP_NFS_SERVER
-          value: {{ .Values.NP_NFS_SERVER | quote }}
-        - name: NP_NFS_EXPORT_PATH
-          value: {{ .Values.NP_NFS_EXPORT_PATH | quote }}
+        - name: NP_STORAGE_NFS_SERVER_0
+          value: {{ .Values.NP_STORAGE_NFS_SERVER | quote }}
+        - name: NP_STORAGE_NFS_EXPORT_PATH_0
+          value: {{ .Values.NP_STORAGE_NFS_EXPORT_PATH | quote }}
         {{- end }}
         {{- if eq .Values.NP_STORAGE_TYPE "host" }}
-        - name: NP_HOST_MOUNT_PATH
-          value: {{ .Values.NP_HOST_MOUNT_PATH | quote }}
+        - name: NP_STORAGE_HOST_MOUNT_PATH_0
+          value: {{ .Values.NP_STORAGE_HOST_MOUNT_PATH | quote }}
         {{- end }}
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets: {{ toYaml .Values.imagePullSecrets | nindent 6 }}

@@ -624,7 +624,7 @@ async def kube_orchestrator_nfs(
     event_loop: Any,
 ) -> AsyncIterator[KubeOrchestrator]:
     orchestrator = KubeOrchestrator(
-        storage_config=storage_config_nfs,
+        storage_configs=[storage_config_nfs],
         registry_config=registry_config,
         orchestrator_config=orchestrator_config,
         kube_config=kube_config,
@@ -642,7 +642,7 @@ async def kube_orchestrator_pvc(
     event_loop: Any,
 ) -> AsyncIterator[KubeOrchestrator]:
     orchestrator = KubeOrchestrator(
-        storage_config=storage_config_pvc,
+        storage_configs=[storage_config_pvc],
         registry_config=registry_config,
         orchestrator_config=orchestrator_config,
         kube_config=kube_config,
