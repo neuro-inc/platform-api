@@ -388,9 +388,9 @@ async def infinite_job(
 ) -> AsyncIterator[str]:
     request_payload = {
         "container": {
-            "image": "ubuntu",
+            "image": "ubuntu:20.10",
             "command": "tail -f /dev/null",
-            "resources": {"cpu": 0.1, "memory_mb": 16},
+            "resources": {"cpu": 0.1, "memory_mb": 32},
         }
     }
     async with client.post(
@@ -412,9 +412,9 @@ def job_request_factory() -> Callable[[], Dict[str, Any]]:
         # Note: Optional fields (as "name") should not have a value here
         request = {
             "container": {
-                "image": "ubuntu",
+                "image": "ubuntu:20.10",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "resources": {"cpu": 0.1, "memory_mb": 32},
                 "http": {"port": 1234},
             },
             "description": "test job submitted by neuro job submit",
