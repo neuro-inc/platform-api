@@ -40,7 +40,9 @@ class TestJobsStorage:
             )
         else:
             resources = ContainerResources(cpu=0.1, memory_mb=256)
-        container = Container(image="ubuntu", command="sleep 5", resources=resources)
+        container = Container(
+            image="ubuntu:20.10", command="sleep 5", resources=resources
+        )
         return JobRequest.create(container)
 
     def _create_job(

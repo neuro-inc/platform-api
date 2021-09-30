@@ -126,7 +126,7 @@ def cluster_name() -> str:
 @pytest.fixture
 async def job_nginx(kube_orchestrator: KubeOrchestrator) -> MyJob:
     container = Container(
-        image="ubuntu",
+        image="ubuntu:20.10",
         command="sleep 5",
         resources=ContainerResources(cpu=0.1, memory_mb=256),
     )
@@ -265,7 +265,7 @@ class TestKubeOrchestrator:
     ) -> None:
         job_id = str(uuid.uuid4())
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep 5",
             resources=ContainerResources(cpu=0.1, memory_mb=256),
         )
@@ -332,7 +332,7 @@ class TestKubeOrchestrator:
     @pytest.mark.asyncio
     async def test_job_succeeded(self, kube_orchestrator: KubeOrchestrator) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="true",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
@@ -352,7 +352,7 @@ class TestKubeOrchestrator:
     async def test_job_failed_error(self, kube_orchestrator: KubeOrchestrator) -> None:
         command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command=command,
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
@@ -399,7 +399,7 @@ class TestKubeOrchestrator:
             orchestrator_config=orchestrator_config
         ) as kube_orchestrator:
             container = Container(
-                image="ubuntu",
+                image="ubuntu:20.10",
                 command="true",
                 resources=ContainerResources(cpu=0.1, memory_mb=1025),
             )
@@ -429,7 +429,7 @@ class TestKubeOrchestrator:
     async def test_job_bunch_of_cpu(self, kube_orchestrator: KubeOrchestrator) -> None:
         command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command=command,
             resources=ContainerResources(cpu=100, memory_mb=16536),
         )
@@ -453,7 +453,7 @@ class TestKubeOrchestrator:
     async def test_job_no_memory(self, kube_orchestrator: KubeOrchestrator) -> None:
         command = "true"
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command=command,
             resources=ContainerResources(cpu=1, memory_mb=500_000),
         )
@@ -492,7 +492,7 @@ class TestKubeOrchestrator:
     ) -> None:
         command = "true"
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command=command,
             resources=ContainerResources(cpu=1, memory_mb=500_000),
         )
@@ -549,7 +549,7 @@ class TestKubeOrchestrator:
 
         mount_path = PurePath("/mnt/disk")
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep 10",
             resources=ContainerResources(cpu=0.1, memory_mb=32),
             disk_volumes=[
@@ -636,7 +636,7 @@ class TestKubeOrchestrator:
         file_path = "/storage/" + str(uuid.uuid4())
 
         write_container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command=f"""bash -c 'echo "test" > {file_path}'""",
             volumes=volumes,
             resources=ContainerResources(cpu=0.1, memory_mb=128),
@@ -649,7 +649,7 @@ class TestKubeOrchestrator:
         )
 
         read_container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command=f"""bash -c '[ "$(cat {file_path})" == "test" ]'""",
             volumes=volumes,
             resources=ContainerResources(cpu=0.1, memory_mb=128),
@@ -686,7 +686,7 @@ class TestKubeOrchestrator:
     ) -> None:
         product = expected_result
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             env={"A": "2", "B": "3"},
             command=fr"""bash -c '[ "$(expr $A \* $B)" == "{product}" ]'""",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
@@ -716,9 +716,9 @@ class TestKubeOrchestrator:
     ) -> None:
         user_name = self._create_username()
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -761,7 +761,7 @@ class TestKubeOrchestrator:
     @pytest.mark.asyncio
     async def test_working_dir(self, kube_orchestrator: KubeOrchestrator) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             working_dir="/var/log",
             command="""bash -c '[ "$(pwd)" == "/var/log" ]'""",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
@@ -1280,9 +1280,9 @@ class TestKubeOrchestrator:
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -1321,7 +1321,7 @@ class TestKubeOrchestrator:
     ) -> None:
         node_name = kube_node_gpu
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="true",
             resources=ContainerResources(
                 cpu=0.1, memory_mb=128, gpu=1, gpu_model_id="gpumodel"
@@ -1358,9 +1358,9 @@ class TestKubeOrchestrator:
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep 1h",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
             http_server=ContainerHTTPServer(port=80),
         )
         job = MyJob(
@@ -1398,9 +1398,9 @@ class TestKubeOrchestrator:
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep 1h",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
             http_server=ContainerHTTPServer(port=80),
         )
         job = MyJob(
@@ -1443,9 +1443,9 @@ class TestKubeOrchestrator:
         async with kube_orchestrator_factory(kube_config=kube_config) as orchestrator:
             async with kube_client_factory(kube_config) as kube_client:
                 container = Container(
-                    image="ubuntu",
+                    image="ubuntu:20.10",
                     command="sleep 1h",
-                    resources=ContainerResources(cpu=0.1, memory_mb=16),
+                    resources=ContainerResources(cpu=0.1, memory_mb=32),
                     http_server=ContainerHTTPServer(port=80),
                 )
                 job = MyJob(
@@ -1477,9 +1477,9 @@ class TestKubeOrchestrator:
         async with kube_orchestrator_factory(kube_config=kube_config) as orchestrator:
             async with kube_client_factory(kube_config) as kube_client:
                 container = Container(
-                    image="ubuntu",
+                    image="ubuntu:20.10",
                     command="sleep 1h",
-                    resources=ContainerResources(cpu=0.1, memory_mb=16),
+                    resources=ContainerResources(cpu=0.1, memory_mb=32),
                     http_server=ContainerHTTPServer(port=80),
                 )
                 job = MyJob(
@@ -1520,9 +1520,9 @@ class TestKubeOrchestrator:
         async with kube_orchestrator_factory(kube_config=kube_config) as orchestrator:
             async with kube_client_factory(kube_config) as kube_client:
                 container = Container(
-                    image="ubuntu",
+                    image="ubuntu:20.10",
                     command="sleep 1h",
-                    resources=ContainerResources(cpu=0.1, memory_mb=16),
+                    resources=ContainerResources(cpu=0.1, memory_mb=32),
                     http_server=ContainerHTTPServer(port=80, requires_auth=True),
                 )
                 job = MyJob(
@@ -1566,9 +1566,9 @@ class TestKubeOrchestrator:
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep 1h",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
             http_server=ContainerHTTPServer(port=80),
         )
         job = MyJob(
@@ -1688,9 +1688,9 @@ class TestKubeOrchestrator:
 
         mount_path = PurePath("/mnt/disk")
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
             http_server=ContainerHTTPServer(port=80),
             disk_volumes=[
                 DiskContainerVolume(disk=disk, dst_path=mount_path, read_only=False)
@@ -1750,9 +1750,9 @@ class TestKubeOrchestrator:
         mount_path = PurePath("/mnt/disk")
 
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
             http_server=ContainerHTTPServer(port=80),
             disk_volumes=[
                 DiskContainerVolume(disk=disk1, dst_path=mount_path),
@@ -1790,9 +1790,9 @@ class TestKubeOrchestrator:
 
         secret_env = {"SECRET_VAR": secret}
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
             http_server=ContainerHTTPServer(port=80),
             secret_env=secret_env,
         )
@@ -1844,9 +1844,9 @@ class TestKubeOrchestrator:
 
         secret_env = {"SECRET_VAR_1": secret1, "SECRET_VAR_2": secret2}
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
             http_server=ContainerHTTPServer(port=80),
             secret_env=secret_env,
         )
@@ -1903,9 +1903,9 @@ class TestKubeOrchestrator:
 
         secret_path, secret_file = PurePath("/foo/bar"), "secret.txt"
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
             http_server=ContainerHTTPServer(port=80),
             secret_volumes=[
                 SecretContainerVolume(secret=secret, dst_path=secret_path / secret_file)
@@ -1972,9 +1972,9 @@ class TestKubeOrchestrator:
         sec_path, sec_file = PurePath("/foo/bar"), "secret.txt"
 
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
             http_server=ContainerHTTPServer(port=80),
             secret_volumes=[
                 SecretContainerVolume(secret=sec1, dst_path=sec_path / sec_file),
@@ -2036,9 +2036,9 @@ class TestKubeOrchestrator:
         file_bc = "secret4.txt"
 
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
             http_server=ContainerHTTPServer(port=80),
             secret_volumes=[
                 SecretContainerVolume(secret_a, dst_path=path_a / file_a),
@@ -2108,7 +2108,7 @@ class TestKubeOrchestrator:
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep 1h",
             http_server=ContainerHTTPServer(80),
             resources=ContainerResources(
@@ -2156,10 +2156,10 @@ class TestKubeOrchestrator:
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="sleep 1h",
             http_server=ContainerHTTPServer(80),
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         name = f"job-{uuid.uuid4().hex[:6]}"
         job1 = MyJob(
@@ -2296,7 +2296,7 @@ class TestNodeAffinity:
             preemptible_node: bool = False,
         ) -> AsyncIterator[MyJob]:
             container = Container(
-                image="ubuntu",
+                image="ubuntu:20.10",
                 command="true",
                 resources=ContainerResources(
                     cpu=cpu,
@@ -2333,7 +2333,7 @@ class TestNodeAffinity:
         start_job: Callable[..., AsyncContextManager[MyJob]],
     ) -> None:
         with pytest.raises(JobError, match="Job will not fit into cluster"):
-            async with start_job(kube_orchestrator, cpu=100, memory_mb=16):
+            async with start_job(kube_orchestrator, cpu=100, memory_mb=32):
                 pass
 
     @pytest.mark.asyncio
@@ -2343,7 +2343,7 @@ class TestNodeAffinity:
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AsyncContextManager[MyJob]],
     ) -> None:
-        async with start_job(kube_orchestrator, cpu=0.1, memory_mb=16) as job:
+        async with start_job(kube_orchestrator, cpu=0.1, memory_mb=32) as job:
             await kube_client.wait_pod_scheduled(job.id, "cpu-small")
 
             job_pod = await kube_client.get_raw_pod(job.id)
@@ -2365,7 +2365,7 @@ class TestNodeAffinity:
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AsyncContextManager[MyJob]],
     ) -> None:
-        async with start_job(kube_orchestrator, cpu=3, memory_mb=16) as job:
+        async with start_job(kube_orchestrator, cpu=3, memory_mb=32) as job:
             await kube_client.wait_pod_scheduled(job.id, "cpu-large-tpu")
 
             job_pod = await kube_client.get_raw_pod(job.id)
@@ -2392,7 +2392,7 @@ class TestNodeAffinity:
         start_job: Callable[..., AsyncContextManager[MyJob]],
     ) -> None:
         with pytest.raises(JobError, match="Job will not fit into cluster"):
-            async with start_job(kube_orchestrator, cpu=7, memory_mb=16):
+            async with start_job(kube_orchestrator, cpu=7, memory_mb=32):
                 pass
 
     @pytest.mark.asyncio
@@ -2405,7 +2405,7 @@ class TestNodeAffinity:
         async with start_job(
             kube_orchestrator,
             cpu=0.1,
-            memory_mb=16,
+            memory_mb=32,
             gpu=1,
             gpu_model="nvidia-tesla-k80",
         ) as job:
@@ -2433,7 +2433,7 @@ class TestNodeAffinity:
         async with start_job(
             kube_orchestrator,
             cpu=0.1,
-            memory_mb=16,
+            memory_mb=32,
             gpu=1,
             gpu_model="nvidia-tesla-v100",
             scheduler_enabled=True,
@@ -2463,7 +2463,7 @@ class TestNodeAffinity:
         async with start_job(
             kube_orchestrator,
             cpu=0.1,
-            memory_mb=16,
+            memory_mb=32,
             preemptible_node=True,
         ) as job:
             await kube_client.wait_pod_scheduled(job.id, "cpu-small-p")
@@ -2554,9 +2554,9 @@ class TestKubeClient:
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
@@ -2576,7 +2576,7 @@ class TestKubeClient:
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="true",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
@@ -2605,7 +2605,7 @@ class TestKubeClient:
         command: str,
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             entrypoint=entrypoint,
             command=command,
             resources=ContainerResources(cpu=0.1, memory_mb=128),
@@ -2823,7 +2823,7 @@ class TestKubeClient:
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="true",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
@@ -2886,7 +2886,7 @@ class TestKubeClient:
         async def _f(job_id: str) -> PodDescriptor:
             labels = {"platform.neuromation.io/job": job_id}
             container = Container(
-                image="ubuntu",
+                image="ubuntu:20.10",
                 command="true",
                 resources=ContainerResources(cpu=0.1, memory_mb=128),
             )
@@ -3119,7 +3119,9 @@ class TestPodContainerDevShmSettings:
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> Callable[..., Awaitable[JobStatusItem]]:
         async def _f(resources: ContainerResources, command: str) -> JobStatusItem:
-            container = Container(image="ubuntu", command=command, resources=resources)
+            container = Container(
+                image="ubuntu:20.10", command=command, resources=resources
+            )
             job_request = JobRequest.create(container)
             pod = PodDescriptor.from_job_request(
                 kube_orchestrator.create_storage_volume(), job_request
@@ -3224,7 +3226,7 @@ class TestPreemption:
         kube_orchestrator: KubeOrchestrator,
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="bash -c 'sleep infinity'",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
@@ -3257,7 +3259,7 @@ class TestPreemption:
         kube_orchestrator: KubeOrchestrator,
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="bash -c 'sleep infinity'",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
@@ -3297,7 +3299,7 @@ class TestPreemption:
         kube_orchestrator: KubeOrchestrator,
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="bash -c 'sleep infinity'",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
@@ -3339,7 +3341,7 @@ class TestPreemption:
     ) -> None:
         node_name = kube_node_preemptible
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="bash -c 'sleep infinity'",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
@@ -3377,7 +3379,7 @@ class TestPreemption:
     ) -> None:
         node_name = kube_node_preemptible
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="bash -c 'sleep infinity'",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
@@ -3424,7 +3426,7 @@ class TestPreemption:
     ) -> None:
         node_name = kube_node_preemptible
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="bash -c 'sleep infinity'",
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
@@ -3447,7 +3449,7 @@ class TestPreemption:
 
         # changing the job details to trigger pod creation failure
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="bash -c 'sleep infinity'",
             resources=ContainerResources(cpu=0.1, memory_mb=-128),
         )
@@ -3477,9 +3479,9 @@ class TestRestartPolicy:
         kube_orchestrator: KubeOrchestrator,
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="false",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -3511,9 +3513,9 @@ class TestRestartPolicy:
         kube_orchestrator: KubeOrchestrator,
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -3540,9 +3542,9 @@ class TestRestartPolicy:
         kube_orchestrator: KubeOrchestrator,
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="false",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -3574,9 +3576,9 @@ class TestRestartPolicy:
         kube_orchestrator: KubeOrchestrator,
     ) -> None:
         container = Container(
-            image="ubuntu",
+            image="ubuntu:20.10",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,

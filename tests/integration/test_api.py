@@ -2301,7 +2301,7 @@ class TestJobs:
             "container": {
                 "image": "some_broken_image",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "resources": {"cpu": 0.1, "memory_mb": 32},
                 "volumes": [
                     {
                         "src_storage_uri": f"storage://{cluster_name}/"
@@ -2339,9 +2339,9 @@ class TestJobs:
     ) -> None:
         payload = {
             "container": {
-                "image": "ubuntu",
+                "image": "ubuntu:20.10",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "resources": {"cpu": 0.1, "memory_mb": 32},
                 "volumes": [
                     {
                         "src_storage_uri": f"storage://{cluster_name}",
@@ -2375,7 +2375,7 @@ class TestJobs:
             "container": {
                 "image": "registry.dev.neuromation.io/anotheruser/image:tag",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "resources": {"cpu": 0.1, "memory_mb": 32},
             }
         }
 
@@ -2406,7 +2406,7 @@ class TestJobs:
             "container": {
                 "image": f"registry.dev.neuromation.io/{regular_user.name}/image:tag",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "resources": {"cpu": 0.1, "memory_mb": 32},
             }
         }
 
@@ -4428,9 +4428,9 @@ class TestJobs:
     ) -> None:
         request_payload = {
             "container": {
-                "image": "ubuntu",
+                "image": "ubuntu:20.10",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "resources": {"cpu": 0.1, "memory_mb": 32},
                 "volumes": [
                     {
                         "src_storage_uri": f"storage://{cluster_name}/"
@@ -4475,8 +4475,8 @@ class TestJobs:
                 "container": {
                     "command": "true",
                     "env": {},
-                    "image": "ubuntu",
-                    "resources": {"cpu": 0.1, "memory_mb": 16},
+                    "image": "ubuntu:20.10",
+                    "resources": {"cpu": 0.1, "memory_mb": 32},
                     "volumes": [
                         {
                             "dst_path": "/var/storage",
@@ -4524,8 +4524,8 @@ class TestJobs:
             "container": {
                 "command": "true",
                 "env": {},
-                "image": "ubuntu",
-                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "image": "ubuntu:20.10",
+                "resources": {"cpu": 0.1, "memory_mb": 32},
                 "volumes": [
                     {
                         "dst_path": "/var/storage",
@@ -4560,9 +4560,9 @@ class TestJobs:
         command = 'bash -c "echo Failed!; false"'
         payload = {
             "container": {
-                "image": "ubuntu",
+                "image": "ubuntu:20.10",
                 "command": command,
-                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "resources": {"cpu": 0.1, "memory_mb": 32},
                 "volumes": [
                     {
                         "dst_path": f"/var/storage/{regular_user.name}",
@@ -4612,8 +4612,8 @@ class TestJobs:
             },
             "container": {
                 "command": 'bash -c "echo Failed!; false"',
-                "image": "ubuntu",
-                "resources": {"cpu": 0.1, "memory_mb": 16},
+                "image": "ubuntu:20.10",
+                "resources": {"cpu": 0.1, "memory_mb": 32},
                 "env": {},
                 "volumes": [
                     {
@@ -4654,11 +4654,11 @@ class TestJobs:
     ) -> None:
         request_payload = {
             "container": {
-                "image": "ubuntu",
+                "image": "ubuntu:20.10",
                 "command": "true",
                 "resources": {
                     "cpu": 0.1,
-                    "memory_mb": 16,
+                    "memory_mb": 32,
                     "gpu": 1,
                     "gpu_model": "unknown",
                 },
@@ -4685,11 +4685,11 @@ class TestJobs:
     ) -> None:
         request_payload = {
             "container": {
-                "image": "ubuntu",
+                "image": "ubuntu:20.10",
                 "command": "true",
                 "resources": {
                     "cpu": 0.1,
-                    "memory_mb": 16,
+                    "memory_mb": 32,
                     "gpu": 1,
                     "gpu_model": "gpumodel",
                 },
@@ -4728,10 +4728,10 @@ class TestJobs:
                 "container": {
                     "command": "true",
                     "env": {},
-                    "image": "ubuntu",
+                    "image": "ubuntu:20.10",
                     "resources": {
                         "cpu": 0.1,
-                        "memory_mb": 16,
+                        "memory_mb": 32,
                         "gpu": 1,
                         "gpu_model": "gpumodel",
                     },
@@ -4760,11 +4760,11 @@ class TestJobs:
     ) -> None:
         request_payload = {
             "container": {
-                "image": "ubuntu",
+                "image": "ubuntu:20.10",
                 "command": "true",
                 "resources": {
                     "cpu": 0.1,
-                    "memory_mb": 16,
+                    "memory_mb": 32,
                     "tpu": {"type": "unknown", "software_version": "unknown"},
                 },
             }
@@ -4788,11 +4788,11 @@ class TestJobs:
     ) -> None:
         request_payload = {
             "container": {
-                "image": "ubuntu",
+                "image": "ubuntu:20.10",
                 "command": "true",
                 "resources": {
                     "cpu": 0.1,
-                    "memory_mb": 16,
+                    "memory_mb": 32,
                     "tpu": {"type": "v2-8", "software_version": "1.14"},
                 },
             }
@@ -4830,10 +4830,10 @@ class TestJobs:
                 "container": {
                     "command": "true",
                     "env": {},
-                    "image": "ubuntu",
+                    "image": "ubuntu:20.10",
                     "resources": {
                         "cpu": 0.1,
-                        "memory_mb": 16,
+                        "memory_mb": 32,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                     "volumes": [],
