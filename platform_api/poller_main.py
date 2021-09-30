@@ -50,7 +50,7 @@ def create_cluster_factory(
     def _create_cluster(cluster_config: ClusterConfig) -> Cluster:
         return KubeCluster(
             registry_config=config.registry_config,
-            storage_config=config.storage_config,
+            storage_configs=config.storage_configs,
             cluster_config=cluster_config,
             kube_config=config.kube_config,
             trace_configs=make_tracing_trace_configs(config),

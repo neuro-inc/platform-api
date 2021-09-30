@@ -505,30 +505,17 @@ class TestPodDescriptor:
             command="testcommand 123",
             working_dir="/working/dir",
             env={"TESTVAR": "testvalue"},
-            volumes=[
-                ContainerVolume(
-                    uri=URL("storage://host/src"),
-                    dst_path=PurePath("/dst"),
-                )
-            ],
             resources=ContainerResources(cpu=1, memory_mb=128, gpu=1),
         )
-        volume = HostVolume(name="testvolume", path=PurePath("/tmp"))
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            volume, job_request, priority_class_name="testpriority"
+            job_request, priority_class_name="testpriority"
         )
         assert pod.name == job_request.job_id
         assert pod.image == "testimage"
         assert pod.args == ["testcommand", "123"]
         assert pod.env == {"TESTVAR": "testvalue"}
         assert pod.env_list == [{"name": "TESTVAR", "value": "testvalue"}]
-        assert pod.volume_mounts == [
-            VolumeMount(
-                volume=volume, mount_path=PurePath("/dst"), sub_path=PurePath("src")
-            )
-        ]
-        assert pod.volumes == [volume]
         assert pod.resources == Resources(cpu=1, memory=128, gpu=1)
         assert pod.priority_class_name == "testpriority"
         assert pod.working_dir == "/working/dir"
@@ -542,9 +529,8 @@ class TestPodDescriptor:
                 tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
             ),
         )
-        volume = HostVolume(name="testvolume", path=PurePath("/tmp"))
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(volume, job_request)
+        pod = PodDescriptor.from_job_request(job_request)
         assert pod.annotations == {"tf-version.cloud-tpus.google.com": "1.14"}
         assert pod.priority_class_name is None
 

@@ -20,7 +20,6 @@ class StorageType(str, Enum):
 @dataclass(frozen=True)
 class StorageConfig:
     host_mount_path: PurePath
-    container_mount_path: PurePath = PurePath("/var/storage")
 
     type: StorageType = StorageType.HOST
 
@@ -28,6 +27,8 @@ class StorageConfig:
     nfs_export_path: Optional[PurePath] = None
 
     pvc_name: Optional[str] = None
+
+    path: Optional[PurePath] = None
 
     def __post_init__(self) -> None:
         self._check_nfs_attrs()
@@ -58,13 +59,13 @@ class StorageConfig:
     def create_nfs(
         cls,
         *,
-        container_mount_path: PurePath = container_mount_path,
+        path: Optional[PurePath] = None,
         nfs_server: str,
         nfs_export_path: PurePath,
     ) -> "StorageConfig":
         return cls(
+            path=path,
             host_mount_path=nfs_export_path,
-            container_mount_path=container_mount_path,
             type=StorageType.NFS,
             nfs_server=nfs_server,
             nfs_export_path=nfs_export_path,
@@ -72,29 +73,28 @@ class StorageConfig:
 
     @classmethod
     def create_pvc(
-        cls, *, container_mount_path: PurePath = container_mount_path, pvc_name: str
+        cls,
+        *,
+        path: Optional[PurePath] = None,
+        pvc_name: str,
     ) -> "StorageConfig":
         return cls(
+            path=path,
+            type=StorageType.PVC,
+            pvc_name=pvc_name,
             # NOTE: `host_mount_path`'s value here does not mean anything
             # really. It is simply used to infer relative paths later.
             host_mount_path=PurePath("/mnt/storage"),
-            container_mount_path=container_mount_path,
-            type=StorageType.PVC,
-            pvc_name=pvc_name,
         )
 
     @classmethod
     def create_host(
         cls,
         *,
-        container_mount_path: PurePath = container_mount_path,
+        path: Optional[PurePath] = None,
         host_mount_path: PurePath,
     ) -> "StorageConfig":
-        return cls(
-            host_mount_path=host_mount_path,
-            container_mount_path=container_mount_path,
-            type=StorageType.HOST,
-        )
+        return cls(path=path, host_mount_path=host_mount_path, type=StorageType.HOST)
 
 
 @dataclass(frozen=True)

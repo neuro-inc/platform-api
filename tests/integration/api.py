@@ -94,7 +94,7 @@ async def api(
             config_url=config.config_url,
             sentry=config.sentry,
             registry_config=registry_config,
-            storage_config=storage_config_host,
+            storage_configs=[storage_config_host],
             kube_config=kube_config,
         )
         poller_app = await poller_main.create_app(poller_config, cluster)
@@ -132,7 +132,7 @@ async def api_with_oauth(
             config_url=config_with_oauth.config_url,
             sentry=config_with_oauth.sentry,
             registry_config=registry_config,
-            storage_config=storage_config_host,
+            storage_configs=[storage_config_host],
             kube_config=kube_config,
         )
         poller_app = await poller_main.create_app(poller_config, cluster)

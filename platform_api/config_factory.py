@@ -2,7 +2,7 @@ import os
 import pathlib
 from decimal import Decimal
 from pathlib import PurePath
-from typing import Dict, Optional, Sequence
+from typing import Dict, List, Optional, Sequence
 
 from alembic.config import Config as AlembicConfig
 from yarl import URL
@@ -94,7 +94,7 @@ class EnvironConfigFactory:
             zipkin=self.create_zipkin("platform-api-poller"),
             sentry=self.create_sentry("platform-api-poller"),
             registry_config=self.create_registry(),
-            storage_config=self.create_storage(),
+            storage_configs=self.create_storages(),
             kube_config=self.create_kube(),
         )
 
@@ -319,19 +319,51 @@ class EnvironConfigFactory:
             email=self._environ.get("NP_REGISTRY_EMAIL", RegistryConfig.email),
         )
 
-    def create_storage(self) -> StorageConfig:
-        storage_type = StorageType(self._environ["NP_STORAGE_TYPE"])
-        if storage_type == StorageType.HOST:
-            return StorageConfig.create_host(
-                host_mount_path=PurePath(self._environ["NP_HOST_MOUNT_PATH"])
-            )
-        if storage_type == StorageType.NFS:
-            return StorageConfig.create_nfs(
-                nfs_server=self._environ["NP_NFS_SERVER"],
-                nfs_export_path=PurePath(self._environ["NP_NFS_EXPORT_PATH"]),
-            )
-        if storage_type == StorageType.PVC:
-            return StorageConfig.create_pvc(pvc_name=self._environ["NP_PVC_NAME"])
-        raise ValueError(
-            f"Storage type {storage_type!r} is not supported"
-        )  # pragma: no cover
+    def create_storages(self) -> Sequence[StorageConfig]:
+        result: List[StorageConfig] = []
+        i = 0
+
+        while True:
+            if f"NP_STORAGE_TYPE_{i}" not in self._environ:
+                break
+
+            path = None
+            if f"NP_STORAGE_PATH_{i}" in self._environ:
+                path = PurePath(self._environ[f"NP_STORAGE_PATH_{i}"])
+
+            storage_type = StorageType(self._environ[f"NP_STORAGE_TYPE_{i}"])
+            if storage_type == StorageType.HOST:
+                result.append(
+                    StorageConfig.create_host(
+                        path=path,
+                        host_mount_path=PurePath(
+                            self._environ[f"NP_STORAGE_HOST_MOUNT_PATH_{i}"]
+                        ),
+                    )
+                )
+            elif storage_type == StorageType.NFS:
+                result.append(
+                    StorageConfig.create_nfs(
+                        path=path,
+                        nfs_server=self._environ[f"NP_STORAGE_NFS_SERVER_{i}"],
+                        nfs_export_path=PurePath(
+                            self._environ[f"NP_STORAGE_NFS_EXPORT_PATH_{i}"]
+                        ),
+                    )
+                )
+            elif storage_type == StorageType.PVC:
+                result.append(
+                    StorageConfig.create_pvc(
+                        path=path, pvc_name=self._environ[f"NP_STORAGE_PVC_NAME_{i}"]
+                    )
+                )
+            else:
+                raise ValueError(
+                    f"Storage type {storage_type!r} is not supported"
+                )  # pragma: no cover
+            i += 1
+
+        if all(s.path is not None for s in result):
+            raise ValueError("Main storage config is required")
+
+        return result

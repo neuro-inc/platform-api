@@ -5,7 +5,7 @@ NP_KUBE_POD_PRIORITY_CLASS_NAME: platform-job
 NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL: https://dev.neu.ro/oauth/authorize
 NP_REGISTRY_URL: https://registry-dev.neu.ro
 NP_STORAGE_TYPE: pvc
-NP_PVC_NAME: pvc-platform-storage-jobs
+NP_STORAGE_PVC_NAME: pvc-platform-storage-jobs
 NP_KUBE_IMAGE_PULL_SECRET: docker-hub-registry
 
 platform:

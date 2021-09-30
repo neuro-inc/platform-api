@@ -2274,7 +2274,7 @@ class TestNodeAffinity:
         )
         await kube_job_nodes_factory(orchestrator_config, kube_config)
         async with KubeOrchestrator(
-            storage_config=storage_config_host,
+            storage_configs=[storage_config_host],
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
             kube_config=kube_config,
@@ -2559,9 +2559,7 @@ class TestKubeClient:
             resources=ContainerResources(cpu=0.1, memory_mb=32),
         )
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
+        pod = PodDescriptor.from_job_request(job_request)
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         with pytest.raises(asyncio.TimeoutError):
@@ -2581,9 +2579,7 @@ class TestKubeClient:
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
+        pod = PodDescriptor.from_job_request(job_request)
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
@@ -2611,9 +2607,7 @@ class TestKubeClient:
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
+        pod = PodDescriptor.from_job_request(job_request)
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         await kube_client.wait_pod_is_terminated(pod_name=pod.name, timeout_s=60.0)
@@ -2828,9 +2822,7 @@ class TestKubeClient:
             resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
+        pod = PodDescriptor.from_job_request(job_request)
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         await kube_client.wait_pod_is_terminated(pod.name)
@@ -2866,9 +2858,7 @@ class TestKubeClient:
             resources=ContainerResources(cpu=0.2, memory_mb=128),
         )
         job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            kube_orchestrator.create_storage_volume(), job_request
-        )
+        pod = PodDescriptor.from_job_request(job_request)
         await delete_pod_later(pod)
         await kube_client.create_pod(pod)
         await kube_client.wait_pod_is_terminated(pod_name=pod.name, timeout_s=60.0)
@@ -2891,9 +2881,7 @@ class TestKubeClient:
                 resources=ContainerResources(cpu=0.1, memory_mb=128),
             )
             pod = PodDescriptor.from_job_request(
-                kube_orchestrator.create_storage_volume(),
-                JobRequest.create(container),
-                labels=labels,
+                JobRequest.create(container), labels=labels
             )
             await delete_pod_later(pod)
             await kube_client.create_pod(pod)
@@ -3123,9 +3111,7 @@ class TestPodContainerDevShmSettings:
                 image="ubuntu:20.10", command=command, resources=resources
             )
             job_request = JobRequest.create(container)
-            pod = PodDescriptor.from_job_request(
-                kube_orchestrator.create_storage_volume(), job_request
-            )
+            pod = PodDescriptor.from_job_request(job_request)
             await delete_pod_later(pod)
             await kube_client.create_pod(pod)
             await kube_client.wait_pod_is_terminated(pod_name=pod.name, timeout_s=60.0)

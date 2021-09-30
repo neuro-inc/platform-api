@@ -12,7 +12,13 @@ from yarl import URL
 from platform_api.cluster_config import OrchestratorConfig
 
 from ..resource import Preset
-from .job_request import ContainerResources, JobError, JobRequest, JobStatus
+from .job_request import (
+    ContainerResources,
+    ContainerVolume,
+    JobError,
+    JobRequest,
+    JobStatus,
+)
 
 
 # For named jobs, their hostname is of the form of
@@ -628,6 +634,10 @@ class Job:
     @property
     def request(self) -> JobRequest:
         return self._job_request
+
+    @property
+    def volumes(self) -> Sequence[ContainerVolume]:
+        return self._job_request.container.volumes
 
     @property
     def resources(self) -> ContainerResources:
