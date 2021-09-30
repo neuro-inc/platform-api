@@ -327,18 +327,25 @@ class EnvironConfigFactory:
             if f"NP_STORAGE_TYPE_{i}" not in self._environ:
                 break
 
+            if f"NP_STORAGE_PATH_{i}" in self._environ:
+                path = PurePath(self._environ[f"NP_STORAGE_PATH_{i}"])
+            else:
+                path = None
+
             storage_type = StorageType(self._environ[f"NP_STORAGE_TYPE_{i}"])
             if storage_type == StorageType.HOST:
                 result.append(
                     StorageConfig.create_host(
+                        path=path,
                         host_mount_path=PurePath(
                             self._environ[f"NP_STORAGE_HOST_MOUNT_PATH_{i}"]
-                        )
+                        ),
                     )
                 )
             elif storage_type == StorageType.NFS:
                 result.append(
                     StorageConfig.create_nfs(
+                        path=path,
                         nfs_server=self._environ[f"NP_STORAGE_NFS_SERVER_{i}"],
                         nfs_export_path=PurePath(
                             self._environ[f"NP_STORAGE_NFS_EXPORT_PATH_{i}"]
@@ -348,7 +355,7 @@ class EnvironConfigFactory:
             elif storage_type == StorageType.PVC:
                 result.append(
                     StorageConfig.create_pvc(
-                        pvc_name=self._environ[f"NP_STORAGE_PVC_NAME_{i}"]
+                        path=path, pvc_name=self._environ[f"NP_STORAGE_PVC_NAME_{i}"]
                     )
                 )
             else:

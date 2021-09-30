@@ -596,7 +596,7 @@ async def kube_orchestrator_factory(
 ) -> Callable[..., KubeOrchestrator]:
     def _f(**kwargs: Any) -> KubeOrchestrator:
         defaults = dict(
-            storage_config=storage_config_host,
+            storage_configs=[storage_config_host],
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
             kube_config=kube_config,
