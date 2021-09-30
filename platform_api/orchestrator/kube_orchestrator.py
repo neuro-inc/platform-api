@@ -191,10 +191,7 @@ class KubeOrchestrator(Orchestrator):
 
     def create_storage_volume(self, container_volume: ContainerVolume) -> Volume:
         for sc in self.extra_storage_configs:
-            storage_path = str(sc.path)
-            container_path = str(container_volume.src_path)
-
-            if container_path.startswith(storage_path):
+            if container_volume.src_path.is_relative_to(str(sc.path)):
                 storage_config = sc
                 break
         else:

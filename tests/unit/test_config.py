@@ -146,10 +146,10 @@ class TestStorageVolume:
             pvc_name="main-claim",
         )
         isolated_storage_config = StorageConfig(
-            path=PurePath("/isolated"),
+            path=PurePath("/user_other"),
             host_mount_path=PurePath("/tmp"),
             type=StorageType.PVC,
-            pvc_name="isolated-claim",
+            pvc_name="user-other-claim",
         )
         orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.testdomain",
@@ -164,7 +164,7 @@ class TestStorageVolume:
             kube_config=kube_config,
         )
         container_volume = ContainerVolume.create(
-            "storage://dir",
+            "storage://user",
             dst_path=PurePath("/vat/storage"),
             read_only=True,
         )
