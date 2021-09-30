@@ -327,10 +327,9 @@ class EnvironConfigFactory:
             if f"NP_STORAGE_TYPE_{i}" not in self._environ:
                 break
 
+            path = None
             if f"NP_STORAGE_PATH_{i}" in self._environ:
                 path = PurePath(self._environ[f"NP_STORAGE_PATH_{i}"])
-            else:
-                path = None
 
             storage_type = StorageType(self._environ[f"NP_STORAGE_TYPE_{i}"])
             if storage_type == StorageType.HOST:
