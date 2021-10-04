@@ -135,7 +135,7 @@ helm_deploy: _helm_fetch _helm_expand_vars
 	helm upgrade $(HELM_CHART)$(RELEASE_SUFFIX) temp_deploy/$(HELM_CHART) \
 		-f deploy/$(HELM_CHART)/values-$(HELM_ENV).yaml \
 		--set "image.repository=$(IMAGE_REPO)" \
-		--set "NP_CLUSTER_NAME=$(CLUSTER_NAME)" \
+		--set "platform.clusterName=$(CLUSTER_NAME)" \
 		--set "k8sSuffix=$(RELEASE_SUFFIX)" \
 		--set "postgres-db-init.migrations.image.repository=$(IMAGE_REPO)" \
 		--namespace platform --install --wait --timeout 600

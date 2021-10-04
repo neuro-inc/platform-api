@@ -46,17 +46,15 @@ spec:
 {{- end }}
         env:
         - name: NP_AUTH_URL
-          value: {{ .Values.NP_AUTH_URL }}
+          value: {{ .Values.platform.authUrl }}
         - name: NP_AUTH_TOKEN
 {{- if .Values.platform.token }}
 {{ toYaml .Values.platform.token | indent 10 }}
 {{- end }}
         - name: NP_PLATFORM_API_URL
-          value: "{{ .Values.NP_PLATFORM_API_URL }}"
+          value: {{ .Values.platform.apiUrl }}
         - name: NP_PLATFORM_CONFIG_URI
-          value: {{ .Values.NP_PLATFORM_CONFIG_URI }}
-        - name: NP_AUTH_PUBLIC_URL
-          value: {{ .Values.NP_AUTH_PUBLIC_URL }}
+          value: {{ .Values.platform.configUrl }}
         {{- if .Values.zipkin }}
         - name: NP_ZIPKIN_URL
           value: {{ .Values.zipkin.url }}
@@ -79,144 +77,86 @@ spec:
         - name: NP_SENTRY_SAMPLE_RATE
           value: {{ .Values.sentry.sampleRate | default 0 | quote }}
         {{- end }}
-        {{- if .Values.NP_CLUSTER_NAME }}
         - name: NP_CLUSTER_NAME
-          value: {{ .Values.NP_CLUSTER_NAME }}
-        {{- end }}
+          value: {{ .Values.platform.clusterName }}
         - name: NP_KUBE_URL
-          value: {{ .Values.NP_KUBE_URL | quote }}
-        {{- if .Values.NP_KUBE_AUTH_TYPE }}
+          value: https://kubernetes.default.svc
         - name: NP_KUBE_AUTH_TYPE
-          value: {{ .Values.NP_KUBE_AUTH_TYPE | quote }}
-        {{- end }}
-        {{- if .Values.NP_KUBE_CA_DATA }}
-        - name: NP_KUBE_CA_DATA
-          value: {{ .Values.NP_KUBE_CA_DATA | quote }}
-        {{- end }}
-        {{- if .Values.NP_KUBE_CA_DATA_PATH }}
+          value: token
         - name: NP_KUBE_CA_DATA_PATH
-          value: {{ .Values.NP_KUBE_CA_DATA_PATH | quote }}
-        {{- end }}
-        {{- if .Values.NP_KUBE_CERT_PATH }}
-        - name: NP_KUBE_CERT_PATH
-          value: {{ .Values.NP_KUBE_CERT_PATH | quote }}
-        {{- end }}
-        {{- if .Values.NP_KUBE_CERT_KEY_PATH }}
-        - name: NP_KUBE_CERT_KEY_PATH
-          value: {{ .Values.NP_KUBE_CERT_KEY_PATH | quote }}
-        {{- end }}
-        {{- if .Values.NP_KUBE_TOKEN }}
-        - name: NP_KUBE_TOKEN
-          value: {{ .Values.NP_KUBE_TOKEN | quote }}
-        {{- end }}
-        {{- if .Values.NP_KUBE_TOKEN_PATH }}
+          value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
         - name: NP_KUBE_TOKEN_PATH
-          value: {{ .Values.NP_KUBE_TOKEN_PATH | quote }}
-        {{- end }}
-        {{- if .Values.NP_KUBE_NAMESPACE }}
+          value: /var/run/secrets/kubernetes.io/serviceaccount/token
+        {{- if .Values.jobs.namespace }}
         - name: NP_KUBE_NAMESPACE
-          value: {{ .Values.NP_KUBE_NAMESPACE | quote }}
+          value: {{ .Values.jobs.namespace | quote }}
         {{- end }}
-        {{- if .Values.NP_KUBE_INGRESS_CLASS }}
+        {{- if .Values.jobs.ingressClass }}
         - name: NP_KUBE_INGRESS_CLASS
-          value: {{ .Values.NP_KUBE_INGRESS_CLASS | quote }}
+          value: {{ .Values.jobs.ingressClass | quote }}
         {{- end }}
-        {{- if .Values.NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL }}
+        {{- if .Values.jobs.ingressOAuthAuthorizeUrl }}
         - name: NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL
-          value: {{ .Values.NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL | quote }}
+          value: {{ .Values.jobs.ingressOAuthAuthorizeUrl | quote }}
         {{- end }}
-        {{- if .Values.NP_KUBE_POD_JOB_TOLERATION_KEY }}
+        {{- if .Values.jobs.tolerationKey }}
         - name: NP_KUBE_POD_JOB_TOLERATION_KEY
-          value: {{ .Values.NP_KUBE_POD_JOB_TOLERATION_KEY | quote }}
+          value: {{ .Values.jobs.tolerationKey | quote }}
         {{- end }}
-        {{- if .Values.NP_KUBE_POD_PREEMPTIBLE_TOLERATION_KEY }}
+        {{- if .Values.jobs.preemptibleTolerationKey }}
         - name: NP_KUBE_POD_PREEMPTIBLE_TOLERATION_KEY
-          value: {{ .Values.NP_KUBE_POD_PREEMPTIBLE_TOLERATION_KEY | quote }}
+          value: {{ .Values.jobs.preemptibleTolerationKey | quote }}
         {{- end }}
-        {{- if .Values.NP_KUBE_POD_PRIORITY_CLASS_NAME }}
+        {{- if .Values.jobs.priorityClassName }}
         - name: NP_KUBE_POD_PRIORITY_CLASS_NAME
-          value: {{ .Values.NP_KUBE_POD_PRIORITY_CLASS_NAME | quote }}
+          value: {{ .Values.jobs.priorityClassName | quote }}
         {{- end }}
-        {{- if .Values.NP_KUBE_NODE_LABEL_JOB }}
+        {{- if .Values.nodeLabels.job }}
         - name: NP_KUBE_NODE_LABEL_JOB
-          value: {{ .Values.NP_KUBE_NODE_LABEL_JOB | quote }}
+          value: {{ .Values.nodeLabels.job | quote }}
         {{- end }}
-        {{- if .Values.NP_KUBE_NODE_LABEL_GPU }}
+        {{- if .Values.nodeLabels.gpu }}
         - name: NP_KUBE_NODE_LABEL_GPU
-          value: {{ .Values.NP_KUBE_NODE_LABEL_GPU | quote }}
+          value: {{ .Values.nodeLabels.gpu | quote }}
         {{- end }}
-        {{- if .Values.NP_KUBE_NODE_LABEL_PREEMPTIBLE }}
+        {{- if .Values.nodeLabels.preemptible }}
         - name: NP_KUBE_NODE_LABEL_PREEMPTIBLE
-          value: {{ .Values.NP_KUBE_NODE_LABEL_PREEMPTIBLE | quote }}
+          value: {{ .Values.nodeLabels.preemptible | quote }}
         {{- end }}
-        {{- if .Values.NP_KUBE_NODE_LABEL_NODE_POOL }}
+        {{- if .Values.nodeLabels.nodePool }}
         - name: NP_KUBE_NODE_LABEL_NODE_POOL
-          value: {{ .Values.NP_KUBE_NODE_LABEL_NODE_POOL | quote }}
+          value: {{ .Values.nodeLabels.nodePool | quote }}
         {{- end }}
-        {{- if .Values.NP_KUBE_IMAGE_PULL_SECRET }}
+        {{- if .Values.jobs.imagePullSecret }}
         - name: NP_KUBE_IMAGE_PULL_SECRET
-          value: {{ .Values.NP_KUBE_IMAGE_PULL_SECRET | quote }}
+          value: {{ .Values.jobs.imagePullSecret | quote }}
         {{- end }}
         - name: NP_REGISTRY_URL
-          value: {{ .Values.NP_REGISTRY_URL | quote }}
-        {{- if .Values.NP_REGISTRY_EMAIL }}
+          value: {{ .Values.platform.registryUrl | quote }}
+        {{- if .Values.platform.registryEmail }}
         - name: NP_REGISTRY_EMAIL
-          value: {{ .Values.NP_REGISTRY_EMAIL | quote }}
+          value: {{ .Values.platform.registryEmail | quote }}
         {{- end }}
-        - name: NP_STORAGE_TYPE_0
-          value: {{ .Values.NP_STORAGE_TYPE | quote }}
-        {{- if eq .Values.NP_STORAGE_TYPE "pvc" }}
-        - name: NP_STORAGE_PVC_NAME_0
-          value: {{ .Values.NP_STORAGE_PVC_NAME | quote }}
+        {{- range $index, $storage := .Values.storages }}
+        - name: NP_STORAGE_TYPE_{{ $index }}
+          value: {{ $storage.type | quote }}
+        {{- if $storage.path }}
+        - name: NP_STORAGE_PATH_{{ $index }}
+          value: {{ $storage.path | quote }}
         {{- end }}
-        {{- if eq .Values.NP_STORAGE_TYPE "nfs" }}
-        - name: NP_STORAGE_NFS_SERVER_0
-          value: {{ .Values.NP_STORAGE_NFS_SERVER | quote }}
-        - name: NP_STORAGE_NFS_EXPORT_PATH_0
-          value: {{ .Values.NP_STORAGE_NFS_EXPORT_PATH | quote }}
+        {{- if eq $storage.type "pvc" }}
+        - name: NP_STORAGE_PVC_NAME_{{ $index }}
+          value: {{ $storage.claimName | quote }}
+        {{- else if eq $storage.type "nfs" }}
+        - name: NP_STORAGE_NFS_SERVER_{{ $index }}
+          value: {{ $storage.server | quote }}
+        - name: NP_STORAGE_NFS_EXPORT_PATH_{{ $index }}
+          value: {{ $storage.exportPath | quote }}
+        {{- else if eq $storage.type "host" }}
+        - name: NP_STORAGE_HOST_MOUNT_PATH_{{ $index }}
+          value: {{ $storage.hostPath | quote }}
         {{- end }}
-        {{- if eq .Values.NP_STORAGE_TYPE "host" }}
-        - name: NP_STORAGE_HOST_MOUNT_PATH_0
-          value: {{ .Values.NP_STORAGE_HOST_MOUNT_PATH | quote }}
         {{- end }}
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets: {{ toYaml .Values.imagePullSecrets | nindent 6 }}
       {{- end }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: platformapi-poller{{ .Values.k8sSuffix }}
-spec:
-  type: ClusterIP
-  ports:
-  - name: http
-    port: 8080
-    targetPort: tcp-web
-  selector:
-    service: platformapi-poller{{ .Values.k8sSuffix }}
-{{- if .Values.ingress.enabled }}
----
-apiVersion: networking.k8s.io/v1beta1
-kind: Ingress
-metadata:
-  name: platformapi-poller{{ .Values.k8sSuffix }}
-  annotations:
-    kubernetes.io/ingress.class: traefik
-    traefik.frontend.rule.type: PathPrefix
-{{- if .Values.ingress.extraAnnotations }}
-{{ toYaml .Values.ingress.extraAnnotations | indent 4}}
-{{- end }}
-spec:
-  rules:
-{{- $k8sSuffix  := .Values.k8sSuffix -}}
-{{- range .Values.ingress.hosts }}
-  - host: {{ . | quote }}
-    http:
-      paths:
-      - path: /api/v1/poller{{ $k8sSuffix }}
-        backend:
-          serviceName: platformapi-poller{{ $k8sSuffix }}
-          servicePort: http
-{{- end }}
-{{- end }}
