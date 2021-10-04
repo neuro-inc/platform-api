@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from collections import defaultdict
 from decimal import Decimal
 from typing import (
@@ -1274,8 +1275,8 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
-            err = f"Invalid URI scheme: '{wrong_scheme}' != 'disk'"
-            assert err in msg["error"], msg
+            err = f"Invalid URI scheme: \\\\*'{wrong_scheme}\\\\*' != \\\\*'disk\\\\*'"
+            assert re.search(err, msg["error"]), msg
 
     @pytest.mark.asyncio
     async def test_create_job_with_disk_volume_wrong_cluster_fail(
@@ -1301,8 +1302,11 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
-            err = f"Invalid URI cluster: '{wrong_cluster}' != '{user.cluster_name}'"
-            assert err in msg["error"], msg
+            err = (
+                "Invalid URI cluster: "
+                f"\\\\*'{wrong_cluster}\\\\*' != \\\\*'{user.cluster_name}\\\\*'"
+            )
+            assert re.search(err, msg["error"]), msg
 
     @pytest.mark.asyncio
     async def test_create_job_with_disk_volume_invalid_mount_with_dots_fail(
@@ -1324,8 +1328,8 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
-            err = f"Invalid path: '{invalid_path}'"
-            assert err in msg["error"], msg
+            err = f"Invalid path: \\\\*'{invalid_path}\\\\*'"
+            assert re.search(err, msg["error"]), msg
 
     @pytest.mark.asyncio
     async def test_create_job_with_disk_volume_invalid_mount_relative_fail(
@@ -1347,8 +1351,8 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
-            err = f"Mount path must be absolute: '{invalid_path}'"
-            assert err in msg["error"], msg
+            err = f"Mount path must be absolute: \\\\*'{invalid_path}\\\\*'"
+            assert re.search(err, msg["error"]), msg
 
     @pytest.mark.asyncio
     async def test_create_job_disk_volumes_same_mount_points_fail(
@@ -1371,8 +1375,11 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
-            err = "destination path '/container/path' was encountered multiple times"
-            assert err in msg["error"], msg["error"]
+            err = (
+                "destination path "
+                r"\\*'/container/path\\*' was encountered multiple times"
+            )
+            assert re.search(err, msg["error"]), msg["error"]
 
     @pytest.mark.asyncio
     async def test_create_job_with_secret_volumes_different_dirs_same_filenames_ok(
@@ -2020,8 +2027,11 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
-            err = f"Invalid URI scheme: '{wrong_scheme}' != 'secret'"
-            assert err in msg["error"], msg
+            err = (
+                "Invalid URI scheme: "
+                f"\\\\*'{wrong_scheme}\\\\*' != \\\\*'secret\\\\*'"
+            )
+            assert re.search(err, msg["error"]), msg
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
@@ -2056,8 +2066,11 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
-            err = f"Invalid URI cluster: '{wrong_cluster}' != '{user.cluster_name}'"
-            assert err in msg["error"], msg
+            err = (
+                "Invalid URI cluster: "
+                f"\\\\*'{wrong_cluster}\\\\*' != \\\\*'{user.cluster_name}\\\\*'"
+            )
+            assert re.search(err, msg["error"]), msg
 
     @pytest.mark.asyncio
     async def test_create_job_with_secret_volume_invalid_mount_with_dots_fail(
@@ -2079,8 +2092,8 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
-            err = f"Invalid path: '{invalid_path}'"
-            assert err in msg["error"], msg
+            err = f"Invalid path: \\\\*'{invalid_path}\\\\*'"
+            assert re.search(err, msg["error"]), msg
 
     @pytest.mark.asyncio
     async def test_create_job_with_secret_volume_invalid_mount_relative_fail(
@@ -2102,8 +2115,8 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
-            err = f"Mount path must be absolute: '{invalid_path}'"
-            assert err in msg["error"], msg
+            err = f"Mount path must be absolute: \\\\*'{invalid_path}\\\\*'"
+            assert re.search(err, msg["error"]), msg
 
     @pytest.mark.asyncio
     async def test_create_job_with_and_secret_volumes_same_mount_points_fail(
@@ -2126,8 +2139,11 @@ class TestJobs:
         async with client.post(url, headers=user.headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
-            err = "destination path '/container/path' was encountered multiple times"
-            assert err in msg["error"], msg["error"]
+            err = (
+                "destination path "
+                r"\\*'/container/path\\*' was encountered multiple times"
+            )
+            assert re.search(err, msg["error"]), msg
 
     @pytest.mark.asyncio
     async def test_create_job_set_max_run_time(
@@ -2198,8 +2214,8 @@ class TestJobs:
         async with client.post(url, headers=headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             payload = await resp.json()
-            err = "Invalid URI scheme: 'wrong-scheme'"
-            assert err in payload["error"]
+            err = "Invalid URI scheme: \\\\*'wrong-scheme\\\\*'"
+            assert re.search(err, payload["error"]), payload
 
     @pytest.mark.asyncio
     async def test_create_job_volume_wrong_cluster_name(
@@ -2222,8 +2238,10 @@ class TestJobs:
         async with client.post(url, headers=headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             payload = await resp.json()
-            err = "Invalid URI cluster: 'wrong-cluster' != 'test-cluster'"
-            assert err in payload["error"]
+            err = (
+                "Invalid URI cluster: " r"\\*'wrong-cluster\\*' != \\*'test-cluster\\*'"
+            )
+            assert re.search(err, payload["error"]), payload
 
     @pytest.mark.asyncio
     async def test_create_job_volume_wrong_path_with_dots(
@@ -2247,8 +2265,8 @@ class TestJobs:
         async with client.post(url, headers=headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             payload = await resp.json()
-            err = "Invalid path: '/var/storage/../another'"
-            assert err in payload["error"]
+            err = r"Invalid path: \\*'/var/storage/../another\\*'"
+            assert re.search(err, payload["error"]), payload
 
     @pytest.mark.asyncio
     async def test_create_job_volume_wrong_path_not_absolute(
@@ -2272,8 +2290,8 @@ class TestJobs:
         async with client.post(url, headers=headers, json=job_submit) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             payload = await resp.json()
-            err = "Mount path must be absolute: 'var/storage'"
-            assert err in payload["error"]
+            err = r"Mount path must be absolute: \\*'var/storage\\*'"
+            assert re.search(err, payload["error"]), payload
 
     @pytest.mark.asyncio
     async def test_incorrect_request(
@@ -2286,7 +2304,7 @@ class TestJobs:
         ) as response:
             assert response.status == HTTPBadRequest.status_code, await response.text()
             data = await response.json()
-            assert """'container': DataError(is required)""" in data["error"]
+            assert "'container': DataError('is required')" in data["error"]
 
     @pytest.mark.asyncio
     async def test_broken_docker_image(
@@ -2453,11 +2471,7 @@ class TestJobs:
         ) as response:
             assert response.status == HTTPBadRequest.status_code, await response.text()
             payload = await response.json()
-            e = (
-                r"{'name': DataError({0: DataError(value should be None), "
-                r"1: DataError(does not match pattern \A[a-z](?:-?[a-z0-9])*\Z)})}"
-            )
-            assert payload == {"error": e}
+            assert "does not match pattern" in payload["error"]
 
     @pytest.mark.asyncio
     async def test_create_job_user_has_unknown_cluster_name(
@@ -4671,7 +4685,10 @@ class TestJobs:
             response_text = await response.text()
             assert response.status == HTTPBadRequest.status_code, response_text
             data = await response.json()
-            assert """'gpu_model': DataError(value doesn't match""" in data["error"]
+            assert re.search(
+                r"\\*'gpu_model\\*': DataError\(\"value doesn\\*'t match",
+                data["error"],
+            ), data
 
     @pytest.mark.asyncio
     async def test_create_gpu_model(
@@ -4776,7 +4793,9 @@ class TestJobs:
             response_text = await response.text()
             assert response.status == HTTPBadRequest.status_code, response_text
             data = await response.json()
-            assert """'type': DataError(value doesn't match""" in data["error"]
+            assert re.search(
+                r"\\*'type\\*': DataError\(\"value doesn\\*'t match", data["error"]
+            )
 
     @pytest.mark.asyncio
     async def test_create_tpu_model(
