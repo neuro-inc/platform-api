@@ -1123,6 +1123,10 @@ class KubernetesEvent:
         return self._payload.get("reason", None)
 
     @property
+    def message(self) -> Optional[str]:
+        return self._payload.get("message", None)
+
+    @property
     def first_timestamp(self) -> datetime:
         return iso8601.parse_date(self._payload["firstTimestamp"])
 

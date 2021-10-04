@@ -612,17 +612,23 @@ class KubeOrchestrator(Orchestrator):
         )
 
         if pod_status.is_scheduled:
-            failed_volume_events = [
-                e for e in pod_events if e.reason == "FailedAttachVolume"
-            ]
-            failed_volume_events.sort(key=operator.attrgetter("last_timestamp"))
-            if failed_volume_events:
-                return JobStatusItem.create(
-                    JobStatus.PENDING,
-                    transition_time=now,
-                    reason=JobStatusReason.DISK_UNAVAILABLE,
-                    description="Waiting for another job to release disk resource",
-                )
+            if pod_events:
+                pod_events.sort(key=operator.attrgetter("last_timestamp"))
+                last_event = pod_events[-1]
+                if last_event.reason == "Pulling":
+                    return JobStatusItem.create(
+                        JobStatus.PENDING,
+                        transition_time=now,
+                        reason=JobStatusReason.PULLING,
+                        description=last_event.message,
+                    )
+                if last_event.reason == "FailedAttachVolume":
+                    return JobStatusItem.create(
+                        JobStatus.PENDING,
+                        transition_time=now,
+                        reason=JobStatusReason.DISK_UNAVAILABLE,
+                        description="Waiting for another job to release disk resource",
+                    )
             return job_status
 
         logger.info(f"Found unscheduled pod. Job '{job.id}'")
