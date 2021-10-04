@@ -4689,7 +4689,10 @@ class TestJobs:
             response_text = await response.text()
             assert response.status == HTTPBadRequest.status_code, response_text
             data = await response.json()
-            assert """'gpu_model': DataError(value doesn't match""" in data["error"]
+            assert re.search(
+                r"\\*'gpu_model\\*': DataError\(\"value doesn\\*'t match",
+                data["error"],
+            ), data
 
     @pytest.mark.asyncio
     async def test_create_gpu_model(
