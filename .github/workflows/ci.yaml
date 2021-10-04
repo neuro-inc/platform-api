@@ -121,7 +121,6 @@ jobs:
       AZURE_REGION: ${{ secrets.AZURE_DEV_REGION }}
       AZURE_RG_NAME: ${{ secrets.AZURE_DEV_RG_NAME }}
       CLUSTER_NAME: ${{ secrets.DEV_CLUSTER_NAME }}
-      HELM_ENV: dev-${{ secrets.CLOUD_PROVIDER_DEV }}
       HELM_VERSION: ${{ secrets.HELM_VERSION }}
       CLOUD_PROVIDER: ${{ secrets.CLOUD_PROVIDER_DEV }}
       IMAGE_REGISTRY: ${{ secrets.CLOUD_PROVIDER_DEV }}
@@ -168,15 +167,18 @@ jobs:
       run: make helm_deploy
       env:
         HELM_CHART: platformapi
+        HELM_ENV: dev-${{ secrets.CLOUD_PROVIDER_DEV }}
     - name: Deploy poller service to kubernetes (default)
       run: make helm_deploy
       env:
         HELM_CHART: platformapi-poller
+        HELM_ENV: dev
         CLUSTER_NAME: default
     - name: Deploy poller service to kubernetes (default2)
       run: make helm_deploy
       env:
         HELM_CHART: platformapi-poller
+        HELM_ENV: dev
         CLUSTER_NAME: default2
         RELEASE_SUFFIX: -default2
 

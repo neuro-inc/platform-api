@@ -1,18 +1,21 @@
-NP_CLUSTER_NAME: default
-NP_PLATFORM_API_URL: https://dev.neu.ro/api/v1
-NP_AUTH_PUBLIC_URL: https://dev.neu.ro/api/v1/users
-NP_KUBE_POD_PRIORITY_CLASS_NAME: platform-job
-NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL: https://dev.neu.ro/oauth/authorize
-NP_REGISTRY_URL: https://registry-dev.neu.ro
-NP_STORAGE_TYPE: pvc
-NP_STORAGE_PVC_NAME: pvc-platform-storage-jobs
-
 platform:
+  authUrl: http://platformauthapi:8080
+  configUrl: http://platformconfig:8080/api/v1
+  apiUrl: http://platformapi:8080/api/v1
+  registryUrl: https://registry-dev.neu.ro
   token:
     valueFrom:
       secretKeyRef:
         name: platformservices-secret
         key: compute_token
+
+jobs:
+  priorityClassName: platform-job
+  ingressOAuthAuthorizeUrl: https://dev.neu.ro/oauth/authorize
+
+storages:
+- type: pvc
+  claimName: pvc-platform-storage-jobs
 
 ingress:
   enabled: true
