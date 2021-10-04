@@ -209,7 +209,7 @@ class TestContainerRequestValidator:
             },
         }
         validator = create_container_request_validator(cluster_name=cluster)
-        with pytest.raises(ValueError, match="value doesn't match any variant"):
+        with pytest.raises(ValueError, match=r"value doesn\\+'t match any variant"):
             validator.check(payload)
 
     def test_gpu_model(self) -> None:
