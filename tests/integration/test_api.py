@@ -2304,7 +2304,7 @@ class TestJobs:
         ) as response:
             assert response.status == HTTPBadRequest.status_code, await response.text()
             data = await response.json()
-            assert """'container': DataError(is required)""" in data["error"]
+            assert "'container': DataError('is required')" in data["error"]
 
     @pytest.mark.asyncio
     async def test_broken_docker_image(
@@ -2471,11 +2471,7 @@ class TestJobs:
         ) as response:
             assert response.status == HTTPBadRequest.status_code, await response.text()
             payload = await response.json()
-            e = (
-                r"{'name': DataError({0: DataError(value should be None), "
-                r"1: DataError(does not match pattern \A[a-z](?:-?[a-z0-9])*\Z)})}"
-            )
-            assert payload == {"error": e}
+            assert "does not match pattern" in payload["error"]
 
     @pytest.mark.asyncio
     async def test_create_job_user_has_unknown_cluster_name(
@@ -4797,7 +4793,9 @@ class TestJobs:
             response_text = await response.text()
             assert response.status == HTTPBadRequest.status_code, response_text
             data = await response.json()
-            assert """'type': DataError(value doesn't match""" in data["error"]
+            assert re.search(
+                r"\\*'type\\*': DataError\(\"value doesn\\*'t match", data["error"]
+            )
 
     @pytest.mark.asyncio
     async def test_create_tpu_model(
