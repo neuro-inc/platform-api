@@ -54,6 +54,7 @@ class JobStatusReason:
     CREATING = "Creating"
     COLLECTED = "Collected"
     SCHEDULING = "Scheduling"
+    PULLING = "Pulling"
     NOT_FOUND = "NotFound"  # "The job could not be scheduled or was preempted."
     CLUSTER_NOT_FOUND = "ClusterNotFound"
     CLUSTER_SCALING_UP = "ClusterScalingUp"
