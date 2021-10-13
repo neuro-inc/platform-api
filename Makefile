@@ -113,7 +113,7 @@ docker_pull_test_images:
 	docker tag $(PLATFORMDISKAPI_IMAGE) platformdiskapi:latest
 
 helm_install:
-	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash -s -- -v $(HELM_VERSION)
+	curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash -s -- -v $(HELM_VERSION)
 	helm plugin install https://github.com/belitre/helm-push-artifactory-plugin --version 1.0.2
 	@helm repo add neuro $(ARTIFACTORY_HELM_VIRTUAL_REPO) \
 		--username ${ARTIFACTORY_USERNAME} \
