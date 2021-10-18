@@ -32,8 +32,7 @@ jobs:
       uses: actions/cache@v2.1.6
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-py-3.8.10-${{ hashFiles('requirements/*.txt') }}-${{
-          hashFiles('setup.py') }}
+        key: ${{ runner.os }}-py-3.8.10-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('setup.cfg') }}
     - name: Install dependencies
       run: make setup
     - name: Lint

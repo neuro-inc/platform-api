@@ -36,7 +36,7 @@ setup:
 	pre-commit install
 
 lint: format
-	mypy --show-error-codes platform_api tests setup.py alembic
+	mypy --show-error-codes platform_api tests alembic
 
 format:
 ifdef CI_LINT_RUN
@@ -52,9 +52,12 @@ test_integration:
 	pytest -vv --maxfail=3 --cov platform_api --cov-config=setup.cfg --cov-report xml:.coverage-integration.xml tests/integration
 
 docker_build:
-	python setup.py sdist
-	docker build -f Dockerfile.k8s -t $(IMAGE_NAME):latest \
-		--build-arg DIST_FILENAME=`python setup.py --fullname`.tar.gz .
+	rm -rf build dist
+	pip install -U build
+	python -m build
+	docker build \
+		--build-arg PYTHON_BASE=slim-buster \
+		-t $(IMAGE_NAME):latest .
 
 docker_push: docker_build
 	docker tag $(IMAGE_NAME):latest $(IMAGE_REPO):$(TAG)
