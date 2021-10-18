@@ -32,7 +32,7 @@ include k8s.mk
 
 setup:
 	pip install -U pip
-	pip install -r requirements/test.txt
+	pip install -e .[dev]
 	pre-commit install
 
 lint: format
