@@ -120,7 +120,7 @@ jobs:
       AZURE_REGION: ${{ secrets.AZURE_DEV_REGION }}
       AZURE_RG_NAME: ${{ secrets.AZURE_DEV_RG_NAME }}
       CLUSTER_NAME: ${{ secrets.DEV_CLUSTER_NAME }}
-      HELM_VERSION: ${{ secrets.HELM_VERSION }}
+      HELM_VERSION: ${{ secrets.HELM3_VERSION }}
       CLOUD_PROVIDER: ${{ secrets.CLOUD_PROVIDER_DEV }}
       IMAGE_REGISTRY: ${{ secrets.CLOUD_PROVIDER_DEV }}
     steps:
@@ -222,7 +222,7 @@ jobs:
       ARTIFACTORY_HELM_VIRTUAL_REPO: ${{ secrets.ARTIFACTORY_HELM_VIRTUAL_REPO }}
       ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
       ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
-      HELM_VERSION: ${{ secrets.HELM_VERSION }}
+      HELM_VERSION: ${{ secrets.HELM3_VERSION }}
     steps:
     - name: Checkout commit
       uses: actions/checkout@v2
@@ -260,7 +260,7 @@ jobs:
       ARTIFACTORY_HELM_VIRTUAL_REPO: ${{ secrets.ARTIFACTORY_HELM_VIRTUAL_REPO }}
       ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
       ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
-      HELM_VERSION: ${{ secrets.HELM_VERSION }}
+      HELM_VERSION: ${{ secrets.HELM3_VERSION }}
     steps:
     - name: Checkout commit
       uses: actions/checkout@v2
@@ -303,7 +303,7 @@ jobs:
       AZURE_RG_NAME: ${{ secrets.AZURE_STAGING_RG_NAME }}
       CLUSTER_NAME: ${{ secrets.STAGING_CLUSTER_NAME }}
       HELM_ENV: staging-${{ secrets.CLOUD_PROVIDER_STAGING }}
-      HELM_VERSION: ${{ secrets.HELM_VERSION }}
+      HELM_VERSION: ${{ secrets.HELM3_VERSION }}
       CLOUD_PROVIDER: ${{ secrets.CLOUD_PROVIDER_STAGING }}
     steps:
     - name: Checkout commit
@@ -346,7 +346,7 @@ jobs:
       ARTIFACTORY_HELM_VIRTUAL_REPO: ${{ secrets.ARTIFACTORY_HELM_VIRTUAL_REPO }}
       ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
       ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
-      HELM_VERSION: ${{ secrets.HELM_VERSION }}
+      HELM_VERSION: ${{ secrets.HELM3_VERSION }}
       HELM_ENV: mts
     steps:
     - name: Checkout commit
