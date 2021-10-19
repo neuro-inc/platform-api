@@ -29,9 +29,9 @@ kubectl apply -f tests/k8s/storageclass.yml
 python -m venv venv
 source venv/bin/activate
 ```
-7. Install testing dependencies:
+7. Install dev dependencies:
 ```shell
-pip install -r requirements/test.txt
+pip install -e .[dev]
 ```
 8. Run the unit test suite:
 ```shell
