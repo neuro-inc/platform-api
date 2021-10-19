@@ -1,37 +1,42 @@
-from typing import List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
-import asyncpgsa
 import sqlalchemy.sql as sasql
-from asyncpg import Connection, Pool
-from asyncpg.cursor import CursorFactory
-from asyncpg.protocol.protocol import Record
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 
 class BasePostgresStorage:
-    def __init__(self, pool: Pool) -> None:
-        self._pool = pool
+    def __init__(self, engine: AsyncEngine) -> None:
+        self._engine = engine
 
     async def _execute(
-        self, query: sasql.ClauseElement, conn: Optional[Connection] = None
+        self, query: sasql.ClauseElement, conn: Optional[AsyncConnection] = None
     ) -> str:
-        query_string, params = asyncpgsa.compile_query(query)
-        conn = conn or self._pool
-        return await conn.execute(query_string, *params)
+        if conn:
+            return await conn.execute(query)
+        async with self._engine.connect() as conn:
+            return await conn.execute(query)
 
     async def _fetchrow(
-        self, query: sasql.ClauseElement, conn: Optional[Connection] = None
-    ) -> Optional[Record]:
-        query_string, params = asyncpgsa.compile_query(query)
-        conn = conn or self._pool
-        return await conn.fetchrow(query_string, *params)
+        self, query: sasql.ClauseElement, conn: Optional[AsyncConnection] = None
+    ) -> Optional[Dict[str, Any]]:
+        if conn:
+            result = await conn.execute(query)
+            return result.one_or_none()
+        async with self._engine.connect() as conn:
+            result = await conn.execute(query)
+            return result.one_or_none()
 
     async def _fetch(
-        self, query: sasql.ClauseElement, conn: Optional[Connection] = None
-    ) -> List[Record]:
-        query_string, params = asyncpgsa.compile_query(query)
-        conn = conn or self._pool
-        return await conn.fetch(query_string, *params)
+        self, query: sasql.ClauseElement, conn: Optional[AsyncConnection] = None
+    ) -> List[Dict[str, Any]]:
+        if conn:
+            result = await conn.execute(query)
+            return result.all()
+        async with self._engine.connect() as conn:
+            result = await conn.execute(query)
+            return result.all()
 
-    def _cursor(self, query: sasql.ClauseElement, conn: Connection) -> CursorFactory:
-        query_string, params = asyncpgsa.compile_query(query)
-        return conn.cursor(query_string, *params)
+    async def _cursor(
+        self, query: sasql.ClauseElement, conn: AsyncConnection
+    ) -> AsyncIterator[Dict[str, Any]]:
+        return await conn.stream(query)

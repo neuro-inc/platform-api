@@ -4,10 +4,10 @@ from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager, suppress
 from typing import Any, AsyncContextManager, Callable, List, Optional
 
-import asyncpgsa
+import asyncpg
 import sqlalchemy as sa
 import sqlalchemy.sql as sasql
-from asyncpg import Connection, Pool
+from sqlalchemy.ext.asyncio import AsyncEngine
 from typing_extensions import AsyncIterator
 
 
@@ -56,13 +56,13 @@ class InMemoryNotifier(Notifier):
 
 
 class PostgresChannelNotifier(Notifier):
-    def __init__(self, pool: Pool, channel: str) -> None:
-        self._pool = pool
+    def __init__(self, engine: AsyncEngine, channel: str) -> None:
+        self._engine = engine
         self._channel = channel
 
-    async def _execute(self, query: sasql.ClauseElement) -> str:
-        query_string, params = asyncpgsa.compile_query(query)
-        return await self._pool.execute(query_string, *params)
+    async def _execute(self, query: sasql.ClauseElement) -> None:
+        async with self._engine.connect() as conn:
+            await conn.execute(query)
 
     async def notify(self) -> None:
         logger.info(f"Notifying channel {self._channel!r}")
@@ -70,12 +70,12 @@ class PostgresChannelNotifier(Notifier):
         await self._execute(query)
 
     class _Subscription(Subscription):
-        def __init__(self, conn: Connection) -> None:
+        def __init__(self, conn: asyncpg.Connection) -> None:
             self._conn = conn
 
         async def is_alive(self) -> bool:
             try:
-                await self._conn.execute("SELECT 42")
+                await self._conn.fetchrow("SELECT 42")
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -86,22 +86,35 @@ class PostgresChannelNotifier(Notifier):
     async def listen_to_updates(
         self, listener: Callback
     ) -> AsyncIterator[Subscription]:
-        def _listener(*args: Any) -> None:
+        def _log_listener(conn: Any, message: Any) -> None:
+            logger.info(f"{type(self).__qualname__}: PG log: {message!r}")
+
+        def _listener(*args: Any, **kwargs: Any) -> None:
+            logger.info(
+                f"{type(self).__qualname__}: Notified "
+                f"from channel {self._channel!r}"
+            )
             listener()
 
-        async with self._pool.acquire() as conn:
+        async with self._engine.connect() as conn:
             logger.info(
                 f"{type(self).__qualname__}: Subscribing to channel {self._channel!r}"
             )
-            await conn.add_listener(self._channel, _listener)
+            connection_fairy = await conn.get_raw_connection()
+            raw_asyncio_connection = connection_fairy.driver_connection
+            raw_asyncio_connection.add_log_listener(_log_listener)
+            await raw_asyncio_connection.add_listener(self._channel, _listener)
+            # connection_fairy.detach()
             try:
-                yield PostgresChannelNotifier._Subscription(conn)
+                yield PostgresChannelNotifier._Subscription(raw_asyncio_connection)
             finally:
                 logger.info(
                     f"{type(self).__qualname__}: Unsubscribing "
                     f"from channel {self._channel!r}"
                 )
-                await conn.remove_listener(self._channel, _listener)
+                await raw_asyncio_connection.remove_listener(self._channel, _listener)
+                await raw_asyncio_connection.close()
+                raw_asyncio_connection.remove_log_listener(_log_listener)
 
 
 class ResubscribingNotifier(Notifier):

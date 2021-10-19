@@ -1,4 +1,3 @@
-import json
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
@@ -16,10 +15,10 @@ from typing import (
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
 import sqlalchemy.sql as sasql
-from asyncpg import Connection, SerializationError, UniqueViolationError
-from asyncpg.pool import Pool
-from asyncpg.protocol.protocol import Record
+from asyncpg import SerializationError, UniqueViolationError
 from sqlalchemy import Boolean, Integer, and_, asc, desc, func, or_, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from platform_api.orchestrator.job import JobRecord
 from platform_api.orchestrator.job_request import JobError, JobStatus
@@ -67,8 +66,8 @@ class JobTables:
 
 
 class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
-    def __init__(self, pool: Pool, tables: Optional[JobTables] = None) -> None:
-        super().__init__(pool)
+    def __init__(self, engine: AsyncEngine, tables: Optional[JobTables] = None) -> None:
+        super().__init__(engine)
         self._tables = tables or JobTables.create()
 
     # Parsing/serialization
@@ -87,14 +86,14 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             "payload": payload,
         }
 
-    def _record_to_job(self, record: Record) -> JobRecord:
-        payload = json.loads(record["payload"])
+    def _record_to_job(self, record: Dict[str, Any]) -> JobRecord:
+        payload = record["payload"]
         payload["id"] = record["id"]
         payload["owner"] = record["owner"]
         payload["name"] = record["name"]
         payload["cluster_name"] = record["cluster_name"]
         if record["tags"] is not None:
-            payload["tags"] = json.loads(record["tags"])
+            payload["tags"] = record["tags"]
         return JobRecord.from_primitive(payload)
 
     # Simple operations
@@ -105,8 +104,8 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         return f"id={values['id']}"
 
     async def _select_row(
-        self, job_id: str, conn: Optional[Connection] = None
-    ) -> Record:
+        self, job_id: str, conn: Optional[AsyncConnection] = None
+    ) -> Dict[str, Any]:
         query = self._tables.jobs.select(self._tables.jobs.c.id == job_id)
         record = await self._fetchrow(query, conn=conn)
         if not record:
@@ -114,39 +113,45 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         return record
 
     async def _insert_values(
-        self, values: Mapping[str, Any], conn: Optional[Connection] = None
+        self, values: Mapping[str, Any], conn: Optional[AsyncConnection] = None
     ) -> None:
         query = self._tables.jobs.insert().values(values)
         try:
             await self._execute(query, conn=conn)
-        except UniqueViolationError as e:
-            if e.constraint_name == "jobs_name_owner_uq":
-                # We need to retrieve conflicting job from database to
-                # build JobStorageJobFoundError
-                base_owner = values["owner"].split("/")[0]
-                query = (
-                    self._tables.jobs.select()
-                    .where(self._tables.jobs.c.name == values["name"])
-                    .where(
-                        func.split_part(self._tables.jobs.c.owner, "/", 1) == base_owner
+        except IntegrityError as exc:
+            if isinstance(exc.orig.__cause__, UniqueViolationError):
+                e = exc.orig.__cause__
+                if e.constraint_name == "jobs_name_owner_uq":
+                    # We need to retrieve conflicting job from database to
+                    # build JobStorageJobFoundError
+                    base_owner = values["owner"].split("/")[0]
+                    query = (
+                        self._tables.jobs.select()
+                        .where(self._tables.jobs.c.name == values["name"])
+                        .where(
+                            func.split_part(self._tables.jobs.c.owner, "/", 1)
+                            == base_owner
+                        )
+                        .where(
+                            self._tables.jobs.c.status.in_(JobStatus.active_values())
+                        )
                     )
-                    .where(self._tables.jobs.c.status.in_(JobStatus.active_values()))
+                    record = await self._fetchrow(query)
+                    if record:
+                        raise JobStorageJobFoundError(
+                            job_name=values["name"],
+                            job_owner=base_owner,
+                            found_job_id=record["id"],
+                        )
+                    else:
+                        # Conflicted entry gone. Retry insert. Possible infinite
+                        # loop has very low probability
+                        await self._insert_values(values)
+                # Conflicting id case:
+                raise JobStorageTransactionError(
+                    "Job {" + self._make_description(values) + "} has changed"
                 )
-                record = await self._fetchrow(query)
-                if record:
-                    raise JobStorageJobFoundError(
-                        job_name=values["name"],
-                        job_owner=base_owner,
-                        found_job_id=record["id"],
-                    )
-                else:
-                    # Conflicted entry gone. Retry insert. Possible infinite
-                    # loop has very low probability
-                    await self._insert_values(values)
-            # Conflicting id case:
-            raise JobStorageTransactionError(
-                "Job {" + self._make_description(values) + "} has changed"
-            )
+            raise
 
     # Public api
 
@@ -193,9 +198,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[JobRecord]:
         try:
-            async with self._pool.acquire() as conn, conn.transaction(
-                isolation="repeatable_read"
-            ):
+            async with self._engine.begin() as conn:
                 # The isolation level 'serializable' is not used here because:
                 # - we only care about single row synchronization (we just want to
                 # protect from concurrent writes between our SELECT and
@@ -239,8 +242,8 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             query = query.order_by(asc(self._tables.jobs.c.created_at))
         if limit:
             query = query.limit(limit)
-        async with self._pool.acquire() as conn, conn.transaction():
-            async for record in self._cursor(query, conn=conn):
+        async with self._engine.begin() as conn:
+            async for record in await self._cursor(query, conn=conn):
                 yield self._record_to_job(record)
 
     async def get_jobs_by_ids(
@@ -347,7 +350,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             .select_from(sub_query)
             .order_by(desc(sub_query.c.created_at), sub_query.c.index)
         )
-        return [record[0] for record in await self._fetch(query)]
+        return [record[sub_query.c.tag_name] for record in await self._fetch(query)]
 
 
 class JobFilterClauseBuilder:

@@ -1,23 +1,18 @@
 import asyncio
-from contextlib import asynccontextmanager
 
 import alembic
-from asyncpg import create_pool
-from asyncpg.pool import Pool
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from .config import PostgresConfig
 
 
-@asynccontextmanager
-async def create_postgres_pool(db_config: PostgresConfig) -> Pool:
-    async with create_pool(
-        dsn=db_config.postgres_dsn,
-        min_size=db_config.pool_min_size,
-        max_size=db_config.pool_max_size,
-        timeout=db_config.connect_timeout_s,
-        command_timeout=db_config.command_timeout_s,
-    ) as pool:
-        yield pool
+def make_async_engine(db_config: PostgresConfig) -> AsyncEngine:
+    return create_async_engine(
+        db_config.postgres_dsn,
+        pool_size=db_config.pool_min_size,
+        max_overflow=max(0, db_config.pool_max_size - db_config.pool_min_size),
+        pool_timeout=db_config.connect_timeout_s,
+    )
 
 
 class MigrationRunner:

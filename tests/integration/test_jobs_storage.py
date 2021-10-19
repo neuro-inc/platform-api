@@ -3,7 +3,7 @@ from itertools import islice
 from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
-from asyncpg.pool import Pool
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from platform_api.config import PostgresConfig
 from platform_api.config_factory import EnvironConfigFactory
@@ -22,15 +22,15 @@ from platform_api.orchestrator.jobs_storage import (
     JobStorageTransactionError,
 )
 from platform_api.orchestrator.jobs_storage.postgres import PostgresJobsStorage
-from platform_api.postgres import MigrationRunner, create_postgres_pool
+from platform_api.postgres import MigrationRunner, make_async_engine
 from tests.conftest import not_raises
 
 
 class TestJobsStorage:
     @pytest.fixture(params=["postgres"])
-    def storage(self, request: Any, postgres_pool: Pool) -> JobsStorage:
+    def storage(self, request: Any, sqalchemy_engine: AsyncEngine) -> JobsStorage:
         if request.param == "postgres":
-            return PostgresJobsStorage(postgres_pool)
+            return PostgresJobsStorage(sqalchemy_engine)
         raise Exception(f"Unknown job storage engine {request.param}.")
 
     def _create_job_request(self, with_gpu: bool = False) -> JobRequest:
@@ -1654,16 +1654,22 @@ class TestJobsStorage:
 
         try:
             # Load data to postgres
-            async with create_postgres_pool(postgres_config) as pool:
-                postgres_storage = PostgresJobsStorage(pool)
+            engine = await make_async_engine(postgres_config)
+            try:
+                postgres_storage = PostgresJobsStorage(engine)
                 await postgres_storage.set_job(job_delete)
                 await postgres_storage.set_job(job_not_delete)
+            finally:
+                await engine.dispose()
             await migration_runner.upgrade()
             JobRecord.to_primitive = real_to_primitive  # type: ignore
-            async with create_postgres_pool(postgres_config) as pool:
-                postgres_storage = PostgresJobsStorage(pool)
+            engine = await make_async_engine(postgres_config)
+            try:
+                postgres_storage = PostgresJobsStorage(engine)
                 assert (await postgres_storage.get_job(job_not_delete.id)).materialized
                 assert not (await postgres_storage.get_job(job_delete.id)).materialized
+            finally:
+                await engine.dispose()
         finally:
             JobRecord.to_primitive = real_to_primitive  # type: ignore
             # Downgrade
