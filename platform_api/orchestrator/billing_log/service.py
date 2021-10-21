@@ -192,10 +192,10 @@ class BillingLogWorker:
             return  # Job was removed from DB, nothing we can do here.
 
         try:
-            await self._admin_client.change_user_credits(
+            await self._admin_client.charge_user(
                 cluster_name=job.cluster_name,
                 username=job.base_owner,
-                credits_delta=-entry.charge,
+                spending=entry.charge,
                 idempotency_key=entry.idempotency_key,
             )
         except ClientResponseError as e:
