@@ -41,7 +41,7 @@ from tests.conftest import random_str
 from tests.integration.secrets import SecretsClient
 from tests.integration.test_config_client import create_config_api
 
-from .admin import AdminServer
+from .admin import AdminAddSpendingRequest, AdminServer
 from .api import ApiConfig, AuthApiConfig, JobsClient
 from .auth import AuthClient, _User
 from .conftest import MyKubeClient
@@ -5018,7 +5018,8 @@ class TestBillingEnforcer:
 
         user_to_charge: Dict[str, Decimal] = defaultdict(Decimal)
         for request in mock_admin_server.requests:
-            user_to_charge[request.username] += -request.amount
+            if isinstance(request, AdminAddSpendingRequest):
+                user_to_charge[request.username] += request.spending
 
         per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
         second = Decimal("1") / 3600
