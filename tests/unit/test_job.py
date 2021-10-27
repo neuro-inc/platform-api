@@ -944,7 +944,7 @@ class TestJob:
         primitive = job.to_primitive()
         assert primitive["preset_name"] == "cpu-small"
 
-    def test_to_primitive_with_tenant_id(
+    def test_to_primitive_with_org_name(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
@@ -952,11 +952,11 @@ class TestJob:
             record=JobRecord.create(
                 request=job_request,
                 cluster_name="test-cluster",
-                tenant_id="10250zxvgew",
+                org_name="10250zxvgew",
             ),
         )
         primitive = job.to_primitive()
-        assert primitive["tenant_id"] == "10250zxvgew"
+        assert primitive["org_name"] == "10250zxvgew"
 
     def test_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
@@ -980,7 +980,7 @@ class TestJob:
         assert job.owner == "testuser"
         assert not job.scheduler_enabled
         assert not job.preemptible_node
-        assert not job.tenant_id
+        assert not job.org_name
         assert job.max_run_time_minutes is None
         assert job.restart_policy == JobRestartPolicy.NEVER
 
@@ -1184,7 +1184,7 @@ class TestJob:
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.max_run_time_minutes is None
 
-    def test_from_primitive_with_tenant_id(
+    def test_from_primitive_with_org_name(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
     ) -> None:
         payload = {
@@ -1196,10 +1196,10 @@ class TestJob:
             "materialized": True,
             "finished_at": datetime.now(timezone.utc).isoformat(),
             "max_run_time_minutes": None,
-            "tenant_id": "some-random-213-tenant-id",
+            "org_name": "some-random-213-tenant-id",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
-        assert job.tenant_id == "some-random-213-tenant-id"
+        assert job.org_name == "some-random-213-tenant-id"
 
     def test_to_uri(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest

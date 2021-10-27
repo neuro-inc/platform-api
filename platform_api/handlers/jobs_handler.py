@@ -273,7 +273,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("max_run_time_minutes", optional=True): t.Int,
             "restart_policy": t.String,
             "privileged": t.Bool,
-            t.Key("tenant_id", optional=True): t.String,
+            t.Key("org_name", optional=True): t.String,
         }
     )
 
@@ -472,8 +472,8 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         response_payload["history"]["finished_at"] = history.finished_at_str
     if current_status.exit_code is not None:
         response_payload["history"]["exit_code"] = current_status.exit_code
-    if job.tenant_id:
-        response_payload["tenant_id"] = job.tenant_id
+    if job.org_name:
+        response_payload["org_name"] = job.org_name
     return response_payload
 
 

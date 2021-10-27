@@ -1509,7 +1509,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
                 description="test test description",
             ),
             cluster_name="test-cluster",
-            tenant_id="test-tenant-id",
+            org_name="test-tenant-id",
             name="test-job-name",
         ),
     )
@@ -1518,7 +1518,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "id": job.id,
         "owner": "compute",
         "cluster_name": "test-cluster",
-        "tenant_id": "test-tenant-id",
+        "org_name": "test-tenant-id",
         "status": "pending",
         "statuses": [
             {
