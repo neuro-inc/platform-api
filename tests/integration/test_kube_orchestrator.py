@@ -565,13 +565,13 @@ class TestKubeOrchestrator:
         )
         await delete_job_later(job)
         await job.start()
-        await kube_client.create_failed_attach_volume_event(job.id)
 
         status_item = await kube_orchestrator.get_job_status(job)
         assert status_item.status == JobStatus.PENDING
 
         t0 = time.monotonic()
         while not status_item.status.is_finished:
+            await kube_client.create_failed_attach_volume_event(job.id)
             t1 = time.monotonic()
             if status_item.reason == JobStatusReason.DISK_UNAVAILABLE:
                 break
