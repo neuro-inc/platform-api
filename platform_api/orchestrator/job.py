@@ -264,6 +264,7 @@ class JobRecord:
     owner: str
     status_history: JobStatusHistory
     cluster_name: str
+    tenant_id: Optional[str] = None
     name: Optional[str] = None
     preset_name: Optional[str] = None
     tags: Sequence[str] = ()
@@ -473,6 +474,8 @@ class JobRecord:
             result["being_dropped"] = self.being_dropped
         if self.logs_removed:
             result["logs_removed"] = self.logs_removed
+        if self.tenant_id:
+            result["tenant_id"] = self.tenant_id
         return result
 
     @classmethod
@@ -494,6 +497,7 @@ class JobRecord:
             name=payload.get("name"),
             preset_name=payload.get("preset_name"),
             tags=payload.get("tags", ()),
+            tenant_id=payload.get("tenant_id", None),
             scheduler_enabled=payload.get("scheduler_enabled", None)
             or payload.get("is_preemptible", False),
             preemptible_node=payload.get("preemptible_node", None)
@@ -867,6 +871,10 @@ class Job:
     @property
     def total_price_credits(self) -> Decimal:
         return self._record.total_price_credits
+
+    @property
+    def tenant_id(self) -> Optional[str]:
+        return self._record.tenant_id
 
     def to_primitive(self) -> Dict[str, Any]:
         return self._record.to_primitive()
