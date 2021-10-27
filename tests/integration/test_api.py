@@ -4876,6 +4876,8 @@ class TestJobs:
                 "privileged": False,
                 "being_dropped": False,
                 "logs_removed": False,
+                "total_price_credits": "0",
+                "price_credits_per_hour": "10",
             }
 
 
