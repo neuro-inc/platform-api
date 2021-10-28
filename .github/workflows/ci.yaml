@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches: [master]
-    tags: [v*.*, v*.*.*, poller/v*.*.*]
+    tags: [v*.*.*]
   pull_request:
     branches: [master]
   pull_request_target:
@@ -185,72 +185,6 @@ jobs:
         RELEASE_SUFFIX: -default2
 
     concurrency: deploy_dev
-  release_public:
-    name: Release Public REPOs
-    runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/poller')
-    env:
-      ARTIFACTORY_DOCKER_REPO: ${{ secrets.ARTIFACTORY_ANONYMOUS_DOCKER_REPO }}
-      ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
-      ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
-    steps:
-    - name: Checkout commit
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-    - name: Install python
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.8.10
-    - name: Login to Artifactory docker registry
-      uses: docker/login-action@v1
-      with:
-        registry: ${{ secrets.ARTIFACTORY_ANONYMOUS_DOCKER_REPO }}
-        username: ${{ secrets.ARTIFACTORY_USERNAME }}
-        password: ${{ secrets.ARTIFACTORY_PASSWORD }}
-    - name: Set tag
-      run: echo "TAG=${GITHUB_REF#refs/tags/poller/v}" >> $GITHUB_ENV
-    - name: Push images to registry
-      run: make docker_push
-
-  release_poller:
-    name: Release poller
-    runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/poller')
-    env:
-      ARTIFACTORY_DOCKER_REPO: ${{ secrets.ARTIFACTORY_DOCKER_REPO }}
-      ARTIFACTORY_HELM_REPO: ${{ secrets.ARTIFACTORY_HELM_REPO }}
-      ARTIFACTORY_HELM_VIRTUAL_REPO: ${{ secrets.ARTIFACTORY_HELM_VIRTUAL_REPO }}
-      ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
-      ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
-      HELM_VERSION: ${{ secrets.HELM3_VERSION }}
-    steps:
-    - name: Checkout commit
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-    - name: Install python
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.8.10
-    - name: Login to Artifactory docker registry
-      uses: docker/login-action@v1
-      with:
-        registry: ${{ secrets.ARTIFACTORY_DOCKER_REPO }}
-        username: ${{ secrets.ARTIFACTORY_USERNAME }}
-        password: ${{ secrets.ARTIFACTORY_PASSWORD }}
-    - name: Set tag
-      run: echo "TAG=${GITHUB_REF#refs/tags/poller/v}" >> $GITHUB_ENV
-    - name: Push images to registry
-      run: make docker_push
-    - name: Install helm
-      run: make helm_install
-    - name: Push poller helm chart to Artifactory
-      run: make artifactory_helm_push
-      env:
-        HELM_CHART: platformapi-poller
 
   release:
     name: Create release packages
@@ -287,6 +221,10 @@ jobs:
       run: make helm_install
     - name: Push helm chart to Artifactory
       run: make artifactory_helm_push
+    - name: Push poller helm chart to Artifactory
+      run: make artifactory_helm_push
+      env:
+        HELM_CHART: platformapi-poller
 
   deploy_staging:
     name: Deploy to staging
