@@ -272,6 +272,8 @@ class TestJobResponseValidator:
             "privileged": False,
             "being_dropped": False,
             "logs_removed": False,
+            "price_credits_per_hour": "10",
+            "total_price_credits": "10",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -314,6 +316,8 @@ class TestJobResponseValidator:
             "privileged": False,
             "being_dropped": False,
             "logs_removed": False,
+            "price_credits_per_hour": "10",
+            "total_price_credits": "10",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -354,6 +358,8 @@ class TestJobResponseValidator:
             "privileged": False,
             "being_dropped": False,
             "logs_removed": False,
+            "price_credits_per_hour": "10",
+            "total_price_credits": "10",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -398,6 +404,8 @@ class TestJobResponseValidator:
             "privileged": False,
             "being_dropped": False,
             "logs_removed": False,
+            "price_credits_per_hour": "10",
+            "total_price_credits": "10",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -440,6 +448,8 @@ class TestJobResponseValidator:
             "privileged": False,
             "being_dropped": False,
             "logs_removed": False,
+            "price_credits_per_hour": "0",
+            "total_price_credits": "0",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -479,6 +489,8 @@ class TestJobResponseValidator:
             "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
+            "price_credits_per_hour": "10",
+            "total_price_credits": "10",
         }
         validator = create_job_response_validator()
         with pytest.raises(t.DataError):
@@ -524,6 +536,8 @@ class TestJobResponseValidator:
             "privileged": False,
             "being_dropped": False,
             "logs_removed": False,
+            "price_credits_per_hour": "10",
+            "total_price_credits": "10",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -564,6 +578,8 @@ class TestJobResponseValidator:
             "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
+            "price_credits_per_hour": "10",
+            "total_price_credits": "10",
         }
         validator = create_job_response_validator()
         with pytest.raises(t.DataError, match="value is less than 0"):
@@ -605,9 +621,98 @@ class TestJobResponseValidator:
             "pass_config": False,
             "uri": "job://cluster-name/tests/test-job-id",
             "restart_policy": "never",
+            "price_credits_per_hour": "10",
+            "total_price_credits": "10",
         }
         validator = create_job_response_validator()
         with pytest.raises(t.DataError, match="value is less than 0"):
+            assert validator.check(response)
+
+    def test_without_price_per_hour(self) -> None:
+        container = {
+            "image": "testimage",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        response = {
+            "id": "test-job-id",
+            "owner": "tests",
+            "cluster_name": "cluster-name",
+            "status": "pending",
+            "statuses": [
+                {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                }
+            ],
+            "name": "test-job-name",
+            "description": "test-job",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": None,
+                "created_at": "now",
+                "run_time_seconds": 10,
+                "restarts": 0,
+            },
+            "container": container,
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+            "materialized": False,
+            "pass_config": False,
+            "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
+            "privileged": False,
+            "being_dropped": False,
+            "logs_removed": False,
+            "total_price_credits": "10",
+        }
+        validator = create_job_response_validator()
+        with pytest.raises(t.DataError, match="price_credits_per_hour"):
+            assert validator.check(response)
+
+    def test_without_total_price(self) -> None:
+        response = {
+            "id": "test-job-id",
+            "owner": "tests",
+            "cluster_name": "cluster-name",
+            "status": "pending",
+            "statuses": [
+                {
+                    "status": "pending",
+                    "reason": None,
+                    "description": None,
+                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                }
+            ],
+            "name": "test-job-name",
+            "description": "test-job",
+            "history": {
+                "status": "pending",
+                "reason": None,
+                "description": None,
+                "created_at": "now",
+                "run_time_seconds": 10,
+                "restarts": 0,
+            },
+            "container": {
+                "image": "testimage",
+                "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+            },
+            "scheduler_enabled": False,
+            "preemptible_node": False,
+            "materialized": False,
+            "pass_config": False,
+            "uri": "job://cluster-name/tests/test-job-id",
+            "restart_policy": "never",
+            "privileged": False,
+            "being_dropped": False,
+            "logs_removed": False,
+            "price_credits_per_hour": "10",
+        }
+        validator = create_job_response_validator()
+        with pytest.raises(t.DataError, match="total_price_credits"):
             assert validator.check(response)
 
 

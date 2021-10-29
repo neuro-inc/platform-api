@@ -1509,6 +1509,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
                 description="test test description",
             ),
             cluster_name="test-cluster",
+            org_name="test-tenant-id",
             name="test-job-name",
         ),
     )
@@ -1517,6 +1518,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "id": job.id,
         "owner": "compute",
         "cluster_name": "test-cluster",
+        "org_name": "test-tenant-id",
         "status": "pending",
         "statuses": [
             {
@@ -1553,6 +1555,8 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "privileged": False,
         "being_dropped": False,
         "logs_removed": False,
+        "total_price_credits": "0",
+        "price_credits_per_hour": "10",
     }
 
 
@@ -1661,6 +1665,8 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "privileged": False,
         "being_dropped": False,
         "logs_removed": False,
+        "price_credits_per_hour": "10",
+        "total_price_credits": "0",
     }
 
 
@@ -1729,6 +1735,8 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "privileged": False,
         "being_dropped": False,
         "logs_removed": False,
+        "price_credits_per_hour": "10",
+        "total_price_credits": "0",
     }
 
 

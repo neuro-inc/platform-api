@@ -944,6 +944,20 @@ class TestJob:
         primitive = job.to_primitive()
         assert primitive["preset_name"] == "cpu-small"
 
+    def test_to_primitive_with_org_name(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                org_name="10250zxvgew",
+            ),
+        )
+        primitive = job.to_primitive()
+        assert primitive["org_name"] == "10250zxvgew"
+
     def test_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
     ) -> None:
@@ -966,6 +980,7 @@ class TestJob:
         assert job.owner == "testuser"
         assert not job.scheduler_enabled
         assert not job.preemptible_node
+        assert not job.org_name
         assert job.max_run_time_minutes is None
         assert job.restart_policy == JobRestartPolicy.NEVER
 
@@ -1168,6 +1183,23 @@ class TestJob:
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.max_run_time_minutes is None
+
+    def test_from_primitive_with_org_name(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+    ) -> None:
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "materialized": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "max_run_time_minutes": None,
+            "org_name": "some-random-213-tenant-id",
+        }
+        job = Job.from_primitive(mock_orchestrator.config, payload)
+        assert job.org_name == "some-random-213-tenant-id"
 
     def test_to_uri(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest

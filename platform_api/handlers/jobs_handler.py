@@ -258,6 +258,8 @@ def create_job_response_validator() -> t.Trafaret:
             "materialized": t.Bool,
             "being_dropped": t.Bool,
             "logs_removed": t.Bool,
+            "total_price_credits": t.String,
+            "price_credits_per_hour": t.String,
             t.Key("is_preemptible", optional=True): t.Bool,
             t.Key("is_preemptible_node_required", optional=True): t.Bool,
             "pass_config": t.Bool,
@@ -271,6 +273,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("max_run_time_minutes", optional=True): t.Int,
             "restart_policy": t.String,
             "privileged": t.Bool,
+            t.Key("org_name", optional=True): t.String,
         }
     )
 
@@ -436,6 +439,8 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         "materialized": job.materialized,
         "being_dropped": job.being_dropped,
         "logs_removed": job.logs_removed,
+        "total_price_credits": str(job.total_price_credits),
+        "price_credits_per_hour": str(job.price_credits_per_hour),
     }
     if job.name:
         response_payload["name"] = job.name
@@ -467,6 +472,8 @@ def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
         response_payload["history"]["finished_at"] = history.finished_at_str
     if current_status.exit_code is not None:
         response_payload["history"]["exit_code"] = current_status.exit_code
+    if job.org_name:
+        response_payload["org_name"] = job.org_name
     return response_payload
 
 
