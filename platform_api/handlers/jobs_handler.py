@@ -51,7 +51,7 @@ from platform_api.orchestrator.job_request import (
     JobStatus,
     SecretContainerVolume,
 )
-from platform_api.orchestrator.jobs_service import JobsService
+from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG, JobsService
 from platform_api.orchestrator.jobs_storage import (
     ClusterOwnerNameSet,
     JobFilter,
@@ -381,6 +381,8 @@ def convert_job_container_to_json(container: Container) -> Dict[str, Any]:
         ret["tty"] = True
     if container.working_dir is not None:
         ret["working_dir"] = container.working_dir
+    if NEURO_PASSED_CONFIG in ret["env"]:
+        ret["env"][NEURO_PASSED_CONFIG] = "<hidden-user-token>"
     return ret
 
 
