@@ -4511,6 +4511,8 @@ class TestJobs:
                 "privileged": False,
                 "being_dropped": False,
                 "logs_removed": False,
+                "total_price_credits": "0",
+                "price_credits_per_hour": "10",
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -4560,6 +4562,8 @@ class TestJobs:
             "privileged": False,
             "being_dropped": False,
             "logs_removed": False,
+            "total_price_credits": "0",
+            "price_credits_per_hour": "10",
         }
 
     @pytest.mark.asyncio
@@ -4655,6 +4659,8 @@ class TestJobs:
             "privileged": False,
             "being_dropped": False,
             "logs_removed": False,
+            "total_price_credits": "0",
+            "price_credits_per_hour": "10",
         }
 
     @pytest.mark.asyncio
@@ -4765,6 +4771,8 @@ class TestJobs:
                 "privileged": False,
                 "being_dropped": False,
                 "logs_removed": False,
+                "total_price_credits": "0",
+                "price_credits_per_hour": "10",
             }
 
     @pytest.mark.asyncio
@@ -4868,6 +4876,8 @@ class TestJobs:
                 "privileged": False,
                 "being_dropped": False,
                 "logs_removed": False,
+                "total_price_credits": "0",
+                "price_credits_per_hour": "10",
             }
 
 
