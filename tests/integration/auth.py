@@ -199,7 +199,11 @@ async def regular_user_factory(
                 quota=quota,
             )
         user_token = token_factory(name)
-        return _User(name=name, token=user_token)
+        return _User(
+            name=name,
+            token=user_token,
+            clusters=[cluster_info[0] for cluster_info in clusters],
+        )
 
     return _factory
 
