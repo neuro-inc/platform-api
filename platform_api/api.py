@@ -275,6 +275,14 @@ async def create_app(
             )
             app["jobs_app"]["auth_client"] = auth_client
 
+            admin_client = await exit_stack.enter_async_context(
+                AdminClient(
+                    base_url=config.admin_url,
+                    service_token=config.auth.service_token,
+                    trace_configs=make_tracing_trace_configs(config),
+                )
+            )
+
             await setup_security(
                 app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER
             )
@@ -329,6 +337,7 @@ async def create_app(
                 jobs_config=config.jobs,
                 notifications_client=notifications_client,
                 auth_client=auth_client,
+                admin_client=admin_client,
                 api_base_url=config.api_base_url,
             )
 
@@ -346,13 +355,7 @@ async def create_app(
             app["tags_app"]["jobs_service"] = jobs_service
 
             logger.info("Initializing JobPolicyEnforcePoller")
-            admin_client = await exit_stack.enter_async_context(
-                AdminClient(
-                    base_url=config.admin_url,
-                    service_token=config.auth.service_token,
-                    trace_configs=make_tracing_trace_configs(config),
-                )
-            )
+
             logger.info("Initializing BillingLogStorage")
             billing_log_storage = PostgresBillingLogStorage(pool=postgres_pool)
 
@@ -393,11 +396,11 @@ async def create_app(
                     config.job_policy_enforcer,
                     enforcers=[
                         RuntimeLimitEnforcer(jobs_service),
-                        CreditsLimitEnforcer(jobs_service, auth_client),
+                        CreditsLimitEnforcer(jobs_service, admin_client),
                         BillingEnforcer(jobs_service, billing_log_service),
                         CreditsNotificationsEnforcer(
                             jobs_service=jobs_service,
-                            auth_client=auth_client,
+                            admin_client=admin_client,
                             notifications_client=notifications_client,
                             notification_threshold=(
                                 config.job_policy_enforcer.credit_notification_threshold

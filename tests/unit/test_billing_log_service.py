@@ -1,12 +1,11 @@
 import asyncio
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, AsyncIterator, Callable, List, Mapping, Tuple
+from typing import Any, AsyncIterator, Callable, Mapping
 
 import pytest
-from aiohttp import ClientResponseError
-from neuro_admin_client import AdminClient
-from neuro_auth_client import Cluster, User
+from neuro_admin_client import AdminClient, Balance, Quota
+from neuro_auth_client import User
 from typing_extensions import Protocol
 
 from platform_api.orchestrator.billing_log.service import (
@@ -21,33 +20,7 @@ from platform_api.orchestrator.billing_log.storage import (
 from platform_api.orchestrator.job_request import JobRequest
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.utils.update_notifier import InMemoryNotifier, Notifier
-
-
-class MockAdminClient(AdminClient):
-    def __init__(self) -> None:
-        self.spending_log: List[Tuple[str, str, Decimal, str]] = []
-        self.debts_log: List[Tuple[str, str, Decimal, str]] = []
-        self.raise_404: bool = False
-
-    async def charge_user(
-        self,
-        cluster_name: str,
-        username: str,
-        spending: Decimal,
-        idempotency_key: str,
-    ) -> None:
-        if self.raise_404:
-            raise ClientResponseError(None, (), status=404)  # type: ignore
-        self.spending_log.append((cluster_name, username, spending, idempotency_key))
-
-    async def add_debt(
-        self,
-        cluster_name: str,
-        username: str,
-        credits: Decimal,
-        idempotency_key: str,
-    ) -> None:
-        self.debts_log.append((cluster_name, username, credits, idempotency_key))
+from tests.unit.conftest import MockAdminClient, UserFactory
 
 
 class BillingServiceFactory(Protocol):
@@ -61,10 +34,6 @@ class BillingWorkerFactory(Protocol):
 
 
 class TestBillingLogProcessing:
-    @pytest.fixture()
-    def admin_client(self) -> MockAdminClient:
-        return MockAdminClient()
-
     @pytest.fixture()
     def storage(self) -> BillingLogStorage:
         return InMemoryBillingLogStorage()
@@ -108,7 +77,7 @@ class TestBillingLogProcessing:
         storage: BillingLogStorage,
         new_entry: Notifier,
         entry_done: Notifier,
-        admin_client: AdminClient,
+        mock_admin_client: AdminClient,
         jobs_service: JobsService,
     ) -> BillingWorkerFactory:
         def _factory(**kwargs: Any) -> BillingLogWorker:
@@ -116,7 +85,7 @@ class TestBillingLogProcessing:
                 "storage": storage,
                 "new_entry": new_entry,
                 "entry_done": entry_done,
-                "admin_client": admin_client,
+                "admin_client": mock_admin_client,
                 "jobs_service": jobs_service,
                 **kwargs,
             }
@@ -134,7 +103,7 @@ class TestBillingLogProcessing:
         test_user: User,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
-        admin_client: MockAdminClient,
+        mock_admin_client: MockAdminClient,
         service: BillingLogService,
         worker: BillingLogWorker,
     ) -> None:
@@ -159,11 +128,11 @@ class TestBillingLogProcessing:
             updated_job = await jobs_service.get_job(job.id)
             assert updated_job.total_price_credits == Decimal("1.00")
             assert updated_job.fully_billed
-            assert len(admin_client.spending_log) == 1
-            assert admin_client.spending_log[0][0] == job.cluster_name
-            assert admin_client.spending_log[0][1] == job.owner
-            assert admin_client.spending_log[0][2] == Decimal("1.00")
-            assert admin_client.spending_log[0][3] == "key"
+            assert len(mock_admin_client.spending_log) == 1
+            assert mock_admin_client.spending_log[0][0] == job.cluster_name
+            assert mock_admin_client.spending_log[0][1] == job.owner
+            assert mock_admin_client.spending_log[0][2] == Decimal("1.00")
+            assert mock_admin_client.spending_log[0][3] == "key"
 
     @pytest.mark.asyncio
     async def test_sub_user_correct_user_charged(
@@ -171,15 +140,17 @@ class TestBillingLogProcessing:
         test_user: User,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
-        admin_client: MockAdminClient,
+        mock_admin_client: MockAdminClient,
         service: BillingLogService,
         worker: BillingLogWorker,
+        user_factory: UserFactory,
+        test_cluster: str,
     ) -> None:
-        sub_user = User(
-            name=f"{test_user.name}/roles/test", clusters=[Cluster(name="test-cluster")]
+        sub_user = await user_factory(
+            f"{test_user.name}/roles/test", [(test_cluster, Balance(), Quota())]
         )
         job, _ = await jobs_service.create_job(
-            job_request_factory(), sub_user, cluster_name="test-cluster"
+            job_request_factory(), sub_user, cluster_name=test_cluster
         )
         async with service.entries_inserter() as inserter:
             last_id = await inserter.insert(
@@ -199,11 +170,11 @@ class TestBillingLogProcessing:
             updated_job = await jobs_service.get_job(job.id)
             assert updated_job.total_price_credits == Decimal("1.00")
             assert updated_job.fully_billed
-            assert len(admin_client.spending_log) == 1
-            assert admin_client.spending_log[0][0] == job.cluster_name
-            assert admin_client.spending_log[0][1] == test_user.name
-            assert admin_client.spending_log[0][2] == Decimal("1.00")
-            assert admin_client.spending_log[0][3] == "key"
+            assert len(mock_admin_client.spending_log) == 1
+            assert mock_admin_client.spending_log[0][0] == job.cluster_name
+            assert mock_admin_client.spending_log[0][1] == test_user.name
+            assert mock_admin_client.spending_log[0][2] == Decimal("1.00")
+            assert mock_admin_client.spending_log[0][3] == "key"
 
     @pytest.mark.asyncio
     async def test_user_removed_from_cluster(
@@ -211,7 +182,7 @@ class TestBillingLogProcessing:
         test_user: User,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
-        admin_client: MockAdminClient,
+        mock_admin_client: MockAdminClient,
         service: BillingLogService,
         worker: BillingLogWorker,
     ) -> None:
@@ -231,17 +202,17 @@ class TestBillingLogProcessing:
                 ]
             )
 
-        admin_client.raise_404 = True
+        mock_admin_client.raise_404 = True
 
         async with worker:
             await asyncio.wait_for(service.wait_until_processed(last_id), timeout=1)
             updated_job = await jobs_service.get_job(job.id)
             assert updated_job.total_price_credits == Decimal("1.00")
             assert updated_job.fully_billed
-            assert admin_client.debts_log[0][0] == job.cluster_name
-            assert admin_client.debts_log[0][1] == test_user.name
-            assert admin_client.debts_log[0][2] == Decimal("1.00")
-            assert admin_client.debts_log[0][3] == "key"
+            assert mock_admin_client.debts_log[0][0] == job.cluster_name
+            assert mock_admin_client.debts_log[0][1] == test_user.name
+            assert mock_admin_client.debts_log[0][2] == Decimal("1.00")
+            assert mock_admin_client.debts_log[0][3] == "key"
 
     @pytest.mark.asyncio
     async def test_syncs_new_entries(
@@ -249,7 +220,7 @@ class TestBillingLogProcessing:
         test_user: User,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
-        admin_client: MockAdminClient,
+        mock_admin_client: MockAdminClient,
         worker: BillingLogWorker,
         service: BillingLogService,
     ) -> None:
@@ -275,11 +246,11 @@ class TestBillingLogProcessing:
             updated_job = await jobs_service.get_job(job.id)
             assert updated_job.total_price_credits == Decimal("1.00")
             assert updated_job.fully_billed
-            assert len(admin_client.spending_log) == 1
-            assert admin_client.spending_log[0][0] == job.cluster_name
-            assert admin_client.spending_log[0][1] == job.owner
-            assert admin_client.spending_log[0][2] == Decimal("1.00")
-            assert admin_client.spending_log[0][3] == "key"
+            assert len(mock_admin_client.spending_log) == 1
+            assert mock_admin_client.spending_log[0][0] == job.cluster_name
+            assert mock_admin_client.spending_log[0][1] == job.owner
+            assert mock_admin_client.spending_log[0][2] == Decimal("1.00")
+            assert mock_admin_client.spending_log[0][3] == "key"
 
     @pytest.mark.asyncio
     async def test_syncs_by_timeout(
@@ -287,7 +258,7 @@ class TestBillingLogProcessing:
         test_user: User,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
-        admin_client: MockAdminClient,
+        mock_admin_client: MockAdminClient,
         service_factory: BillingServiceFactory,
         worker_factory: BillingWorkerFactory,
     ) -> None:
@@ -316,11 +287,11 @@ class TestBillingLogProcessing:
             updated_job = await jobs_service.get_job(job.id)
             assert updated_job.total_price_credits == Decimal("1.00")
             assert updated_job.fully_billed
-            assert len(admin_client.spending_log) == 1
-            assert admin_client.spending_log[0][0] == job.cluster_name
-            assert admin_client.spending_log[0][1] == job.owner
-            assert admin_client.spending_log[0][2] == Decimal("1.00")
-            assert admin_client.spending_log[0][3] == "key"
+            assert len(mock_admin_client.spending_log) == 1
+            assert mock_admin_client.spending_log[0][0] == job.cluster_name
+            assert mock_admin_client.spending_log[0][1] == job.owner
+            assert mock_admin_client.spending_log[0][2] == Decimal("1.00")
+            assert mock_admin_client.spending_log[0][3] == "key"
 
     @pytest.mark.asyncio
     async def test_syncs_concurrent(
@@ -328,7 +299,7 @@ class TestBillingLogProcessing:
         test_user: User,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
-        admin_client: MockAdminClient,
+        mock_admin_client: MockAdminClient,
         worker: BillingLogWorker,
         service: BillingLogService,
     ) -> None:
@@ -359,10 +330,10 @@ class TestBillingLogProcessing:
             updated_job = await jobs_service.get_job(job.id)
             assert updated_job.total_price_credits == Decimal("10.00")
             assert not updated_job.fully_billed
-            assert len(admin_client.spending_log) == 10
-            for admin_request in admin_client.spending_log:
+            assert len(mock_admin_client.spending_log) == 10
+            for admin_request in mock_admin_client.spending_log:
                 assert admin_request[0] == job.cluster_name
                 assert admin_request[1] == job.owner
                 assert admin_request[2] == Decimal("1.00")
-            keys = {it[3] for it in admin_client.spending_log}
+            keys = {it[3] for it in mock_admin_client.spending_log}
             assert keys == {f"key{index}" for index in range(10)}

@@ -8,6 +8,8 @@ from functools import partial
 from typing import AsyncIterator, Callable, Dict, List, Optional, Tuple, Union
 
 from aiohttp import ClientResponseError
+from aiohttp.web_exceptions import HTTPNotFound
+from neuro_admin_client import AdminClient
 from neuro_auth_client import AuthClient
 
 from platform_api.cluster import (
@@ -18,7 +20,6 @@ from platform_api.cluster import (
 )
 from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import JobsConfig, JobsSchedulerConfig
-from platform_api.user import get_cluster
 
 from ..utils.asyncio import run_and_log_exceptions
 from .base import Orchestrator
@@ -49,21 +50,24 @@ class JobsScheduler:
     def __init__(
         self,
         config: JobsSchedulerConfig,
-        auth_client: AuthClient,
+        admin_client: AdminClient,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
     ) -> None:
         self._config = config
-        self._auth_client = auth_client
+        self._admin_client = admin_client
         self._current_datetime_factory = current_datetime_factory
 
     async def _get_user_running_jobs_quota(
         self, username: str, cluster: str
     ) -> Optional[int]:
-        auth_user = await self._auth_client.get_user(username)
-        auth_cluster = get_cluster(auth_user, cluster)
-        if auth_cluster:
-            return auth_cluster.quota.total_running_jobs
-        return 0  # User has no access to this cluster
+        try:
+            cluster_user = await self._admin_client.get_cluster_user(
+                cluster_name=cluster, user_name=username
+            )
+        except HTTPNotFound:
+            return 0  # User has no access to this cluster
+        else:
+            return cluster_user.quota.total_running_jobs
 
     async def _enforce_running_job_quota(
         self, raw_result: SchedulingResult

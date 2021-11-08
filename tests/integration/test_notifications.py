@@ -4,13 +4,13 @@ from unittest import mock
 
 import aiohttp.web
 import pytest
-from neuro_auth_client import Quota
+from neuro_admin_client import Balance, Quota
 from neuro_notifications_client import CreditsWillRunOutSoon, JobCannotStartNoCredits
 
 from platform_api.config import Config
 
 from .api import ApiConfig, JobsClient
-from .auth import _User
+from .auth import UserFactory, _User
 from .notifications import NotificationsServer
 
 
@@ -22,11 +22,13 @@ class TestCannotStartJobNoCredits:
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
         jobs_client: Callable[[], Any],
-        regular_user_factory: Callable[..., Awaitable[_User]],
+        regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
+        test_cluster_name: str,
     ) -> None:
-        quota = Quota(credits=Decimal("100"))
-        user = await regular_user_factory(quota=quota)
+        user = await regular_user_factory(
+            clusters=[(test_cluster_name, Balance(credits=Decimal("100")), Quota())]
+        )
         url = api.jobs_base_url
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
@@ -44,11 +46,13 @@ class TestCannotStartJobNoCredits:
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
         jobs_client: Callable[[], Any],
-        regular_user_factory: Callable[..., Awaitable[_User]],
+        regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
+        test_cluster_name: str,
     ) -> None:
-        quota = Quota(credits=Decimal("0"))
-        user = await regular_user_factory(quota=quota)
+        user = await regular_user_factory(
+            clusters=[(test_cluster_name, Balance(credits=Decimal("0")), Quota())]
+        )
         url = api.jobs_base_url
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
@@ -110,7 +114,7 @@ class TestJobTransition:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[str], Dict[str, Any]],
-        regular_user_factory: Callable[..., Any],
+        regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
     ) -> None:
         user = await regular_user_factory()
@@ -131,7 +135,7 @@ class TestJobTransition:
         api: ApiConfig,
         job_request_factory: Callable[[], Dict[str, Any]],
         jobs_client_factory: Callable[[_User], JobsClient],
-        regular_user_factory: Callable[..., Any],
+        regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
         run_job: Callable[..., Awaitable[str]],
     ) -> None:
@@ -172,7 +176,7 @@ class TestJobTransition:
         api: ApiConfig,
         job_request_factory: Callable[[], Dict[str, Any]],
         jobs_client_factory: Callable[[_User], JobsClient],
-        regular_user_factory: Callable[..., Any],
+        regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
         run_job: Callable[..., Awaitable[str]],
     ) -> None:
@@ -215,12 +219,15 @@ class TestCreditsWillRunOutSoon:
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
         jobs_client_factory: Callable[[_User], JobsClient],
-        regular_user_factory: Callable[..., Any],
+        regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
+        test_cluster_name: str,
     ) -> None:
         threshold = config.job_policy_enforcer.credit_notification_threshold
-        quota = Quota(credits=threshold / 2)
-        user = await regular_user_factory(quota=quota)
+
+        user = await regular_user_factory(
+            clusters=[(test_cluster_name, Balance(credits=threshold / 2), Quota())]
+        )
 
         jobs_client = jobs_client_factory(user)
         job_request = job_request_factory()

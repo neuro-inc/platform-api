@@ -82,6 +82,7 @@ class EnvironConfigFactory:
         auth = self.create_auth()
         jobs = self.create_jobs(orphaned_job_owner=auth.service_name)
         config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
+        admin_url = URL(self._environ["NP_PLATFORM_ADMIN_URI"])
         cluster_name = self._environ["NP_CLUSTER_NAME"]
         return PollerConfig(
             platform_api_url=URL(self._environ["NP_PLATFORM_API_URL"]),
@@ -90,6 +91,7 @@ class EnvironConfigFactory:
             jobs=jobs,
             scheduler=self.create_job_scheduler(),
             config_url=config_url,
+            admin_url=admin_url,
             cluster_name=cluster_name,
             zipkin=self.create_zipkin("platform-api-poller"),
             sentry=self.create_sentry("platform-api-poller"),
