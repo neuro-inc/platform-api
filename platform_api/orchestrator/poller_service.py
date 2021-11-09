@@ -21,6 +21,7 @@ from platform_api.config import JobsConfig, JobsSchedulerConfig
 from platform_api.user import get_cluster
 
 from ..utils.asyncio import run_and_log_exceptions
+from ..utils.retry import retries
 from .base import Orchestrator
 from .job import Job, JobRecord, JobStatusItem, JobStatusReason
 from .job_request import (
@@ -342,7 +343,9 @@ class JobsPollerService:
                 await self._revoke_pass_config(job)
         else:
             try:
-                status_item = await orchestrator.get_job_status(job)
+                for retry in retries("Fail to fetch a job", (JobNotFoundException,)):
+                    async with retry:
+                        status_item = await orchestrator.get_job_status(job)
                 # TODO: In case job is found, but container is not in state Pending
                 # We shall go and check for the events assigned to the pod
                 # "pod didn't trigger scale-up (it wouldn't fit if a new node is added)"
