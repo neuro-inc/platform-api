@@ -1,6 +1,5 @@
 import asyncio
 
-import asyncpg
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -65,16 +64,3 @@ async def test_channel_notifier_connection_lost(sqalchemy_engine: AsyncEngine) -
 
         await notifier.notify()
         await counter.assert_count(2)
-
-
-@pytest.mark.asyncio
-async def test_cluster_update_notifier_failed_to_subscribe(
-    sqalchemy_engine: AsyncEngine,
-) -> None:
-    await sqalchemy_engine.dispose()
-    notifier: Notifier = PostgresChannelNotifier(sqalchemy_engine, "channel")
-    notifier = ResubscribingNotifier(notifier, check_interval=0.1)
-
-    with pytest.raises(asyncpg.InterfaceError):
-        async with notifier.listen_to_updates(lambda: None):
-            pass
