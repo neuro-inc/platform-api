@@ -29,7 +29,6 @@ from aiohttp.web import (
     HTTPOk,
     HTTPUnauthorized,
 )
-from aiohttp.web_exceptions import HTTPCreated
 from neuro_admin_client import AdminClient, Balance, Quota
 from neuro_auth_client import Permission
 from yarl import URL
@@ -2536,19 +2535,11 @@ class TestJobs:
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         admin_token: str,
-        regular_user: _User,
+        regular_user_with_missing_cluster_name: _User,
     ) -> None:
-        admin_user = _User(name="admin", token=admin_token)
-        user = regular_user
-
-        url = auth_api.auth_for_user_url(user.name)
-        payload = {"name": user.name, "cluster_name": "unknowncluster"}
-        async with client.put(url, headers=admin_user.headers, json=payload) as resp:
-            assert resp.status == HTTPCreated.status_code, await resp.text()
-
         url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=job_submit
+            url, headers=regular_user_with_missing_cluster_name.headers, json=job_submit
         ) as response:
             assert response.status == HTTPForbidden.status_code, await response.text()
             payload = await response.json()
