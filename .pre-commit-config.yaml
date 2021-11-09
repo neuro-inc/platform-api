@@ -13,7 +13,7 @@ repos:
   hooks:
   - id: isort
 - repo: https://github.com/psf/black
-  rev: '21.9b0'
+  rev: '21.10b0'
   hooks:
   - id: black
     language_version: python3   # Should be a command that runs python3.6+
@@ -49,7 +49,7 @@ repos:
   - id: flake8
     exclude: "^docs/"
 - repo: https://github.com/rhysd/actionlint
-  rev: v1.6.6
+  rev: v1.6.7
   hooks:
   - id: actionlint-docker
     args:

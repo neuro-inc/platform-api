@@ -50,7 +50,6 @@ from platform_api.orchestrator.job_request import (
     SecretContainerVolume,
 )
 from platform_api.orchestrator.jobs_poller import job_response_to_job_record
-from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG, JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.resource import Preset, TPUPreset, TPUResource
 
@@ -1781,26 +1780,3 @@ async def test_job_to_job_response_with_preset_name(
     payload = convert_job_to_job_response(job)
 
     assert payload["preset_name"] == "cpu-small"
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("pass_config", [True, False])
-async def test_job_to_job_response_with_passed_config(
-    jobs_service: JobsService, test_user: AuthUser, pass_config: bool
-) -> None:
-    job_request = JobRequest.create(
-        Container("testimage", ContainerResources(cpu=1, memory_mb=128))
-    )
-    job, _ = await jobs_service.create_job(
-        job_request, test_user, "test-cluster", pass_config=pass_config
-    )
-    payload = convert_job_to_job_response(job)
-
-    assert payload["pass_config"] == pass_config
-    if pass_config:
-        assert NEURO_PASSED_CONFIG in payload["container"]["env"]
-        assert (
-            payload["container"]["env"]["NEURO_PASSED_CONFIG"] == "<hidden-user-token>"
-        )
-    else:
-        assert NEURO_PASSED_CONFIG not in payload["container"]["env"]
