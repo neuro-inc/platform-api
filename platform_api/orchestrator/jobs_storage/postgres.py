@@ -147,7 +147,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
                     else:
                         # Conflicted entry gone. Retry insert. Possible infinite
                         # loop has very low probability
-                        await self._insert_values(values)
+                        await self._insert_values(values, conn=conn)
                 # Conflicting id case:
                 raise JobStorageTransactionError(
                     "Job {" + self._make_description(values) + "} has changed"
@@ -166,14 +166,15 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             .where(self._tables.jobs.c.id == job_id)
             .returning(self._tables.jobs.c.id)
         )
-        result = await self._fetchrow(query)
-        if result:
-            # Docs on status messages are placed here:
-            # https://www.postgresql.org/docs/current/protocol-message-formats.html
-            return
-        # There was no row with such id, lets insert it.
-        values["id"] = job_id
-        await self._insert_values(values)
+        async with self._transaction() as conn:
+            result = await self._fetchrow(query, conn=conn)
+            if result:
+                # Docs on status messages are placed here:
+                # https://www.postgresql.org/docs/current/protocol-message-formats.html
+                return
+            # There was no row with such id, lets insert it.
+            values["id"] = job_id
+            await self._insert_values(values, conn=conn)
 
     async def get_job(self, job_id: str) -> JobRecord:
         record = await self._select_row(job_id)
@@ -185,7 +186,8 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             .where(self._tables.jobs.c.id == job_id)
             .returning(self._tables.jobs.c.id)
         )
-        result = await self._fetchrow(query)
+        async with self._transaction() as conn:
+            result = await self._fetchrow(query, conn=conn)
         if result is None:
             raise JobError(f"no such job {job_id}")
 
@@ -194,7 +196,8 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         # No need to do any checks -- INSERT cannot be executed twice
         yield job
         values = self._job_to_values(job)
-        await self._insert_values(values)
+        async with self._transaction() as conn:
+            await self._insert_values(values, conn=conn)
 
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[JobRecord]:

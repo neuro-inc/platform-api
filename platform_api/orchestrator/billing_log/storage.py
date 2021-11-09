@@ -234,7 +234,8 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
                 empty = BillingLogSyncRecord(0)
                 values = self._sync_record_to_values(empty)
                 query = self._tables.sync_record.insert().values(values)
-                await self._execute(query)
+                async with self._transaction() as conn:
+                    await self._execute(query, conn=conn)
             except IntegrityError as exc:
                 if isinstance(exc.orig.__cause__, UniqueViolationError):
                     pass
@@ -252,7 +253,8 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
             .where(self._tables.sync_record.c.type == self.BILLING_SYNC_RECORD_TYPE)
             .returning(self._tables.sync_record.c.type)
         )
-        result = await self._fetchrow(query)
+        async with self._transaction() as conn:
+            result = await self._fetchrow(query, conn=conn)
         if not result:
             raise BillingLogSyncRecordNotFound
 
@@ -319,4 +321,5 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
         query = self._tables.billing_log.delete().where(
             self._tables.billing_log.c.id <= with_ids_le
         )
-        await self._execute(query)
+        async with self._transaction() as conn:
+            await self._execute(query, conn=conn)
