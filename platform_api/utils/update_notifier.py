@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager, suppress
 from typing import Any, AsyncContextManager, Callable, List, Optional
 
 import asyncpg
-import sqlalchemy as sa
 import sqlalchemy.sql as sasql
 from sqlalchemy.ext.asyncio import AsyncEngine
 from typing_extensions import AsyncIterator
@@ -66,8 +65,9 @@ class PostgresChannelNotifier(Notifier):
 
     async def notify(self) -> None:
         logger.info(f"Notifying channel {self._channel!r}")
-        query = sa.text(f"NOTIFY {self._channel}")
-        await self._execute(query)
+        async with self._engine.connect() as conn:
+            conn_proxy = await conn.get_raw_connection()
+            await conn_proxy.driver_connection.fetch(f"NOTIFY {self._channel}")
 
     class _Subscription(Subscription):
         def __init__(self, conn: asyncpg.Connection) -> None:
@@ -104,7 +104,6 @@ class PostgresChannelNotifier(Notifier):
             raw_asyncio_connection = connection_fairy.driver_connection
             raw_asyncio_connection.add_log_listener(_log_listener)
             await raw_asyncio_connection.add_listener(self._channel, _listener)
-            # connection_fairy.detach()
             try:
                 yield PostgresChannelNotifier._Subscription(raw_asyncio_connection)
             finally:
@@ -113,7 +112,6 @@ class PostgresChannelNotifier(Notifier):
                     f"from channel {self._channel!r}"
                 )
                 await raw_asyncio_connection.remove_listener(self._channel, _listener)
-                await raw_asyncio_connection.close()
                 raw_asyncio_connection.remove_log_listener(_log_listener)
 
 
