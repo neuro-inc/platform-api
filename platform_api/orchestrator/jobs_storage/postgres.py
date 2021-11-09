@@ -14,10 +14,10 @@ from typing import (
 
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
-import sqlalchemy.row as Row
 import sqlalchemy.sql as sasql
 from asyncpg import SerializationError, UniqueViolationError
 from sqlalchemy import Boolean, Integer, and_, asc, desc, func, or_, select
+from sqlalchemy.engine import Row
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
@@ -199,7 +199,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[JobRecord]:
         try:
-            async with self._engine.begin() as conn:
+            async with self._transaction() as conn:
                 # The isolation level 'serializable' is not used here because:
                 # - we only care about single row synchronization (we just want to
                 # protect from concurrent writes between our SELECT and
@@ -243,8 +243,8 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             query = query.order_by(asc(self._tables.jobs.c.created_at))
         if limit:
             query = query.limit(limit)
-        async with self._engine.begin() as conn:
-            async for record in await self._cursor(query, conn=conn):
+        async with self._cursor(query) as cursor:
+            async for record in cursor:
                 yield self._record_to_job(record)
 
     async def get_jobs_by_ids(

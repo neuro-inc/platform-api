@@ -1,13 +1,19 @@
+from contextlib import asynccontextmanager
 from typing import AsyncIterator, List, Optional
 
-import sqlalchemy.row as Row
 import sqlalchemy.sql as sasql
+from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 
 class BasePostgresStorage:
     def __init__(self, engine: AsyncEngine) -> None:
         self._engine = engine
+
+    @asynccontextmanager
+    async def _transaction(self) -> AsyncIterator[AsyncConnection]:
+        async with self._engine.begin() as conn:
+            yield conn
 
     async def _execute(
         self, query: sasql.ClauseElement, conn: Optional[AsyncConnection] = None
@@ -38,7 +44,9 @@ class BasePostgresStorage:
             result = await conn.execute(query)
             return result.all()
 
+    @asynccontextmanager
     async def _cursor(
-        self, query: sasql.ClauseElement, conn: AsyncConnection
-    ) -> AsyncIterator[Row]:
-        return await conn.stream(query)
+        self, query: sasql.ClauseElement
+    ) -> AsyncIterator[AsyncIterator[Row]]:
+        async with self._engine.begin() as conn:
+            yield await conn.stream(query)

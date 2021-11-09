@@ -20,9 +20,9 @@ import sqlalchemy.dialects.postgresql as sapg
 from asyncpg import UniqueViolationError
 from neuro_logging import trace, trace_cm
 from sqlalchemy import asc, desc
+from sqlalchemy.engine import Row
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
-from sqlalchemy.row import Row
 
 from platform_api.orchestrator.base_postgres_storage import BasePostgresStorage
 from platform_api.utils.asyncio import asyncgeneratorcontextmanager
@@ -276,7 +276,7 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
         self,
     ) -> AsyncIterator[BillingLogStorage.EntriesInserter]:
         tracing_name = PostgresBillingLogStorage.entries_inserter.__qualname__
-        async with trace_cm(tracing_name), self._engine.begin() as conn:
+        async with trace_cm(tracing_name), self._transaction() as conn:
             await self._execute(
                 f"LOCK TABLE {self._tables.billing_log.name} IN SHARE "
                 "UPDATE EXCLUSIVE MODE",
@@ -296,8 +296,8 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
             query = query.order_by(asc(self._tables.billing_log.c.id))
             if limit:
                 query = query.limit(limit)
-            async with self._engine.begin() as conn:
-                async for record in await self._cursor(query, conn=conn):
+            async with self._cursor(query) as cursor:
+                async for record in cursor:
                     yield self._record_to_log_entry(record)
 
     @trace
