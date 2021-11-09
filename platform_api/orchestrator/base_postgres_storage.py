@@ -1,5 +1,6 @@
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import AsyncIterator, List, Optional
 
+import sqlalchemy.row as Row
 import sqlalchemy.sql as sasql
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
@@ -10,15 +11,16 @@ class BasePostgresStorage:
 
     async def _execute(
         self, query: sasql.ClauseElement, conn: Optional[AsyncConnection] = None
-    ) -> str:
+    ) -> None:
         if conn:
-            return await conn.execute(query)
+            await conn.execute(query)
+            return
         async with self._engine.connect() as conn:
-            return await conn.execute(query)
+            await conn.execute(query)
 
     async def _fetchrow(
         self, query: sasql.ClauseElement, conn: Optional[AsyncConnection] = None
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[Row]:
         if conn:
             result = await conn.execute(query)
             return result.one_or_none()
@@ -28,7 +30,7 @@ class BasePostgresStorage:
 
     async def _fetch(
         self, query: sasql.ClauseElement, conn: Optional[AsyncConnection] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Row]:
         if conn:
             result = await conn.execute(query)
             return result.all()
@@ -38,5 +40,5 @@ class BasePostgresStorage:
 
     async def _cursor(
         self, query: sasql.ClauseElement, conn: AsyncConnection
-    ) -> AsyncIterator[Dict[str, Any]]:
+    ) -> AsyncIterator[Row]:
         return await conn.stream(query)

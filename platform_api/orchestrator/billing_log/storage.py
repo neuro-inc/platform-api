@@ -22,6 +22,7 @@ from neuro_logging import trace, trace_cm
 from sqlalchemy import asc, desc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
+from sqlalchemy.row import Row
 
 from platform_api.orchestrator.base_postgres_storage import BasePostgresStorage
 from platform_api.utils.asyncio import asyncgeneratorcontextmanager
@@ -199,7 +200,7 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
             },
         }
 
-    def _record_to_log_entry(self, record: Dict[str, Any]) -> BillingLogEntry:
+    def _record_to_log_entry(self, record: Row) -> BillingLogEntry:
         payload = record["payload"]
         return BillingLogEntry(
             id=record["id"],

@@ -14,6 +14,7 @@ from typing import (
 
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
+import sqlalchemy.row as Row
 import sqlalchemy.sql as sasql
 from asyncpg import SerializationError, UniqueViolationError
 from sqlalchemy import Boolean, Integer, and_, asc, desc, func, or_, select
@@ -86,7 +87,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             "payload": payload,
         }
 
-    def _record_to_job(self, record: Dict[str, Any]) -> JobRecord:
+    def _record_to_job(self, record: Row) -> JobRecord:
         payload = record["payload"]
         payload["id"] = record["id"]
         payload["owner"] = record["owner"]
@@ -105,7 +106,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
 
     async def _select_row(
         self, job_id: str, conn: Optional[AsyncConnection] = None
-    ) -> Dict[str, Any]:
+    ) -> Row:
         query = self._tables.jobs.select(self._tables.jobs.c.id == job_id)
         record = await self._fetchrow(query, conn=conn)
         if not record:
