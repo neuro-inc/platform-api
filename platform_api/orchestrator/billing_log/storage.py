@@ -280,8 +280,10 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
         tracing_name = PostgresBillingLogStorage.entries_inserter.__qualname__
         async with trace_cm(tracing_name), self._transaction() as conn:
             await self._execute(
-                f"LOCK TABLE {self._tables.billing_log.name} IN SHARE "
-                "UPDATE EXCLUSIVE MODE",
+                sa.text(
+                    f"LOCK TABLE {self._tables.billing_log.name} IN SHARE "
+                    "UPDATE EXCLUSIVE MODE"
+                ),
                 conn=conn,
             )
             yield PostgresBillingLogStorage.EntriesInserter(self, conn)
