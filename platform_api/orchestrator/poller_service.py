@@ -61,8 +61,9 @@ class JobsScheduler:
         self, username: str, cluster: str
     ) -> Optional[int]:
         try:
+            base_name = username.split("/", 1)[0]  # SA same quota as user
             cluster_user = await self._admin_client.get_cluster_user(
-                cluster_name=cluster, user_name=username
+                cluster_name=cluster, user_name=base_name
             )
         except HTTPNotFound:
             return 0  # User has no access to this cluster

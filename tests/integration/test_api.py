@@ -43,7 +43,7 @@ from tests.integration.secrets import SecretsClient
 from tests.integration.test_config_client import create_config_api
 
 from .api import ApiConfig, AuthApiConfig, JobsClient
-from .auth import AuthClient, UserFactory, _User
+from .auth import AuthClient, ServiceAccountFactory, UserFactory, _User
 from .conftest import MyKubeClient
 from .diskapi import DiskAPIClient
 
@@ -512,28 +512,29 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
-        regular_user_factory: UserFactory,
+        regular_user: _User,
+        service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
     ) -> None:
-        base_username = random_str()
-        await regular_user_factory(base_username)
-        user = await regular_user_factory(
-            f"{base_username}/service-accounts/some-really-long-name"
+        service_user = await service_account_factory(
+            owner=regular_user, name="some-really-long-name"
         )
-        jobs_client = jobs_client_factory(user)
+        jobs_client = jobs_client_factory(service_user)
         url = api.jobs_base_url
         job_name = "test-name"
         job_submit["name"] = job_name
-        async with client.post(url, headers=user.headers, json=job_submit) as response:
+        async with client.post(
+            url, headers=service_user.headers, json=job_submit
+        ) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["id"]
-            assert result["owner"] == user.name
+            assert result["owner"] == service_user.name
             assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
             assert (
                 result["http_url_named"]
-                == f"http://{job_name}--{base_username}.jobs.neu.ro"
+                == f"http://{job_name}--{regular_user.name}.jobs.neu.ro"
             )
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
@@ -755,25 +756,26 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
-        regular_user_factory: UserFactory,
+        regular_user: _User,
+        service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         secrets_client_factory: Callable[[_User], SecretsClient],
         _run_job_with_secrets: Callable[..., Awaitable[None]],
     ) -> None:
-        base_username = random_str()
-        await regular_user_factory(base_username)
-        user = await regular_user_factory(
-            f"{base_username}/service-accounts/some-really-long-name"
+        service_user = await service_account_factory(
+            owner=regular_user, name="some-really-long-name"
         )
-        jobs_client = jobs_client_factory(user)
+        jobs_client = jobs_client_factory(service_user)
 
         secret_name, secret_value = "key1", "value1"
         secret_path = "/etc/foo/file.txt"
 
-        async with secrets_client_factory(user) as secrets_client:
+        async with secrets_client_factory(service_user) as secrets_client:
             await secrets_client.create_secret(secret_name, secret_value)
 
-        secret_uri = f"secret://{user.cluster_name}/{user.name}/{secret_name}"
+        secret_uri = (
+            f"secret://{service_user.cluster_name}/{service_user.name}/{secret_name}"
+        )
         secret_volumes = [
             {"src_secret_uri": secret_uri, "dst_path": secret_path},
         ]
@@ -785,7 +787,9 @@ class TestJobs:
         job_id = ""
         try:
             url = api.jobs_base_url
-            async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            async with client.post(
+                url, headers=service_user.headers, json=job_submit
+            ) as resp:
                 assert resp.status == HTTPAccepted.status_code, await resp.text()
                 result = await resp.json()
                 job_id = result["id"]
@@ -807,31 +811,31 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
-        regular_user_factory: UserFactory,
+        regular_user: _User,
+        service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         secrets_client_factory: Callable[[_User], SecretsClient],
         _run_job_with_secrets: Callable[..., Awaitable[None]],
     ) -> None:
-        base_username = random_str()
-        await regular_user_factory(base_username)
-        user = await regular_user_factory(
-            f"{base_username}/service-accounts/some-really-long-name"
+        service_user = await service_account_factory(
+            owner=regular_user, name="some-really-long-name"
         )
 
         key, value = "key1", "value1"
 
-        async with secrets_client_factory(user) as secrets_client:
+        async with secrets_client_factory(service_user) as secrets_client:
             await secrets_client.create_secret(key, value)
 
         secret_env = {
-            "ENV_SECRET": f"secret://{user.cluster_name}/{user.name}/{key}",
+            "ENV_SECRET": f"secret://{service_user.cluster_name}/"
+            f"{service_user.name}/{key}",
         }
         job_submit["container"]["secret_env"] = secret_env
 
         cmd = f'bash -c \'echo "$ENV_SECRET" && [ "$ENV_SECRET" == "{value}" ]\''
         job_submit["container"]["command"] = cmd
 
-        await _run_job_with_secrets(job_submit, user, secret_env=secret_env)
+        await _run_job_with_secrets(job_submit, service_user, secret_env=secret_env)
 
     @pytest.mark.asyncio
     async def test_create_job_with_disk_volume_single_ok(
@@ -889,18 +893,18 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
-        regular_user_factory: UserFactory,
+        regular_user: _User,
+        service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         disk_client_factory: Callable[[_User], DiskAPIClient],
     ) -> None:
-        base_username = random_str()
-        await regular_user_factory(base_username)
-        user = await regular_user_factory(
-            f"{base_username}/service-accounts/some-really-long-name"
+
+        service_user = await service_account_factory(
+            owner=regular_user, name="some-really-long-name"
         )
-        jobs_client = jobs_client_factory(user)
+        jobs_client = jobs_client_factory(service_user)
         disk_path = "/mnt/disk"
-        async with disk_client_factory(user) as disk_client:
+        async with disk_client_factory(service_user) as disk_client:
             disk = await disk_client.create_disk(storage=1024 * 1024)
 
         disk_volumes = [
@@ -921,7 +925,9 @@ class TestJobs:
         job_id = ""
         try:
             url = api.jobs_base_url
-            async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            async with client.post(
+                url, headers=service_user.headers, json=job_submit
+            ) as resp:
                 assert resp.status == HTTPAccepted.status_code, await resp.text()
                 result = await resp.json()
                 job_id = result["id"]

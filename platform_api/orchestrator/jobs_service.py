@@ -187,8 +187,9 @@ class JobsService:
         max_run_time_minutes: Optional[int] = None,
         restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
     ) -> Tuple[Job, Status]:
+        base_name = user.name.split("/", 1)[0]  # SA has access to same clusters as user
         cluster_user = await self._admin_client.get_cluster_user(
-            user_name=user.name, cluster_name=cluster_name
+            user_name=base_name, cluster_name=cluster_name
         )
 
         if job_name is not None and maybe_job_id(job_name):
@@ -382,7 +383,8 @@ class JobsService:
 
     async def get_user_cluster_configs(self, user: AuthUser) -> List[ClusterConfig]:
         configs = []
-        _, user_clusters = await self._admin_client.get_user_with_clusters(user.name)
+        base_name = user.name.split("/", 1)[0]  # SA has access to same clusters as user
+        _, user_clusters = await self._admin_client.get_user_with_clusters(base_name)
         for user_cluster in user_clusters:
             try:
                 cluster_config = self._cluster_registry.get(user_cluster.cluster_name)

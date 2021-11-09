@@ -96,7 +96,8 @@ class CreditsNotificationsEnforcer(JobPolicyEnforcer):
         )
 
     async def _enforce_for_user(self, username: str, clusters: Set[str]) -> None:
-        _, cluster_users = await self._admin_client.get_user_with_clusters(username)
+        base_name = username.split("/", 1)[0]  # SA inherit balance from main user
+        _, cluster_users = await self._admin_client.get_user_with_clusters(base_name)
         cluster_to_user = {
             cluster_user.cluster_name: cluster_user for cluster_user in cluster_users
         }
@@ -171,7 +172,8 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
         await run_and_log_exceptions(coros)
 
     async def _enforce_for_user(self, username: str, user_jobs: Iterable[Job]) -> None:
-        user, user_clusters = await self._admin_client.get_user_with_clusters(username)
+        base_name = username.split("/", 1)[0]  # SA inherit balance from main user
+        user, user_clusters = await self._admin_client.get_user_with_clusters(base_name)
         for cluster_name, cluster_jobs in self._groupby(
             user_jobs, lambda job: job.cluster_name
         ).items():

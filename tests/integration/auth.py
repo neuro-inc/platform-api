@@ -19,7 +19,7 @@ from aiohttp.hdrs import AUTHORIZATION
 from async_timeout import timeout
 from jose import jwt
 from neuro_admin_client import AdminClient, Balance, ClusterUserRoleType, Quota
-from neuro_auth_client import AuthClient
+from neuro_auth_client import AuthClient, Permission, User as AuthUser
 from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
@@ -203,6 +203,54 @@ async def regular_user_factory(
             name=name,
             token=user_token,
             clusters=[cluster_info[0] for cluster_info in clusters],
+        )
+
+    return _factory
+
+
+class ServiceAccountFactory(Protocol):
+    async def __call__(
+        self,
+        owner: _User,
+        name: Optional[str] = None,
+    ) -> _User:
+        ...
+
+
+@pytest.fixture
+async def service_account_factory(
+    auth_client: AuthClient,
+    token_factory: Callable[[str], str],
+    admin_token: str,
+    test_cluster_name: str,
+) -> ServiceAccountFactory:
+    async def _factory(
+        owner: _User,
+        name: Optional[str] = None,
+    ) -> _User:
+        if not name:
+            name = random_str()
+        user = AuthUser(name=f"{owner.name}/service-accounts/{name}", clusters=[])
+        await auth_client.add_user(user, token=admin_token)
+        permissions = []
+        # Fake grant access to SA staff
+        for cluster in owner.clusters:
+            permissions.extend(
+                [
+                    Permission(uri=f"storage://{cluster}/{user.name}", action="manage"),
+                    Permission(uri=f"image://{cluster}/{user.name}", action="manage"),
+                    Permission(uri=f"job://{cluster}/{user.name}", action="manage"),
+                    Permission(uri=f"secret://{cluster}/{user.name}", action="manage"),
+                    Permission(uri=f"disk://{cluster}/{user.name}", action="write"),
+                ]
+            )
+        await auth_client.grant_user_permissions(
+            user.name, permissions, token=admin_token
+        )
+        return _User(
+            name=user.name,
+            token=token_factory(user.name),
+            clusters=owner.clusters,
         )
 
     return _factory
