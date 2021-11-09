@@ -221,10 +221,13 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
                     .where(self._tables.jobs.c.id == job_id)
                 )
                 await self._execute(query, conn=conn)
-        except SerializationError:
-            raise JobStorageTransactionError(
-                "Job {" + self._make_description(values) + "} has changed"
-            )
+        except IntegrityError as exc:
+            if isinstance(exc.orig.__cause__, SerializationError):
+                raise JobStorageTransactionError(
+                    "Job {" + self._make_description(values) + "} has changed"
+                )
+            else:
+                raise
 
     def _clause_for_filter(self, job_filter: JobFilter) -> sasql.ClauseElement:
         return JobFilterClauseBuilder.by_job_filter(job_filter, self._tables)
