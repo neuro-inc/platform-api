@@ -86,9 +86,6 @@ class PostgresChannelNotifier(Notifier):
     async def listen_to_updates(
         self, listener: Callback
     ) -> AsyncIterator[Subscription]:
-        def _log_listener(conn: Any, message: Any) -> None:
-            logger.info(f"{type(self).__qualname__}: PG log: {message!r}")
-
         def _listener(*args: Any, **kwargs: Any) -> None:
             logger.info(
                 f"{type(self).__qualname__}: Notified "
@@ -102,7 +99,6 @@ class PostgresChannelNotifier(Notifier):
             )
             connection_fairy = await conn.get_raw_connection()
             raw_asyncio_connection = connection_fairy.driver_connection
-            raw_asyncio_connection.add_log_listener(_log_listener)
             await raw_asyncio_connection.add_listener(self._channel, _listener)
             try:
                 yield PostgresChannelNotifier._Subscription(raw_asyncio_connection)
@@ -112,7 +108,6 @@ class PostgresChannelNotifier(Notifier):
                     f"from channel {self._channel!r}"
                 )
                 await raw_asyncio_connection.remove_listener(self._channel, _listener)
-                raw_asyncio_connection.remove_log_listener(_log_listener)
 
 
 class ResubscribingNotifier(Notifier):
