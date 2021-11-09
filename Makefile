@@ -27,6 +27,7 @@ PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
 PLATFORMSECRETS_IMAGE = $(shell cat PLATFORMSECRETS_IMAGE)
 PLATFORMDISKAPI_IMAGE = $(shell cat PLATFORMDISKAPI_IMAGE)
+PLATFORMADMIN_IMAGE = $(shell cat PLATFORMADMIN_IMAGE)
 
 include k8s.mk
 
@@ -107,10 +108,12 @@ docker_pull_test_images:
 	docker pull $(PLATFORMCONFIG_IMAGE)
 	docker pull $(PLATFORMSECRETS_IMAGE)
 	docker pull $(PLATFORMDISKAPI_IMAGE)
+	docker pull $(PLATFORMADMIN_IMAGE)
 	docker tag $(PLATFORMAUTHAPI_IMAGE) platformauthapi:latest
 	docker tag $(PLATFORMCONFIG_IMAGE) platformconfig:latest
 	docker tag $(PLATFORMSECRETS_IMAGE) platformsecrets:latest
 	docker tag $(PLATFORMDISKAPI_IMAGE) platformdiskapi:latest
+	docker tag $(PLATFORMADMIN_IMAGE) platformadmin:latest
 
 helm_install:
 	curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash -s -- -v $(HELM_VERSION)

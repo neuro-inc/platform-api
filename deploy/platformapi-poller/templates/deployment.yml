@@ -55,6 +55,8 @@ spec:
           value: {{ .Values.platform.apiUrl }}
         - name: NP_PLATFORM_CONFIG_URI
           value: {{ .Values.platform.configUrl }}
+        - name: NP_PLATFORM_ADMIN_URI
+          value: {{ .Values.platform.adminUrl }}
         {{- if .Values.zipkin }}
         - name: NP_ZIPKIN_URL
           value: {{ .Values.zipkin.url }}

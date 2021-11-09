@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import logging
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from decimal import Decimal
 from typing import (
     Any,
@@ -11,16 +12,12 @@ from typing import (
     Callable,
     Iterable,
     List,
-    Mapping,
     Optional,
 )
 
 import pytest
-from neuro_auth_client import (
-    Cluster as AuthCluster,
-    Quota as AuthQuota,
-    User as AuthUser,
-)
+from neuro_admin_client import Balance, Quota
+from neuro_auth_client import User as AuthUser
 from neuro_notifications_client import CreditsWillRunOutSoon
 from yarl import URL
 
@@ -49,7 +46,12 @@ from platform_api.orchestrator.job_request import JobRequest, JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.utils.update_notifier import InMemoryNotifier
-from tests.unit.conftest import MockAuthClient, MockNotificationsClient
+from tests.unit.conftest import (
+    MockAdminClient,
+    MockAuthClient,
+    MockNotificationsClient,
+    UserFactory,
+)
 
 
 _EnforcePollingRunner = Callable[
@@ -241,9 +243,9 @@ class TestJobPolicyEnforcePoller:
 class TestHasCreditsEnforcer:
     @pytest.fixture()
     def has_credits_enforcer(
-        self, jobs_service: JobsService, mock_auth_client: MockAuthClient
+        self, jobs_service: JobsService, mock_admin_client: MockAdminClient
     ) -> CreditsLimitEnforcer:
-        return CreditsLimitEnforcer(jobs_service, mock_auth_client)
+        return CreditsLimitEnforcer(jobs_service, mock_admin_client)
 
     @pytest.fixture()
     def make_jobs(
@@ -286,31 +288,18 @@ class TestHasCreditsEnforcer:
 
         return _check
 
-    def make_auth_user(
-        self, user: AuthUser, cluster_credits: Mapping[str, Optional[Decimal]]
-    ) -> AuthUser:
-        return AuthUser(
-            name=user.name,
-            clusters=[
-                AuthCluster(cluster_name, quota=AuthQuota(credits=credits))
-                for cluster_name, credits in cluster_credits.items()
-            ],
-        )
-
     @pytest.mark.asyncio
     async def test_user_credits_disabled_do_nothing(
         self,
-        test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
         make_jobs: Callable[[AuthUser, int], Awaitable[List[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
+        user_factory: UserFactory,
+        test_cluster: str,
     ) -> None:
-        jobs = await make_jobs(test_user, 5)
-
-        mock_auth_client.user_to_return = self.make_auth_user(
-            test_user, {"test-cluster": None}
-        )
+        user = await user_factory("some-user", [(test_cluster, Balance(), Quota())])
+        jobs = await make_jobs(user, 5)
 
         await has_credits_enforcer.enforce()
 
@@ -324,12 +313,13 @@ class TestHasCreditsEnforcer:
         mock_auth_client: MockAuthClient,
         make_jobs: Callable[[AuthUser, int], Awaitable[List[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
+        user_factory: UserFactory,
+        test_cluster: str,
     ) -> None:
-        jobs = await make_jobs(test_user, 5)
-
-        mock_auth_client.user_to_return = self.make_auth_user(
-            test_user, {"test-cluster": Decimal("1.00")}
+        user = await user_factory(
+            "some-user", [(test_cluster, Balance(credits=Decimal("1.00")), Quota())]
         )
+        jobs = await make_jobs(user, 5)
 
         await has_credits_enforcer.enforce()
 
@@ -345,12 +335,14 @@ class TestHasCreditsEnforcer:
         make_jobs: Callable[[AuthUser, int], Awaitable[List[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         credits: Decimal,
+        mock_admin_client: MockAdminClient,
     ) -> None:
         jobs = await make_jobs(test_user, 5)
+        old_cluster_user = mock_admin_client.cluster_users[test_user.name][0]
 
-        mock_auth_client.user_to_return = self.make_auth_user(
-            test_user, {"test-cluster": credits}
-        )
+        mock_admin_client.cluster_users[test_user.name] = [
+            replace(old_cluster_user, balance=Balance(credits=credits))
+        ]
 
         await has_credits_enforcer.enforce()
 
@@ -364,12 +356,10 @@ class TestHasCreditsEnforcer:
         mock_auth_client: MockAuthClient,
         make_jobs: Callable[[AuthUser, int], Awaitable[List[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
+        mock_admin_client: MockAdminClient,
     ) -> None:
         jobs = await make_jobs(test_user, 5)
-
-        mock_auth_client.user_to_return = self.make_auth_user(
-            test_user, {"test-another-cluster": None}
-        )
+        mock_admin_client.cluster_users[test_user.name] = []
 
         await has_credits_enforcer.enforce()
 
@@ -543,27 +533,25 @@ class TestCreditsNotificationEnforcer:
     async def test_credits_almost_run_out_user_notified(
         self,
         jobs_service: JobsService,
-        mock_auth_client: MockAuthClient,
+        mock_admin_client: MockAdminClient,
         mock_notifications_client: MockNotificationsClient,
         job_request_factory: Callable[[], JobRequest],
+        user_factory: UserFactory,
+        test_cluster: str,
     ) -> None:
-        user = AuthUser(
-            name="test_user",
-            clusters=[
-                AuthCluster(name="test-cluster", quota=AuthQuota(credits=Decimal("10")))
-            ],
+        user = await user_factory(
+            "some-user", [(test_cluster, Balance(credits=Decimal("10.00")), Quota())]
         )
 
         enforcer = CreditsNotificationsEnforcer(
             jobs_service,
-            mock_auth_client,
+            mock_admin_client,
             mock_notifications_client,
             notification_threshold=Decimal("2000"),
         )
         job, _ = await jobs_service.create_job(
             job_request_factory(), user, cluster_name="test-cluster"
         )
-        mock_auth_client.user_to_return = user
         await enforcer.enforce()
         assert (
             CreditsWillRunOutSoon(
@@ -578,26 +566,26 @@ class TestCreditsNotificationEnforcer:
     async def test_no_credits_not_notified(
         self,
         jobs_service: JobsService,
-        mock_auth_client: MockAuthClient,
+        mock_admin_client: MockAdminClient,
         mock_notifications_client: MockNotificationsClient,
         job_request_factory: Callable[[], JobRequest],
         caplog: Any,
+        user_factory: UserFactory,
+        test_cluster: str,
     ) -> None:
-        user = AuthUser(
-            name="test_user",
-            clusters=[AuthCluster(name="test-cluster", quota=AuthQuota(credits=None))],
+        user = await user_factory(
+            "some-user", [(test_cluster, Balance(credits=None), Quota())]
         )
 
         enforcer = CreditsNotificationsEnforcer(
             jobs_service,
-            mock_auth_client,
+            mock_admin_client,
             mock_notifications_client,
             notification_threshold=Decimal("2000"),
         )
         job, _ = await jobs_service.create_job(
             job_request_factory(), user, cluster_name="test-cluster"
         )
-        mock_auth_client.user_to_return = user
         await enforcer.enforce()
         assert not any(
             isinstance(notification, CreditsWillRunOutSoon)

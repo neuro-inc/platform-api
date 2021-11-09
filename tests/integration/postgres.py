@@ -14,6 +14,50 @@ from platform_api.postgres import MigrationRunner, create_postgres_pool
 
 
 @pytest.fixture(scope="session")
+async def admin_postgres_dsn(
+    docker: aiodocker.Docker, reuse_docker: bool
+) -> AsyncIterator[str]:
+    image_name = "postgres:11.3"
+    container_name = "postgres-admin"
+    container_config = {
+        "Image": image_name,
+        "AttachStdout": False,
+        "AttachStderr": False,
+        "HostConfig": {"PublishAllPorts": True},
+    }
+    dsn = "postgresql://postgres@postgres:5432/postgres"
+
+    if reuse_docker:
+        try:
+            container = await docker.containers.get(container_name)
+            if container["State"]["Running"]:
+                postgres_dsn = await _make_postgres_dsn(container)
+                await _wait_for_postgres_server(postgres_dsn)
+                yield dsn
+                return
+        except aiodocker.exceptions.DockerError:
+            pass
+
+    try:
+        await docker.images.inspect(image_name)
+    except aiodocker.exceptions.DockerError:
+        await docker.images.pull(image_name)
+
+    container = await docker.containers.create_or_replace(
+        name=container_name, config=container_config
+    )
+    await container.start()
+
+    postgres_dsn = await _make_postgres_dsn(container)
+    await _wait_for_postgres_server(postgres_dsn)
+    yield dsn
+
+    if not reuse_docker:
+        await container.kill()
+        await container.delete(force=True)
+
+
+@pytest.fixture(scope="session")
 async def postgres_dsn(
     docker: aiodocker.Docker, reuse_docker: bool
 ) -> AsyncIterator[str]:

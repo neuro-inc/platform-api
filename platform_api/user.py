@@ -1,20 +1,12 @@
 import logging
-from typing import Optional
 
 from aiohttp.web import HTTPUnauthorized, Request
 from aiohttp_security.api import AUTZ_KEY, IDENTITY_KEY
-from neuro_auth_client import Cluster as AuthCluster, User as AuthUser
+from neuro_auth_client import User as AuthUser
 from yarl import URL
 
 
 logger = logging.getLogger(__name__)
-
-
-def get_cluster(user: AuthUser, cluster_name: str) -> Optional[AuthCluster]:
-    for cluster in user.clusters:
-        if cluster.name == cluster_name:
-            return cluster
-    return None
 
 
 def make_job_uri(user: AuthUser, cluster_name: str) -> URL:

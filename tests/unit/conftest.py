@@ -1,27 +1,38 @@
 import asyncio
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from functools import partial
 from pathlib import Path
 from typing import (
     Any,
     AsyncIterator,
+    Awaitable,
     Callable,
     Dict,
     Iterator,
     List,
+    Literal,
     Optional,
     Sequence,
     Tuple,
+    Union,
+    overload,
 )
 
 import pytest
-from neuro_auth_client import (
-    AuthClient,
-    Cluster as AuthCluster,
-    Permission,
-    Quota as AuthQuota,
-    User as AuthUser,
+from aiohttp import ClientResponseError
+from neuro_admin_client import (
+    AdminClient,
+    Balance,
+    ClusterUser,
+    ClusterUserRoleType,
+    ClusterUserWithInfo,
+    Quota,
+    User,
+    UserInfo,
 )
+from neuro_auth_client import AuthClient, Permission, User as AuthUser
 from neuro_notifications_client import Client as NotificationsClient
 from neuro_notifications_client.notifications import Notification
 from yarl import URL
@@ -201,20 +212,6 @@ class MockAuthClient(AuthClient):
     def __init__(self) -> None:
         self.user_to_return = AuthUser(
             name="testuser",
-            clusters=[
-                AuthCluster(
-                    "default",
-                    quota=AuthQuota(
-                        total_running_jobs=100,
-                    ),
-                ),
-                AuthCluster(
-                    "test-cluster",
-                    quota=AuthQuota(
-                        total_running_jobs=100,
-                    ),
-                ),
-            ],
         )
         self._grants: List[Tuple[str, Sequence[Permission]]] = []
         self._revokes: List[Tuple[str, Sequence[str]]] = []
@@ -247,6 +244,69 @@ class MockAuthClient(AuthClient):
         token: Optional[str] = None,
     ) -> str:
         return f"token-{name}"
+
+
+class MockAdminClient(AdminClient):
+    def __init__(self) -> None:
+        self.users: Dict[str, User] = {}
+        self.cluster_users: Dict[str, List[ClusterUser]] = defaultdict(list)
+        self.spending_log: List[Tuple[str, str, Decimal, str]] = []
+        self.debts_log: List[Tuple[str, str, Decimal, str]] = []
+        self.raise_404: bool = False
+
+    async def get_user_with_clusters(self, name: str) -> Tuple[User, List[ClusterUser]]:
+        if name not in self.users:
+            raise ClientResponseError(None, (), status=404)  # type: ignore
+        return self.users[name], self.cluster_users[name]
+
+    async def charge_user(
+        self,
+        cluster_name: str,
+        username: str,
+        spending: Decimal,
+        idempotency_key: str,
+    ) -> None:
+        if self.raise_404:
+            raise ClientResponseError(None, (), status=404)  # type: ignore
+        self.spending_log.append((cluster_name, username, spending, idempotency_key))
+
+    async def add_debt(
+        self,
+        cluster_name: str,
+        username: str,
+        credits: Decimal,
+        idempotency_key: str,
+    ) -> None:
+        self.debts_log.append((cluster_name, username, credits, idempotency_key))
+
+    @overload
+    async def get_cluster_user(
+        self, cluster_name: str, user_name: str, with_user_info: Literal[True]
+    ) -> ClusterUserWithInfo:
+        ...
+
+    @overload
+    async def get_cluster_user(
+        self, cluster_name: str, user_name: str, with_user_info: Literal[False] = ...
+    ) -> ClusterUser:
+        ...
+
+    async def get_cluster_user(
+        self, cluster_name: str, user_name: str, with_user_info: bool = False
+    ) -> Union[ClusterUser, ClusterUserWithInfo]:
+        for cluster_user in self.cluster_users.get(user_name, []):
+            if cluster_user.cluster_name == cluster_name:
+                if with_user_info:
+                    return cluster_user.add_info(
+                        UserInfo(
+                            email=self.users[user_name].email,
+                            first_name=self.users[user_name].first_name,
+                            last_name=self.users[user_name].last_name,
+                            created_at=self.users[user_name].created_at,
+                        )
+                    )
+                return cluster_user
+        raise ClientResponseError(None, (), status=404)  # type: ignore
 
 
 class MockJobsPollerApi(JobsPollerApi):
@@ -390,6 +450,11 @@ def mock_auth_client() -> AuthClient:
 
 
 @pytest.fixture
+def mock_admin_client() -> MockAdminClient:
+    return MockAdminClient()
+
+
+@pytest.fixture
 def jobs_config() -> JobsConfig:
     return JobsConfig(orphaned_job_owner="compute")
 
@@ -407,6 +472,7 @@ def jobs_service(
     mock_notifications_client: NotificationsClient,
     scheduler_config: JobsSchedulerConfig,
     mock_auth_client: AuthClient,
+    mock_admin_client: AdminClient,
     mock_api_base: URL,
 ) -> JobsService:
     return JobsService(
@@ -415,6 +481,7 @@ def jobs_service(
         jobs_config=jobs_config,
         notifications_client=mock_notifications_client,
         auth_client=mock_auth_client,
+        admin_client=mock_admin_client,
         api_base_url=mock_api_base,
     )
 
@@ -433,12 +500,13 @@ def jobs_poller_service(
     jobs_config: JobsConfig,
     scheduler_config: JobsSchedulerConfig,
     mock_auth_client: AuthClient,
+    mock_admin_client: AdminClient,
     mock_poller_api: MockJobsPollerApi,
 ) -> JobsPollerService:
     return JobsPollerService(
         cluster_holder=cluster_holder,
         jobs_config=jobs_config,
-        scheduler=JobsScheduler(scheduler_config, mock_auth_client),
+        scheduler=JobsScheduler(scheduler_config, mock_admin_client),
         auth_client=mock_auth_client,
         api=mock_poller_api,
     )
@@ -451,6 +519,38 @@ def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
     loop.close()
 
 
+UserFactory = Callable[[str, List[Tuple[str, Balance, Quota]]], Awaitable[AuthUser]]
+
+
 @pytest.fixture
-def test_user() -> AuthUser:
-    return AuthUser(name="test_user", clusters=[AuthCluster(name="test-cluster")])
+def user_factory(
+    mock_admin_client: MockAdminClient,
+) -> Callable[[str, List[Tuple[str, Balance, Quota]]], Awaitable[AuthUser]]:
+    async def _factory(
+        name: str, clusters: List[Tuple[str, Balance, Quota]]
+    ) -> AuthUser:
+        mock_admin_client.users[name] = User(name=name, email=f"{name}@domain.com")
+        for cluster, balance, quota in clusters:
+            mock_admin_client.cluster_users[name].append(
+                ClusterUser(
+                    user_name=name,
+                    cluster_name=cluster,
+                    role=ClusterUserRoleType.USER,
+                    balance=balance,
+                    quota=quota,
+                    org_name=None,
+                )
+            )
+        return AuthUser(name=name)
+
+    return _factory
+
+
+@pytest.fixture
+def test_cluster(user_factory: UserFactory) -> str:
+    return "test-cluster"
+
+
+@pytest.fixture
+async def test_user(user_factory: UserFactory, test_cluster: str) -> AuthUser:
+    return await user_factory("test_user", [(test_cluster, Balance(), Quota())])

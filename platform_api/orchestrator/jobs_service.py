@@ -7,12 +7,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
-from neuro_auth_client import (
-    AuthClient,
-    Cluster as AuthCluster,
-    Permission,
-    User as AuthUser,
-)
+from neuro_admin_client import AdminClient, ClusterUser
+from neuro_auth_client import AuthClient, Permission, User as AuthUser
 from neuro_notifications_client import (
     Client as NotificationsClient,
     JobCannotStartNoCredits,
@@ -25,7 +21,6 @@ from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import JobsConfig
 from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
-from ..user import get_cluster
 from .job import (
     Job,
     JobRecord,
@@ -73,6 +68,7 @@ class JobsService:
         jobs_config: JobsConfig,
         notifications_client: NotificationsClient,
         auth_client: AuthClient,
+        admin_client: AdminClient,
         api_base_url: URL,
     ) -> None:
         self._cluster_registry = cluster_config_registry
@@ -88,6 +84,7 @@ class JobsService:
             resource_pool_types=(),
         )
         self._auth_client = auth_client
+        self._admin_client = admin_client
         self._api_base_url = api_base_url
 
     def _make_job(
@@ -103,23 +100,24 @@ class JobsService:
             image_pull_error_delay=self._jobs_config.image_pull_error_delay,
         )
 
-    async def _raise_for_running_jobs_quota(
-        self, user: AuthUser, cluster: AuthCluster
-    ) -> None:
-        if cluster.quota.total_running_jobs is None:
+    async def _raise_for_running_jobs_quota(self, cluster_user: ClusterUser) -> None:
+        if cluster_user.quota.total_running_jobs is None:
             return
         running_filter = JobFilter(
-            owners={user.name},
-            clusters={cluster.name: {}},
+            owners={cluster_user.user_name},
+            clusters={cluster_user.cluster_name: {}},
             statuses={JobStatus(value) for value in JobStatus.active_values()},
         )
         running_count = len(await self._jobs_storage.get_all_jobs(running_filter))
-        if running_count >= cluster.quota.total_running_jobs:
-            raise RunningJobsQuotaExceededError(user.name)
+        if running_count >= cluster_user.quota.total_running_jobs:
+            raise RunningJobsQuotaExceededError(cluster_user.user_name)
 
-    async def _raise_for_no_credits(self, user: AuthUser, cluster: AuthCluster) -> None:
-        if cluster.quota.credits is not None and cluster.quota.credits <= 0:
-            raise NoCreditsError(user.name)
+    async def _raise_for_no_credits(self, cluster_user: ClusterUser) -> None:
+        if (
+            cluster_user.balance.credits is not None
+            and cluster_user.balance.credits <= 0
+        ):
+            raise NoCreditsError(cluster_user.user_name)
 
     async def _make_pass_config_token(
         self, username: str, cluster_name: str, job_id: str
@@ -189,17 +187,19 @@ class JobsService:
         max_run_time_minutes: Optional[int] = None,
         restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
     ) -> Tuple[Job, Status]:
-        user_cluster = get_cluster(user, cluster_name)
-        assert user_cluster
+        base_name = user.name.split("/", 1)[0]  # SA has access to same clusters as user
+        cluster_user = await self._admin_client.get_cluster_user(
+            user_name=base_name, cluster_name=cluster_name
+        )
 
         if job_name is not None and maybe_job_id(job_name):
             raise JobsServiceException(
                 "Failed to create job: job name cannot start with 'job-' prefix."
             )
         if not wait_for_jobs_quota:
-            await self._raise_for_running_jobs_quota(user, user_cluster)
+            await self._raise_for_running_jobs_quota(cluster_user)
         try:
-            await self._raise_for_no_credits(user, user_cluster)
+            await self._raise_for_no_credits(cluster_user)
         except NoCreditsError:
             await self._notifications_client.notify(
                 JobCannotStartNoCredits(
@@ -383,9 +383,11 @@ class JobsService:
 
     async def get_user_cluster_configs(self, user: AuthUser) -> List[ClusterConfig]:
         configs = []
-        for user_cluster in user.clusters:
+        base_name = user.name.split("/", 1)[0]  # SA has access to same clusters as user
+        _, user_clusters = await self._admin_client.get_user_with_clusters(base_name)
+        for user_cluster in user_clusters:
             try:
-                cluster_config = self._cluster_registry.get(user_cluster.name)
+                cluster_config = self._cluster_registry.get(user_cluster.cluster_name)
                 configs.append(cluster_config)
             except ClusterNotFound:
                 pass

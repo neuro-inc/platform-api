@@ -29,8 +29,8 @@ from aiohttp.web import (
     HTTPOk,
     HTTPUnauthorized,
 )
-from aiohttp.web_exceptions import HTTPCreated
-from neuro_auth_client import Cluster as AuthCluster, Permission, Quota
+from neuro_admin_client import AdminClient, Balance, Quota
+from neuro_auth_client import Permission
 from yarl import URL
 
 from platform_api.cluster import ClusterConfigRegistry
@@ -41,9 +41,8 @@ from tests.conftest import random_str
 from tests.integration.secrets import SecretsClient
 from tests.integration.test_config_client import create_config_api
 
-from .admin import AdminAddSpendingRequest, AdminServer
 from .api import ApiConfig, AuthApiConfig, JobsClient
-from .auth import AuthClient, _User
+from .auth import AuthClient, ServiceAccountFactory, UserFactory, _User
 from .conftest import MyKubeClient
 from .diskapi import DiskAPIClient
 
@@ -218,14 +217,15 @@ class TestApi:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_factory: Callable[..., Awaitable[_User]],
+        regular_user_factory: UserFactory,
+        admin_url: URL,
     ) -> None:
         url = api.config_url
         regular_user = await regular_user_factory(
-            auth_clusters=[
-                AuthCluster(name="test-cluster"),
-                AuthCluster(name="testcluster2"),
-            ]
+            clusters=[
+                ("test-cluster", Balance(), Quota()),
+                ("testcluster2", Balance(), Quota()),
+            ],
         )
         async with client.get(url, headers=regular_user.headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
@@ -322,7 +322,7 @@ class TestApi:
                 ],
             }
             expected_payload: Dict[str, Any] = {
-                "admin_url": "http://0.0.0.0:8085/api/v1/",
+                "admin_url": f"{admin_url}",
                 "clusters": [
                     expected_cluster_payload,
                     {**expected_cluster_payload, **{"name": "testcluster2"}},
@@ -337,6 +337,7 @@ class TestApi:
         api_with_oauth: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user: _User,
+        admin_url: URL,
     ) -> None:
         url = api_with_oauth.config_url
         async with client.get(url, headers=regular_user.headers) as resp:
@@ -446,7 +447,7 @@ class TestApi:
                     "http://127.0.0.1:54541",
                     "http://127.0.0.1:54542",
                 ],
-                "admin_url": "http://0.0.0.0:8085/api/v1/",
+                "admin_url": f"{admin_url}",
                 "clusters": [expected_cluster_payload],
                 **expected_cluster_payload,
             }
@@ -510,28 +511,29 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
-        regular_user_factory: Callable[[Optional[str]], Awaitable[_User]],
+        regular_user: _User,
+        service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
     ) -> None:
-        base_username = random_str()
-        await regular_user_factory(base_username)
-        user = await regular_user_factory(
-            f"{base_username}/service-accounts/some-really-long-name"
+        service_user = await service_account_factory(
+            owner=regular_user, name="some-really-long-name"
         )
-        jobs_client = jobs_client_factory(user)
+        jobs_client = jobs_client_factory(service_user)
         url = api.jobs_base_url
         job_name = "test-name"
         job_submit["name"] = job_name
-        async with client.post(url, headers=user.headers, json=job_submit) as response:
+        async with client.post(
+            url, headers=service_user.headers, json=job_submit
+        ) as response:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
             job_id = result["id"]
-            assert result["owner"] == user.name
+            assert result["owner"] == service_user.name
             assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
             assert (
                 result["http_url_named"]
-                == f"http://{job_name}--{base_username}.jobs.neu.ro"
+                == f"http://{job_name}--{regular_user.name}.jobs.neu.ro"
             )
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
@@ -753,25 +755,26 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
-        regular_user_factory: Callable[[Optional[str]], Awaitable[_User]],
+        regular_user: _User,
+        service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         secrets_client_factory: Callable[[_User], SecretsClient],
         _run_job_with_secrets: Callable[..., Awaitable[None]],
     ) -> None:
-        base_username = random_str()
-        await regular_user_factory(base_username)
-        user = await regular_user_factory(
-            f"{base_username}/service-accounts/some-really-long-name"
+        service_user = await service_account_factory(
+            owner=regular_user, name="some-really-long-name"
         )
-        jobs_client = jobs_client_factory(user)
+        jobs_client = jobs_client_factory(service_user)
 
         secret_name, secret_value = "key1", "value1"
         secret_path = "/etc/foo/file.txt"
 
-        async with secrets_client_factory(user) as secrets_client:
+        async with secrets_client_factory(service_user) as secrets_client:
             await secrets_client.create_secret(secret_name, secret_value)
 
-        secret_uri = f"secret://{user.cluster_name}/{user.name}/{secret_name}"
+        secret_uri = (
+            f"secret://{service_user.cluster_name}/{service_user.name}/{secret_name}"
+        )
         secret_volumes = [
             {"src_secret_uri": secret_uri, "dst_path": secret_path},
         ]
@@ -783,7 +786,9 @@ class TestJobs:
         job_id = ""
         try:
             url = api.jobs_base_url
-            async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            async with client.post(
+                url, headers=service_user.headers, json=job_submit
+            ) as resp:
                 assert resp.status == HTTPAccepted.status_code, await resp.text()
                 result = await resp.json()
                 job_id = result["id"]
@@ -805,31 +810,31 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
-        regular_user_factory: Callable[[Optional[str]], Awaitable[_User]],
+        regular_user: _User,
+        service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         secrets_client_factory: Callable[[_User], SecretsClient],
         _run_job_with_secrets: Callable[..., Awaitable[None]],
     ) -> None:
-        base_username = random_str()
-        await regular_user_factory(base_username)
-        user = await regular_user_factory(
-            f"{base_username}/service-accounts/some-really-long-name"
+        service_user = await service_account_factory(
+            owner=regular_user, name="some-really-long-name"
         )
 
         key, value = "key1", "value1"
 
-        async with secrets_client_factory(user) as secrets_client:
+        async with secrets_client_factory(service_user) as secrets_client:
             await secrets_client.create_secret(key, value)
 
         secret_env = {
-            "ENV_SECRET": f"secret://{user.cluster_name}/{user.name}/{key}",
+            "ENV_SECRET": f"secret://{service_user.cluster_name}/"
+            f"{service_user.name}/{key}",
         }
         job_submit["container"]["secret_env"] = secret_env
 
         cmd = f'bash -c \'echo "$ENV_SECRET" && [ "$ENV_SECRET" == "{value}" ]\''
         job_submit["container"]["command"] = cmd
 
-        await _run_job_with_secrets(job_submit, user, secret_env=secret_env)
+        await _run_job_with_secrets(job_submit, service_user, secret_env=secret_env)
 
     @pytest.mark.asyncio
     async def test_create_job_with_disk_volume_single_ok(
@@ -887,18 +892,18 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
-        regular_user_factory: Callable[[Optional[str]], Awaitable[_User]],
+        regular_user: _User,
+        service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         disk_client_factory: Callable[[_User], DiskAPIClient],
     ) -> None:
-        base_username = random_str()
-        await regular_user_factory(base_username)
-        user = await regular_user_factory(
-            f"{base_username}/service-accounts/some-really-long-name"
+
+        service_user = await service_account_factory(
+            owner=regular_user, name="some-really-long-name"
         )
-        jobs_client = jobs_client_factory(user)
+        jobs_client = jobs_client_factory(service_user)
         disk_path = "/mnt/disk"
-        async with disk_client_factory(user) as disk_client:
+        async with disk_client_factory(service_user) as disk_client:
             disk = await disk_client.create_disk(storage=1024 * 1024)
 
         disk_volumes = [
@@ -919,7 +924,9 @@ class TestJobs:
         job_id = ""
         try:
             url = api.jobs_base_url
-            async with client.post(url, headers=user.headers, json=job_submit) as resp:
+            async with client.post(
+                url, headers=service_user.headers, json=job_submit
+            ) as resp:
                 assert resp.status == HTTPAccepted.status_code, await resp.text()
                 result = await resp.json()
                 job_id = result["id"]
@@ -1221,13 +1228,13 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
         test_cluster_name: str,
-        regular_user_factory: Callable[..., Awaitable[_User]],
+        regular_user_factory: UserFactory,
         disk_client_factory: Callable[..., AsyncContextManager[DiskAPIClient]],
         read_only: bool,
     ) -> None:
         cluster = test_cluster_name
-        usr_1 = await regular_user_factory(cluster_name=cluster)
-        usr_2 = await regular_user_factory(cluster_name=cluster)
+        usr_1 = await regular_user_factory(clusters=[(cluster, Balance(), Quota())])
+        usr_2 = await regular_user_factory(clusters=[(cluster, Balance(), Quota())])
 
         async with disk_client_factory(usr_1) as disk_client:
             disk = await disk_client.create_disk(storage=1024 * 1024)
@@ -1878,13 +1885,13 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
         test_cluster_name: str,
-        regular_user_factory: Callable[..., Awaitable[_User]],
+        regular_user_factory: UserFactory,
         secrets_client_factory: Callable[..., AsyncContextManager[SecretsClient]],
         secret_kind: str,
     ) -> None:
         cluster = test_cluster_name
-        usr_1 = await regular_user_factory(cluster_name=cluster)
-        usr_2 = await regular_user_factory(cluster_name=cluster)
+        usr_1 = await regular_user_factory(clusters=[(cluster, Balance(), Quota())])
+        usr_2 = await regular_user_factory(clusters=[(cluster, Balance(), Quota())])
 
         key_1, key_2 = "key_1", "key_2"
 
@@ -1925,15 +1932,19 @@ class TestJobs:
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         test_cluster_name: str,
-        regular_user_factory: Callable[..., Awaitable[_User]],
+        regular_user_factory: UserFactory,
         secrets_client_factory: Callable[..., AsyncContextManager[SecretsClient]],
         secret_kind: str,
         share_secret: Callable[..., Awaitable[None]],
         _run_job_with_secrets: Callable[..., Awaitable[None]],
     ) -> None:
         cluster_name = test_cluster_name
-        usr_1 = await regular_user_factory(cluster_name=cluster_name)
-        usr_2 = await regular_user_factory(cluster_name=cluster_name)
+        usr_1 = await regular_user_factory(
+            clusters=[(cluster_name, Balance(), Quota())]
+        )
+        usr_2 = await regular_user_factory(
+            clusters=[(cluster_name, Balance(), Quota())]
+        )
 
         key_1, key_2, key_3 = "key_1", "key_2", "key_3"
         key_a, key_b, key_c = "key_a", "key_b", "key_c"
@@ -2524,19 +2535,11 @@ class TestJobs:
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
         admin_token: str,
-        regular_user: _User,
+        regular_user_with_missing_cluster_name: _User,
     ) -> None:
-        admin_user = _User(name="admin", token=admin_token)
-        user = regular_user
-
-        url = auth_api.auth_for_user_url(user.name)
-        payload = {"name": user.name, "cluster_name": "unknowncluster"}
-        async with client.put(url, headers=admin_user.headers, json=payload) as resp:
-            assert resp.status == HTTPCreated.status_code, await resp.text()
-
         url = api.jobs_base_url
         async with client.post(
-            url, headers=regular_user.headers, json=job_submit
+            url, headers=regular_user_with_missing_cluster_name.headers, json=job_submit
         ) as response:
             assert response.status == HTTPForbidden.status_code, await response.text()
             payload = await response.json()
@@ -2718,11 +2721,13 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        regular_user_factory: Callable[..., Any],
+        regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
+        test_cluster_name: str,
     ) -> None:
-        quota = Quota(credits=Decimal("100"))
-        user = await regular_user_factory(quota=quota)
+        user = await regular_user_factory(
+            clusters=[(test_cluster_name, Balance(credits=Decimal("100")), Quota())]
+        )
         url = api.jobs_base_url
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
@@ -2743,11 +2748,13 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        regular_user_factory: Callable[..., Any],
+        regular_user_factory: UserFactory,
         credits: Decimal,
+        cluster_name: str,
     ) -> None:
-        quota = Quota(credits=credits)
-        user = await regular_user_factory(quota=quota)
+        user = await regular_user_factory(
+            clusters=[(cluster_name, Balance(credits=credits), Quota())]
+        )
         url = api.jobs_base_url
         job_request = job_request_factory()
         async with client.post(url, headers=user.headers, json=job_request) as response:
@@ -3179,7 +3186,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_factory: Callable[[], Any],
+        regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         job_request_factory: Callable[[], Dict[str, Any]],
         run_job: Callable[..., Awaitable[str]],
@@ -3254,7 +3261,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_factory: Callable[[], Any],
+        regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         job_request_factory: Callable[[], Dict[str, Any]],
         run_job: Callable[..., Awaitable[str]],
@@ -3337,7 +3344,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_factory: Callable[[], Any],
+        regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         job_request_factory: Callable[[], Dict[str, Any]],
         run_job: Callable[..., Awaitable[str]],
@@ -3419,7 +3426,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_factory: Callable[[], Any],
+        regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         job_request_factory: Callable[[], Dict[str, Any]],
         run_job: Callable[..., Awaitable[str]],
@@ -3604,7 +3611,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        regular_user_factory: Callable[[], Any],
+        regular_user_factory: UserFactory,
         auth_client: AuthClient,
         cluster_name: str,
     ) -> None:
@@ -3658,7 +3665,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_request_factory: Callable[[], Dict[str, Any]],
-        regular_user_factory: Callable[[], Any],
+        regular_user_factory: UserFactory,
         auth_client: AuthClient,
         cluster_name: str,
     ) -> None:
@@ -3795,7 +3802,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_factory: Callable[..., Any],
+        regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
@@ -3855,7 +3862,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_factory: Callable[[], Any],
+        regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         run_job: Callable[..., Awaitable[str]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
@@ -3907,7 +3914,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_factory: Callable[[], Any],
+        regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
@@ -3946,7 +3953,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_factory: Callable[[], Any],
+        regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         run_job: Callable[..., Awaitable[str]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
@@ -3987,7 +3994,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_factory: Callable[[], Any],
+        regular_user_factory: UserFactory,
         run_job: Callable[..., Awaitable[str]],
         create_job_request_with_name: Callable[[str], Dict[str, Any]],
     ) -> None:
@@ -4242,7 +4249,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_submit: Dict[str, Any],
         jobs_client: JobsClient,
-        regular_user_factory: Callable[..., Awaitable[_User]],
+        regular_user_factory: UserFactory,
         regular_user: _User,
         cluster_name: str,
     ) -> None:
@@ -4365,7 +4372,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_factory: Callable[[], Any],
+        regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
@@ -4402,7 +4409,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        regular_user_factory: Callable[[], Any],
+        regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[..., Awaitable[None]],
@@ -4999,7 +5006,8 @@ class TestBillingEnforcer:
         job_submit: Dict[str, Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: Callable[[], Awaitable[_User]],
-        mock_admin_server: AdminServer,
+        admin_client: AdminClient,
+        cluster_name: str,
     ) -> None:
         durations = [30, 25, 20, 15, 10, 5]
 
@@ -5023,13 +5031,12 @@ class TestBillingEnforcer:
                 status="succeeded",
             )
 
-        # Wait for 5 ticks for jobs to become charged
-        await asyncio.sleep(config.job_policy_enforcer.interval_sec * 5)
+        # Wait for 7 ticks for jobs to become charged
+        await asyncio.sleep(config.job_policy_enforcer.interval_sec * 7)
 
         user_to_charge: Dict[str, Decimal] = defaultdict(Decimal)
-        for request in mock_admin_server.requests:
-            if isinstance(request, AdminAddSpendingRequest):
-                user_to_charge[request.username] += request.spending
+        for cluster_user in await admin_client.list_cluster_users(cluster_name):
+            user_to_charge[cluster_user.user_name] = cluster_user.balance.spent_credits
 
         per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
         second = Decimal("1") / 3600
