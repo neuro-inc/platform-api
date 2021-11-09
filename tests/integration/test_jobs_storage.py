@@ -1654,7 +1654,7 @@ class TestJobsStorage:
 
         try:
             # Load data to postgres
-            engine = await make_async_engine(postgres_config)
+            engine = make_async_engine(postgres_config)
             try:
                 postgres_storage = PostgresJobsStorage(engine)
                 await postgres_storage.set_job(job_delete)
@@ -1663,7 +1663,7 @@ class TestJobsStorage:
                 await engine.dispose()
             await migration_runner.upgrade()
             JobRecord.to_primitive = real_to_primitive  # type: ignore
-            engine = await make_async_engine(postgres_config)
+            engine = make_async_engine(postgres_config)
             try:
                 postgres_storage = PostgresJobsStorage(engine)
                 assert (await postgres_storage.get_job(job_not_delete.id)).materialized
