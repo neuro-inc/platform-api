@@ -8,7 +8,6 @@ from functools import partial
 from typing import AsyncIterator, Callable, Dict, List, Optional, Tuple, Union
 
 from aiohttp import ClientResponseError
-from aiohttp.web_exceptions import HTTPNotFound
 from neuro_admin_client import AdminClient
 from neuro_auth_client import AuthClient
 
@@ -65,8 +64,11 @@ class JobsScheduler:
             cluster_user = await self._admin_client.get_cluster_user(
                 cluster_name=cluster, user_name=base_name
             )
-        except HTTPNotFound:
-            return 0  # User has no access to this cluster
+        except ClientResponseError as e:
+            if e.status == 404:
+                # User has no access to this cluster
+                return 0
+            raise
         else:
             return cluster_user.quota.total_running_jobs
 

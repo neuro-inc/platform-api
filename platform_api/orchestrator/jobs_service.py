@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
 
+from aiohttp import ClientResponseError
 from neuro_admin_client import AdminClient, ClusterUser
 from neuro_auth_client import AuthClient, Permission, User as AuthUser
 from neuro_notifications_client import (
@@ -384,7 +385,16 @@ class JobsService:
     async def get_user_cluster_configs(self, user: AuthUser) -> List[ClusterConfig]:
         configs = []
         base_name = user.name.split("/", 1)[0]  # SA has access to same clusters as user
-        _, user_clusters = await self._admin_client.get_user_with_clusters(base_name)
+        try:
+            _, user_clusters = await self._admin_client.get_user_with_clusters(
+                base_name
+            )
+        except ClientResponseError as e:
+            if e.status == 404:
+                # There is no entry in admin about this user --
+                # we assume no access to any clusters
+                return []
+            raise
         for user_cluster in user_clusters:
             try:
                 cluster_config = self._cluster_registry.get(user_cluster.cluster_name)
