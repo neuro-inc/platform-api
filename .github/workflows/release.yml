@@ -71,15 +71,25 @@ jobs:
       uses: azure/setup-helm@v1
       with:
         version: v3.7.0
-    - name: Create chart
+    - name: Create platform-api chart
       run: make helm_create_chart
       env:
         IMAGE_REGISTRY: github
         TAG: ${{ needs.publish_image.outputs.tag }}
         GITHUB_OWNER: ${{ github.repository_owner }}
+        HELM_CHART: platform-api
         HELM_CHART_VERSION: ${{ needs.publish_image.outputs.version }}
         HELM_APP_VERSION: ${{ needs.publish_image.outputs.version }}
-    - name: Release chart
+    - name: Create platform-api-poller chart
+      run: make helm_create_chart
+      env:
+        IMAGE_REGISTRY: github
+        TAG: ${{ needs.publish_image.outputs.tag }}
+        GITHUB_OWNER: ${{ github.repository_owner }}
+        HELM_CHART: platform-api-poller
+        HELM_CHART_VERSION: ${{ needs.publish_image.outputs.version }}
+        HELM_APP_VERSION: ${{ needs.publish_image.outputs.version }}
+    - name: Release charts
       uses: helm/chart-releaser-action@v1.2.1
       env:
         CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
