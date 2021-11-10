@@ -1,0 +1,70 @@
+image:
+  repository: "$IMAGE_REPO"
+  tag: "$IMAGE_TAG"
+
+imagePullSecrets: []
+
+replicas: 1
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+enforcerRetentionDelayDays:
+
+platform:
+  apiPublicUrl: https://staging.neu.ro/api/v1
+  adminPublicUrl: https://staging.neu.ro/apis/admin/v1
+  authPublicUrl: https://staging.neu.ro/api/v1/users
+  authUrl: http://platformauthapi:8080
+  configUrl: http://platformconfig:8080/api/v1
+  notificationsUrl: http://platformnotificationsapi:8080
+  token: {}
+
+oauth:
+  authUrl: https://login.neu.ro/authorize
+  tokenUrl: https://login.neu.ro/oauth/token
+  logoutUrl: https://login.neu.ro/v2/logout?returnTo=https://app.neu.ro/cli-logout
+  clientId: uJV0pm5JPdHkXsSd525rlhFDVcEuUnaV
+  audience: https://platform.staging.neuromation.io
+  successRedirectUrl: https://staging.neu.ro/oauth/login
+  headlessCallbackUrl: https://staging.neu.ro/oauth/show-code
+
+jobPriorityClass:
+  enabled: false
+
+cors:
+  origins: []
+
+postgres:
+  dsn: {}
+
+postgres-db-init:
+  adminDsn: {}
+  migrationsRunnerDsn: {}
+  serviceDsn: {}
+
+  migrations:
+    enabled: true
+
+    image:
+      repository: "$IMAGE_REPO"
+      tag: "$IMAGE_TAG"
+
+    command: ["alembic", "upgrade", "head"]
+
+resources:
+  requests:
+    cpu: "1"
+    memory: "1Gi"
+
+ingress:
+  enabled: false
+
+secrets: []
+
+zipkin: {}
+
+sentry: {}

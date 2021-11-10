@@ -1,0 +1,25 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: {{ include "platformApiPoller.fullname" . }}
+  labels: {{ include "platformApiPoller.labels.standard" . | nindent 4 }}
+    service: platform-api-poller
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    traefik.frontend.rule.type: PathPrefix
+{{- if .Values.ingress.extraAnnotations }}
+{{ toYaml .Values.ingress.extraAnnotations | indent 4}}
+{{- end }}
+spec:
+  rules:
+{{- range .Values.ingress.hosts }}
+  - host: {{ . | quote }}
+    http:
+      paths:
+      - path: /api/v1/poller
+        backend:
+          serviceName: {{ include "platformApiPoller.fullname" $ }}
+          servicePort: http
+{{- end }}
+{{- end }}

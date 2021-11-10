@@ -1,26 +1,32 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: platformapi
+  name: {{ include "platformApi.fullname" . }}
+  labels: {{ include "platformApi.labels.standard" . | nindent 4 }}
+    service: platform-api
 spec:
   replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
-      service: platformapi
+      app: {{ include "platformApi.name" . }}
+      release: {{ .Release.Name }}
+      service: platform-api
   {{- if .Values.strategy }}
   strategy: {{ toYaml .Values.strategy | nindent 4 }}
   {{- end }}
   template:
     metadata:
       labels:
-        service: platformapi
+        app: {{ include "platformApi.name" . }}
+        release: {{ .Release.Name }}
+        service: platform-api
       {{- if .Values.secrets }}
       annotations:
         checksum/secret: {{ include (print $.Template.BasePath "/secrets.yml") . | sha256sum }}
       {{- end }}
     spec:
       containers:
-      - name: platformapi
+      - name: platform-api
         image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
         livenessProbe:
           httpGet:
@@ -43,49 +49,51 @@ spec:
 {{- end }}
         env:
         - name: NP_AUTH_URL
-          value: http://platformauthapi:8080
+          value: {{ .Values.platform.authUrl | quote }}
         - name: NP_AUTH_TOKEN
 {{- if .Values.platform.token }}
 {{ toYaml .Values.platform.token | indent 10 }}
 {{- end }}
         - name: NP_OAUTH_AUTH_URL
-          value: {{ .Values.NP_OAUTH_AUTH_URL | quote }}
+          value: {{ .Values.oauth.authUrl | quote }}
         - name: NP_OAUTH_TOKEN_URL
-          value: {{ .Values.NP_OAUTH_TOKEN_URL | quote }}
+          value: {{ .Values.oauth.tokenUrl | quote }}
         - name: NP_OAUTH_LOGOUT_URL
-          value: {{ .Values.NP_OAUTH_LOGOUT_URL | quote }}
+          value: {{ .Values.oauth.logoutUrl | quote }}
         - name: NP_OAUTH_CLIENT_ID
-          value: "{{ .Values.NP_OAUTH_CLIENT_ID }}"
+          value: {{ .Values.oauth.clientId | quote }}
         - name: NP_OAUTH_AUDIENCE
-          value: "{{ .Values.NP_OAUTH_AUDIENCE }}"
+          value: {{ .Values.oauth.audience | quote }}
         - name: NP_OAUTH_SUCCESS_REDIRECT_URL
-          value: "{{ .Values.NP_OAUTH_SUCCESS_REDIRECT_URL }}"
+          value: {{ .Values.oauth.successRedirectUrl | quote }}
         - name: NP_OAUTH_HEADLESS_CALLBACK_URL
-          value: "{{ .Values.NP_OAUTH_HEADLESS_CALLBACK_URL }}"
+          value: {{ .Values.oauth.headlessCallbackUrl | quote }}
         - name: NP_API_URL
-          value: "{{ .Values.NP_API_URL }}"
+          value: {{ .Values.platform.apiPublicUrl | quote }}
         - name: NP_ADMIN_URL
-          value: "{{ .Values.NP_ADMIN_URL }}"
-        - name: NP_PLATFORM_CONFIG_URI
-          value: {{ .Values.NP_PLATFORM_CONFIG_URI }}
+          value: {{ .Values.platform.adminPublicUrl | quote }}
         - name: NP_AUTH_PUBLIC_URL
-          value: {{ .Values.NP_AUTH_PUBLIC_URL }}
+          value: {{ .Values.platform.authPublicUrl | quote }}
+        - name: NP_PLATFORM_CONFIG_URI
+          value: {{ .Values.platform.configUrl | quote }}
         - name: NP_NOTIFICATIONS_URL
-          value: http://platformnotificationsapi:8080/
+          value: {{ .Values.platform.notificationsUrl | quote }}
         - name: NP_NOTIFICATIONS_TOKEN
 {{- if .Values.platform.token }}
 {{ toYaml .Values.platform.token | indent 10 }}
 {{- end }}
         - name: NP_ENFORCER_PLATFORM_API_URL
-          value: {{ .Values.NP_ENFORCER_PLATFORM_API_URL }}
+          value: http://localhost:8080/api/v1
         - name: NP_ENFORCER_TOKEN
 {{- if .Values.platform.token }}
 {{ toYaml .Values.platform.token | indent 10 }}
 {{- end }}
         - name: NP_ENFORCER_RETENTION_DELAY_DAYS
-          value: {{ .Values.NP_ENFORCER_RETENTION_DELAY_DAYS | quote }}
+          value: {{ .Values.enforcerRetentionDelayDays | quote }}
+        {{- if .Values.cors.origins }}
         - name: NP_CORS_ORIGINS
-          value: "{{ .Values.NP_CORS_ORIGINS }}"
+          value: {{ .Values.cors.origins | join "," }}
+        {{- end }}
         - name: NP_DB_POSTGRES_DSN
 {{- if .Values.postgres.dsn }}
 {{ toYaml .Values.postgres.dsn | indent 10 }}
@@ -107,49 +115,3 @@ spec:
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets: {{ toYaml .Values.imagePullSecrets | nindent 6 }}
       {{- end }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: platformapi
-spec:
-  type: ClusterIP
-  ports:
-  - name: http
-    port: 8080
-    targetPort: tcp-web
-  selector:
-    service: platformapi
-{{- if .Values.ingress.enabled }}
----
-apiVersion: networking.k8s.io/v1beta1
-kind: Ingress
-metadata:
-  name: platformapi
-  annotations:
-    kubernetes.io/ingress.class: traefik
-    traefik.frontend.rule.type: PathPrefix
-{{- if .Values.ingress.extraAnnotations }}
-{{ toYaml .Values.ingress.extraAnnotations | indent 4}}
-{{- end }}
-spec:
-  rules:
-{{- range .Values.ingress.hosts }}
-  - host: {{ . | quote }}
-    http:
-      paths:
-      - path: /api/v1
-        backend:
-          serviceName: platformapi
-          servicePort: http
-{{- end }}
-{{- end }}
-{{- if .Values.jobPriorityClass.enabled }}
----
-apiVersion: scheduling.k8s.io/v1beta1
-kind: PriorityClass
-metadata:
-  name: platform-job
-value: 1000000
-globalDefault: false
-{{- end }}

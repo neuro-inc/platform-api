@@ -1,21 +1,28 @@
-NP_API_URL: https://staging.neu.ro/api/v1
-NP_ADMIN_URL: https://staging.neu.ro/apis/admin/v1
-NP_AUTH_PUBLIC_URL: https://staging.neu.ro/api/v1/users
-NP_OAUTH_AUTH_URL: https://login.neu.ro/authorize
-NP_OAUTH_TOKEN_URL: https://login.neu.ro/oauth/token
-NP_OAUTH_LOGOUT_URL: https://login.neu.ro/v2/logout?returnTo=https://app.neu.ro/cli-logout
-NP_OAUTH_CLIENT_ID: uJV0pm5JPdHkXsSd525rlhFDVcEuUnaV
-NP_OAUTH_AUDIENCE: https://platform.staging.neuromation.io
-NP_OAUTH_SUCCESS_REDIRECT_URL: https://staging.neu.ro/oauth/login
-NP_OAUTH_HEADLESS_CALLBACK_URL: https://staging.neu.ro/oauth/show-code
-NP_CORS_ORIGINS: https://neu.ro,https://release--neuro-web.netlify.com,https://app.neu.ro,https://mts.neu.ro
-
 platform:
+  apiPublicUrl: https://staging.neu.ro/api/v1
+  adminPublicUrl: https://staging.neu.ro/apis/admin/v1
+  authPublicUrl: https://staging.neu.ro/api/v1/users
   token:
     valueFrom:
       secretKeyRef:
         name: platformservices-secret
         key: compute_token
+
+oauth:
+  authUrl: https://login.neu.ro/authorize
+  tokenUrl: https://login.neu.ro/oauth/token
+  logoutUrl: https://login.neu.ro/v2/logout?returnTo=https://app.neu.ro/cli-logout
+  clientId: uJV0pm5JPdHkXsSd525rlhFDVcEuUnaV
+  audience: https://platform.staging.neuromation.io
+  successRedirectUrl: https://staging.neu.ro/oauth/login
+  headlessCallbackUrl: https://staging.neu.ro/oauth/show-code
+
+cors:
+  origins:
+  - https://neu.ro
+  - https://release--neuro-web.netlify.com
+  - https://app.neu.ro
+  - https://mts.neu.ro
 
 postgres:
   dsn:

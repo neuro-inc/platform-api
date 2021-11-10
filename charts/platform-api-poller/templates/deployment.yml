@@ -1,12 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: platformapi-poller{{ .Values.k8sSuffix }}
+  name: {{ include "platformApiPoller.fullname" . }}
+  labels: {{ include "platformApiPoller.labels.standard" . | nindent 4 }}
+    service: platform-api-poller
 spec:
   replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
-      service: platformapi-poller{{ .Values.k8sSuffix }}
+      app: {{ include "platformApiPoller.name" . }}
+      release: {{ .Release.Name }}
+      service: platform-api-poller
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -15,14 +19,16 @@ spec:
   template:
     metadata:
       labels:
-        service: platformapi-poller{{ .Values.k8sSuffix }}
+        app: {{ include "platformApiPoller.name" . }}
+        release: {{ .Release.Name }}
+        service: platform-api-poller
       {{- if .Values.secrets }}
       annotations:
         checksum/secret: {{ include (print $.Template.BasePath "/secrets.yml") . | sha256sum }}
       {{- end }}
     spec:
       containers:
-      - name: platformapi-poller
+      - name: platform-api-poller
         image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
         command: ["platform-api-poller"]
         livenessProbe:
@@ -60,20 +66,16 @@ spec:
         {{- if .Values.zipkin }}
         - name: NP_ZIPKIN_URL
           value: {{ .Values.zipkin.url }}
-        {{- if .Values.k8sSuffix }}
         - name: NP_ZIPKIN_APP_NAME
-          value: platform-api-poller{{ .Values.k8sSuffix }}
-        {{- end }}
+          value: {{ include "platformApiPoller.fullname" . }}
         - name: NP_ZIPKIN_SAMPLE_RATE
           value: {{ .Values.zipkin.sampleRate | default 0 | quote }}
         {{- end }}
         {{- if .Values.sentry }}
         - name: NP_SENTRY_DSN
           value: {{ .Values.sentry.dsn }}
-        {{- if .Values.k8sSuffix }}
         - name: NP_SENTRY_APP_NAME
-          value: platform-api-poller{{ .Values.k8sSuffix }}
-        {{- end }}
+          value: {{ include "platformApiPoller.fullname" . }}
         - name: NP_SENTRY_CLUSTER_NAME
           value: {{ .Values.sentry.clusterName }}
         - name: NP_SENTRY_SAMPLE_RATE

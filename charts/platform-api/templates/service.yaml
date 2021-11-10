@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "platformApi.fullname" . }}
+  labels: {{ include "platformApi.labels.standard" . | nindent 4 }}
+    service: platform-api
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8080
+    targetPort: tcp-web
+  selector:
+    app: {{ include "platformApi.name" . }}
+    release: {{ .Release.Name }}
+    service: platform-api
+---
+# TODO: Old service definition. Check that it is not used elsewhere and remove.
+apiVersion: v1
+kind: Service
+metadata:
+  name: platformapi
+  labels: {{ include "platformApi.labels.standard" . | nindent 4 }}
+    service: platform-api
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8080
+    targetPort: tcp-web
+  selector:
+    app: {{ include "platformApi.name" . }}
+    release: {{ .Release.Name }}
+    service: platform-api

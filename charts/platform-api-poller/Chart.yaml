@@ -1,0 +1,5 @@
+apiVersion: v2
+name: platform-api-poller
+description: A Helm chart for platform-api-poller service
+version: $CHART_VERSION
+appVersion: $APP_VERSION

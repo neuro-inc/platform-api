@@ -1,9 +1,0 @@
-apiVersion: v2
-name: platformapi
-description: Deploy Platformapi
-version: 0.0.1
-appVersion: 0.0.1
-dependencies:
-  - name: postgres-db-init
-    version: "1.1.0"
-    repository: "@neuro"
