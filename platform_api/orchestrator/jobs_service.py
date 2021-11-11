@@ -389,15 +389,19 @@ class JobsService:
             _, user_clusters = await self._admin_client.get_user_with_clusters(
                 base_name
             )
+            cluster_names = [
+                user_cluster.cluster_name for user_cluster in user_clusters
+            ]
         except ClientResponseError as e:
             if e.status == 404:
-                # There is no entry in admin about this user --
-                # we assume no access to any clusters
-                return []
-            raise
-        for user_cluster in user_clusters:
+                # Fallback to old logic with AuthUser clusters
+                # TODO: rethink this
+                cluster_names = [auth_cluster.name for auth_cluster in user.clusters]
+            else:
+                raise
+        for cluster_name in cluster_names:
             try:
-                cluster_config = self._cluster_registry.get(user_cluster.cluster_name)
+                cluster_config = self._cluster_registry.get(cluster_name)
                 configs.append(cluster_config)
             except ClusterNotFound:
                 pass
