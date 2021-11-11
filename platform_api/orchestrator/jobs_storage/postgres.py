@@ -18,7 +18,7 @@ import sqlalchemy.sql as sasql
 from asyncpg import SerializationError, UniqueViolationError
 from sqlalchemy import Boolean, Integer, and_, asc, desc, func, or_, select
 from sqlalchemy.engine import Row
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from platform_api.orchestrator.job import JobRecord
@@ -202,7 +202,9 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
     @asynccontextmanager
     async def try_update_job(self, job_id: str) -> AsyncIterator[JobRecord]:
         try:
-            async with self._transaction() as conn:
+            async with self._engine.execution_options(
+                isolation_level="REPEATABLE READ"
+            ).begin() as conn:
                 # The isolation level 'serializable' is not used here because:
                 # - we only care about single row synchronization (we just want to
                 # protect from concurrent writes between our SELECT and
@@ -221,7 +223,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
                     .where(self._tables.jobs.c.id == job_id)
                 )
                 await self._execute(query, conn=conn)
-        except IntegrityError as exc:
+        except DBAPIError as exc:
             if isinstance(exc.orig.__cause__, SerializationError):
                 raise JobStorageTransactionError(
                     "Job {" + self._make_description(values) + "} has changed"
