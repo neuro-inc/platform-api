@@ -1,7 +1,6 @@
 .idea
 tests/logs
 tests/sandbox
-platform-api
 coverage.txt
 .coverage-*
 tests/.docker/config.json

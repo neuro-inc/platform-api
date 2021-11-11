@@ -4,29 +4,32 @@ AWS_REGION ?= us-east-1
 AZURE_RG_NAME ?= dev
 AZURE_ACR_NAME ?= crc570d91c95c6aac0ea80afb1019a0c6f
 
-ARTIFACTORY_DOCKER_REPO ?= neuro-docker-local-public.jfrog.io
-ARTIFACTORY_HELM_REPO ?= https://neuro.jfrog.io/artifactory/helm-local-public
-ARTIFACTORY_HELM_VIRTUAL_REPO ?= https://neuro.jfrog.io/artifactory/helm-virtual-public
+GITHUB_OWNER ?= neuro-inc
 
-IMAGE_REPO_gke         = $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)
-IMAGE_REPO_aws         = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
-IMAGE_REPO_azure       = $(AZURE_ACR_NAME).azurecr.io
-IMAGE_REPO_artifactory = $(ARTIFACTORY_DOCKER_REPO)
+IMAGE_TAG ?= latest
 
-IMAGE_REGISTRY ?= artifactory
+IMAGE_REPO_gke    = $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)
+IMAGE_REPO_aws    = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+IMAGE_REPO_azure  = $(AZURE_ACR_NAME).azurecr.io
+IMAGE_REPO_github = ghcr.io/$(GITHUB_OWNER)
 
-IMAGE_NAME = platformapi
-IMAGE_REPO = $(IMAGE_REPO_$(IMAGE_REGISTRY))/$(IMAGE_NAME)
+IMAGE_REGISTRY ?= aws
 
-HELM_CHART ?= platformapi
-RELEASE_SUFFIX ?=
+IMAGE_NAME      = platformapi
+IMAGE_REPO_BASE = $(IMAGE_REPO_$(IMAGE_REGISTRY))
+IMAGE_REPO      = $(IMAGE_REPO_BASE)/$(IMAGE_NAME)
 
-TAG ?= latest
+HELM_ENV           ?= dev
+HELM_CHART         ?= platform-api
+HELM_RELEASE       ?= platform-api
+HELM_CHART_VERSION ?= 1.0.0
+HELM_APP_VERSION   ?= 1.0.0
 
 PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
 PLATFORMSECRETS_IMAGE = $(shell cat PLATFORMSECRETS_IMAGE)
 PLATFORMDISKAPI_IMAGE = $(shell cat PLATFORMDISKAPI_IMAGE)
+PLATFORMADMIN_IMAGE = $(shell cat PLATFORMADMIN_IMAGE)
 
 include k8s.mk
 
@@ -60,8 +63,8 @@ docker_build:
 		-t $(IMAGE_NAME):latest .
 
 docker_push: docker_build
-	docker tag $(IMAGE_NAME):latest $(IMAGE_REPO):$(TAG)
-	docker push $(IMAGE_REPO):$(TAG)
+	docker tag $(IMAGE_NAME):latest $(IMAGE_REPO):$(IMAGE_TAG)
+	docker push $(IMAGE_REPO):$(IMAGE_TAG)
 
 	docker tag $(IMAGE_NAME):latest $(IMAGE_REPO):latest
 	docker push $(IMAGE_REPO):latest
@@ -107,50 +110,26 @@ docker_pull_test_images:
 	docker pull $(PLATFORMCONFIG_IMAGE)
 	docker pull $(PLATFORMSECRETS_IMAGE)
 	docker pull $(PLATFORMDISKAPI_IMAGE)
+	docker pull $(PLATFORMADMIN_IMAGE)
 	docker tag $(PLATFORMAUTHAPI_IMAGE) platformauthapi:latest
 	docker tag $(PLATFORMCONFIG_IMAGE) platformconfig:latest
 	docker tag $(PLATFORMSECRETS_IMAGE) platformsecrets:latest
 	docker tag $(PLATFORMDISKAPI_IMAGE) platformdiskapi:latest
+	docker tag $(PLATFORMADMIN_IMAGE) platformadmin:latest
 
-helm_install:
-	curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash -s -- -v $(HELM_VERSION)
-	helm plugin install https://github.com/belitre/helm-push-artifactory-plugin --version 1.0.2
-	@helm repo add neuro $(ARTIFACTORY_HELM_VIRTUAL_REPO) \
-		--username ${ARTIFACTORY_USERNAME} \
-		--password ${ARTIFACTORY_PASSWORD}
-	helm repo update
-
-_helm_fetch:
-	rm -rf temp_deploy
-	mkdir -p temp_deploy/$(HELM_CHART)
-	cp -Rf deploy/$(HELM_CHART) temp_deploy/
-	find temp_deploy/$(HELM_CHART) -type f -name 'values*' -delete
-	helm dependency update temp_deploy/$(HELM_CHART)
-
-_helm_expand_vars:
+helm_create_chart:
 	export IMAGE_REPO=$(IMAGE_REPO); \
-	export IMAGE_TAG=$(TAG); \
-	export DOCKER_SERVER=$(ARTIFACTORY_DOCKER_REPO); \
-	cat deploy/$(HELM_CHART)/values-template.yaml | envsubst > temp_deploy/$(HELM_CHART)/values.yaml
+	export IMAGE_TAG=$(IMAGE_TAG); \
+	export CHART_VERSION=$(HELM_CHART_VERSION); \
+	export APP_VERSION=$(HELM_APP_VERSION); \
+	VALUES=$$(cat charts/$(HELM_CHART)/values.yaml | envsubst); \
+	echo "$$VALUES" > charts/$(HELM_CHART)/values.yaml; \
+	CHART=$$(cat charts/$(HELM_CHART)/Chart.yaml | envsubst); \
+	echo "$$CHART" > charts/$(HELM_CHART)/Chart.yaml
 
-helm_deploy: _helm_fetch _helm_expand_vars
-	helm upgrade $(HELM_CHART)$(RELEASE_SUFFIX) temp_deploy/$(HELM_CHART) \
-		-f deploy/$(HELM_CHART)/values-$(HELM_ENV).yaml \
-		--set "image.repository=$(IMAGE_REPO)" \
+helm_deploy: helm_create_chart
+	helm dependency update charts/$(HELM_CHART)
+	helm upgrade $(HELM_RELEASE) charts/$(HELM_CHART) \
+		-f charts/$(HELM_CHART)/values-$(HELM_ENV).yaml \
 		--set "platform.clusterName=$(CLUSTER_NAME)" \
-		--set "k8sSuffix=$(RELEASE_SUFFIX)" \
-		--set "postgres-db-init.migrations.image.repository=$(IMAGE_REPO)" \
 		--namespace platform --install --wait --timeout 600s
-
-artifactory_helm_push: _helm_fetch _helm_expand_vars
-	helm package --app-version=$(TAG) --version=$(TAG) temp_deploy/$(HELM_CHART)
-	helm push-artifactory $(HELM_CHART)-$(TAG).tgz $(ARTIFACTORY_HELM_REPO) \
-		--username $(ARTIFACTORY_USERNAME) \
-		--password $(ARTIFACTORY_PASSWORD)
-
-artifactory_helm_deploy:
-	helm upgrade $(HELM_CHART) neuro/$(HELM_CHART) \
-		-f deploy/$(HELM_CHART)/values-$(HELM_ENV).yaml \
-		--set "image.repository=$(IMAGE_REPO)" \
-		--set "postgres-db-init.migrations.image.repository=$(IMAGE_REPO)" \
-		--version $(TAG) --namespace platform --install --wait --timeout 600s

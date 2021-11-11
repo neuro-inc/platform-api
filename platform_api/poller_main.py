@@ -5,6 +5,7 @@ from typing import AsyncIterator, Callable, List, Optional
 
 import aiohttp.web
 from aiohttp.web_urldispatcher import AbstractRoute
+from neuro_admin_client import AdminClient
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
 from neuro_logging import (
@@ -88,6 +89,13 @@ async def create_app(
                     trace_configs=make_tracing_trace_configs(config),
                 )
             )
+            admin_client = await exit_stack.enter_async_context(
+                AdminClient(
+                    base_url=config.admin_url,
+                    service_token=config.auth.service_token,
+                    trace_configs=make_tracing_trace_configs(config),
+                )
+            )
 
             await setup_security(
                 app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER
@@ -121,7 +129,7 @@ async def create_app(
             jobs_poller_service = JobsPollerService(
                 cluster_holder=cluster_holder,
                 jobs_config=config.jobs,
-                scheduler=JobsScheduler(config.scheduler, auth_client=auth_client),
+                scheduler=JobsScheduler(config.scheduler, admin_client=admin_client),
                 auth_client=auth_client,
                 api=poller_api,
             )

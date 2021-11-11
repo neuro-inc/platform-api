@@ -1,5 +1,3 @@
-k8sSuffix:
-
 image:
   repository: "$IMAGE_REPO"
   tag: "$IMAGE_TAG"
@@ -18,6 +16,7 @@ platform:
   clusterName:
   authUrl:
   configUrl:
+  adminUrl:
   apiUrl:
   registryUrl:
   registryEmail:

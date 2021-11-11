@@ -4,27 +4,22 @@ from dataclasses import dataclass, field
 from typing import (
     AsyncGenerator,
     AsyncIterator,
-    Awaitable,
     Callable,
     Dict,
     List,
     Optional,
-    Sequence,
+    Protocol,
+    Tuple,
 )
 
 import aiodocker
 import pytest
-from aiohttp import ClientError
+from aiohttp import ClientError, ClientResponseError
 from aiohttp.hdrs import AUTHORIZATION
 from async_timeout import timeout
 from jose import jwt
-from neuro_auth_client import (
-    AuthClient,
-    Cluster as AuthCluster,
-    Permission,
-    Quota,
-    User as AuthClientUser,
-)
+from neuro_admin_client import AdminClient, Balance, ClusterUserRoleType, Quota
+from neuro_auth_client import AuthClient, Permission, User as AuthUser
 from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
@@ -91,7 +86,7 @@ def token_factory() -> Callable[[str], str]:
     return create_token
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def admin_token(token_factory: Callable[[str], str]) -> str:
     return token_factory("admin")
 
@@ -148,12 +143,12 @@ async def wait_for_auth_server(
 class _User:
     name: str
     token: str
-    clusters: List[AuthCluster] = field(default_factory=list)
+    clusters: List[str] = field(default_factory=list)
 
     @property
     def cluster_name(self) -> str:
         assert self.clusters, "Test user has no access to any cluster"
-        return self.clusters[0].name
+        return self.clusters[0]
 
     @property
     def headers(self) -> Dict[str, str]:
@@ -165,58 +160,112 @@ def test_cluster_name() -> str:
     return "test-cluster"
 
 
+class UserFactory(Protocol):
+    async def __call__(
+        self,
+        name: Optional[str] = None,
+        clusters: Optional[List[Tuple[str, Balance, Quota]]] = None,
+    ) -> _User:
+        ...
+
+
 @pytest.fixture
 async def regular_user_factory(
+    auth_client: AuthClient,
+    admin_client: AdminClient,
+    token_factory: Callable[[str], str],
+    admin_token: str,
+    test_cluster_name: str,
+) -> UserFactory:
+    async def _factory(
+        name: Optional[str] = None,
+        clusters: Optional[List[Tuple[str, Balance, Quota]]] = None,
+    ) -> _User:
+        if not name:
+            name = random_str()
+        if clusters is None:
+            clusters = [(test_cluster_name, Balance(), Quota())]
+        await admin_client.create_user(name=name, email=f"{name}@email.com")
+        for cluster, balance, quota in clusters:
+            try:
+                await admin_client.create_cluster(cluster)
+            except ClientResponseError:
+                pass
+            await admin_client.create_cluster_user(
+                cluster_name=cluster,
+                role=ClusterUserRoleType.USER,
+                user_name=name,
+                balance=balance,
+                quota=quota,
+            )
+        user_token = token_factory(name)
+        return _User(
+            name=name,
+            token=user_token,
+            clusters=[cluster_info[0] for cluster_info in clusters],
+        )
+
+    return _factory
+
+
+class ServiceAccountFactory(Protocol):
+    async def __call__(
+        self,
+        owner: _User,
+        name: Optional[str] = None,
+    ) -> _User:
+        ...
+
+
+@pytest.fixture
+async def service_account_factory(
     auth_client: AuthClient,
     token_factory: Callable[[str], str],
     admin_token: str,
     test_cluster_name: str,
-) -> Callable[[Optional[str], Optional[Quota], str], Awaitable[_User]]:
+) -> ServiceAccountFactory:
     async def _factory(
+        owner: _User,
         name: Optional[str] = None,
-        quota: Optional[Quota] = None,
-        cluster_name: str = test_cluster_name,
-        auth_clusters: Optional[Sequence[AuthCluster]] = None,
     ) -> _User:
         if not name:
             name = random_str()
-        quota = quota or Quota()
-        if auth_clusters is None:
-            auth_clusters = [AuthCluster(name=cluster_name, quota=quota)]
-        user = AuthClientUser(name=name, clusters=list(auth_clusters))
+        user = AuthUser(name=f"{owner.name}/service-accounts/{name}", clusters=[])
         await auth_client.add_user(user, token=admin_token)
-        # Grant cluster-specific permissions
         permissions = []
-
-        for cluster in auth_clusters:
+        # Fake grant access to SA staff
+        for cluster in owner.clusters:
             permissions.extend(
                 [
-                    Permission(uri=f"storage://{cluster.name}/{name}", action="manage"),
-                    Permission(uri=f"image://{cluster.name}/{name}", action="manage"),
-                    Permission(uri=f"job://{cluster.name}/{name}", action="manage"),
-                    Permission(uri=f"secret://{cluster.name}/{name}", action="manage"),
-                    Permission(uri=f"disk://{cluster.name}/{name}", action="write"),
+                    Permission(uri=f"storage://{cluster}/{user.name}", action="manage"),
+                    Permission(uri=f"image://{cluster}/{user.name}", action="manage"),
+                    Permission(uri=f"job://{cluster}/{user.name}", action="manage"),
+                    Permission(uri=f"secret://{cluster}/{user.name}", action="manage"),
+                    Permission(uri=f"disk://{cluster}/{user.name}", action="write"),
                 ]
             )
-        await auth_client.grant_user_permissions(name, permissions, token=admin_token)
-        user_token = token_factory(user.name)
-        return _User(name=user.name, clusters=user.clusters, token=user_token)
+        await auth_client.grant_user_permissions(
+            user.name, permissions, token=admin_token
+        )
+        return _User(
+            name=user.name,
+            token=token_factory(user.name),
+            clusters=owner.clusters,
+        )
 
     return _factory
 
 
 @pytest.fixture
-async def regular_user(regular_user_factory: Callable[[], Awaitable[_User]]) -> _User:
+async def regular_user(regular_user_factory: UserFactory) -> _User:
     return await regular_user_factory()
 
 
 @pytest.fixture
 async def regular_user_with_missing_cluster_name(
-    regular_user_factory: Callable[
-        [Optional[str], Optional[Quota], Optional[str]], Awaitable[_User]
-    ],
+    regular_user_factory: UserFactory,
 ) -> _User:
-    return await regular_user_factory(None, None, "missing")
+    return await regular_user_factory(None, [("missing", Balance(), Quota())])
 
 
 @pytest.fixture

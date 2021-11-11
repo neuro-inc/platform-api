@@ -1,137 +1,202 @@
-from dataclasses import dataclass
-from decimal import Decimal
-from typing import AsyncIterator, NamedTuple, Optional, Sequence, Union
+import asyncio
+from contextlib import asynccontextmanager
+from typing import Any, AsyncGenerator, AsyncIterator, List
 
+import aiodocker
 import aiohttp.web
 import pytest
+from aiohttp import ClientError, ClientResponseError
+from async_timeout import timeout
+from neuro_admin_client import AdminClient
 from yarl import URL
 
-from .api import ApiRunner
-from .conftest import ApiAddress
+from platform_api.config import AuthConfig
+from tests.integration.conftest import ApiRunner
 
 
-@dataclass(frozen=True)
-class AdminUpdateCreditsRequest:
-    idempotency_key: Optional[str]
-    cluster_name: str
-    username: str
-    delta: Decimal
+@pytest.fixture(scope="session")
+async def fake_config_app() -> AsyncIterator[URL]:
+    app = aiohttp.web.Application()
+    clusters: List[Any] = []
 
-
-@dataclass(frozen=True)
-class AdminDebtRequest:
-    idempotency_key: Optional[str]
-    cluster_name: str
-    username: str
-    amount: Decimal
-
-
-@dataclass(frozen=True)
-class AdminAddSpendingRequest:
-    idempotency_key: Optional[str]
-    cluster_name: str
-    username: str
-    spending: Decimal
-
-
-class AdminServer(NamedTuple):
-    address: ApiAddress
-    app: aiohttp.web.Application
-
-    @property
-    def url(self) -> URL:
-        return URL(f"http://{self.address.host}:{self.address.port}/api/v1/")
-
-    @property
-    def requests(
-        self,
-    ) -> Sequence[
-        Union[AdminUpdateCreditsRequest, AdminDebtRequest, AdminAddSpendingRequest]
-    ]:
-        return [request for request in self.app["requests"]]
-
-
-@pytest.fixture
-async def mock_admin_server() -> AsyncIterator[AdminServer]:
-    async def _handle_balance_patch(
-        request: aiohttp.web.Request,
-    ) -> aiohttp.web.Response:
-        cluster_name = request.match_info["cname"]
-        username = request.match_info["uname"]
+    async def add_cluster(request: aiohttp.web.Request) -> aiohttp.web.Response:
         payload = await request.json()
-        delta = Decimal(payload["additional_credits"])
-        idempotency_key = request.query.get("idempotency_key")
-        app["requests"].append(
-            AdminUpdateCreditsRequest(
-                idempotency_key=idempotency_key,
-                cluster_name=cluster_name,
-                username=username,
-                delta=delta,
-            )
-        )
-        return aiohttp.web.Response()
+        clusters.append(payload)
+        return aiohttp.web.json_response(payload)
 
-    async def _handle_add_debt(request: aiohttp.web.Request) -> aiohttp.web.Response:
-        cluster_name = request.match_info["cname"]
-        payload = await request.json()
-        username = payload["user_name"]
-        amount = Decimal(payload["credits"])
-        idempotency_key = request.query.get("idempotency_key")
-        app["requests"].append(
-            AdminDebtRequest(
-                idempotency_key=idempotency_key,
-                cluster_name=cluster_name,
-                username=username,
-                amount=amount,
-            )
-        )
-        return aiohttp.web.Response()
+    async def list_clusters(request: aiohttp.web.Request) -> aiohttp.web.Response:
+        return aiohttp.web.json_response(clusters)
 
-    async def _handle_add_spending(
-        request: aiohttp.web.Request,
-    ) -> aiohttp.web.Response:
-        cluster_name = request.match_info["cname"]
-        username = request.match_info["uname"]
-        payload = await request.json()
-        spending = Decimal(payload["spending"])
-        idempotency_key = request.query.get("idempotency_key")
-        app["requests"].append(
-            AdminAddSpendingRequest(
-                idempotency_key=idempotency_key,
-                cluster_name=cluster_name,
-                username=username,
-                spending=spending,
-            )
-        )
-        return aiohttp.web.Response()
+    app.add_routes((aiohttp.web.post("/api/v1/clusters", add_cluster),))
+    app.add_routes((aiohttp.web.get("/api/v1/clusters", list_clusters),))
 
-    def _create_app() -> aiohttp.web.Application:
-        app = aiohttp.web.Application()
-        app["requests"] = []
-        app.router.add_routes(
-            (
-                aiohttp.web.patch(
-                    "/api/v1/clusters/{cname}/users/{uname}/balance",
-                    _handle_balance_patch,
-                ),
-                aiohttp.web.post(
-                    "/api/v1/clusters/{cname}/users/{uname}/spending",
-                    _handle_add_spending,
-                ),
-                aiohttp.web.post("/api/v1/clusters/{cname}/debts", _handle_add_debt),
-            )
-        )
-        return app
-
-    app = _create_app()
-    runner = ApiRunner(app, port=8085)
+    runner = ApiRunner(app, port=8089)
     api_address = await runner.run()
-    yield AdminServer(address=api_address, app=app)
+    yield URL(f"http://{api_address.host}:{api_address.port}/api/v1")
     await runner.close()
 
 
-@pytest.fixture
-def admin_url(
-    mock_admin_server: AdminServer,
+@pytest.fixture(scope="session")
+def admin_server_image_name() -> str:
+    with open("PLATFORMADMIN_IMAGE") as f:
+        return f.read().strip()
+
+
+@pytest.fixture(scope="session")
+async def _admin_server_setup_db(
+    docker: aiodocker.Docker,
+    reuse_docker: bool,
+    admin_server_image_name: str,
+    auth_server: AuthConfig,
+    admin_token: str,
+    admin_postgres_dsn: str,
+    fake_config_app: URL,
+) -> None:
+    image_name = admin_server_image_name
+    container_name = "admin_migrations"
+    container_config = {
+        "Image": image_name,
+        "AttachStdout": False,
+        "AttachStderr": False,
+        "HostConfig": {
+            "PublishAllPorts": True,
+            "Links": ["postgres-admin:postgres"],
+            "ExtraHosts": [
+                "host.docker.internal:host-gateway",
+            ],
+        },
+        "Cmd": ["alembic", "upgrade", "head"],
+        "Env": [
+            f"NP_ADMIN_AUTH_TOKEN={admin_token}",
+            "NP_ADMIN_AUTH_URL=http://auth:8080",
+            f"NP_ADMIN_CONFIG_TOKEN={admin_token}",
+            "NP_ADMIN_CONFIG_URL=http://host.docker.internal:8089",
+            f"NP_ADMIN_POSTGRES_DSN={admin_postgres_dsn}",
+        ],
+    }
+
+    try:
+        await docker.images.inspect(admin_server_image_name)
+    except aiodocker.exceptions.DockerError:
+        await docker.images.pull(admin_server_image_name)
+
+    container = await docker.containers.create_or_replace(
+        name=container_name, config=container_config
+    )
+    await container.start()
+    res = await container.wait()
+    if res["StatusCode"] != 0:
+        raise Exception(
+            "Postgres admin DB migrations failed: " + res["Error"]["Message"]
+        )
+
+
+@pytest.fixture(scope="session")
+async def admin_server(
+    docker: aiodocker.Docker,
+    reuse_docker: bool,
+    admin_server_image_name: str,
+    auth_server: AuthConfig,
+    admin_token: str,
+    admin_postgres_dsn: str,
+    _admin_server_setup_db: None,
+) -> AsyncIterator[URL]:
+    image_name = admin_server_image_name
+    container_name = "admin_server"
+    container_config = {
+        "Image": image_name,
+        "AttachStdout": False,
+        "AttachStderr": False,
+        "HostConfig": {
+            "PublishAllPorts": True,
+            "Links": ["postgres-admin:postgres", "auth_server:auth"],
+            "ExtraHosts": [
+                "host.docker.internal:host-gateway",
+            ],
+        },
+        "Env": [
+            f"NP_ADMIN_AUTH_TOKEN={admin_token}",
+            "NP_ADMIN_AUTH_URL=http://auth:8080",
+            f"NP_ADMIN_CONFIG_TOKEN={admin_token}",
+            "NP_ADMIN_CONFIG_URL=http://host.docker.internal:8089",
+            f"NP_ADMIN_POSTGRES_DSN={admin_postgres_dsn}",
+        ],
+    }
+
+    if reuse_docker:
+        try:
+            container = await docker.containers.get(container_name)
+            if container["State"]["Running"]:
+                url = await create_admin_url(container)
+                await wait_for_admin_server(url, auth_server)
+                yield url
+                return
+        except aiodocker.exceptions.DockerError:
+            pass
+
+    try:
+        await docker.images.inspect(admin_server_image_name)
+    except aiodocker.exceptions.DockerError:
+        await docker.images.pull(admin_server_image_name)
+
+    container = await docker.containers.create_or_replace(
+        name=container_name, config=container_config
+    )
+    await container.start()
+
+    url = await create_admin_url(container)
+    await wait_for_admin_server(url, auth_server)
+    yield url
+
+    if not reuse_docker:
+        await container.kill()
+        await container.delete(force=True)
+
+
+async def create_admin_url(
+    container: aiodocker.containers.DockerContainer,
 ) -> URL:
-    return mock_admin_server.url
+    host = "0.0.0.0"
+    port = int((await container.port(8080))[0]["HostPort"])
+    return URL(f"http://{host}:{port}/apis/admin/v1")
+
+
+@pytest.fixture
+async def admin_url(admin_server: URL) -> AsyncIterator[URL]:
+    yield admin_server
+
+
+@asynccontextmanager
+async def create_admin_client(
+    url: URL, config: AuthConfig
+) -> AsyncGenerator[AdminClient, None]:
+    async with AdminClient(base_url=url, service_token=config.service_token) as client:
+        # Make user for compute token so it can be owner of clusters
+        try:
+            await client.create_user(name="compute", email="compute@admin.com")
+        except ClientResponseError:  # Already exists
+            pass
+        yield client
+
+
+@pytest.fixture
+async def admin_client(
+    admin_url: URL, auth_config: AuthConfig
+) -> AsyncGenerator[AdminClient, None]:
+    async with create_admin_client(admin_url, auth_config) as client:
+
+        yield client
+
+
+async def wait_for_admin_server(
+    url: URL, auth_config: AuthConfig, timeout_s: float = 30, interval_s: float = 1
+) -> None:
+    async with timeout(timeout_s):
+        while True:
+            try:
+                async with create_admin_client(url, auth_config) as admin_client:
+                    await admin_client.list_users()
+                    break
+            except (AssertionError, ClientError):
+                pass
+            await asyncio.sleep(interval_s)

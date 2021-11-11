@@ -171,6 +171,7 @@ class PollerConfig:
 
     auth: AuthConfig
 
+    admin_url: URL
     config_url: URL
 
     registry_config: RegistryConfig

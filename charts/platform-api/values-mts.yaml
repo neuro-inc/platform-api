@@ -1,24 +1,29 @@
-NP_API_URL: https://ml.cloud.mts.ru/api/v1
-NP_ADMIN_URL: https://ml.cloud.mts.ru/apis/admin/v1
-NP_AUTH_PUBLIC_URL: https://ml.cloud.mts.ru/api/v1/users
-NP_OAUTH_AUTH_URL: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/auth
-NP_OAUTH_TOKEN_URL: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/token
-NP_OAUTH_LOGOUT_URL: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/logout
-NP_OAUTH_CLIENT_ID: neuro-client
-NP_OAUTH_AUDIENCE: https://platform.ml.cloud.mts.ru
-NP_OAUTH_SUCCESS_REDIRECT_URL: https://ml.cloud.mts.ru/oauth/login
-NP_OAUTH_HEADLESS_CALLBACK_URL: https://ml.cloud.mts.ru/oauth/show-code
-NP_CORS_ORIGINS: https://ml.cloud.mts.ru,https://app.ml.cloud.mts.ru
-
-jobPriorityClass:
-  enabled: true
-
 platform:
+  apiPublicUrl: https://ml.cloud.mts.ru/api/v1
+  adminPublicUrl: https://ml.cloud.mts.ru/apis/admin/v1
+  authPublicUrl: https://ml.cloud.mts.ru/api/v1/users
   token:
     valueFrom:
       secretKeyRef:
         name: platformservices-secret
         key: compute_token
+
+jobPriorityClass:
+  enabled: true
+
+oauth:
+  authUrl: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/auth
+  tokenUrl: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/token
+  logoutUrl: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/logout
+  clientId: neuro-client
+  audience: https://platform.ml.cloud.mts.ru
+  successRedirectUrl: https://ml.cloud.mts.ru/oauth/login
+  headlessCallbackUrl: https://ml.cloud.mts.ru/oauth/show-code
+
+cors:
+  origins:
+  - https://ml.cloud.mts.ru
+  - https://app.ml.cloud.mts.ru
 
 postgres:
   dsn:

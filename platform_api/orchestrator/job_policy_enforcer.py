@@ -19,7 +19,8 @@ from typing import (
     TypeVar,
 )
 
-from neuro_auth_client import AuthClient, Cluster
+from neuro_admin_client import AdminClient, ClusterUser
+from neuro_auth_client import AuthClient
 from neuro_logging import new_trace, trace
 from neuro_notifications_client import (
     Client as NotificationsClient,
@@ -35,7 +36,6 @@ from platform_api.orchestrator.job_request import JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.orchestrator.poller_service import _revoke_pass_config
-from platform_api.user import get_cluster
 from platform_api.utils.asyncio import run_and_log_exceptions
 
 
@@ -52,12 +52,12 @@ class CreditsNotificationsEnforcer(JobPolicyEnforcer):
     def __init__(
         self,
         jobs_service: JobsService,
-        auth_client: AuthClient,
+        admin_client: AdminClient,
         notifications_client: NotificationsClient,
         notification_threshold: Decimal,
     ):
         self._jobs_service = jobs_service
-        self._auth_client = auth_client
+        self._admin_client = admin_client
         self._notifications_client = notifications_client
         self._threshold = notification_threshold
         self._sent: Dict[Tuple[str, str], Optional[Decimal]] = defaultdict(lambda: None)
@@ -96,14 +96,18 @@ class CreditsNotificationsEnforcer(JobPolicyEnforcer):
         )
 
     async def _enforce_for_user(self, username: str, clusters: Set[str]) -> None:
-        user = await self._auth_client.get_user(username)
+        base_name = username.split("/", 1)[0]  # SA inherit balance from main user
+        _, cluster_users = await self._admin_client.get_user_with_clusters(base_name)
+        cluster_to_user = {
+            cluster_user.cluster_name: cluster_user for cluster_user in cluster_users
+        }
         for cluster_name in clusters:
-            cluster = get_cluster(user, cluster_name)
-            if cluster:
+            cluster_user = cluster_to_user.get(cluster_name)
+            if cluster_user:
                 await self._notify_user_if_needed(
-                    username=user.name,
-                    cluster_name=cluster.name,
-                    credits=cluster.quota.credits,
+                    username=username,
+                    cluster_name=cluster_name,
+                    credits=cluster_user.balance.credits,
                 )
 
 
@@ -138,9 +142,9 @@ class RuntimeLimitEnforcer(JobPolicyEnforcer):
 
 
 class CreditsLimitEnforcer(JobPolicyEnforcer):
-    def __init__(self, service: JobsService, auth_client: AuthClient):
+    def __init__(self, service: JobsService, admin_client: AdminClient):
         self._service = service
-        self._auth_client = auth_client
+        self._admin_client = admin_client
 
     _T = TypeVar("_T")
     _K = TypeVar("_K")
@@ -168,23 +172,27 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
         await run_and_log_exceptions(coros)
 
     async def _enforce_for_user(self, username: str, user_jobs: Iterable[Job]) -> None:
-        user = await self._auth_client.get_user(username)
+        base_name = username.split("/", 1)[0]  # SA inherit balance from main user
+        user, user_clusters = await self._admin_client.get_user_with_clusters(base_name)
         for cluster_name, cluster_jobs in self._groupby(
             user_jobs, lambda job: job.cluster_name
         ).items():
-            cluster: Optional[Cluster]
+            user_cluster: Optional[ClusterUser]
             try:
-                cluster = next(
-                    cluster for cluster in user.clusters if cluster.name == cluster_name
+                user_cluster = next(
+                    user_cluster
+                    for user_cluster in user_clusters
+                    if user_cluster.cluster_name == cluster_name
                 )
             except StopIteration:
                 logger.warning(
                     f"User {username} has jobs in cluster {cluster_name}, "
                     f"but has no access to this cluster. Jobs will be cancelled"
                 )
-                cluster = None
-            if cluster is None or (
-                cluster.quota.credits is not None and cluster.quota.credits <= 0
+                user_cluster = None
+            if user_cluster is None or (
+                user_cluster.balance.credits is not None
+                and user_cluster.balance.credits <= 0
             ):
                 for job in cluster_jobs:
                     await self._service.cancel_job(

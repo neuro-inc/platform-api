@@ -8,6 +8,7 @@ from functools import partial
 from typing import AsyncIterator, Callable, Dict, List, Optional, Tuple, Union
 
 from aiohttp import ClientResponseError
+from neuro_admin_client import AdminClient
 from neuro_auth_client import AuthClient
 
 from platform_api.cluster import (
@@ -18,9 +19,9 @@ from platform_api.cluster import (
 )
 from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import JobsConfig, JobsSchedulerConfig
-from platform_api.user import get_cluster
 
 from ..utils.asyncio import run_and_log_exceptions
+from ..utils.retry import retries
 from .base import Orchestrator
 from .job import Job, JobRecord, JobStatusItem, JobStatusReason
 from .job_request import (
@@ -49,21 +50,28 @@ class JobsScheduler:
     def __init__(
         self,
         config: JobsSchedulerConfig,
-        auth_client: AuthClient,
+        admin_client: AdminClient,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
     ) -> None:
         self._config = config
-        self._auth_client = auth_client
+        self._admin_client = admin_client
         self._current_datetime_factory = current_datetime_factory
 
     async def _get_user_running_jobs_quota(
         self, username: str, cluster: str
     ) -> Optional[int]:
-        auth_user = await self._auth_client.get_user(username)
-        auth_cluster = get_cluster(auth_user, cluster)
-        if auth_cluster:
-            return auth_cluster.quota.total_running_jobs
-        return 0  # User has no access to this cluster
+        try:
+            base_name = username.split("/", 1)[0]  # SA same quota as user
+            cluster_user = await self._admin_client.get_cluster_user(
+                cluster_name=cluster, user_name=base_name
+            )
+        except ClientResponseError as e:
+            if e.status == 404:
+                # User has no access to this cluster
+                return 0
+            raise
+        else:
+            return cluster_user.quota.total_running_jobs
 
     async def _enforce_running_job_quota(
         self, raw_result: SchedulingResult
@@ -342,7 +350,9 @@ class JobsPollerService:
                 await self._revoke_pass_config(job)
         else:
             try:
-                status_item = await orchestrator.get_job_status(job)
+                for retry in retries("Fail to fetch a job", (JobNotFoundException,)):
+                    async with retry:
+                        status_item = await orchestrator.get_job_status(job)
                 # TODO: In case job is found, but container is not in state Pending
                 # We shall go and check for the events assigned to the pod
                 # "pod didn't trigger scale-up (it wouldn't fit if a new node is added)"

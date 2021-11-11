@@ -1,0 +1,9 @@
+apiVersion: v2
+name: platform-api
+description: A Helm chart for platform-api service
+version: $CHART_VERSION
+appVersion: $APP_VERSION
+dependencies:
+  - name: postgres-db-init
+    version: "1.1.0"
+    repository: https://neuro-inc.github.io/helm-charts
