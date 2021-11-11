@@ -6,7 +6,7 @@ AZURE_ACR_NAME ?= crc570d91c95c6aac0ea80afb1019a0c6f
 
 GITHUB_OWNER ?= neuro-inc
 
-TAG ?= latest
+IMAGE_TAG ?= latest
 
 IMAGE_REPO_gke    = $(GKE_DOCKER_REGISTRY)/$(GKE_PROJECT_ID)
 IMAGE_REPO_aws    = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
@@ -63,8 +63,8 @@ docker_build:
 		-t $(IMAGE_NAME):latest .
 
 docker_push: docker_build
-	docker tag $(IMAGE_NAME):latest $(IMAGE_REPO):$(TAG)
-	docker push $(IMAGE_REPO):$(TAG)
+	docker tag $(IMAGE_NAME):latest $(IMAGE_REPO):$(IMAGE_TAG)
+	docker push $(IMAGE_REPO):$(IMAGE_TAG)
 
 	docker tag $(IMAGE_NAME):latest $(IMAGE_REPO):latest
 	docker push $(IMAGE_REPO):latest
@@ -119,7 +119,7 @@ docker_pull_test_images:
 
 helm_create_chart:
 	export IMAGE_REPO=$(IMAGE_REPO); \
-	export IMAGE_TAG=$(TAG); \
+	export IMAGE_TAG=$(IMAGE_TAG); \
 	export CHART_VERSION=$(HELM_CHART_VERSION); \
 	export APP_VERSION=$(HELM_APP_VERSION); \
 	VALUES=$$(cat charts/$(HELM_CHART)/values.yaml | envsubst); \

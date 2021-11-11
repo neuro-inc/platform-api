@@ -195,6 +195,7 @@ jobs:
       HELM_CHART: platform-api
       HELM_RELEASE: platform-api
       CLOUD_PROVIDER: ${{ secrets.CLOUD_PROVIDER_STAGING }}
+      IMAGE_REGISTRY: ${{ secrets.CLOUD_PROVIDER_DEV }}
     steps:
     - name: Checkout commit
       uses: actions/checkout@v2
@@ -215,42 +216,26 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
+    - name: Login to AWS ECR
+      if: env.CLOUD_PROVIDER == 'aws'
+      uses: aws-actions/amazon-ecr-login@v1
     - name: Configure Azure credentials
       if: env.CLOUD_PROVIDER == 'azure'
       uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - name: Login to Azure ACR
+      if: env.CLOUD_PROVIDER == 'azure'
+      uses: azure/docker-login@v1
+      with:
+        login-server: ${{ secrets.AZURE_DEV_ACR_SERVER }}
+        username: ${{ secrets.AZURE_DEV_ACR_USERNAME }}
+        password: ${{ secrets.AZURE_DEV_ACR_PASSWORD }}
     - name: Set tag
       run: echo "TAG=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+    - name: Push images to registry
+      run: make docker_push
     - name: Update kube config
       run: make ${{ env.CLOUD_PROVIDER }}_k8s_login
-    - name: Deploy to kubernetes
-      run: make helm_deploy
-  deploy_mts:
-    name: Deploy to MTS
-    runs-on: ubuntu-latest
-    needs: deploy_staging
-    concurrency: deploy_mts
-    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/v')
-    env:
-      HELM_ENV: mts
-      HELM_CHART: platform-api
-      HELM_RELEASE: platform-api
-    steps:
-    - name: Checkout commit
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-    - name: Install Helm
-      uses: azure/setup-helm@v1
-      with:
-        version: v3.7.0
-    - name: Configure kube config
-      uses: azure/k8s-set-context@v1
-      with:
-        method: kubeconfig
-        kubeconfig: ${{ secrets.MTS_KUBE_CONFIG }}
-    - name: Set tag
-      run: echo "TAG=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
     - name: Deploy to kubernetes
       run: make helm_deploy
