@@ -359,7 +359,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             .select_from(sub_query)
             .order_by(desc(sub_query.c.created_at), sub_query.c.index)
         )
-        return [record[sub_query.c.tag_name] for record in await self._fetch(query)]
+        return [record["tag_name"] for record in await self._fetch(query)]
 
 
 class JobFilterClauseBuilder:
