@@ -4889,6 +4889,7 @@ class TestJobs:
 
 
 class TestTags:
+    @pytest.mark.xfail
     @pytest.mark.asyncio
     async def test_user_tags_unauthorized(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
@@ -4897,6 +4898,7 @@ class TestTags:
         async with client.get(url) as resp:
             assert resp.status == HTTPUnauthorized.status_code
 
+    @pytest.mark.xfail
     @pytest.mark.asyncio
     async def test_user_tags_authorized_empty(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
@@ -4907,6 +4909,7 @@ class TestTags:
             result = await resp.json()
             assert result == {"tags": []}
 
+    @pytest.mark.xfail
     @pytest.mark.asyncio
     async def test_user_tags_authorized(
         self,
