@@ -51,7 +51,7 @@ from platform_api.orchestrator.job_request import (
     JobStatus,
     SecretContainerVolume,
 )
-from platform_api.orchestrator.jobs_service import JobsService
+from platform_api.orchestrator.jobs_service import JobsService, UserClusterConfig
 from platform_api.orchestrator.jobs_storage import (
     ClusterOwnerNameSet,
     JobFilter,
@@ -550,7 +550,7 @@ class JobsHandler:
         )
 
     def _check_user_can_submit_jobs(
-        self, user_cluster_configs: Sequence[ClusterConfig]
+        self, user_cluster_configs: Sequence[UserClusterConfig]
     ) -> None:
         if not user_cluster_configs:
             raise aiohttp.web.HTTPForbidden(
@@ -576,16 +576,16 @@ class JobsHandler:
         )
 
     def _get_cluster_config(
-        self, cluster_configs: Sequence[ClusterConfig], cluster_name: str
+        self, user_cluster_configs: Sequence[UserClusterConfig], cluster_name: str
     ) -> ClusterConfig:
-        for config in cluster_configs:
-            if config.name == cluster_name:
-                return config
+        for user_cluster_config in user_cluster_configs:
+            if user_cluster_config.config.name == cluster_name:
+                return user_cluster_config.config
         raise aiohttp.web.HTTPForbidden(
             text=json.dumps(
                 {
                     "error": (
-                        "User is not allowed to submit jobs " "to the specified cluster"
+                        "User is not allowed to submit jobs to the specified cluster"
                     )
                 }
             ),
@@ -599,13 +599,12 @@ class JobsHandler:
 
         cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
         self._check_user_can_submit_jobs(cluster_configs)
-        default_cluster_name = cluster_configs[0].name
+        default_cluster_name = cluster_configs[0].config.name
 
         job_cluster_name_validator = create_job_cluster_name_validator(
             default_cluster_name
         )
         request_payload = job_cluster_name_validator.check(orig_payload)
-        self._check_user_can_submit_jobs(cluster_configs)
         cluster_name = request_payload["cluster_name"]
         cluster_config = self._get_cluster_config(cluster_configs, cluster_name)
 

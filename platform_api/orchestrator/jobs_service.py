@@ -1,8 +1,9 @@
 import base64
 import json
 import logging
+from collections import defaultdict
 from contextlib import asynccontextmanager
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
@@ -59,6 +60,12 @@ class RunningJobsQuotaExceededError(JobsServiceException):
 class NoCreditsError(JobsServiceException):
     def __init__(self, user: str) -> None:
         super().__init__(f"No credits left for user '{user}'")
+
+
+@dataclass(frozen=True)
+class UserClusterConfig:
+    config: ClusterConfig
+    orgs: List[Optional[str]]
 
 
 class JobsService:
@@ -382,27 +389,33 @@ class JobsService:
         )
         return [await self._get_cluster_job(record) for record in records]
 
-    async def get_user_cluster_configs(self, user: AuthUser) -> List[ClusterConfig]:
+    async def get_user_cluster_configs(self, user: AuthUser) -> List[UserClusterConfig]:
         configs = []
         base_name = user.name.split("/", 1)[0]  # SA has access to same clusters as user
+        cluster_to_orgs = defaultdict(list)
         try:
             _, user_clusters = await self._admin_client.get_user_with_clusters(
                 base_name
             )
-            cluster_names = [
-                user_cluster.cluster_name for user_cluster in user_clusters
-            ]
+            for user_cluster in user_clusters:
+                cluster_to_orgs[user_cluster.cluster_name].append(user_cluster.org_name)
         except ClientResponseError as e:
             if e.status == 404:
                 # Fallback to old logic with AuthUser clusters
                 # TODO: rethink this
-                cluster_names = [auth_cluster.name for auth_cluster in user.clusters]
+                for auth_cluster in user.clusters:
+                    cluster_to_orgs[auth_cluster.name].append(None)
             else:
                 raise
-        for cluster_name in cluster_names:
+        for cluster_name, orgs in cluster_to_orgs.items():
             try:
                 cluster_config = self._cluster_registry.get(cluster_name)
-                configs.append(cluster_config)
+                configs.append(
+                    UserClusterConfig(
+                        config=cluster_config,
+                        orgs=orgs,
+                    )
+                )
             except ClusterNotFound:
                 pass
         return configs

@@ -281,18 +281,30 @@ class MockAdminClient(AdminClient):
 
     @overload
     async def get_cluster_user(
-        self, cluster_name: str, user_name: str, with_user_info: Literal[True]
+        self,
+        cluster_name: str,
+        user_name: str,
+        with_user_info: Literal[True] = ...,
+        org_name: Optional[str] = None,
     ) -> ClusterUserWithInfo:
         ...
 
     @overload
     async def get_cluster_user(
-        self, cluster_name: str, user_name: str, with_user_info: Literal[False] = ...
+        self,
+        cluster_name: str,
+        user_name: str,
+        with_user_info: Literal[False] = ...,
+        org_name: Optional[str] = None,
     ) -> ClusterUser:
         ...
 
     async def get_cluster_user(
-        self, cluster_name: str, user_name: str, with_user_info: bool = False
+        self,
+        cluster_name: str,
+        user_name: str,
+        with_user_info: bool = False,
+        org_name: Optional[str] = None,
     ) -> Union[ClusterUser, ClusterUserWithInfo]:
         for cluster_user in self.cluster_users.get(user_name, []):
             if cluster_user.cluster_name == cluster_name:
