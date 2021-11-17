@@ -4888,52 +4888,6 @@ class TestJobs:
             }
 
 
-class TestTags:
-    @pytest.mark.asyncio
-    async def test_user_tags_unauthorized(
-        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
-    ) -> None:
-        url = api.tags_base_url
-        async with client.get(url) as resp:
-            assert resp.status == HTTPUnauthorized.status_code
-
-    @pytest.mark.asyncio
-    async def test_user_tags_authorized_empty(
-        self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
-    ) -> None:
-        url = api.tags_base_url
-        async with client.get(url, headers=regular_user.headers) as resp:
-            assert resp.status == HTTPOk.status_code, await resp.text()
-            result = await resp.json()
-            assert result == {"tags": []}
-
-    @pytest.mark.asyncio
-    async def test_user_tags_authorized(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        regular_user: _User,
-        job_submit: Dict[str, Any],
-    ) -> None:
-        headers = regular_user.headers
-
-        job_submit["tags"] = ["t1"]
-        url = api.jobs_base_url
-        async with client.post(url, headers=headers, json=job_submit) as resp:
-            assert resp.status == HTTPAccepted.status_code, await resp.text()
-
-        job_submit["tags"] = ["t4", "t3", "t2"]
-        url = api.jobs_base_url
-        async with client.post(url, headers=headers, json=job_submit) as resp:
-            assert resp.status == HTTPAccepted.status_code, await resp.text()
-
-        url = api.tags_base_url
-        async with client.get(url, headers=regular_user.headers) as resp:
-            assert resp.status == HTTPOk.status_code, await resp.text()
-            result = await resp.json()
-            assert result == {"tags": ["t2", "t3", "t4", "t1"]}
-
-
 class TestRuntimeLimitEnforcer:
     @pytest.mark.asyncio
     async def test_enforce_runtime(

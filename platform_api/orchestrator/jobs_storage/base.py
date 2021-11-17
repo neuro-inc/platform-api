@@ -168,7 +168,3 @@ class JobsStorage(ABC):
         self, *, delay: timedelta = timedelta(), limit: Optional[int] = None
     ) -> List[JobRecord]:
         pass
-
-    @abstractmethod
-    async def get_tags(self, owner: str) -> List[str]:
-        pass

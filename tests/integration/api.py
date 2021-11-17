@@ -49,10 +49,6 @@ class ApiConfig(NamedTuple):
     def clusters_sync_url(self) -> str:
         return self.endpoint + "/config/clusters/sync"
 
-    @property
-    def tags_base_url(self) -> str:
-        return f"{self.endpoint}/tags"
-
 
 class AuthApiConfig(NamedTuple):
     server_endpoint_url: URL
