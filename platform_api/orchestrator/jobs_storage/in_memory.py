@@ -129,6 +129,3 @@ class InMemoryJobsStorage(JobsStorage):
         if limit:
             jobs = jobs[:limit]
         return jobs
-
-    async def get_tags(self, owner: str) -> List[str]:
-        return self._owner_to_tags.get(owner, [])

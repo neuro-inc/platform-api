@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from itertools import islice
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -1241,96 +1241,6 @@ class TestJobsStorage:
         jobs = await storage.get_jobs_for_drop(delay=timedelta(days=1), limit=1)
         assert len(jobs) == 1
         assert {deleted_job_1.id, deleted_job_2.id}.issuperset({job.id for job in jobs})
-
-    @pytest.mark.asyncio
-    async def test_get_tags_empty(self, storage: JobsStorage) -> None:
-        for job in [
-            self._create_job(owner="u", tags=["b"]),
-            self._create_job(owner="u", tags=["a"]),
-            self._create_job(owner="u", tags=()),
-        ]:
-            async with storage.try_create_job(job):
-                pass
-
-        tags_u1 = await storage.get_tags("another")
-        assert tags_u1 == []
-
-    @pytest.mark.asyncio
-    async def test_get_tags_single(self, storage: JobsStorage) -> None:
-        f1 = lambda: datetime(year=2020, month=1, day=1, second=1)  # noqa
-        f2 = lambda: datetime(year=2020, month=1, day=1, second=2)  # noqa
-        f3 = lambda: datetime(year=2020, month=1, day=1, second=3)  # noqa
-
-        for job in [
-            self._create_job(owner="u", current_datetime_factory=f1, tags=["b"]),
-            self._create_job(owner="u", current_datetime_factory=f2, tags=["a"]),
-            self._create_job(owner="u", current_datetime_factory=f3, tags=["c"]),
-            self._create_job(owner="u", tags=()),
-        ]:
-            async with storage.try_create_job(job):
-                pass
-
-        tags_u1 = await storage.get_tags("u")
-        assert tags_u1 == ["c", "a", "b"]
-
-    @pytest.mark.asyncio
-    async def test_get_tags_multiple(self, storage: JobsStorage) -> None:
-        f1 = lambda: datetime(year=2020, month=1, day=1, second=1)  # noqa
-        f2 = lambda: datetime(year=2020, month=1, day=1, second=2)  # noqa
-
-        for job in [
-            self._create_job(
-                owner="u", current_datetime_factory=f1, tags=["b", "a", "c"]
-            ),
-            self._create_job(owner="u", current_datetime_factory=f2, tags=["d"]),
-            self._create_job(owner="u", tags=()),
-        ]:
-            async with storage.try_create_job(job):
-                pass
-
-        tags_u1 = await storage.get_tags("u")
-        assert tags_u1 == ["d", "a", "b", "c"]
-
-    @pytest.mark.asyncio
-    async def test_get_tags_overwrite_single(self, storage: JobsStorage) -> None:
-        f1 = lambda: datetime(year=2020, month=1, day=1, second=1)  # noqa
-        f2 = lambda: datetime(year=2020, month=1, day=1, second=2)  # noqa
-        f3 = lambda: datetime(year=2020, month=1, day=1, second=3)  # noqa
-        f4 = lambda: datetime(year=2020, month=1, day=1, second=4)  # noqa
-
-        for job in [
-            self._create_job(owner="u", current_datetime_factory=f1, tags=["a"]),
-            self._create_job(owner="u", current_datetime_factory=f2, tags=["b"]),
-            self._create_job(owner="u", current_datetime_factory=f3, tags=["a"]),
-            self._create_job(owner="u", current_datetime_factory=f4, tags=["c"]),
-            self._create_job(owner="u", tags=()),
-        ]:
-            async with storage.try_create_job(job):
-                pass
-
-        tags_u1 = await storage.get_tags("u")
-        assert tags_u1 == ["c", "a", "b"]
-
-    @pytest.mark.asyncio
-    async def test_get_tags_overwrite_multiple(
-        self,
-        storage: JobsStorage,
-    ) -> None:
-        f1 = lambda: datetime(year=2020, month=1, day=1, second=1)  # noqa
-        f2 = lambda: datetime(year=2020, month=1, day=1, second=2)  # noqa
-        f3 = lambda: datetime(year=2020, month=1, day=1, second=3)  # noqa
-
-        for job in [
-            self._create_job(owner="u", current_datetime_factory=f1, tags=["a"]),
-            self._create_job(owner="u", current_datetime_factory=f2, tags=["b"]),
-            self._create_job(owner="u", current_datetime_factory=f3, tags=["c", "a"]),
-            self._create_job(owner="u", tags=()),
-        ]:
-            async with storage.try_create_job(job):
-                pass
-
-        tags_u1 = await storage.get_tags("u")
-        assert tags_u1 == ["a", "c", "b"]
 
     @pytest.mark.asyncio
     async def test_job_lifecycle(self, storage: JobsStorage) -> None:
