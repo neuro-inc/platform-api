@@ -8,9 +8,6 @@ platform:
         name: platformservices-secret
         key: compute_token
 
-jobPriorityClass:
-  enabled: true
-
 oauth:
   authUrl: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/auth
   tokenUrl: https://login.ml.cloud.mts.ru/auth/realms/neu.ro/protocol/openid-connect/token
