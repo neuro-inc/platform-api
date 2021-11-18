@@ -38,7 +38,6 @@ from .config import Config, CORSConfig
 from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
-from .handlers.tags_handler import TagsHandler
 from .orchestrator.billing_log.service import BillingLogService, BillingLogWorker
 from .orchestrator.billing_log.storage import PostgresBillingLogStorage
 from .orchestrator.job_request import JobError, JobException
@@ -228,13 +227,6 @@ async def create_jobs_app(config: Config) -> aiohttp.web.Application:
     return jobs_app
 
 
-async def create_tags_app(config: Config) -> aiohttp.web.Application:
-    tags_app = aiohttp.web.Application()
-    tags_handler = TagsHandler(app=tags_app, config=config)
-    tags_handler.register(tags_app)
-    return tags_app
-
-
 package_version = pkg_resources.get_distribution("platform-api").version
 
 
@@ -351,7 +343,6 @@ async def create_app(
 
             app["config_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
-            app["tags_app"]["jobs_service"] = jobs_service
 
             logger.info("Initializing JobPolicyEnforcePoller")
 
@@ -432,10 +423,6 @@ async def create_app(
     jobs_app = await create_jobs_app(config=config)
     app["jobs_app"] = jobs_app
     api_v1_app.add_subapp("/jobs", jobs_app)
-
-    tags_app = await create_tags_app(config=config)
-    app["tags_app"] = tags_app
-    api_v1_app.add_subapp("/tags", tags_app)
 
     app.add_subapp("/api/v1", api_v1_app)
 

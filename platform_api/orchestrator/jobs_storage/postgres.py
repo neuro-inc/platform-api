@@ -16,7 +16,7 @@ import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
 import sqlalchemy.sql as sasql
 from asyncpg import SerializationError, UniqueViolationError
-from sqlalchemy import Boolean, Integer, and_, asc, desc, func, or_, select
+from sqlalchemy import Boolean, and_, asc, desc, func, or_
 from sqlalchemy.engine import Row
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
@@ -308,58 +308,6 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         if limit:
             query = query.limit(limit)
         return [self._record_to_job(record) for record in await self._fetch(query)]
-
-    async def get_tags(self, owner: str) -> List[str]:
-        # This methods has the following requirements:
-        # - it should return all job tags for the given owner
-        # - tags should be sorted by created_at date of the most recent job
-        # - tags that have the same created_at date should be sorted alphabetically
-        # To achieve these goals we:
-        # - Sort and enumerate tags jsonb array for each job using SQL functions
-        # defined at alembic migration (..._create_jobs_table.py)
-        # - Flatten those array into single result set using postgresql
-        # function jsonb_array_elements
-        # - Add created_at as the third column
-        # Now we can have duplicated tags. To eliminate them, we properly order
-        # result set and use DISTINCT ON. Unfortunately, this requires makes us
-        # to use "tag_name" as the first ordering key.
-        # - Using the result of the previous step as a subquery, we reorder it
-        # properly.
-        #
-        # It's complicated, I know :).
-
-        sorted_tags = sasql.func.sort_json_str_array(self._tables.jobs.c.tags)
-        enumerated_tags = sasql.func.enumerate_json_array(sorted_tags)
-        tag = sasql.func.jsonb_array_elements(enumerated_tags).alias("tag")
-        tag_col = sa.column("value", type_=sapg.JSONB)
-        tag_name = tag_col["value"].astext.label("tag_name")
-
-        sub_query = (
-            select(
-                [
-                    tag_name,
-                    self._tables.jobs.c.created_at,
-                    tag_col["index"].astext.cast(Integer).label("index"),
-                ]
-            )
-            .distinct(tag_name)
-            .select_from(self._tables.jobs)
-            .select_from(tag)
-            .where(self._tables.jobs.c.owner == owner)
-            .where(self._tables.jobs.c.tags != "null")
-            .order_by(
-                tag_name,
-                desc(self._tables.jobs.c.created_at),
-                tag_col["index"].astext.cast(Integer),
-            )
-            .alias()
-        )
-        query = (
-            select([sub_query.c.tag_name])
-            .select_from(sub_query)
-            .order_by(desc(sub_query.c.created_at), sub_query.c.index)
-        )
-        return [record["tag_name"] for record in await self._fetch(query)]
 
 
 class JobFilterClauseBuilder:
