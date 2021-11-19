@@ -121,7 +121,10 @@ jobs:
       HELM_ENV: mts
       HELM_CHART: platform-api
       HELM_RELEASE: platform-api
+      HELM_CHART_VERSION: ${{ needs.publish_image.outputs.version }}
+      HELM_APP_VERSION: ${{ needs.publish_image.outputs.version }}
       IMAGE_REGISTRY: github
+      IMAGE_TAG: ${{ needs.publish_image.outputs.version }}
     steps:
     - name: Checkout commit
       uses: actions/checkout@v2
@@ -137,6 +140,4 @@ jobs:
         method: kubeconfig
         kubeconfig: ${{ secrets.MTS_KUBE_CONFIG }}
     - name: Deploy to kubernetes
-      env:
-        IMAGE_TAG: ${{ needs.publish_image.outputs.version }}
       run: make helm_deploy
