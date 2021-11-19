@@ -155,8 +155,8 @@ jobs:
         login-server: ${{ secrets.AZURE_DEV_ACR_SERVER }}
         username: ${{ secrets.AZURE_DEV_ACR_USERNAME }}
         password: ${{ secrets.AZURE_DEV_ACR_PASSWORD }}
-    - name: Set tag
-      run: echo "TAG=$GITHUB_SHA" >> $GITHUB_ENV
+    - name: Set image tag
+      run: echo "IMAGE_TAG=$GITHUB_SHA" >> $GITHUB_ENV
     - name: Push images to registry
       run: make docker_push
     - name: Update kube config
@@ -195,7 +195,7 @@ jobs:
       HELM_CHART: platform-api
       HELM_RELEASE: platform-api
       CLOUD_PROVIDER: ${{ secrets.CLOUD_PROVIDER_STAGING }}
-      IMAGE_REGISTRY: ${{ secrets.CLOUD_PROVIDER_DEV }}
+      IMAGE_REGISTRY: ${{ secrets.CLOUD_PROVIDER_STAGING }}
     steps:
     - name: Checkout commit
       uses: actions/checkout@v2
@@ -228,11 +228,11 @@ jobs:
       if: env.CLOUD_PROVIDER == 'azure'
       uses: azure/docker-login@v1
       with:
-        login-server: ${{ secrets.AZURE_DEV_ACR_SERVER }}
-        username: ${{ secrets.AZURE_DEV_ACR_USERNAME }}
-        password: ${{ secrets.AZURE_DEV_ACR_PASSWORD }}
-    - name: Set tag
-      run: echo "TAG=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+        login-server: ${{ secrets.AZURE_STAGING_ACR_SERVER }}
+        username: ${{ secrets.AZURE_STAGING_ACR_USERNAME }}
+        password: ${{ secrets.AZURE_STAGING_ACR_PASSWORD }}
+    - name: Set image tag
+      run: echo "IMAGE_TAG=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
     - name: Push images to registry
       run: make docker_push
     - name: Update kube config

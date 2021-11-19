@@ -102,9 +102,11 @@ jobs:
     concurrency: deploy_mts
     if: ${{ ! needs.publish_image.outputs.skip }}
     env:
+      GITHUB_OWNER: ${{ github.repository_owner }}
       HELM_ENV: mts
       HELM_CHART: platform-api
       HELM_RELEASE: platform-api
+      IMAGE_REGISTRY: github
     steps:
     - name: Checkout commit
       uses: actions/checkout@v2
