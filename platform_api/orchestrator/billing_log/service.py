@@ -192,15 +192,17 @@ class BillingLogWorker:
             return  # Job was removed from DB, nothing we can do here.
 
         try:
-            await self._admin_client.charge_user(
+            await self._admin_client.charge_cluster_user(
                 cluster_name=job.cluster_name,
-                username=job.base_owner,
-                spending=entry.charge,
+                user_name=job.base_owner,
+                org_name=job.org_name,
+                amount=entry.charge,
                 idempotency_key=entry.idempotency_key,
             )
         except ClientResponseError as e:
             if e.status == 404:
                 # User was removed from the cluster
+                # TODO: support debts with org_name
                 await self._admin_client.add_debt(
                     cluster_name=job.cluster_name,
                     username=job.base_owner,

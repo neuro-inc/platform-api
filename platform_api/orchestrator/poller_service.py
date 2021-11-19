@@ -58,12 +58,12 @@ class JobsScheduler:
         self._current_datetime_factory = current_datetime_factory
 
     async def _get_user_running_jobs_quota(
-        self, username: str, cluster: str
+        self, username: str, cluster: str, org_name: Optional[str]
     ) -> Optional[int]:
         try:
             base_name = username.split("/", 1)[0]  # SA same quota as user
             cluster_user = await self._admin_client.get_cluster_user(
-                cluster_name=cluster, user_name=base_name
+                cluster_name=cluster, user_name=base_name, org_name=org_name
             )
         except ClientResponseError as e:
             if e.status == 404:
@@ -73,31 +73,71 @@ class JobsScheduler:
         else:
             return cluster_user.quota.total_running_jobs
 
+    async def _get_org_running_jobs_quota(
+        self, cluster: str, org_name: Optional[str]
+    ) -> Optional[int]:
+        if org_name is None:
+            return None
+        try:
+            org_cluster = await self._admin_client.get_org_cluster(
+                cluster_name=cluster, org_name=org_name
+            )
+        except ClientResponseError as e:
+            if e.status == 404:
+                # User has no access to this cluster
+                return 0
+            raise
+        else:
+            return org_cluster.quota.total_running_jobs
+
     async def _enforce_running_job_quota(
         self, raw_result: SchedulingResult
     ) -> SchedulingResult:
         jobs_to_update: List[JobRecord] = []
 
-        # Grouping by (username, cluster_name):
-        grouped_jobs: Dict[Tuple[str, str], List[JobRecord]] = defaultdict(list)
+        # Grouping by (username, cluster_name, org_name):
+        grouped_jobs: Dict[
+            Tuple[str, str, Optional[str]], List[JobRecord]
+        ] = defaultdict(list)
         for record in raw_result.jobs_to_update:
-            grouped_jobs[(record.owner, record.cluster_name)].append(record)
+            grouped_jobs[(record.owner, record.cluster_name, record.org_name)].append(
+                record
+            )
 
-        # Filter jobs
-        for (username, cluster), jobs in grouped_jobs.items():
-            quota = await self._get_user_running_jobs_quota(username, cluster)
+        def _filter_our_for_quota(
+            quota: Optional[int], jobs: List[JobRecord]
+        ) -> List[JobRecord]:
             if quota is not None:
                 materialized_jobs = [job for job in jobs if job.materialized]
                 not_materialized = [job for job in jobs if not job.materialized]
-                jobs_to_update.extend(materialized_jobs)
                 free_places = quota - len(materialized_jobs)
+                result = materialized_jobs
                 if free_places > 0:
                     not_materialized = sorted(
                         not_materialized, key=lambda job: job.status_history.created_at
                     )
-                    jobs_to_update.extend(not_materialized[:free_places])
+                    result += not_materialized[:free_places]
+                return result
             else:
-                jobs_to_update.extend(jobs)
+                return jobs
+
+        # Filter jobs by user quota
+        for (username, cluster, org_name), jobs in grouped_jobs.items():
+            quota = await self._get_user_running_jobs_quota(username, cluster, org_name)
+            jobs_to_update.extend(_filter_our_for_quota(quota, jobs))
+
+        # Grouping by (cluster_name, org_name):
+        grouped_by_org_jobs: Dict[
+            Tuple[str, Optional[str]], List[JobRecord]
+        ] = defaultdict(list)
+        for record in jobs_to_update:
+            grouped_by_org_jobs[(record.cluster_name, record.org_name)].append(record)
+        jobs_to_update = []
+
+        # Filter jobs by org quota
+        for (cluster, org_name), jobs in grouped_by_org_jobs.items():
+            quota = await self._get_org_running_jobs_quota(cluster, org_name)
+            jobs_to_update.extend(_filter_our_for_quota(quota, jobs))
 
         return SchedulingResult(
             jobs_to_update=jobs_to_update,

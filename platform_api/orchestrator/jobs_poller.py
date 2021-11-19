@@ -125,6 +125,7 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
             [_parse_status_item(item) for item in payload["statuses"]]
         ),
         cluster_name=payload["cluster_name"],
+        org_name=payload.get("org_name"),
         name=payload.get("name"),
         preset_name=payload.get("preset_name"),
         tags=payload.get("tags", []),

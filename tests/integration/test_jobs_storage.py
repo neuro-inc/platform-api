@@ -959,6 +959,72 @@ class TestJobsStorage:
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == []
 
+    async def prepare_filtering_test_different_orgs(
+        self, storage: JobsStorage
+    ) -> List[JobRecord]:
+        jobs = [
+            self._create_running_job(
+                owner="user1", cluster_name="test-cluster", org_name=None
+            ),
+            self._create_succeeded_job(
+                owner="user1",
+                cluster_name="test-cluster",
+                job_name="jobname1",
+                org_name=None,
+            ),
+            self._create_failed_job(
+                owner="user2",
+                cluster_name="test-cluster",
+                job_name="jobname1",
+                org_name=None,
+            ),
+            self._create_succeeded_job(
+                owner="user3",
+                cluster_name="test-cluster",
+                job_name="jobname1",
+                org_name="test-org",
+            ),
+            self._create_succeeded_job(
+                owner="user1", cluster_name="my-cluster", org_name="test-org"
+            ),
+            self._create_failed_job(
+                owner="user3", cluster_name="my-cluster", org_name="test-org"
+            ),
+            self._create_failed_job(
+                owner="user1", cluster_name="other-cluster", org_name="test-org"
+            ),
+            self._create_succeeded_job(
+                owner="user2", cluster_name="other-cluster", org_name="other-org"
+            ),
+            self._create_running_job(
+                owner="user3", cluster_name="other-cluster", org_name="other-org"
+            ),
+        ]
+        for job in jobs:
+            async with storage.try_create_job(job):
+                pass
+        return jobs
+
+    @pytest.mark.asyncio
+    async def test_get_all_filter_by_org(self, storage: JobsStorage) -> None:
+        jobs = await self.prepare_filtering_test_different_orgs(storage)
+
+        job_filter = JobFilter(orgs={"other-org"})
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job.id for job in jobs[7:]}
+
+        job_filter = JobFilter(orgs={None})
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job.id for job in jobs[:3]}
+
+        job_filter = JobFilter(orgs={None, "test-org"})
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job.id for job in jobs[:7]}
+
+        job_filter = JobFilter(orgs={"nonexisting-org"})
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == set()
+
     @pytest.mark.asyncio
     async def test_get_all_filter_by_fully_billed(self, storage: JobsStorage) -> None:
         jobs = [

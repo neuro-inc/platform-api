@@ -129,10 +129,57 @@ class TestBillingLogProcessing:
             assert updated_job.total_price_credits == Decimal("1.00")
             assert updated_job.fully_billed
             assert len(mock_admin_client.spending_log) == 1
-            assert mock_admin_client.spending_log[0][0] == job.cluster_name
-            assert mock_admin_client.spending_log[0][1] == job.owner
-            assert mock_admin_client.spending_log[0][2] == Decimal("1.00")
-            assert mock_admin_client.spending_log[0][3] == "key"
+            assert mock_admin_client.spending_log[0] == (
+                job.cluster_name,
+                job.org_name,
+                job.owner,
+                Decimal("1.00"),
+                "key",
+            )
+
+    @pytest.mark.asyncio
+    async def test_syncs_job_with_org(
+        self,
+        test_org: str,
+        test_user_with_org: User,
+        jobs_service: JobsService,
+        job_request_factory: Callable[[], JobRequest],
+        mock_admin_client: MockAdminClient,
+        service: BillingLogService,
+        worker: BillingLogWorker,
+    ) -> None:
+        job, _ = await jobs_service.create_job(
+            job_request_factory(),
+            test_user_with_org,
+            cluster_name="test-cluster",
+            org_name=test_org,
+        )
+        async with service.entries_inserter() as inserter:
+            last_id = await inserter.insert(
+                [
+                    BillingLogEntry(
+                        idempotency_key="key",
+                        job_id=job.id,
+                        charge=Decimal("1.00"),
+                        fully_billed=True,
+                        last_billed=datetime.now(tz=timezone.utc),
+                    )
+                ]
+            )
+
+        async with worker:
+            await asyncio.wait_for(service.wait_until_processed(last_id), timeout=1)
+            updated_job = await jobs_service.get_job(job.id)
+            assert updated_job.total_price_credits == Decimal("1.00")
+            assert updated_job.fully_billed
+            assert len(mock_admin_client.spending_log) == 1
+            assert mock_admin_client.spending_log[0] == (
+                job.cluster_name,
+                test_org,
+                job.owner,
+                Decimal("1.00"),
+                "key",
+            )
 
     @pytest.mark.asyncio
     async def test_sub_user_correct_user_charged(
@@ -171,10 +218,13 @@ class TestBillingLogProcessing:
             assert updated_job.total_price_credits == Decimal("1.00")
             assert updated_job.fully_billed
             assert len(mock_admin_client.spending_log) == 1
-            assert mock_admin_client.spending_log[0][0] == job.cluster_name
-            assert mock_admin_client.spending_log[0][1] == test_user.name
-            assert mock_admin_client.spending_log[0][2] == Decimal("1.00")
-            assert mock_admin_client.spending_log[0][3] == "key"
+            assert mock_admin_client.spending_log[0] == (
+                job.cluster_name,
+                job.org_name,
+                test_user.name,
+                Decimal("1.00"),
+                "key",
+            )
 
     @pytest.mark.asyncio
     async def test_user_removed_from_cluster(
@@ -247,10 +297,13 @@ class TestBillingLogProcessing:
             assert updated_job.total_price_credits == Decimal("1.00")
             assert updated_job.fully_billed
             assert len(mock_admin_client.spending_log) == 1
-            assert mock_admin_client.spending_log[0][0] == job.cluster_name
-            assert mock_admin_client.spending_log[0][1] == job.owner
-            assert mock_admin_client.spending_log[0][2] == Decimal("1.00")
-            assert mock_admin_client.spending_log[0][3] == "key"
+            assert mock_admin_client.spending_log[0] == (
+                job.cluster_name,
+                job.org_name,
+                job.owner,
+                Decimal("1.00"),
+                "key",
+            )
 
     @pytest.mark.asyncio
     async def test_syncs_by_timeout(
@@ -288,10 +341,13 @@ class TestBillingLogProcessing:
             assert updated_job.total_price_credits == Decimal("1.00")
             assert updated_job.fully_billed
             assert len(mock_admin_client.spending_log) == 1
-            assert mock_admin_client.spending_log[0][0] == job.cluster_name
-            assert mock_admin_client.spending_log[0][1] == job.owner
-            assert mock_admin_client.spending_log[0][2] == Decimal("1.00")
-            assert mock_admin_client.spending_log[0][3] == "key"
+            assert mock_admin_client.spending_log[0] == (
+                job.cluster_name,
+                job.org_name,
+                job.owner,
+                Decimal("1.00"),
+                "key",
+            )
 
     @pytest.mark.asyncio
     async def test_syncs_concurrent(
@@ -333,7 +389,8 @@ class TestBillingLogProcessing:
             assert len(mock_admin_client.spending_log) == 10
             for admin_request in mock_admin_client.spending_log:
                 assert admin_request[0] == job.cluster_name
-                assert admin_request[1] == job.owner
-                assert admin_request[2] == Decimal("1.00")
-            keys = {it[3] for it in mock_admin_client.spending_log}
+                assert admin_request[1] == job.org_name
+                assert admin_request[2] == job.owner
+                assert admin_request[3] == Decimal("1.00")
+            keys = {it[4] for it in mock_admin_client.spending_log}
             assert keys == {f"key{index}" for index in range(10)}

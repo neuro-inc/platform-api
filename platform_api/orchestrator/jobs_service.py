@@ -6,10 +6,10 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple
+from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple, Union
 
 from aiohttp import ClientResponseError
-from neuro_admin_client import AdminClient, ClusterUser
+from neuro_admin_client import AdminClient, ClusterUser, OrgCluster
 from neuro_auth_client import AuthClient, Permission, User as AuthUser
 from neuro_notifications_client import (
     Client as NotificationsClient,
@@ -53,13 +53,29 @@ class JobsServiceException(Exception):
 
 
 class RunningJobsQuotaExceededError(JobsServiceException):
-    def __init__(self, user: str) -> None:
-        super().__init__(f"Jobs limit quota exceeded for user '{user}'")
+    def __init__(self, quota_owner: str) -> None:
+        super().__init__(f"Jobs limit quota exceeded for {quota_owner}")
+
+    @classmethod
+    def create_for_user(cls, user: str) -> "RunningJobsQuotaExceededError":
+        return RunningJobsQuotaExceededError(f"user '{user}'")
+
+    @classmethod
+    def create_for_org(cls, org: str) -> "RunningJobsQuotaExceededError":
+        return RunningJobsQuotaExceededError(f"org '{org}'")
 
 
 class NoCreditsError(JobsServiceException):
-    def __init__(self, user: str) -> None:
-        super().__init__(f"No credits left for user '{user}'")
+    def __init__(self, quota_owner: str) -> None:
+        super().__init__(f"No credits left for {quota_owner}")
+
+    @classmethod
+    def create_for_user(cls, user: str) -> "NoCreditsError":
+        return NoCreditsError(f"user '{user}'")
+
+    @classmethod
+    def create_for_org(cls, org: str) -> "NoCreditsError":
+        return NoCreditsError(f"org '{org}'")
 
 
 @dataclass(frozen=True)
@@ -119,14 +135,31 @@ class JobsService:
         )
         running_count = len(await self._jobs_storage.get_all_jobs(running_filter))
         if running_count >= cluster_user.quota.total_running_jobs:
-            raise RunningJobsQuotaExceededError(cluster_user.user_name)
+            raise RunningJobsQuotaExceededError.create_for_user(cluster_user.user_name)
 
-    async def _raise_for_no_credits(self, cluster_user: ClusterUser) -> None:
+    async def _raise_for_orgs_running_jobs_quota(self, org_cluster: OrgCluster) -> None:
+        if org_cluster.quota.total_running_jobs is None:
+            return
+        running_filter = JobFilter(
+            orgs={org_cluster.org_name},
+            clusters={org_cluster.cluster_name: {}},
+            statuses={JobStatus(value) for value in JobStatus.active_values()},
+        )
+        running_count = len(await self._jobs_storage.get_all_jobs(running_filter))
+        if running_count >= org_cluster.quota.total_running_jobs:
+            raise RunningJobsQuotaExceededError.create_for_org(org_cluster.org_name)
+
+    async def _raise_for_no_credits(
+        self, cluster_entry: Union[ClusterUser, OrgCluster]
+    ) -> None:
         if (
-            cluster_user.balance.credits is not None
-            and cluster_user.balance.credits <= 0
+            cluster_entry.balance.credits is not None
+            and cluster_entry.balance.credits <= 0
         ):
-            raise NoCreditsError(cluster_user.user_name)
+            if isinstance(cluster_entry, ClusterUser):
+                raise NoCreditsError.create_for_user(cluster_entry.user_name)
+            else:
+                raise NoCreditsError.create_for_org(cluster_entry.org_name)
 
     async def _make_pass_config_token(
         self, username: str, cluster_name: str, job_id: str
@@ -138,7 +171,11 @@ class JobsService:
         return await self._auth_client.get_user_token(username, new_token_uri=token_uri)
 
     async def _setup_pass_config(
-        self, user: AuthUser, cluster_name: str, job_request: JobRequest
+        self,
+        user: AuthUser,
+        cluster_name: str,
+        org_name: Optional[str],
+        job_request: JobRequest,
     ) -> JobRequest:
         if NEURO_PASSED_CONFIG in job_request.container.env:
             raise JobsServiceException(
@@ -152,6 +189,7 @@ class JobsService:
                 {
                     "token": token,
                     "cluster": cluster_name,
+                    "org_name": org_name,
                     "url": str(self._api_base_url),
                 }
             ).encode()
@@ -184,6 +222,7 @@ class JobsService:
         user: AuthUser,
         cluster_name: str,
         *,
+        org_name: Optional[str] = None,
         job_name: Optional[str] = None,
         preset_name: Optional[str] = None,
         tags: Sequence[str] = (),
@@ -196,9 +235,13 @@ class JobsService:
         max_run_time_minutes: Optional[int] = None,
         restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
     ) -> Tuple[Job, Status]:
-        base_name = user.name.split("/", 1)[0]  # SA has access to same clusters as user
+        base_name = user.name.split("/", 1)[
+            0
+        ]  # SA has access to same clusters as a user
         cluster_user = await self._admin_client.get_cluster_user(
-            user_name=base_name, cluster_name=cluster_name
+            user_name=base_name,
+            cluster_name=cluster_name,
+            org_name=org_name,
         )
 
         if job_name is not None and maybe_job_id(job_name):
@@ -217,14 +260,26 @@ class JobsService:
                 )
             )
             raise
+        if org_name:
+            # check that OrgCluster itself has enough credits and quota:
+            org_cluster = await self._admin_client.get_org_cluster(
+                cluster_name, org_name
+            )
+            if not wait_for_jobs_quota:
+                await self._raise_for_orgs_running_jobs_quota(org_cluster)
+            # TODO: add notification about org cluster credits exhausted
+            await self._raise_for_no_credits(org_cluster)
 
         if pass_config:
-            job_request = await self._setup_pass_config(user, cluster_name, job_request)
+            job_request = await self._setup_pass_config(
+                user, cluster_name, org_name, job_request
+            )
 
         record = JobRecord.create(
             request=job_request,
             owner=user.name,
             cluster_name=cluster_name,
+            org_name=org_name,
             status_history=JobStatusHistory(
                 [
                     JobStatusItem.create(

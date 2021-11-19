@@ -19,7 +19,8 @@ from typing import (
     TypeVar,
 )
 
-from neuro_admin_client import AdminClient, ClusterUser
+from aiohttp import ClientResponseError
+from neuro_admin_client import AdminClient, ClusterUser, OrgCluster
 from neuro_auth_client import AuthClient
 from neuro_logging import new_trace, trace
 from neuro_notifications_client import (
@@ -63,7 +64,11 @@ class CreditsNotificationsEnforcer(JobPolicyEnforcer):
         self._sent: Dict[Tuple[str, str], Optional[Decimal]] = defaultdict(lambda: None)
 
     async def _notify_user_if_needed(
-        self, username: str, cluster_name: str, credits: Optional[Decimal]
+        self,
+        username: str,
+        cluster_name: str,
+        org_name: Optional[str],
+        credits: Optional[Decimal],
     ) -> None:
         notification_key = (username, cluster_name)
         if credits is None or credits >= self._threshold:
@@ -74,6 +79,7 @@ class CreditsNotificationsEnforcer(JobPolicyEnforcer):
         # with duplicate notifications
         if self._sent[notification_key] == credits:
             return
+        # TODO patch notifications to support org_name
         await self._notifications_client.notify(
             CreditsWillRunOutSoon(
                 user_id=username, cluster_name=cluster_name, credits=credits
@@ -83,30 +89,34 @@ class CreditsNotificationsEnforcer(JobPolicyEnforcer):
 
     @trace
     async def enforce(self) -> None:
-        user_to_clusters: Dict[str, Set[str]] = defaultdict(set)
+        user_to_clusters: Dict[str, Set[Tuple[str, Optional[str]]]] = defaultdict(set)
         job_filter = JobFilter(
             statuses={JobStatus(item) for item in JobStatus.active_values()}
         )
         async with self._jobs_service.iter_all_jobs(job_filter) as running_jobs:
             async for job in running_jobs:
-                user_to_clusters[job.owner].add(job.cluster_name)
+                user_to_clusters[job.owner].add((job.cluster_name, job.org_name))
         await run_and_log_exceptions(
-            self._enforce_for_user(username, clusters)
-            for username, clusters in user_to_clusters.items()
+            self._enforce_for_user(username, clusters_with_org)
+            for username, clusters_with_org in user_to_clusters.items()
         )
 
-    async def _enforce_for_user(self, username: str, clusters: Set[str]) -> None:
+    async def _enforce_for_user(
+        self, username: str, clusters_and_orgs: Set[Tuple[str, Optional[str]]]
+    ) -> None:
         base_name = username.split("/", 1)[0]  # SA inherit balance from main user
         _, cluster_users = await self._admin_client.get_user_with_clusters(base_name)
         cluster_to_user = {
-            cluster_user.cluster_name: cluster_user for cluster_user in cluster_users
+            (cluster_user.cluster_name, cluster_user.org_name): cluster_user
+            for cluster_user in cluster_users
         }
-        for cluster_name in clusters:
-            cluster_user = cluster_to_user.get(cluster_name)
+        for cluster_name, org_name in clusters_and_orgs:
+            cluster_user = cluster_to_user.get((cluster_name, org_name))
             if cluster_user:
                 await self._notify_user_if_needed(
                     username=username,
                     cluster_name=cluster_name,
+                    org_name=org_name,
                     credits=cluster_user.balance.credits,
                 )
 
@@ -165,17 +175,23 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
             )
         )
         owner_to_jobs = self._groupby(jobs, lambda job: job.owner)
+        org_to_jobs = self._groupby(jobs, lambda job: (job.cluster_name, job.org_name))
         coros = [
             self._enforce_for_user(owner, user_jobs)
             for owner, user_jobs in owner_to_jobs.items()
+        ]
+        coros += [
+            self._enforce_for_org(cluster_name, org_name, org_jobs)
+            for (cluster_name, org_name), org_jobs in org_to_jobs.items()
+            if org_name is not None
         ]
         await run_and_log_exceptions(coros)
 
     async def _enforce_for_user(self, username: str, user_jobs: Iterable[Job]) -> None:
         base_name = username.split("/", 1)[0]  # SA inherit balance from main user
         user, user_clusters = await self._admin_client.get_user_with_clusters(base_name)
-        for cluster_name, cluster_jobs in self._groupby(
-            user_jobs, lambda job: job.cluster_name
+        for (cluster_name, org_name), org_cluster_jobs in self._groupby(
+            user_jobs, lambda job: (job.cluster_name, job.org_name)
         ).items():
             user_cluster: Optional[ClusterUser]
             try:
@@ -183,21 +199,46 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
                     user_cluster
                     for user_cluster in user_clusters
                     if user_cluster.cluster_name == cluster_name
+                    and user_cluster.org_name == org_name
                 )
             except StopIteration:
                 logger.warning(
-                    f"User {username} has jobs in cluster {cluster_name}, "
-                    f"but has no access to this cluster. Jobs will be cancelled"
+                    f"User {username} has jobs in cluster {cluster_name} "
+                    f"as part of org {org_name}, but has no access to this "
+                    "cluster as part of this org. Jobs will be cancelled"
                 )
                 user_cluster = None
             if user_cluster is None or (
                 user_cluster.balance.credits is not None
                 and user_cluster.balance.credits <= 0
             ):
-                for job in cluster_jobs:
+                for job in org_cluster_jobs:
                     await self._service.cancel_job(
                         job.id, JobStatusReason.QUOTA_EXHAUSTED
                     )
+
+    async def _enforce_for_org(
+        self, cluster_name: str, org_name: str, org_cluster_jobs: Iterable[Job]
+    ) -> None:
+        org_cluster: Optional[OrgCluster] = None
+        try:
+            org_cluster = await self._admin_client.get_org_cluster(
+                cluster_name, org_name
+            )
+        except ClientResponseError as e:
+            if e.status == 404:
+                logger.warning(
+                    f"Org {org_name} has jobs in cluster {cluster_name} but has no "
+                    f"access to this cluster as part of this org. "
+                    f"Jobs will be cancelled"
+                )
+            else:
+                raise
+        if org_cluster is None or (
+            org_cluster.balance.credits is not None and org_cluster.balance.credits <= 0
+        ):
+            for job in org_cluster_jobs:
+                await self._service.cancel_job(job.id, JobStatusReason.QUOTA_EXHAUSTED)
 
 
 class BillingEnforcer(JobPolicyEnforcer):
