@@ -80,6 +80,16 @@ jobs:
         HELM_CHART: platform-api
         HELM_CHART_VERSION: ${{ needs.publish_image.outputs.version }}
         HELM_APP_VERSION: ${{ needs.publish_image.outputs.version }}
+    - name: Release platform-api chart
+      env:
+        HELM_EXPERIMENTAL_OCI: 1
+        HELM_REPO: ghcr.io/${{ github.repository_owner }}/helm-charts
+        HELM_CHART_VERSION: ${{ needs.publish_image.outputs.version }}
+        CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo $CR_TOKEN | helm registry login ghcr.io -u x-access-token --password-stdin
+        helm package charts/platform-api -u
+        helm push platform-api-$HELM_CHART_VERSION.tgz oci://$HELM_REPO
     - name: Create platform-api-poller chart
       run: make helm_create_chart
       env:
@@ -89,10 +99,15 @@ jobs:
         HELM_CHART: platform-api-poller
         HELM_CHART_VERSION: ${{ needs.publish_image.outputs.version }}
         HELM_APP_VERSION: ${{ needs.publish_image.outputs.version }}
-    - name: Release charts
-      uses: helm/chart-releaser-action@v1.2.1
+    - name: Release platform-api-poller chart
       env:
-        CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        HELM_EXPERIMENTAL_OCI: 1
+        HELM_REPO: ghcr.io/${{ github.repository_owner }}/helm-charts
+        HELM_CHART_VERSION: ${{ needs.publish_image.outputs.version }}
+        CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        helm package charts/platform-api-poller -u
+        helm push platform-api-poller-$HELM_CHART_VERSION.tgz oci://$HELM_REPO
 
   # Temporary solution until deployment configurations are moved to a separate repository.
   deploy_mts:
@@ -106,7 +121,10 @@ jobs:
       HELM_ENV: mts
       HELM_CHART: platform-api
       HELM_RELEASE: platform-api
+      HELM_CHART_VERSION: ${{ needs.publish_image.outputs.version }}
+      HELM_APP_VERSION: ${{ needs.publish_image.outputs.version }}
       IMAGE_REGISTRY: github
+      IMAGE_TAG: ${{ needs.publish_image.outputs.version }}
     steps:
     - name: Checkout commit
       uses: actions/checkout@v2
@@ -122,6 +140,4 @@ jobs:
         method: kubeconfig
         kubeconfig: ${{ secrets.MTS_KUBE_CONFIG }}
     - name: Deploy to kubernetes
-      env:
-        IMAGE_TAG: ${{ needs.publish_image.outputs.version }}
       run: make helm_deploy
