@@ -65,6 +65,7 @@ class NoCreditsError(JobsServiceException):
 @dataclass(frozen=True)
 class UserClusterConfig:
     config: ClusterConfig
+    # None value means the direct access to cluster without any or:
     orgs: List[Optional[str]]
 
 
