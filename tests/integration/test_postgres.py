@@ -49,13 +49,15 @@ async def test_channel_notifier_connection_lost(sqalchemy_engine: AsyncEngine) -
 
         # Kill 'LISTEN ...' connections
         async with sqalchemy_engine.connect() as conn:
-            pid_rows = await conn.execute(
-                sa.text(
-                    "SELECT pid, query FROM pg_stat_activity "
-                    "where QUERY like 'LISTEN%';"
+            pid_rows = (
+                await conn.execute(
+                    sa.text(
+                        "SELECT pid, query FROM pg_stat_activity "
+                        "where QUERY like 'LISTEN%';"
+                    )
                 )
-            )
-        for pid_row in pid_rows.all():
+            ).all()
+        for pid_row in pid_rows:
             async with sqalchemy_engine.connect() as conn:
                 await conn.execute(
                     sa.text(f"SELECT pg_terminate_backend({pid_row['pid']});")

@@ -63,11 +63,21 @@ class PostgresChannelNotifier(Notifier):
         async with self._engine.connect() as conn:
             await conn.execute(query)
 
-    async def notify(self) -> None:
-        logger.info(f"Notifying channel {self._channel!r}")
+    @asynccontextmanager
+    async def _raw_connect(self) -> AsyncIterator[asyncpg.Connection]:
         async with self._engine.connect() as conn:
-            conn_proxy = await conn.get_raw_connection()
-            await conn_proxy.driver_connection.fetch(f"NOTIFY {self._channel}")
+            connection_fairy = await conn.get_raw_connection()
+            connection_fairy.detach()
+            raw_connection = connection_fairy.driver_connection
+            try:
+                yield raw_connection
+            finally:
+                await raw_connection.close()
+
+    async def notify(self) -> None:
+        async with self._raw_connect() as raw_conn:
+            logger.info(f"Notifying channel {self._channel!r}")
+            await raw_conn.fetch(f"NOTIFY {self._channel}")
 
     class _Subscription(Subscription):
         def __init__(self, conn: asyncpg.Connection) -> None:
@@ -93,21 +103,19 @@ class PostgresChannelNotifier(Notifier):
             )
             listener()
 
-        async with self._engine.connect() as conn:
+        async with self._raw_connect() as raw_conn:
             logger.info(
                 f"{type(self).__qualname__}: Subscribing to channel {self._channel!r}"
             )
-            connection_fairy = await conn.get_raw_connection()
-            raw_asyncio_connection = connection_fairy.driver_connection
-            await raw_asyncio_connection.add_listener(self._channel, _listener)
+            await raw_conn.add_listener(self._channel, _listener)
             try:
-                yield PostgresChannelNotifier._Subscription(raw_asyncio_connection)
+                yield PostgresChannelNotifier._Subscription(raw_conn)
             finally:
                 logger.info(
                     f"{type(self).__qualname__}: Unsubscribing "
                     f"from channel {self._channel!r}"
                 )
-                await raw_asyncio_connection.remove_listener(self._channel, _listener)
+                await raw_conn.remove_listener(self._channel, _listener)
 
 
 class ResubscribingNotifier(Notifier):
