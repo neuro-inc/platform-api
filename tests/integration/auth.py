@@ -10,6 +10,8 @@ from typing import (
     Optional,
     Protocol,
     Tuple,
+    Union,
+    cast,
 )
 
 import aiodocker
@@ -18,7 +20,13 @@ from aiohttp import ClientError, ClientResponseError
 from aiohttp.hdrs import AUTHORIZATION
 from async_timeout import timeout
 from jose import jwt
-from neuro_admin_client import AdminClient, Balance, ClusterUserRoleType, Quota
+from neuro_admin_client import (
+    AdminClient,
+    Balance,
+    ClusterUserRoleType,
+    OrgUserRoleType,
+    Quota,
+)
 from neuro_auth_client import AuthClient, Permission, User as AuthUser
 from yarl import URL
 
@@ -164,7 +172,9 @@ class UserFactory(Protocol):
     async def __call__(
         self,
         name: Optional[str] = None,
-        clusters: Optional[List[Tuple[str, Balance, Quota]]] = None,
+        clusters: Optional[
+            List[Union[Tuple[str, Balance, Quota], Tuple[str, str, Balance, Quota]]]
+        ] = None,
     ) -> _User:
         ...
 
@@ -179,20 +189,47 @@ async def regular_user_factory(
 ) -> UserFactory:
     async def _factory(
         name: Optional[str] = None,
-        clusters: Optional[List[Tuple[str, Balance, Quota]]] = None,
+        clusters: Optional[
+            List[Union[Tuple[str, Balance, Quota], Tuple[str, str, Balance, Quota]]]
+        ] = None,
     ) -> _User:
         if not name:
             name = random_str()
         if clusters is None:
             clusters = [(test_cluster_name, Balance(), Quota())]
         await admin_client.create_user(name=name, email=f"{name}@email.com")
-        for cluster, balance, quota in clusters:
+        for entry in clusters:
+            org_name: Optional[str] = None
+            if len(entry) == 3:
+                cluster, balance, quota = cast(Tuple[str, Balance, Quota], entry)
+            else:
+                cluster, org_name, balance, quota = cast(
+                    Tuple[str, str, Balance, Quota], entry
+                )
             try:
                 await admin_client.create_cluster(cluster)
             except ClientResponseError:
                 pass
+            if org_name is not None:
+                try:
+                    await admin_client.create_org(org_name)
+                except ClientResponseError:
+                    pass
+                await admin_client.create_org_user(
+                    org_name=org_name,
+                    user_name=name,
+                    role=OrgUserRoleType.USER,
+                )
+                try:
+                    await admin_client.create_org_cluster(
+                        cluster_name=cluster,
+                        org_name=org_name,
+                    )
+                except ClientResponseError:
+                    pass
             await admin_client.create_cluster_user(
                 cluster_name=cluster,
+                org_name=org_name,
                 role=ClusterUserRoleType.USER,
                 user_name=name,
                 balance=balance,

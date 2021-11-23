@@ -232,6 +232,7 @@ class TestApi:
             result = await resp.json()
             expected_cluster_payload = {
                 "name": "test-cluster",
+                "orgs": [None],
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "blob_storage_url": "https://neu.ro/api/v1/blob",
@@ -332,6 +333,126 @@ class TestApi:
             assert result == expected_payload
 
     @pytest.mark.asyncio
+    async def test_config_with_orgs(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: UserFactory,
+        admin_url: URL,
+    ) -> None:
+        url = api.config_url
+        regular_user = await regular_user_factory(
+            clusters=[
+                ("test-cluster", Balance(), Quota()),
+                ("test-cluster", "org1", Balance(), Quota()),
+                ("test-cluster", "org2", Balance(), Quota()),
+            ],
+        )
+        async with client.get(url, headers=regular_user.headers) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            expected_cluster_payload = {
+                "name": "test-cluster",
+                "orgs": [None, "org1", "org2"],
+                "registry_url": "https://registry.dev.neuromation.io",
+                "storage_url": "https://neu.ro/api/v1/storage",
+                "blob_storage_url": "https://neu.ro/api/v1/blob",
+                "users_url": "https://neu.ro/api/v1/users",
+                "monitoring_url": "https://neu.ro/api/v1/monitoring",
+                "secrets_url": "https://neu.ro/api/v1/secrets",
+                "metrics_url": "https://neu.ro/api/v1/metrics",
+                "disks_url": "https://neu.ro/api/v1/disk",
+                "buckets_url": "https://neu.ro/api/v1/buckets",
+                "resource_presets": [
+                    {
+                        "name": "gpu-small",
+                        "credits_per_hour": "10",
+                        "cpu": 7,
+                        "memory_mb": 30720,
+                        "gpu": 1,
+                        "gpu_model": "nvidia-tesla-k80",
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                    },
+                    {
+                        "name": "gpu-large",
+                        "credits_per_hour": "10",
+                        "cpu": 7,
+                        "memory_mb": 61440,
+                        "gpu": 1,
+                        "gpu_model": "nvidia-tesla-v100",
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                    },
+                    {
+                        "name": "gpu-large-p",
+                        "credits_per_hour": "10",
+                        "cpu": 7,
+                        "memory_mb": 61440,
+                        "gpu": 1,
+                        "gpu_model": "nvidia-tesla-v100",
+                        "scheduler_enabled": True,
+                        "preemptible_node": True,
+                        "is_preemptible": True,
+                        "is_preemptible_node_required": True,
+                    },
+                    {
+                        "name": "cpu-micro",
+                        "credits_per_hour": "10",
+                        "cpu": 0.1,
+                        "memory_mb": 100,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                    },
+                    {
+                        "name": "cpu-small",
+                        "credits_per_hour": "10",
+                        "cpu": 2,
+                        "memory_mb": 2048,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                    },
+                    {
+                        "name": "cpu-large",
+                        "credits_per_hour": "10",
+                        "cpu": 3,
+                        "memory_mb": 14336,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                    },
+                    {
+                        "name": "tpu",
+                        "credits_per_hour": "10",
+                        "cpu": 3,
+                        "memory_mb": 14336,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                        "tpu": {"type": "v2-8", "software_version": "1.14"},
+                    },
+                ],
+            }
+            expected_payload: Dict[str, Any] = {
+                "admin_url": f"{admin_url}",
+                "clusters": [
+                    expected_cluster_payload,
+                ],
+                **expected_cluster_payload,
+            }
+            assert result == expected_payload
+
+    @pytest.mark.asyncio
     async def test_config_with_oauth(
         self,
         api_with_oauth: ApiConfig,
@@ -345,6 +466,7 @@ class TestApi:
             result = await resp.json()
             expected_cluster_payload = {
                 "name": "test-cluster",
+                "orgs": [None],
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "blob_storage_url": "https://neu.ro/api/v1/blob",
