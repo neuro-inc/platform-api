@@ -18,9 +18,9 @@ platform:
   apiPublicUrl: https://staging.neu.ro/api/v1
   adminPublicUrl: https://staging.neu.ro/apis/admin/v1
   authPublicUrl: https://staging.neu.ro/api/v1/users
-  authUrl: http://platformauthapi:8080
-  configUrl: http://platformconfig:8080/api/v1
-  notificationsUrl: http://platformnotificationsapi:8080
+  authUrl: http://platform-auth:8080
+  configUrl: http://platform-config:8080/api/v1
+  notificationsUrl: http://platform-notifications:8080
   token: {}
 
 oauth:

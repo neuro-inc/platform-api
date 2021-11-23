@@ -41,7 +41,11 @@ from .handlers import JobsHandler
 from .orchestrator.billing_log.service import BillingLogService, BillingLogWorker
 from .orchestrator.billing_log.storage import PostgresBillingLogStorage
 from .orchestrator.job_request import JobError, JobException
-from .orchestrator.jobs_service import JobsService, JobsServiceException
+from .orchestrator.jobs_service import (
+    JobsService,
+    JobsServiceException,
+    UserClusterConfig,
+)
 from .orchestrator.jobs_storage import JobsStorage, PostgresJobsStorage
 from .orchestrator.jobs_storage.base import JobStorageTransactionError
 from .postgres import make_async_engine
@@ -133,8 +137,10 @@ class ConfigApiHandler:
         return aiohttp.web.json_response(data)
 
     def _convert_cluster_config_to_payload(
-        self, cluster_config: ClusterConfig
+        self, user_cluster_config: UserClusterConfig
     ) -> Dict[str, Any]:
+        cluster_config = user_cluster_config.config
+        orgs = user_cluster_config.orgs
         presets = [
             self._convert_preset_to_payload(preset)
             for preset in cluster_config.orchestrator.presets
@@ -151,6 +157,7 @@ class ConfigApiHandler:
             "disks_url": str(cluster_config.ingress.disks_url),
             "buckets_url": str(cluster_config.ingress.buckets_url),
             "resource_presets": presets,
+            "orgs": orgs,
         }
 
     def _convert_preset_to_payload(self, preset: Preset) -> Dict[str, Any]:
