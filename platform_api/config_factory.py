@@ -224,7 +224,7 @@ class EnvironConfigFactory:
 
     def create_postgres(self) -> PostgresConfig:
         try:
-            postgres_dsn = self._environ["NP_DB_POSTGRES_DSN"]
+            postgres_dsn = to_async_postgres_dsn(self._environ["NP_DB_POSTGRES_DSN"])
         except KeyError:
             # Temporary fix until postgres deployment is set
             postgres_dsn = ""
@@ -257,6 +257,7 @@ class EnvironConfigFactory:
         script_path = str(parent_path / "alembic")
         config = AlembicConfig(ini_path)
         config.set_main_option("script_location", script_path)
+        postgres_dsn = to_sync_postgres_dsn(postgres_dsn)
         config.set_main_option("sqlalchemy.url", postgres_dsn.replace("%", "%%"))
         return config
 
@@ -369,3 +370,19 @@ class EnvironConfigFactory:
             raise ValueError("Main storage config is required")
 
         return result
+
+
+syncpg_schema = "postgresql"
+asyncpg_schema = "postgresql+asyncpg"
+
+
+def to_async_postgres_dsn(dsn: str) -> str:
+    if dsn.startswith(syncpg_schema + "://"):
+        dsn = asyncpg_schema + dsn[len(syncpg_schema) :]
+    return dsn
+
+
+def to_sync_postgres_dsn(dsn: str) -> str:
+    if dsn.startswith(asyncpg_schema + "://"):
+        dsn = syncpg_schema + dsn[len(asyncpg_schema) :]
+    return dsn

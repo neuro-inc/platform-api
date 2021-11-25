@@ -1,8 +1,8 @@
 import asyncio
 
-import asyncpg
 import pytest
-from asyncpg.pool import Pool
+import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from platform_api.utils.update_notifier import (
     Notifier,
@@ -13,19 +13,22 @@ from tests.unit.test_notifier import Counter
 
 
 @pytest.mark.asyncio
-async def test_postgres_available(postgres_pool: Pool) -> None:
-    async with postgres_pool.acquire() as connection:
-        result = await connection.fetchrow("SELECT 2 + 2;")
-        assert result[0] == 4
+async def test_postgres_available(sqalchemy_engine: AsyncEngine) -> None:
+    async with sqalchemy_engine.connect() as connection:
+        result = await connection.execute(sa.text("SELECT 2 + 2;"))
+        row = result.one()
+        assert row == (4,)
 
 
 @pytest.mark.asyncio
-async def test_channel_notifier(postgres_pool: Pool) -> None:
-    notifier = PostgresChannelNotifier(postgres_pool, "channel")
+async def test_channel_notifier(sqalchemy_engine: AsyncEngine) -> None:
+    notifier = PostgresChannelNotifier(sqalchemy_engine, "channel")
     counter = Counter()
 
-    async with notifier.listen_to_updates(counter.callback):
+    async with notifier.listen_to_updates(counter.callback) as s:
+        assert await s.is_alive()
         await notifier.notify()
+        assert await s.is_alive()
         await counter.assert_count(1)
         await notifier.notify()
         await counter.assert_count(2)
@@ -35,8 +38,8 @@ async def test_channel_notifier(postgres_pool: Pool) -> None:
 
 
 @pytest.mark.asyncio
-async def test_channel_notifier_connection_lost(postgres_pool: Pool) -> None:
-    notifier: Notifier = PostgresChannelNotifier(postgres_pool, "channel")
+async def test_channel_notifier_connection_lost(sqalchemy_engine: AsyncEngine) -> None:
+    notifier: Notifier = PostgresChannelNotifier(sqalchemy_engine, "channel")
     notifier = ResubscribingNotifier(notifier, check_interval=0.1)
     counter = Counter()
 
@@ -45,25 +48,21 @@ async def test_channel_notifier_connection_lost(postgres_pool: Pool) -> None:
         await counter.assert_count(1)
 
         # Kill 'LISTEN ...' connections
-        pid_rows = await postgres_pool.fetch(
-            "SELECT pid, query FROM pg_stat_activity where QUERY like 'LISTEN%';"
-        )
+        async with sqalchemy_engine.connect() as conn:
+            pid_rows = (
+                await conn.execute(
+                    sa.text(
+                        "SELECT pid, query FROM pg_stat_activity "
+                        "where QUERY like 'LISTEN%';"
+                    )
+                )
+            ).all()
         for pid_row in pid_rows:
-            await postgres_pool.execute(
-                f"SELECT pg_terminate_backend({pid_row['pid']});"
-            )
+            async with sqalchemy_engine.connect() as conn:
+                await conn.execute(
+                    sa.text(f"SELECT pg_terminate_backend({pid_row['pid']});")
+                )
         await asyncio.sleep(0.2)  # allow it to reconnect
 
         await notifier.notify()
         await counter.assert_count(2)
-
-
-@pytest.mark.asyncio
-async def test_cluster_update_notifier_failed_to_subscribe(postgres_pool: Pool) -> None:
-    await postgres_pool.close()
-    notifier: Notifier = PostgresChannelNotifier(postgres_pool, "channel")
-    notifier = ResubscribingNotifier(notifier, check_interval=0.1)
-
-    with pytest.raises(asyncpg.InterfaceError):
-        async with notifier.listen_to_updates(lambda: None):
-            pass
