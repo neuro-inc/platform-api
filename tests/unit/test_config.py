@@ -358,10 +358,8 @@ class TestEnvironConfigFactory:
         assert config.notifications.token == "token"
 
         assert config.database.postgres is not None
-        assert (
-            config.database.postgres.postgres_dsn
-            == "postgresql://postgres@localhost:5432/postgres"
-        )
+        async_dsn = "postgresql+asyncpg://postgres@localhost:5432/postgres"
+        assert config.database.postgres.postgres_dsn == async_dsn
         assert config.database.postgres.pool_min_size == 50
         assert config.database.postgres.pool_max_size == 500
 
@@ -375,14 +373,11 @@ class TestEnvironConfigFactory:
         assert config.sentry
 
     def test_alembic_with_escaped_symbol(self) -> None:
-        config = EnvironConfigFactory(environ={}).create_alembic(
-            "postgresql://postgres%40@localhost:5432/postgres"
-        )
+        async_dsn = "postgresql+asyncpg://postgres%40@localhost:5432/postgres"
+        config = EnvironConfigFactory(environ={}).create_alembic(async_dsn)
 
-        assert (
-            config.get_main_option("sqlalchemy.url")
-            == "postgresql://postgres%40@localhost:5432/postgres"
-        )
+        sync_dsn = "postgresql://postgres%40@localhost:5432/postgres"
+        assert config.get_main_option("sqlalchemy.url") == sync_dsn
 
     def test_registry_default(self) -> None:
         config = EnvironConfigFactory(

@@ -48,7 +48,7 @@ from .orchestrator.jobs_service import (
 )
 from .orchestrator.jobs_storage import JobsStorage, PostgresJobsStorage
 from .orchestrator.jobs_storage.base import JobStorageTransactionError
-from .postgres import create_postgres_pool
+from .postgres import make_async_engine
 from .resource import Preset
 from .user import authorized_user, untrusted_user
 from .utils.update_notifier import (
@@ -315,16 +315,15 @@ async def create_app(
             for cluster in client_clusters:
                 await cluster_config_registry.replace(cluster)
 
-            logger.info("Initializing Postgres connection pool")
-            postgres_pool = await exit_stack.enter_async_context(
-                create_postgres_pool(config.database.postgres)
-            )
+            logger.info("Initializing SQLAlchemy engine")
+            engine = make_async_engine(config.database.postgres)
+            exit_stack.push_async_callback(engine.dispose)
 
             logger.info("Initializing JobsStorage")
-            jobs_storage: JobsStorage = PostgresJobsStorage(postgres_pool)
+            jobs_storage: JobsStorage = PostgresJobsStorage(engine)
 
             cluster_update_notifier = ResubscribingNotifier(
-                PostgresChannelNotifier(postgres_pool, "cluster_update_required"),
+                PostgresChannelNotifier(engine, "cluster_update_required"),
                 check_interval=15,
             )
             app["config_app"]["cluster_update_notifier"] = cluster_update_notifier
@@ -355,17 +354,15 @@ async def create_app(
             logger.info("Initializing JobPolicyEnforcePoller")
 
             logger.info("Initializing BillingLogStorage")
-            billing_log_storage = PostgresBillingLogStorage(pool=postgres_pool)
+            billing_log_storage = PostgresBillingLogStorage(engine)
 
             billing_log_new_entry_notifier = ResubscribingNotifier(
-                PostgresChannelNotifier(postgres_pool, "billing_log_new_entry"),
+                PostgresChannelNotifier(engine, "billing_log_new_entry"),
                 check_interval=15,
             )
 
             billing_log_entry_done_notifier = ResubscribingNotifier(
-                PostgresChannelNotifier(
-                    postgres_pool, "billing_log_entry_done_notifier"
-                ),
+                PostgresChannelNotifier(engine, "billing_log_entry_done_notifier"),
                 check_interval=15,
             )
 

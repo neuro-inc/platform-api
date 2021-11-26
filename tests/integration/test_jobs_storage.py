@@ -3,7 +3,7 @@ from itertools import islice
 from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
-from asyncpg.pool import Pool
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from platform_api.orchestrator.job import JobRecord, current_datetime_factory
 from platform_api.orchestrator.job_request import (
@@ -25,9 +25,9 @@ from tests.conftest import not_raises
 
 class TestJobsStorage:
     @pytest.fixture(params=["postgres"])
-    def storage(self, request: Any, postgres_pool: Pool) -> JobsStorage:
+    def storage(self, request: Any, sqalchemy_engine: AsyncEngine) -> JobsStorage:
         if request.param == "postgres":
-            return PostgresJobsStorage(postgres_pool)
+            return PostgresJobsStorage(sqalchemy_engine)
         raise Exception(f"Unknown job storage engine {request.param}.")
 
     def _create_job_request(self, with_gpu: bool = False) -> JobRequest:

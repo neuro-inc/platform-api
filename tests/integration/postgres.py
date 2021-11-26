@@ -5,12 +5,11 @@ import aiodocker
 import aiodocker.containers
 import asyncpg
 import pytest
-from asyncpg import Connection
-from asyncpg.pool import Pool
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from platform_api.config import PostgresConfig
 from platform_api.config_factory import EnvironConfigFactory
-from platform_api.postgres import MigrationRunner, create_postgres_pool
+from platform_api.postgres import MigrationRunner, make_async_engine
 
 
 @pytest.fixture(scope="session")
@@ -103,17 +102,19 @@ async def postgres_dsn(
 async def _make_postgres_dsn(container: aiodocker.containers.DockerContainer) -> str:
     host = "0.0.0.0"
     port = int((await container.port(5432))[0]["HostPort"])
-    return f"postgresql://postgres@{host}:{port}/postgres"
+    return f"postgresql+asyncpg://postgres@{host}:{port}/postgres"
 
 
 async def _wait_for_postgres_server(
     postgres_dsn: str, attempts: int = 5, interval_s: float = 1
 ) -> None:
+    if postgres_dsn.startswith("postgresql+asyncpg://"):
+        postgres_dsn = "postgresql" + postgres_dsn[len("postgresql+asyncpg") :]
     attempt = 0
     while attempt < attempts:
         try:
             attempt = attempt + 1
-            conn: Connection = await asyncpg.connect(postgres_dsn, timeout=5.0)
+            conn = await asyncpg.connect(postgres_dsn, timeout=5.0)
             await conn.close()
             return
         except Exception:
@@ -137,6 +138,11 @@ async def postgres_config(postgres_dsn: str) -> AsyncIterator[PostgresConfig]:
 
 
 @pytest.fixture
-async def postgres_pool(postgres_config: PostgresConfig) -> AsyncIterator[Pool]:
-    async with create_postgres_pool(postgres_config) as pool:
-        yield pool
+async def sqalchemy_engine(
+    postgres_config: PostgresConfig,
+) -> AsyncIterator[AsyncEngine]:
+    engine = make_async_engine(postgres_config)
+    try:
+        yield engine
+    finally:
+        await engine.dispose()

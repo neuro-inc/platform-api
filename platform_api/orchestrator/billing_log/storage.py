@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
@@ -18,10 +17,12 @@ from typing import (
 
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
-from asyncpg import Connection, Pool, UniqueViolationError
-from asyncpg.protocol.protocol import Record
+from asyncpg import UniqueViolationError
 from neuro_logging import trace, trace_cm
 from sqlalchemy import asc, desc
+from sqlalchemy.engine import Row
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from platform_api.orchestrator.base_postgres_storage import BasePostgresStorage
 from platform_api.utils.asyncio import asyncgeneratorcontextmanager
@@ -180,8 +181,10 @@ class BillingLogTables:
 class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
     BILLING_SYNC_RECORD_TYPE = "BillingLogSyncRecord"
 
-    def __init__(self, pool: Pool, tables: Optional[BillingLogTables] = None) -> None:
-        super().__init__(pool)
+    def __init__(
+        self, engine: AsyncEngine, tables: Optional[BillingLogTables] = None
+    ) -> None:
+        super().__init__(engine)
         self._tables = tables or BillingLogTables.create()
 
     # Parsing/serialization
@@ -197,8 +200,8 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
             },
         }
 
-    def _record_to_log_entry(self, record: Record) -> BillingLogEntry:
-        payload = json.loads(record["payload"])
+    def _record_to_log_entry(self, record: Row) -> BillingLogEntry:
+        payload = record["payload"]
         return BillingLogEntry(
             id=record["id"],
             job_id=record["job_id"],
@@ -216,7 +219,7 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
             "last_entry_id": sync_record.last_entry_id,
         }
 
-    def _record_to_sync_record(self, record: Record) -> BillingLogSyncRecord:
+    def _record_to_sync_record(self, record: Dict[str, Any]) -> BillingLogSyncRecord:
         assert record["type"] == self.BILLING_SYNC_RECORD_TYPE
         return BillingLogSyncRecord(last_entry_id=record["last_entry_id"])
 
@@ -231,9 +234,12 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
                 empty = BillingLogSyncRecord(0)
                 values = self._sync_record_to_values(empty)
                 query = self._tables.sync_record.insert().values(values)
-                await self._execute(query)
-            except UniqueViolationError:
-                pass
+                async with self._transaction() as conn:
+                    await self._execute(query, conn=conn)
+            except IntegrityError as exc:
+                if isinstance(exc.orig.__cause__, UniqueViolationError):
+                    pass
+                raise
             return await self.get_or_create_sync_record()
         else:
             return self._record_to_sync_record(record)
@@ -247,12 +253,13 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
             .where(self._tables.sync_record.c.type == self.BILLING_SYNC_RECORD_TYPE)
             .returning(self._tables.sync_record.c.type)
         )
-        result = await self._fetchrow(query)
+        async with self._transaction() as conn:
+            result = await self._fetchrow(query, conn=conn)
         if not result:
             raise BillingLogSyncRecordNotFound
 
     class EntriesInserter(BillingLogStorage.EntriesInserter):
-        def __init__(self, storage: "PostgresBillingLogStorage", conn: Connection):
+        def __init__(self, storage: "PostgresBillingLogStorage", conn: AsyncConnection):
             self._storage = storage
             self._conn = conn
 
@@ -271,12 +278,12 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
         self,
     ) -> AsyncIterator[BillingLogStorage.EntriesInserter]:
         tracing_name = PostgresBillingLogStorage.entries_inserter.__qualname__
-        async with trace_cm(
-            tracing_name
-        ), self._pool.acquire() as conn, conn.transaction():
+        async with trace_cm(tracing_name), self._transaction() as conn:
             await self._execute(
-                f"LOCK TABLE {self._tables.billing_log.name} IN SHARE "
-                "UPDATE EXCLUSIVE MODE",
+                sa.text(
+                    f"LOCK TABLE {self._tables.billing_log.name} IN SHARE "
+                    "UPDATE EXCLUSIVE MODE"
+                ),
                 conn=conn,
             )
             yield PostgresBillingLogStorage.EntriesInserter(self, conn)
@@ -293,8 +300,8 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
             query = query.order_by(asc(self._tables.billing_log.c.id))
             if limit:
                 query = query.limit(limit)
-            async with self._pool.acquire() as conn, conn.transaction():
-                async for record in self._cursor(query, conn=conn):
+            async with self._cursor(query) as cursor:
+                async for record in cursor:
                     yield self._record_to_log_entry(record)
 
     @trace
@@ -316,4 +323,5 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
         query = self._tables.billing_log.delete().where(
             self._tables.billing_log.c.id <= with_ids_le
         )
-        await self._execute(query)
+        async with self._transaction() as conn:
+            await self._execute(query, conn=conn)
