@@ -250,7 +250,9 @@ class MockAdminClient(AdminClient):
     def __init__(self) -> None:
         self.users: Dict[str, User] = {}
         self.cluster_users: Dict[str, List[ClusterUser]] = defaultdict(list)
-        self.spending_log: List[Tuple[str, str, Decimal, str]] = []
+        self.spending_log: List[
+            Tuple[str, Optional[str], str, Decimal, Optional[str]]
+        ] = []
         self.debts_log: List[Tuple[str, str, Decimal, str]] = []
         self.raise_404: bool = False
 
@@ -259,16 +261,24 @@ class MockAdminClient(AdminClient):
             raise ClientResponseError(None, (), status=404)  # type: ignore
         return self.users[name], self.cluster_users[name]
 
-    async def charge_user(
+    async def charge_cluster_user(  # type: ignore
         self,
         cluster_name: str,
-        username: str,
-        spending: Decimal,
-        idempotency_key: str,
-    ) -> None:
+        user_name: str,
+        amount: Decimal,
+        *,
+        with_user_info: bool = False,
+        idempotency_key: Optional[str] = None,
+        org_name: Optional[str] = None,
+    ) -> Union[ClusterUser, ClusterUserWithInfo]:
         if self.raise_404:
             raise ClientResponseError(None, (), status=404)  # type: ignore
-        self.spending_log.append((cluster_name, username, spending, idempotency_key))
+        self.spending_log.append(
+            (cluster_name, org_name, user_name, amount, idempotency_key)
+        )
+        return await self.get_cluster_user(
+            cluster_name, user_name, org_name=org_name, with_user_info=True
+        )
 
     async def add_debt(
         self,
