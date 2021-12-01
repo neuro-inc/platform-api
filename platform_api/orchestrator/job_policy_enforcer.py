@@ -208,7 +208,7 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
                     "cluster as part of this org. Jobs will be cancelled"
                 )
                 user_cluster = None
-            if user_cluster is None or (user_cluster.balance.is_non_positive):
+            if user_cluster is None or user_cluster.balance.is_non_positive:
                 for job in org_cluster_jobs:
                     await self._service.cancel_job(
                         job.id, JobStatusReason.QUOTA_EXHAUSTED
