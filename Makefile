@@ -1,4 +1,3 @@
-AWS_ACCOUNT_ID ?= 771188043543
 AWS_REGION ?= us-east-1
 
 GITHUB_OWNER ?= neuro-inc

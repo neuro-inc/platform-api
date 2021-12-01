@@ -19,7 +19,7 @@ jobs:
       (github.event_name != 'pull_request_target' && github.actor != 'dependabot[bot]') ||
       (github.event_name == 'pull_request_target' && github.actor == 'dependabot[bot]')
     env:
-      AWS_ACCOUNT_ID: 771188043543
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       AWS_REGION: us-east-1
     steps:
     - name: Checkout commit
@@ -98,7 +98,7 @@ jobs:
     concurrency: deploy_dev
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     env:
-      AWS_ACCOUNT_ID: 771188043543
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       AWS_REGION: us-east-1
       CLUSTER_NAME: aws-dev
       HELM_ENV: dev
