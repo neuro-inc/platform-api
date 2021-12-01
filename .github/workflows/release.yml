@@ -121,5 +121,4 @@ jobs:
         CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         helm package charts/platform-api-poller -u
-IMAGE_REGISTRY: github
         helm push platform-api-poller-$HELM_CHART_VERSION.tgz oci://$HELM_REPO
