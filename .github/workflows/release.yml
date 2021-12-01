@@ -15,6 +15,9 @@ jobs:
   publish_image:
     name: Publish Image
     runs-on: ubuntu-latest
+    env:
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      AWS_REGION: us-east-1
     concurrency: release_image
     outputs:
       tag: ${{ steps.release.outputs.tag }}
@@ -26,7 +29,7 @@ jobs:
       with:
         token: ${{ secrets.GH_TOKEN }}
         expire-in: 30mins
-    - name: Release image
+    - name: Push image to Github
       id: release
       uses: neuro-inc/release-image-action@v21.9.36
       with:
@@ -51,6 +54,21 @@ jobs:
         VERSION: ${{ steps.release.outputs.version }}
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
         PRERELEASE: ${{ steps.release.outputs.prerelease }}
+    - name: Configure AWS credentials
+      if: ${{ ! steps.release.outputs.skip }}
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    - name: Login to AWS ECR
+      if: ${{ ! steps.release.outputs.skip }}
+      uses: aws-actions/amazon-ecr-login@v1
+    - name: Push image to AWS ECR
+      if: ${{ ! steps.release.outputs.skip }}
+      run: make docker_push
+      env:
+        IMAGE_TAG: ${{ steps.release.outputs.version }}
   publish_chart:
     name: Publish Helm chart
     runs-on: ubuntu-latest
@@ -103,4 +121,5 @@ jobs:
         CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         helm package charts/platform-api-poller -u
+IMAGE_REGISTRY: github
         helm push platform-api-poller-$HELM_CHART_VERSION.tgz oci://$HELM_REPO
