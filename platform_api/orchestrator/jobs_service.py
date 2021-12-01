@@ -152,10 +152,7 @@ class JobsService:
     async def _raise_for_no_credits(
         self, cluster_entry: Union[ClusterUser, OrgCluster]
     ) -> None:
-        if (
-            cluster_entry.balance.credits is not None
-            and cluster_entry.balance.credits <= 0
-        ):
+        if cluster_entry.balance.is_non_positive:
             if isinstance(cluster_entry, ClusterUser):
                 raise NoCreditsError.create_for_user(cluster_entry.user_name)
             else:
