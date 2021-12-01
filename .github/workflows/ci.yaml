@@ -85,7 +85,7 @@ jobs:
     - name: Build Docker image
       run: make docker_build
       env:
-        TAG: latest
+        IMAGE_TAG: latest
     - name: Upload image artifact
       uses: neuro-inc/upload-image-action@v21.9.2
       with:
@@ -100,12 +100,10 @@ jobs:
     env:
       AWS_ACCOUNT_ID: 771188043543
       AWS_REGION: us-east-1
-      AZURE_ACR_NAME: ${{ secrets.AZURE_DEV_ACR_NAME }}
-      AZURE_REGION: ${{ secrets.AZURE_DEV_REGION }}
-      AZURE_RG_NAME: ${{ secrets.AZURE_DEV_RG_NAME }}
       CLUSTER_NAME: aws-dev
       HELM_ENV: dev
       IMAGE_REGISTRY: aws
+      IMAGE_TAG: ${{ github.sha }}
     steps:
     - name: Checkout commit
       uses: actions/checkout@v2
@@ -127,10 +125,12 @@ jobs:
         aws-region: ${{ env.AWS_REGION }}
     - name: Login to AWS ECR
       uses: aws-actions/amazon-ecr-login@v1
-    - name: Set image tag
-      run: echo "IMAGE_TAG=$GITHUB_SHA" >> $GITHUB_ENV
+    - name: Build image
+      run: make docker_build
     - name: Push images to registry
-      run: make docker_push
+      run: |
+        make docker_push
+        IMAGE_TAG=latest make docker_push
     - name: Update kube config
       run: aws eks --region $AWS_REGION update-kubeconfig --name $CLUSTER_NAME
     - name: Deploy Main service to kubernetes
