@@ -138,6 +138,50 @@ class TestBillingLogProcessing:
             )
 
     @pytest.mark.asyncio
+    async def test_syncs_job_with_org(
+        self,
+        test_org: str,
+        test_user_with_org: User,
+        jobs_service: JobsService,
+        job_request_factory: Callable[[], JobRequest],
+        mock_admin_client: MockAdminClient,
+        service: BillingLogService,
+        worker: BillingLogWorker,
+    ) -> None:
+        job, _ = await jobs_service.create_job(
+            job_request_factory(),
+            test_user_with_org,
+            cluster_name="test-cluster",
+            org_name=test_org,
+        )
+        async with service.entries_inserter() as inserter:
+            last_id = await inserter.insert(
+                [
+                    BillingLogEntry(
+                        idempotency_key="key",
+                        job_id=job.id,
+                        charge=Decimal("1.00"),
+                        fully_billed=True,
+                        last_billed=datetime.now(tz=timezone.utc),
+                    )
+                ]
+            )
+
+        async with worker:
+            await asyncio.wait_for(service.wait_until_processed(last_id), timeout=1)
+            updated_job = await jobs_service.get_job(job.id)
+            assert updated_job.total_price_credits == Decimal("1.00")
+            assert updated_job.fully_billed
+            assert len(mock_admin_client.spending_log) == 1
+            assert mock_admin_client.spending_log[0] == (
+                job.cluster_name,
+                test_org,
+                job.owner,
+                Decimal("1.00"),
+                "key",
+            )
+
+    @pytest.mark.asyncio
     async def test_sub_user_correct_user_charged(
         self,
         test_user: User,

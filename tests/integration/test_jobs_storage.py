@@ -5,8 +5,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from platform_api.config import PostgresConfig
-from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.job import JobRecord, current_datetime_factory
 from platform_api.orchestrator.job_request import (
     Container,
@@ -22,7 +20,6 @@ from platform_api.orchestrator.jobs_storage import (
     JobStorageTransactionError,
 )
 from platform_api.orchestrator.jobs_storage.postgres import PostgresJobsStorage
-from platform_api.postgres import MigrationRunner, make_async_engine
 from tests.conftest import not_raises
 
 
@@ -959,6 +956,72 @@ class TestJobsStorage:
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == []
 
+    async def prepare_filtering_test_different_orgs(
+        self, storage: JobsStorage
+    ) -> List[JobRecord]:
+        jobs = [
+            self._create_running_job(
+                owner="user1", cluster_name="test-cluster", org_name=None
+            ),
+            self._create_succeeded_job(
+                owner="user1",
+                cluster_name="test-cluster",
+                job_name="jobname1",
+                org_name=None,
+            ),
+            self._create_failed_job(
+                owner="user2",
+                cluster_name="test-cluster",
+                job_name="jobname1",
+                org_name=None,
+            ),
+            self._create_succeeded_job(
+                owner="user3",
+                cluster_name="test-cluster",
+                job_name="jobname1",
+                org_name="test-org",
+            ),
+            self._create_succeeded_job(
+                owner="user1", cluster_name="my-cluster", org_name="test-org"
+            ),
+            self._create_failed_job(
+                owner="user3", cluster_name="my-cluster", org_name="test-org"
+            ),
+            self._create_failed_job(
+                owner="user1", cluster_name="other-cluster", org_name="test-org"
+            ),
+            self._create_succeeded_job(
+                owner="user2", cluster_name="other-cluster", org_name="other-org"
+            ),
+            self._create_running_job(
+                owner="user3", cluster_name="other-cluster", org_name="other-org"
+            ),
+        ]
+        for job in jobs:
+            async with storage.try_create_job(job):
+                pass
+        return jobs
+
+    @pytest.mark.asyncio
+    async def test_get_all_filter_by_org(self, storage: JobsStorage) -> None:
+        jobs = await self.prepare_filtering_test_different_orgs(storage)
+
+        job_filter = JobFilter(orgs={"other-org"})
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job.id for job in jobs[7:]}
+
+        job_filter = JobFilter(orgs={None})
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job.id for job in jobs[:3]}
+
+        job_filter = JobFilter(orgs={None, "test-org"})
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == {job.id for job in jobs[:7]}
+
+        job_filter = JobFilter(orgs={"nonexisting-org"})
+        job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
+        assert job_ids == set()
+
     @pytest.mark.asyncio
     async def test_get_all_filter_by_fully_billed(self, storage: JobsStorage) -> None:
         jobs = [
@@ -1477,110 +1540,3 @@ class TestJobsStorage:
             job_filter=job_filter,
         )
         assert jobs == []
-
-    def _fix_utf8(self, value: str) -> str:
-        return value.encode("utf-8", "replace").decode("utf-8")
-
-    def check_same_job_sets(
-        self, jobs1: List[JobRecord], jobs2: List[JobRecord]
-    ) -> None:
-        assert len(jobs1) == len(jobs2)
-        for job1 in jobs1:
-            try:
-                job2 = next(job for job in jobs2 if job.id == job1.id)
-            except StopIteration:
-                raise AssertionError(f"Job with id {job1.id} is missing in job2 set!")
-            job1_primitive = job1.to_primitive()
-            job2_primitive = job2.to_primitive()
-            # If data contains bad utf8 string, it is ok to replace it with ?
-            job1_primitive["request"]["container"]["command"] = self._fix_utf8(
-                job1_primitive["request"]["container"]["command"]
-            )
-            job2_primitive["request"]["container"]["command"] = self._fix_utf8(
-                job2_primitive["request"]["container"]["command"]
-            )
-            assert job1_primitive == job2_primitive
-
-    async def prepare_jobs_for_data_migration(
-        self, storage: JobsStorage, include_bad_utf8: bool = False
-    ) -> List[JobRecord]:
-        jobs = [
-            self._create_running_job(owner="user1", cluster_name="test-cluster"),
-            self._create_succeeded_job(
-                owner="user1", cluster_name="test-cluster", job_name="jobname1"
-            ),
-            self._create_failed_job(
-                owner="user2", cluster_name="test-cluster", job_name="jobname1"
-            ),
-            self._create_succeeded_job(
-                owner="user3", cluster_name="test-cluster", job_name="jobname1"
-            ),
-            self._create_succeeded_job(owner="user1", cluster_name="my-cluster"),
-            self._create_failed_job(owner="user3", cluster_name="my-cluster"),
-            self._create_failed_job(owner="user1", cluster_name="other-cluster"),
-            self._create_succeeded_job(owner="user2", cluster_name="other-cluster"),
-            self._create_running_job(owner="user3", cluster_name="other-cluster"),
-        ]
-        if include_bad_utf8:
-            job_bad_command_str = self._create_running_job(
-                owner="user-bad-utf-8", cluster_name="test-cluster"
-            )
-            job_primitive = job_bad_command_str.to_primitive()
-            # Some value from wild nature:
-            job_primitive["request"]["container"][
-                "command"
-            ] = "python -c 'print('\"'\"'wandb: Starting wandb agent \ud83d️'\"'\"')'"
-            jobs += [JobRecord.from_primitive(job_primitive)]
-
-        for job in jobs:
-            async with storage.try_create_job(job):
-                pass
-        return jobs
-
-    @pytest.mark.asyncio
-    async def test_data_migration_rename_as_deleted(self, postgres_dsn: str) -> None:
-        postgres_config = PostgresConfig(
-            postgres_dsn=postgres_dsn,
-            alembic=EnvironConfigFactory().create_alembic(postgres_dsn),
-        )
-        migration_runner = MigrationRunner(postgres_config)
-        await migration_runner.upgrade("eaa33ba10d63")
-
-        job_not_delete = self._create_failed_job(
-            owner="user3", cluster_name="my-cluster", materialized=True
-        )
-        job_delete = self._create_failed_job(
-            owner="user3", cluster_name="my-cluster", materialized=False
-        )
-
-        real_to_primitive = JobRecord.to_primitive
-
-        def _to_primitive(self: JobRecord) -> Dict[str, Any]:
-            payload = real_to_primitive(self)
-            payload["is_deleted"] = not payload["materialized"]
-            return payload
-
-        JobRecord.to_primitive = _to_primitive  # type: ignore
-
-        try:
-            # Load data to postgres
-            engine = make_async_engine(postgres_config)
-            try:
-                postgres_storage = PostgresJobsStorage(engine)
-                await postgres_storage.set_job(job_delete)
-                await postgres_storage.set_job(job_not_delete)
-            finally:
-                await engine.dispose()
-            await migration_runner.upgrade()
-            JobRecord.to_primitive = real_to_primitive  # type: ignore
-            engine = make_async_engine(postgres_config)
-            try:
-                postgres_storage = PostgresJobsStorage(engine)
-                assert (await postgres_storage.get_job(job_not_delete.id)).materialized
-                assert not (await postgres_storage.get_job(job_delete.id)).materialized
-            finally:
-                await engine.dispose()
-        finally:
-            JobRecord.to_primitive = real_to_primitive  # type: ignore
-            # Downgrade
-            await migration_runner.downgrade()

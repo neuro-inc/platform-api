@@ -50,6 +50,7 @@ from tests.unit.conftest import (
     MockAdminClient,
     MockAuthClient,
     MockNotificationsClient,
+    OrgFactory,
     UserFactory,
 )
 
@@ -252,12 +253,17 @@ class TestHasCreditsEnforcer:
         self,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
-    ) -> Callable[[AuthUser, int], Awaitable[List[Job]]]:
-        async def _make_jobs(user: AuthUser, count: int) -> List[Job]:
+    ) -> Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]]:
+        async def _make_jobs(
+            user: AuthUser, org_name: Optional[str], count: int
+        ) -> List[Job]:
             return [
                 (
                     await jobs_service.create_job(
-                        job_request_factory(), user, cluster_name="test-cluster"
+                        job_request_factory(),
+                        user,
+                        cluster_name="test-cluster",
+                        org_name=org_name,
                     )
                 )[0]
                 for _ in range(count)
@@ -293,13 +299,13 @@ class TestHasCreditsEnforcer:
         self,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         user_factory: UserFactory,
         test_cluster: str,
     ) -> None:
         user = await user_factory("some-user", [(test_cluster, Balance(), Quota())])
-        jobs = await make_jobs(user, 5)
+        jobs = await make_jobs(user, None, 5)
 
         await has_credits_enforcer.enforce()
 
@@ -311,7 +317,7 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         user_factory: UserFactory,
         test_cluster: str,
@@ -319,7 +325,7 @@ class TestHasCreditsEnforcer:
         user = await user_factory(
             "some-user", [(test_cluster, Balance(credits=Decimal("1.00")), Quota())]
         )
-        jobs = await make_jobs(user, 5)
+        jobs = await make_jobs(user, None, 5)
 
         await has_credits_enforcer.enforce()
 
@@ -332,12 +338,12 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         credits: Decimal,
         mock_admin_client: MockAdminClient,
     ) -> None:
-        jobs = await make_jobs(test_user, 5)
+        jobs = await make_jobs(test_user, None, 5)
         old_cluster_user = mock_admin_client.cluster_users[test_user.name][0]
 
         mock_admin_client.cluster_users[test_user.name] = [
@@ -354,12 +360,100 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         mock_admin_client: MockAdminClient,
     ) -> None:
-        jobs = await make_jobs(test_user, 5)
+        jobs = await make_jobs(test_user, None, 5)
         mock_admin_client.cluster_users[test_user.name] = []
+
+        await has_credits_enforcer.enforce()
+
+        await check_cancelled(jobs, JobStatusReason.QUOTA_EXHAUSTED)
+
+    @pytest.mark.asyncio
+    async def test_orgs_credits_disabled_do_nothing(
+        self,
+        has_credits_enforcer: CreditsLimitEnforcer,
+        mock_auth_client: MockAuthClient,
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
+        check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
+        org_factory: OrgFactory,
+        user_factory: UserFactory,
+        test_cluster: str,
+    ) -> None:
+        org = await org_factory("some-org", [(test_cluster, Balance(), Quota())])
+        user = await user_factory(
+            "some-user", [(test_cluster, org, Balance(), Quota())]
+        )
+        jobs = await make_jobs(user, org, 5)
+
+        await has_credits_enforcer.enforce()
+
+        await check_not_cancelled(jobs)
+
+    @pytest.mark.asyncio
+    async def test_org_has_credits_do_nothing(
+        self,
+        test_user: AuthUser,
+        has_credits_enforcer: CreditsLimitEnforcer,
+        mock_auth_client: MockAuthClient,
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
+        check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
+        org_factory: OrgFactory,
+        user_factory: UserFactory,
+        test_cluster: str,
+    ) -> None:
+        org = await org_factory(
+            "some-org", [(test_cluster, Balance(credits=Decimal("1.00")), Quota())]
+        )
+        user = await user_factory(
+            "some-user", [(test_cluster, org, Balance(), Quota())]
+        )
+
+        jobs = await make_jobs(user, org, 5)
+
+        await has_credits_enforcer.enforce()
+
+        await check_not_cancelled(jobs)
+
+    @pytest.mark.parametrize("credits", [Decimal("0"), Decimal("-0.5")])
+    @pytest.mark.asyncio
+    async def test_org_has_no_credits_kill_all(
+        self,
+        test_org: str,
+        test_user_with_org: AuthUser,
+        has_credits_enforcer: CreditsLimitEnforcer,
+        mock_auth_client: MockAuthClient,
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
+        check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
+        credits: Decimal,
+        mock_admin_client: MockAdminClient,
+    ) -> None:
+        jobs = await make_jobs(test_user_with_org, test_org, 5)
+        old_org_cluster = mock_admin_client.org_clusters[test_org][0]
+
+        mock_admin_client.org_clusters[test_org] = [
+            replace(old_org_cluster, balance=Balance(credits=credits))
+        ]
+
+        await has_credits_enforcer.enforce()
+
+        await check_cancelled(jobs, JobStatusReason.QUOTA_EXHAUSTED)
+
+    @pytest.mark.asyncio
+    async def test_org_has_no_access_to_cluster_kill_all(
+        self,
+        test_org: str,
+        test_user_with_org: AuthUser,
+        has_credits_enforcer: CreditsLimitEnforcer,
+        mock_auth_client: MockAuthClient,
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
+        check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
+        mock_admin_client: MockAdminClient,
+    ) -> None:
+        jobs = await make_jobs(test_user_with_org, test_org, 5)
+        mock_admin_client.org_clusters[test_org] = []
 
         await has_credits_enforcer.enforce()
 

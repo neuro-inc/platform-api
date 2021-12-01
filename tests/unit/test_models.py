@@ -18,7 +18,7 @@ from platform_api.handlers.jobs_handler import (
     JobFilterFactory,
     convert_job_container_to_json,
     convert_job_to_job_response,
-    create_job_cluster_name_validator,
+    create_job_cluster_org_name_validator,
     create_job_preset_validator,
     create_job_request_validator,
     infer_permissions_from_container,
@@ -366,9 +366,24 @@ class TestJobClusterNameValidator:
         request = {
             "container": container,
         }
-        validator = create_job_cluster_name_validator("default")
+        validator = create_job_cluster_org_name_validator("default", None)
         payload = validator.check(request)
         assert payload["cluster_name"] == "default"
+        assert payload["org_name"] is None
+
+    def test_without_org_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        request = {
+            "container": container,
+        }
+        validator = create_job_cluster_org_name_validator("default", "some_org")
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "default"
+        assert payload["org_name"] == "some_org"
 
     def test_with_cluster_name(self) -> None:
         container = {
@@ -380,12 +395,29 @@ class TestJobClusterNameValidator:
             "cluster_name": "testcluster",
             "container": container,
         }
-        validator = create_job_cluster_name_validator("default")
+        validator = create_job_cluster_org_name_validator("default", None)
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
+        assert payload["org_name"] is None
+
+    def test_with_org_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        request = {
+            "cluster_name": "testcluster",
+            "org_name": "testorg",
+            "container": container,
+        }
+        validator = create_job_cluster_org_name_validator("default", None)
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "testcluster"
+        assert payload["org_name"] == "testorg"
 
     def test_invalid_payload_type(self) -> None:
-        validator = create_job_cluster_name_validator("default")
+        validator = create_job_cluster_org_name_validator("default", None)
         with pytest.raises(DataError):
             validator.check([])
 
@@ -393,7 +425,15 @@ class TestJobClusterNameValidator:
         request = {
             "cluster_name": 123,
         }
-        validator = create_job_cluster_name_validator("default")
+        validator = create_job_cluster_org_name_validator("default", None)
+        with pytest.raises(DataError, match="value is not a string"):
+            validator.check(request)
+
+    def test_invalid_org_name_type(self) -> None:
+        request = {
+            "org_name": 123,
+        }
+        validator = create_job_cluster_org_name_validator("default", None)
         with pytest.raises(DataError, match="value is not a string"):
             validator.check(request)
 
@@ -570,7 +610,10 @@ class TestJobRequestValidator:
             "container": container,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+            allowed_gpu_models=(),
+            allowed_tpu_resources=(),
+            cluster_name="testcluster",
+            org_name=None,
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
@@ -588,7 +631,10 @@ class TestJobRequestValidator:
             "scheduler_enabled": True,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+            allowed_gpu_models=(),
+            allowed_tpu_resources=(),
+            cluster_name="testcluster",
+            org_name=None,
         )
         with pytest.raises(
             DataError, match="schedule_timeout is not allowed for scheduled jobs"
@@ -606,6 +652,7 @@ class TestJobRequestValidator:
             allowed_gpu_models=(),
             allowed_tpu_resources=(),
             cluster_name="testcluster",
+            org_name=None,
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
@@ -622,7 +669,10 @@ class TestJobRequestValidator:
             "cluster_name": "testcluster",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+            allowed_gpu_models=(),
+            allowed_tpu_resources=(),
+            cluster_name="testcluster",
+            org_name=None,
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
@@ -638,7 +688,10 @@ class TestJobRequestValidator:
             "cluster_name": "testcluster",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="another"
+            allowed_gpu_models=(),
+            allowed_tpu_resources=(),
+            cluster_name="another",
+            org_name=None,
         )
         with pytest.raises(DataError, match="value is not exactly 'another'"):
             validator.check(request)
@@ -655,7 +708,10 @@ class TestJobRequestValidator:
             "max_run_time_minutes": limit_minutes,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="test-cluster"
+            allowed_gpu_models=(),
+            allowed_tpu_resources=(),
+            cluster_name="test-cluster",
+            org_name=None,
         )
         validator.check(request)
 
@@ -671,7 +727,10 @@ class TestJobRequestValidator:
             "max_run_time_minutes": limit_minutes,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="test-cluster"
+            allowed_gpu_models=(),
+            allowed_tpu_resources=(),
+            cluster_name="test-cluster",
+            org_name=None,
         )
         with pytest.raises(DataError, match="value is less than"):
             validator.check(request)
@@ -719,7 +778,10 @@ class TestJobRequestValidator:
             "restart_policy": "unknown",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="testcluster"
+            allowed_gpu_models=(),
+            allowed_tpu_resources=(),
+            cluster_name="testcluster",
+            org_name=None,
         )
         with pytest.raises(DataError, match="restart_policy.+any variant"):
             validator.check(request)
@@ -737,7 +799,10 @@ class TestJobRequestValidator:
             "container": container,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="clustername"
+            allowed_gpu_models=(),
+            allowed_tpu_resources=(),
+            cluster_name="clustername",
+            org_name=None,
         )
         validator.check(request)
 
@@ -758,7 +823,10 @@ class TestJobRequestValidator:
         }
         request = {"container": container}
         validator = create_job_request_validator(
-            allowed_gpu_models=(), allowed_tpu_resources=(), cluster_name="clustername"
+            allowed_gpu_models=(),
+            allowed_tpu_resources=(),
+            cluster_name="clustername",
+            org_name=None,
         )
         validator.check(request)
 
@@ -1389,7 +1457,11 @@ class TestInferPermissionsFromContainer:
             image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
         )
         permissions = infer_permissions_from_container(
-            user, container, "example.com", "test-cluster"
+            user,
+            container,
+            "example.com",
+            "test-cluster",
+            org_name=None,
         )
         assert permissions == [
             Permission(uri="job://test-cluster/testuser", action="write")
@@ -1413,7 +1485,11 @@ class TestInferPermissionsFromContainer:
             ],
         )
         permissions = infer_permissions_from_container(
-            user, container, "http://example.com", "test-cluster"
+            user,
+            container,
+            "http://example.com",
+            "test-cluster",
+            org_name=None,
         )
         assert permissions == [
             Permission(uri="job://test-cluster/testuser", action="write"),
@@ -1428,7 +1504,11 @@ class TestInferPermissionsFromContainer:
             resources=ContainerResources(cpu=0.1, memory_mb=16),
         )
         permissions = infer_permissions_from_container(
-            user, container, "example.com", "test-cluster"
+            user,
+            container,
+            "example.com",
+            "test-cluster",
+            org_name=None,
         )
         assert permissions == [
             Permission(uri="job://test-cluster/testuser", action="write"),
@@ -1550,7 +1630,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "is_preemptible_node_required": False,
         "materialized": False,
         "pass_config": False,
-        "uri": f"job://test-cluster/compute/{job.id}",
+        "uri": f"job://test-cluster/test-tenant-id/compute/{job.id}",
         "restart_policy": "never",
         "privileged": False,
         "being_dropped": False,

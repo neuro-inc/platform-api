@@ -632,6 +632,8 @@ class Job:
     def to_uri(self) -> URL:
         assert self.cluster_name
         uri = URL.build(scheme="job", host=self.cluster_name)
+        if self.org_name:
+            uri /= self.org_name
         if self.owner:
             uri /= self.owner
         return uri / self.id

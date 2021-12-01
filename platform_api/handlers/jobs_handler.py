@@ -71,6 +71,7 @@ from .validators import (
     create_job_name_validator,
     create_job_status_validator,
     create_job_tag_validator,
+    create_org_name_validator,
     create_user_name_validator,
     sanitize_dns_name,
 )
@@ -85,6 +86,7 @@ def create_job_request_validator(
     allowed_gpu_models: Sequence[str],
     allowed_tpu_resources: Sequence[TPUResource],
     cluster_name: str,
+    org_name: Optional[str],
     storage_scheme: str = "storage",
 ) -> t.Trafaret:
     def _check_no_schedule_timeout_for_scheduled_jobs(
@@ -133,6 +135,7 @@ def create_job_request_validator(
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=1),
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
+            t.Key("org_name", default=org_name): t.Atom(org_name),
             t.Key("restart_policy", default=str(JobRestartPolicy.NEVER)): t.Enum(
                 *(str(policy) for policy in JobRestartPolicy)
             )
@@ -218,9 +221,14 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
     return validator
 
 
-def create_job_cluster_name_validator(default_cluster_name: str) -> t.Trafaret:
+def create_job_cluster_org_name_validator(
+    default_cluster_name: str, org_name: Optional[str]
+) -> t.Trafaret:
     return t.Dict(
-        {t.Key("cluster_name", default=default_cluster_name): t.String}
+        {
+            t.Key("cluster_name", default=default_cluster_name): t.String,
+            t.Key("org_name", default=org_name): t.String | t.Null,
+        }
     ).allow_extra("*")
 
 
@@ -234,6 +242,7 @@ def create_job_response_validator() -> t.Trafaret:
             # prod env is there.
             "owner": t.String(allow_blank=True),
             "cluster_name": t.String(allow_blank=False),
+            t.Key("org_name", optional=True): t.String,
             "uri": t.String(allow_blank=False),
             # `status` is left for backward compat. the python client/cli still
             # relies on it.
@@ -273,7 +282,6 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("max_run_time_minutes", optional=True): t.Int,
             "restart_policy": t.String,
             "privileged": t.Bool,
-            t.Key("org_name", optional=True): t.String,
         }
     )
 
@@ -482,9 +490,10 @@ def infer_permissions_from_container(
     container: Container,
     registry_host: str,
     cluster_name: str,
+    org_name: Optional[str],
 ) -> List[Permission]:
     permissions = [
-        Permission(uri=str(make_job_uri(user, cluster_name)), action="write")
+        Permission(uri=str(make_job_uri(user, cluster_name, org_name)), action="write")
     ]
     if container.belongs_to_registry(registry_host):
         permissions.append(
@@ -562,6 +571,7 @@ class JobsHandler:
         self,
         cluster_config: ClusterConfig,
         allow_flat_structure: bool = False,
+        org_name: str = None,
     ) -> t.Trafaret:
         resource_pool_types = cluster_config.orchestrator.resource_pool_types
         gpu_models = list(
@@ -572,15 +582,31 @@ class JobsHandler:
             allowed_gpu_models=gpu_models,
             allowed_tpu_resources=cluster_config.orchestrator.tpu_resources,
             cluster_name=cluster_config.name,
+            org_name=org_name,
             storage_scheme=STORAGE_URI_SCHEME,
         )
 
     def _get_cluster_config(
-        self, user_cluster_configs: Sequence[UserClusterConfig], cluster_name: str
+        self,
+        user_cluster_configs: Sequence[UserClusterConfig],
+        cluster_name: str,
+        org_name: Optional[str],
     ) -> ClusterConfig:
         for user_cluster_config in user_cluster_configs:
             if user_cluster_config.config.name == cluster_name:
-                return user_cluster_config.config
+                if org_name in user_cluster_config.orgs:
+                    return user_cluster_config.config
+                raise aiohttp.web.HTTPForbidden(
+                    text=json.dumps(
+                        {
+                            "error": (
+                                "User is not allowed to submit jobs to the specified "
+                                "cluster as a member of given organization"
+                            )
+                        }
+                    ),
+                    content_type="application/json",
+                )
         raise aiohttp.web.HTTPForbidden(
             text=json.dumps(
                 {
@@ -600,13 +626,17 @@ class JobsHandler:
         cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
         self._check_user_can_submit_jobs(cluster_configs)
         default_cluster_name = cluster_configs[0].config.name
+        default_org_name_name = cluster_configs[0].orgs[0]
 
-        job_cluster_name_validator = create_job_cluster_name_validator(
-            default_cluster_name
+        job_cluster_org_name_validator = create_job_cluster_org_name_validator(
+            default_cluster_name, default_org_name_name
         )
-        request_payload = job_cluster_name_validator.check(orig_payload)
+        request_payload = job_cluster_org_name_validator.check(orig_payload)
         cluster_name = request_payload["cluster_name"]
-        cluster_config = self._get_cluster_config(cluster_configs, cluster_name)
+        org_name = request_payload["org_name"]
+        cluster_config = self._get_cluster_config(
+            cluster_configs, cluster_name, org_name
+        )
 
         if "from_preset" in request.query:
             job_preset_validator = create_job_preset_validator(
@@ -618,14 +648,18 @@ class JobsHandler:
             allow_flat_structure = False
 
         job_request_validator = await self._create_job_request_validator(
-            cluster_config, allow_flat_structure=allow_flat_structure
+            cluster_config, allow_flat_structure=allow_flat_structure, org_name=org_name
         )
         request_payload = job_request_validator.check(request_payload)
 
         container = create_container_from_payload(request_payload)
 
         permissions = infer_permissions_from_container(
-            user, container, cluster_config.ingress.registry_host, cluster_name
+            user,
+            container,
+            cluster_config.ingress.registry_host,
+            cluster_name,
+            org_name,
         )
         await check_permissions(request, permissions)
 
@@ -645,6 +679,7 @@ class JobsHandler:
             job_request,
             user=user,
             cluster_name=cluster_name,
+            org_name=org_name,
             job_name=name,
             preset_name=preset_name,
             tags=tags,
@@ -949,6 +984,7 @@ class JobFilterFactory:
         self._user_name_validator = create_user_name_validator()
         self._base_owner_name_validator = create_base_owner_name_validator()
         self._cluster_name_validator = create_cluster_name_validator()
+        self._org_name_validator = create_org_name_validator()
 
     def create_from_query(self, query: MultiDictProxy) -> JobFilter:  # type: ignore
         statuses = {JobStatus(s) for s in query.getall("status", [])}
@@ -972,11 +1008,16 @@ class JobFilterFactory:
                 self._cluster_name_validator.check(cluster_name): {}
                 for cluster_name in query.getall("cluster_name", [])
             }
+            orgs = {
+                self._org_name_validator.check(org_name)
+                for org_name in query.getall("org_name", [])
+            }
             since = query.get("since")
             until = query.get("until")
             return JobFilter(
                 statuses=statuses,
                 clusters=clusters,
+                orgs=orgs,
                 owners=owners,
                 base_owners=base_owners,
                 name=job_name,

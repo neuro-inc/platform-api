@@ -49,6 +49,9 @@ class JobFilter:
     clusters: ClusterOwnerNameSet = field(
         default_factory=cast(Type[ClusterOwnerNameSet], dict)
     )
+    orgs: AbstractSet[Optional[str]] = field(
+        default_factory=cast(Type[Set[Optional[str]]], set)
+    )
     owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     base_owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
     tags: Set[str] = field(default_factory=cast(Type[Set[str]], set))

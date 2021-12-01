@@ -12,12 +12,11 @@ from typing import (
     Dict,
     Iterator,
     List,
-    Literal,
     Optional,
     Sequence,
     Tuple,
     Union,
-    overload,
+    cast,
 )
 
 import pytest
@@ -28,6 +27,7 @@ from neuro_admin_client import (
     ClusterUser,
     ClusterUserRoleType,
     ClusterUserWithInfo,
+    OrgCluster,
     Quota,
     User,
     UserInfo,
@@ -250,6 +250,7 @@ class MockAdminClient(AdminClient):
     def __init__(self) -> None:
         self.users: Dict[str, User] = {}
         self.cluster_users: Dict[str, List[ClusterUser]] = defaultdict(list)
+        self.org_clusters: Dict[str, List[OrgCluster]] = defaultdict(list)
         self.spending_log: List[
             Tuple[str, Optional[str], str, Decimal, Optional[str]]
         ] = []
@@ -289,27 +290,7 @@ class MockAdminClient(AdminClient):
     ) -> None:
         self.debts_log.append((cluster_name, username, credits, idempotency_key))
 
-    @overload
-    async def get_cluster_user(
-        self,
-        cluster_name: str,
-        user_name: str,
-        with_user_info: Literal[True] = ...,
-        org_name: Optional[str] = None,
-    ) -> ClusterUserWithInfo:
-        ...
-
-    @overload
-    async def get_cluster_user(
-        self,
-        cluster_name: str,
-        user_name: str,
-        with_user_info: Literal[False] = ...,
-        org_name: Optional[str] = None,
-    ) -> ClusterUser:
-        ...
-
-    async def get_cluster_user(
+    async def get_cluster_user(  # type: ignore
         self,
         cluster_name: str,
         user_name: str,
@@ -317,7 +298,10 @@ class MockAdminClient(AdminClient):
         org_name: Optional[str] = None,
     ) -> Union[ClusterUser, ClusterUserWithInfo]:
         for cluster_user in self.cluster_users.get(user_name, []):
-            if cluster_user.cluster_name == cluster_name:
+            if (
+                cluster_user.cluster_name == cluster_name
+                and cluster_user.org_name == org_name
+            ):
                 if with_user_info:
                     return cluster_user.add_info(
                         UserInfo(
@@ -328,6 +312,16 @@ class MockAdminClient(AdminClient):
                         )
                     )
                 return cluster_user
+        raise ClientResponseError(None, (), status=404)  # type: ignore
+
+    async def get_org_cluster(
+        self,
+        cluster_name: str,
+        org_name: str,
+    ) -> OrgCluster:
+        for org_cluster in self.org_clusters.get(org_name, []):
+            if org_cluster.cluster_name == cluster_name:
+                return org_cluster
         raise ClientResponseError(None, (), status=404)  # type: ignore
 
 
@@ -541,18 +535,31 @@ def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
     loop.close()
 
 
-UserFactory = Callable[[str, List[Tuple[str, Balance, Quota]]], Awaitable[AuthUser]]
+UserFactory = Callable[
+    [str, List[Union[Tuple[str, Balance, Quota], Tuple[str, str, Balance, Quota]]]],
+    Awaitable[AuthUser],
+]
 
 
 @pytest.fixture
 def user_factory(
     mock_admin_client: MockAdminClient,
-) -> Callable[[str, List[Tuple[str, Balance, Quota]]], Awaitable[AuthUser]]:
+) -> UserFactory:
     async def _factory(
-        name: str, clusters: List[Tuple[str, Balance, Quota]]
+        name: str,
+        clusters: List[
+            Union[Tuple[str, Balance, Quota], Tuple[str, str, Balance, Quota]]
+        ],
     ) -> AuthUser:
         mock_admin_client.users[name] = User(name=name, email=f"{name}@domain.com")
-        for cluster, balance, quota in clusters:
+        for entry in clusters:
+            org_name: Optional[str] = None
+            if len(entry) == 3:
+                cluster, balance, quota = cast(Tuple[str, Balance, Quota], entry)
+            else:
+                cluster, org_name, balance, quota = cast(
+                    Tuple[str, str, Balance, Quota], entry
+                )
             mock_admin_client.cluster_users[name].append(
                 ClusterUser(
                     user_name=name,
@@ -560,7 +567,7 @@ def user_factory(
                     role=ClusterUserRoleType.USER,
                     balance=balance,
                     quota=quota,
-                    org_name=None,
+                    org_name=org_name,
                 )
             )
         return AuthUser(name=name)
@@ -568,11 +575,48 @@ def user_factory(
     return _factory
 
 
+OrgFactory = Callable[[str, List[Tuple[str, Balance, Quota]]], Awaitable[str]]
+
+
 @pytest.fixture
-def test_cluster(user_factory: UserFactory) -> str:
+def org_factory(
+    mock_admin_client: MockAdminClient,
+) -> OrgFactory:
+    async def _factory(name: str, clusters: List[Tuple[str, Balance, Quota]]) -> str:
+        mock_admin_client.users[name] = User(name=name, email=f"{name}@domain.com")
+        for cluster, balance, quota in clusters:
+            mock_admin_client.org_clusters[name].append(
+                OrgCluster(
+                    cluster_name=cluster,
+                    org_name=name,
+                    balance=balance,
+                    quota=quota,
+                )
+            )
+        return name
+
+    return _factory
+
+
+@pytest.fixture
+def test_cluster() -> str:
     return "test-cluster"
+
+
+@pytest.fixture
+async def test_org(test_cluster: str, org_factory: OrgFactory) -> str:
+    return await org_factory("test-org", [(test_cluster, Balance(), Quota())])
 
 
 @pytest.fixture
 async def test_user(user_factory: UserFactory, test_cluster: str) -> AuthUser:
     return await user_factory("test_user", [(test_cluster, Balance(), Quota())])
+
+
+@pytest.fixture
+async def test_user_with_org(
+    user_factory: UserFactory, test_cluster: str, test_org: str
+) -> AuthUser:
+    return await user_factory(
+        "test_user", [(test_cluster, test_org, Balance(), Quota())]
+    )

@@ -50,6 +50,7 @@ from .conftest import (
     MockJobsStorage,
     MockNotificationsClient,
     MockOrchestrator,
+    OrgFactory,
     UserFactory,
 )
 
@@ -175,6 +176,30 @@ class TestJobsService:
         assert job.owner == test_user.name
 
     @pytest.mark.asyncio
+    async def test_create_job_with_org(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        test_user_with_org: AuthUser,
+        test_cluster: str,
+        test_org: str,
+    ) -> None:
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+        )
+        assert original_job.status == JobStatus.PENDING
+        assert not original_job.is_finished
+
+        job = await jobs_service.get_job(job_id=original_job.id)
+        assert job.id == original_job.id
+        assert job.status == JobStatus.PENDING
+        assert job.owner == test_user_with_org.name
+        assert job.org_name == test_org
+
+    @pytest.mark.asyncio
     async def test_create_job_privileged_not_allowed(
         self,
         cluster_config: ClusterConfig,
@@ -241,7 +266,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
             user=test_user,
@@ -255,9 +279,42 @@ class TestJobsService:
         assert URL(passed_data["url"]) == mock_api_base
         assert passed_data["token"] == f"token-{test_user.name}"
         assert passed_data["cluster"] == original_job.cluster_name
+        assert passed_data["org_name"] == original_job.org_name
         token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
         assert mock_auth_client.grants[0] == (
             test_user.name,
+            [Permission(uri=token_uri, action="read")],
+        )
+
+    @pytest.mark.asyncio
+    async def test_create_job_pass_config_with_org(
+        self,
+        jobs_service: JobsService,
+        mock_job_request: JobRequest,
+        mock_api_base: URL,
+        mock_auth_client: MockAuthClient,
+        test_user_with_org: AuthUser,
+        test_cluster: str,
+        test_org: str,
+    ) -> None:
+        original_job, _ = await jobs_service.create_job(
+            job_request=mock_job_request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            pass_config=True,
+        )
+        assert original_job.status == JobStatus.PENDING
+        assert original_job.pass_config
+        passed_data_str = original_job.request.container.env[NEURO_PASSED_CONFIG]
+        passed_data = json.loads(base64.b64decode(passed_data_str).decode())
+        assert URL(passed_data["url"]) == mock_api_base
+        assert passed_data["token"] == f"token-{test_user_with_org.name}"
+        assert passed_data["cluster"] == original_job.cluster_name
+        assert passed_data["org_name"] == test_org
+        token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
+        assert mock_auth_client.grants[0] == (
+            test_user_with_org.name,
             [Permission(uri=token_uri, action="read")],
         )
 
@@ -1263,6 +1320,97 @@ class TestJobsService:
             assert job.status == JobStatus.SUCCEEDED
 
     @pytest.mark.asyncio
+    async def test_update_jobs_handles_org_level_running_quota(
+        self,
+        jobs_service_factory: Callable[..., JobsService],
+        jobs_poller_service: JobsPollerService,
+        mock_orchestrator: MockOrchestrator,
+        mock_auth_client: MockAuthClient,
+        job_request_factory: Callable[[], JobRequest],
+        test_cluster: str,
+        org_factory: OrgFactory,
+        user_factory: UserFactory,
+    ) -> None:
+        jobs_service = jobs_service_factory(deletion_delay_s=60)
+
+        org = await org_factory(
+            "testuser", [(test_cluster, Balance(), Quota(total_running_jobs=5))]
+        )
+        org2 = await org_factory("testuser", [(test_cluster, Balance(), Quota())])
+
+        jobs = []
+
+        # Start bunch of jobs
+        for index in range(10):
+            user = await user_factory(
+                f"testorguser{index}", [(test_cluster, org, Balance(), Quota())]
+            )
+            job, _ = await jobs_service.create_job(
+                job_request=job_request_factory(),
+                user=user,
+                cluster_name=test_cluster,
+                wait_for_jobs_quota=True,
+                org_name=org,
+            )
+            assert job.status == JobStatus.PENDING
+            jobs.append(job)
+
+        # Start bunch of jobs for different org - should not have no effect
+        for index in range(10):
+            user = await user_factory(
+                f"testorguser{index}", [(test_cluster, org2, Balance(), Quota())]
+            )
+            job, _ = await jobs_service.create_job(
+                job_request=job_request_factory(),
+                user=user,
+                cluster_name=test_cluster,
+                wait_for_jobs_quota=True,
+                org_name=org2,
+            )
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        # Only 5 first should be materialized:
+        for job in jobs[:5]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert job.materialized
+        for job in jobs[5:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert not job.materialized
+
+        for job in jobs[:5]:
+            mock_orchestrator.update_status_to_return_single(
+                job.id, JobStatus.SUCCEEDED
+            )
+
+        # Two ticks - first will move remove running from queue,
+        # second will start pending
+        await jobs_poller_service.update_jobs_statuses()
+        await jobs_poller_service.update_jobs_statuses()
+
+        for job in jobs[:5]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.SUCCEEDED
+
+        for job in jobs[5:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert job.materialized
+
+        for job in jobs[5:]:
+            mock_orchestrator.update_status_to_return_single(
+                job.id, JobStatus.SUCCEEDED
+            )
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        for job in jobs:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.SUCCEEDED
+
+    @pytest.mark.asyncio
     async def test_update_jobs_scheduled_additional_when_no_pending(
         self,
         jobs_service_factory: Callable[..., JobsService],
@@ -1686,6 +1834,36 @@ class TestJobsService:
             await jobs_service.create_job(request, user, cluster_name=test_cluster)
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "balance",
+        [
+            Balance(credits=Decimal("0")),
+            Balance(credits=Decimal("-0.5")),
+        ],
+    )
+    async def test_raise_no_credits_in_org(
+        self,
+        jobs_service: JobsService,
+        job_request_factory: Callable[..., JobRequest],
+        balance: Balance,
+        org_factory: OrgFactory,
+        user_factory: UserFactory,
+        test_cluster: str,
+    ) -> None:
+        org_name = await org_factory("testorg", [(test_cluster, balance, Quota())])
+        user = await user_factory(
+            "testuser", [(test_cluster, org_name, Balance(), Quota())]
+        )
+        request = job_request_factory(with_gpu=True)
+
+        with pytest.raises(
+            NoCreditsError, match=f"No credits left for org '{org_name}'"
+        ):
+            await jobs_service.create_job(
+                request, user, cluster_name=test_cluster, org_name=org_name
+            )
+
+    @pytest.mark.asyncio
     async def test_raise_for_jobs_limit(
         self,
         jobs_service: JobsService,
@@ -1704,6 +1882,41 @@ class TestJobsService:
 
         with pytest.raises(RunningJobsQuotaExceededError):
             await jobs_service.create_job(request, user=user, cluster_name=test_cluster)
+
+    @pytest.mark.asyncio
+    async def test_raise_for_jobs_limit_in_org(
+        self,
+        jobs_service: JobsService,
+        job_request_factory: Callable[..., JobRequest],
+        org_factory: OrgFactory,
+        user_factory: UserFactory,
+        test_cluster: str,
+    ) -> None:
+
+        org_name = await org_factory(
+            "testorg", [(test_cluster, Balance(), Quota(total_running_jobs=5))]
+        )
+        user = await user_factory(
+            "testuser", [(test_cluster, org_name, Balance(), Quota())]
+        )
+        user2 = await user_factory(
+            "testuser2", [(test_cluster, org_name, Balance(), Quota())]
+        )
+        for _ in range(5):
+            request = job_request_factory()
+            await jobs_service.create_job(
+                request, user=user2, cluster_name=test_cluster, org_name=org_name
+            )
+
+        request = job_request_factory()
+
+        with pytest.raises(
+            RunningJobsQuotaExceededError,
+            match=f"Jobs limit quota exceeded for org '{org_name}'",
+        ):
+            await jobs_service.create_job(
+                request, user=user, cluster_name=test_cluster, org_name=org_name
+            )
 
     @pytest.mark.asyncio
     async def test_no_raise_for_jobs_limit_if_wait_flag(

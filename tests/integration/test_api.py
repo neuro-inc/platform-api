@@ -662,6 +662,37 @@ class TestJobs:
         await jobs_client.delete_job(job_id=job_id)
 
     @pytest.mark.asyncio
+    async def test_create_job_with_org(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        service_account_factory: ServiceAccountFactory,
+        regular_user_factory: UserFactory,
+        jobs_client_factory: Callable[[_User], JobsClient],
+    ) -> None:
+        org_user = await regular_user_factory(
+            clusters=[
+                ("test-cluster", "org", Balance(), Quota()),
+            ],
+        )
+        url = api.jobs_base_url
+        job_submit["org_name"] = "org"
+
+        async with client.post(
+            url, headers=org_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["id"]
+            assert result["org_name"] == "org"
+
+        jobs_client = jobs_client_factory(org_user)
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    @pytest.mark.asyncio
     async def test_create_job_with_pass_config(
         self,
         api: ApiConfig,
@@ -3209,6 +3240,60 @@ class TestJobs:
         job_ids = {job["id"] for job in await jobs_client.get_all_jobs(filters)}
         assert job_ids == {job_1, job_2, job_3}
 
+    @pytest.mark.asyncio
+    async def test_get_all_jobs_filter_by_org(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        jobs_client_factory: Callable[[_User], JobsClient],
+        job_request_factory: Callable[[], Dict[str, Any]],
+        regular_user_factory: UserFactory,
+    ) -> None:
+        url = api.jobs_base_url
+
+        org_user = await regular_user_factory(
+            clusters=[
+                ("test-cluster", Balance(), Quota()),
+                ("test-cluster", "org1", Balance(), Quota()),
+                ("test-cluster", "org2", Balance(), Quota()),
+            ],
+        )
+        headers = org_user.headers
+
+        job_request = job_request_factory()
+        job_request["container"]["resources"]["memory_mb"] = 100_500
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job_id_no_org = result["id"]
+
+        job_request["org_name"] = "org1"
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job_id_org1 = result["id"]
+
+        job_request["org_name"] = "org2"
+        async with client.post(url, headers=headers, json=job_request) as resp:
+            assert resp.status == HTTPAccepted.status_code, await resp.text()
+            result = await resp.json()
+            job_id_org2 = result["id"]
+
+        jobs_client = jobs_client_factory(org_user)
+        await jobs_client.long_polling_by_job_id(job_id_no_org, status="pending")
+        await jobs_client.long_polling_by_job_id(job_id_org1, status="pending")
+        await jobs_client.long_polling_by_job_id(job_id_org2, status="pending")
+
+        filters = [("org_name", "org1"), ("org_name", "org2")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id_org1, job_id_org2}
+
+        filters = [("org_name", "org2")]
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id_org2}
+
     @pytest.fixture
     async def run_job(
         self,
@@ -5113,6 +5198,66 @@ class TestBillingEnforcer:
         user_to_charge: Dict[str, Decimal] = defaultdict(Decimal)
         for cluster_user in await admin_client.list_cluster_users(cluster_name):
             user_to_charge[cluster_user.user_name] = cluster_user.balance.spent_credits
+
+        per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
+        second = Decimal("1") / 3600
+        for _, user, _, duration in test_jobs:
+            real_charge = user_to_charge[user.name]
+            expected_charge = duration * second * per_hour
+            # As we track runtime using jobs poller, the tracked runtime
+            # will have some drift from real value
+            allowed_drift = 5 * second * per_hour
+            assert abs(expected_charge - real_charge) < allowed_drift, (
+                f"Wrong charge for duration {duration}: "
+                f"delta from right value is {expected_charge - real_charge}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_enforce_billing_with_org(
+        self,
+        api: ApiConfig,
+        config: Config,
+        cluster_config: ClusterConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        regular_user_factory: UserFactory,
+        admin_client: AdminClient,
+        cluster_name: str,
+    ) -> None:
+        durations = [30, 25, 20, 15, 10, 5]
+
+        test_jobs: List[Tuple[Dict[str, Any], _User, JobsClient, int]] = []
+        for duration in durations:
+            job_submit["container"]["command"] = f"sleep {duration}s"
+            user = await regular_user_factory(
+                clusters=[(cluster_name, "org", Balance(), Quota())]
+            )
+            user_jobs_client = jobs_client_factory(user)
+            test_jobs.append(
+                (
+                    await user_jobs_client.create_job(job_submit),
+                    user,
+                    user_jobs_client,
+                    duration,
+                )
+            )
+
+        for job, _, user_jobs_client, _ in test_jobs:
+            await user_jobs_client.long_polling_by_job_id(
+                job_id=job["id"],
+                status="succeeded",
+            )
+
+        # Wait for 7 ticks for jobs to become charged
+        await asyncio.sleep(config.job_policy_enforcer.interval_sec * 7)
+
+        user_to_charge: Dict[str, Decimal] = defaultdict(Decimal)
+        for cluster_user in await admin_client.list_cluster_users(cluster_name):
+            if cluster_user.org_name == "org":
+                user_to_charge[
+                    cluster_user.user_name
+                ] = cluster_user.balance.spent_credits
 
         per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
         second = Decimal("1") / 3600

@@ -49,6 +49,7 @@ class JobTables:
             sa.Column("owner", sa.String(), nullable=False),
             sa.Column("name", sa.String(), nullable=True),
             sa.Column("cluster_name", sa.String(), nullable=False),
+            sa.Column("org_name", sa.String(), nullable=True),
             sa.Column("tags", sapg.JSONB(), nullable=True),
             # Denormalized fields for optimized access/unique constrains checks
             sa.Column("status", sa.String(), nullable=False),
@@ -80,6 +81,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             "owner": payload.pop("owner"),
             "name": payload.pop("name", None),
             "cluster_name": payload.pop("cluster_name"),
+            "org_name": payload.pop("org_name", None),
             "tags": payload.pop("tags", None),
             "status": job.status_history.current.status,
             "created_at": job.status_history.created_at,
@@ -93,6 +95,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         payload["owner"] = record["owner"]
         payload["name"] = record["name"]
         payload["cluster_name"] = record["cluster_name"]
+        payload["org_name"] = record["org_name"]
         if record["tags"] is not None:
             payload["tags"] = record["tags"]
         return JobRecord.from_primitive(payload)
@@ -352,6 +355,15 @@ class JobFilterClauseBuilder:
         )
         self._clauses.append(or_(*cluster_clauses))
 
+    def filter_orgs(self, orgs: AbstractSet[Optional[str]]) -> None:
+        not_null_orgs = [org for org in orgs if org is not None]
+        or_clauses = []
+        if not_null_orgs:
+            or_clauses.append(self._tables.jobs.c.org_name.in_(not_null_orgs))
+        if None in orgs:
+            or_clauses.append(self._tables.jobs.c.org_name == None)  # noqa
+        self._clauses.append(or_(*or_clauses))
+
     def filter_name(self, name: str) -> None:
         self._clauses.append(self._tables.jobs.c.name == name)
 
@@ -402,6 +414,8 @@ class JobFilterClauseBuilder:
             builder.filter_base_owners(job_filter.base_owners)
         if job_filter.clusters:
             builder.filter_clusters(job_filter.clusters)
+        if job_filter.orgs:
+            builder.filter_orgs(job_filter.orgs)
         if job_filter.name:
             builder.filter_name(job_filter.name)
         if job_filter.ids:
