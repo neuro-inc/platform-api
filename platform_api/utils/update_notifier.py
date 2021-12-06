@@ -5,9 +5,10 @@ from contextlib import asynccontextmanager, suppress
 from typing import Any, AsyncContextManager, Callable, List, Optional
 
 import asyncpg
-import sqlalchemy.sql as sasql
 from sqlalchemy.ext.asyncio import AsyncEngine
 from typing_extensions import AsyncIterator
+
+from platform_api.orchestrator.base_postgres_storage import _safe_connect
 
 
 logger = logging.getLogger(__name__)
@@ -59,13 +60,9 @@ class PostgresChannelNotifier(Notifier):
         self._engine = engine
         self._channel = channel
 
-    async def _execute(self, query: sasql.ClauseElement) -> None:
-        async with self._engine.connect() as conn:
-            await conn.execute(query)
-
     @asynccontextmanager
     async def _raw_connect(self) -> AsyncIterator[asyncpg.Connection]:
-        async with self._engine.connect() as conn:
+        async with _safe_connect(self._engine.connect()) as conn:
             connection_fairy = await conn.get_raw_connection()
             connection_fairy.detach()
             raw_connection = connection_fairy.driver_connection
