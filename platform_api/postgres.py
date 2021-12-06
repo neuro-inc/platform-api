@@ -12,8 +12,6 @@ def make_async_engine(db_config: PostgresConfig) -> AsyncEngine:
         pool_size=db_config.pool_min_size,
         max_overflow=max(0, db_config.pool_max_size - db_config.pool_min_size),
         pool_timeout=db_config.connect_timeout_s,
-        # Send ping (e.g. SELECT 1;) when retrieving connection from the pool:
-        pool_pre_ping=True,
     )
 
 
