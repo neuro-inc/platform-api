@@ -58,7 +58,7 @@ class PostgresConfig:
     # based on defaults
     # https://magicstack.github.io/asyncpg/current/api/index.html#asyncpg.connection.connect
     pool_min_size: int = 10
-    pool_max_size: int = 10
+    pool_max_size: int = 50
 
     connect_timeout_s: float = 60.0
     command_timeout_s: Optional[float] = 60.0
