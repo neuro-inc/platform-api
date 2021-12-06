@@ -17,13 +17,18 @@ class BasePostgresStorage:
         async with _safe_connect(self._engine.begin()) as conn:
             yield conn
 
+    @asynccontextmanager
+    async def _connect(self) -> AsyncIterator[AsyncConnection]:
+        async with _safe_connect(self._engine.connect()) as conn:
+            yield conn
+
     async def _execute(
         self, query: sasql.ClauseElement, conn: Optional[AsyncConnection] = None
     ) -> None:
         if conn:
             await conn.execute(query)
             return
-        async with self._transaction() as conn:
+        async with self._connect() as conn:
             await conn.execute(query)
 
     async def _fetchrow(
@@ -32,7 +37,7 @@ class BasePostgresStorage:
         if conn:
             result = await conn.execute(query)
             return result.one_or_none()
-        async with self._transaction() as conn:
+        async with self._connect() as conn:
             result = await conn.execute(query)
             return result.one_or_none()
 
@@ -42,7 +47,7 @@ class BasePostgresStorage:
         if conn:
             result = await conn.execute(query)
             return result.all()
-        async with self._transaction() as conn:
+        async with self._connect() as conn:
             result = await conn.execute(query)
             return result.all()
 
