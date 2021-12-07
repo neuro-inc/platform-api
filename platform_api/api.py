@@ -112,6 +112,15 @@ class ConfigApiHandler:
             data["clusters"] = [
                 self._convert_cluster_config_to_payload(c) for c in cluster_configs
             ]
+
+            if len(data["clusters"]) == 0:
+                error_payload = {
+                    "error": "Current user doesn't have access to any cluster."
+                }
+                return aiohttp.web.json_response(
+                    error_payload, status=aiohttp.web.HTTPBadRequest.status_code
+                )
+
             # NOTE: adding the cluster payload to the root document for
             # backward compatibility
             data.update(data["clusters"][0])

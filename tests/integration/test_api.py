@@ -213,6 +213,23 @@ class TestApi:
             await assert_cluster_names([])
 
     @pytest.mark.asyncio
+    async def test_config_no_clusters(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: UserFactory,
+        admin_url: URL,
+    ) -> None:
+        url = api.config_url
+        regular_user = await regular_user_factory(
+            clusters=[],
+        )
+        async with client.get(url, headers=regular_user.headers) as resp:
+            assert resp.status == HTTPBadRequest.status_code, await resp.text()
+            error = await resp.json()
+            assert error["error"] == "Current user doesn't have access to any cluster."
+
+    @pytest.mark.asyncio
     async def test_config(
         self,
         api: ApiConfig,
