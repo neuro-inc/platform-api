@@ -189,7 +189,7 @@ class EnvironConfigFactory:
         client_id = self._environ.get("NP_OAUTH_CLIENT_ID")
         audience = self._environ.get("NP_OAUTH_AUDIENCE")
         success_redirect_url = self._environ.get("NP_OAUTH_SUCCESS_REDIRECT_URL")
-        headless_callback_url = self._environ["NP_OAUTH_HEADLESS_CALLBACK_URL"]
+        headless_callback_url = self._environ.get("NP_OAUTH_HEADLESS_CALLBACK_URL")
         if not (
             auth_url
             and token_url
