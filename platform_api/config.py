@@ -25,7 +25,7 @@ class ZipkinConfig:
 
 @dataclass(frozen=True)
 class AuthConfig:
-    server_endpoint_url: URL
+    server_endpoint_url: Optional[URL]
     public_endpoint_url: URL
     service_token: str = field(repr=False)
     service_name: str = "compute"
@@ -93,7 +93,6 @@ class NotificationsConfig:
 @dataclass(frozen=True)
 class JobPolicyEnforcerConfig:
     platform_api_url: URL
-    token: str
     interval_sec: float = 60
     credit_notification_threshold: Decimal = Decimal("10")
     retention_delay_days: float = 180  # Half of a year
@@ -145,14 +144,12 @@ class Config:
 
     database: DatabaseConfig
     auth: AuthConfig
+    notifications: NotificationsConfig
     job_policy_enforcer: JobPolicyEnforcerConfig
 
     api_base_url: URL
     config_url: URL
-
-    admin_url: Optional[URL] = None
-
-    notifications: Optional[NotificationsConfig] = None
+    admin_url: URL
 
     oauth: Optional[OAuthConfig] = None
 

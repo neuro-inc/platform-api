@@ -276,7 +276,7 @@ async def create_app(
             logger.info("Initializing Auth client")
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
-                    url=config.auth.server_endpoint_url,
+                    url=config.auth.server_endpoint_url or None,
                     token=config.auth.service_token,
                     trace_configs=make_tracing_trace_configs(config),
                 )
@@ -285,7 +285,7 @@ async def create_app(
 
             admin_client = await exit_stack.enter_async_context(
                 AdminClient(
-                    base_url=config.admin_url,
+                    base_url=config.admin_url or None,
                     service_token=config.auth.service_token,
                     trace_configs=make_tracing_trace_configs(config),
                 )
@@ -296,15 +296,13 @@ async def create_app(
             )
 
             logger.info("Initializing Notifications client")
-            if config.notifications:
-                notifications_client = NotificationsClient(
-                    url=config.notifications.url,
+            notifications_client = await exit_stack.enter_async_context(
+                NotificationsClient(
+                    url=config.notifications.url or None,
                     token=config.notifications.token,
                     trace_configs=make_tracing_trace_configs(config),
                 )
-            else:
-                notifications_client = NotificationsClient(url=None, token="")
-            await exit_stack.enter_async_context(notifications_client)
+            )
 
             logger.info("Initializing Cluster Registry")
             cluster_config_registry = ClusterConfigRegistry()

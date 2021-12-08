@@ -774,7 +774,6 @@ def config_factory(
         server_config = ServerConfig()
         job_policy_enforcer = JobPolicyEnforcerConfig(
             platform_api_url=URL("http://localhost:8080/api/v1"),
-            token=token_factory("compute"),
             interval_sec=1,
             credit_notification_threshold=Decimal("0.1"),
             retention_delay_days=20 / (24 * 60 * 60),  # 20 seconds

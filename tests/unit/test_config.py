@@ -240,8 +240,6 @@ class TestEnvironConfigFactory:
 
     def test_create_defaults(self) -> None:
         environ = {
-            "NP_AUTH_URL": "https://auth",
-            "NP_AUTH_TOKEN": "token",
             "NP_OAUTH_AUTH_URL": "https://oauth-auth",
             "NP_OAUTH_TOKEN_URL": "https://oauth-token",
             "NP_OAUTH_LOGOUT_URL": "https://oauth-logout",
@@ -253,14 +251,13 @@ class TestEnvironConfigFactory:
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
-            "NP_ENFORCER_TOKEN": "compute-token",
             "NP_ENFORCER_CREDIT_NOTIFICATION_THRESHOLD": "200.33",
             "NP_ENFORCER_RETENTION_DELAY_DAYS": "200",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
         assert config.config_url == URL("http://platformconfig:8080/api/v1")
-        assert config.admin_url is None
+        assert config.admin_url == URL()
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 8080
@@ -272,15 +269,15 @@ class TestEnvironConfigFactory:
         assert config.job_policy_enforcer.platform_api_url == URL(
             "http://platformapi:8080/api/v1"
         )
-        assert config.job_policy_enforcer.token == "compute-token"
         assert config.job_policy_enforcer.credit_notification_threshold == (
             Decimal("200.33")
         )
         assert config.job_policy_enforcer.retention_delay_days == 200
-        assert config.notifications is None
+        assert config.notifications.url == URL()
+        assert config.notifications.token == ""
 
-        assert config.auth.server_endpoint_url == URL("https://auth")
-        assert config.auth.service_token == "token"
+        assert config.auth.server_endpoint_url == URL()
+        assert config.auth.service_token == ""
         assert config.auth.service_name == "compute"
 
         assert config.oauth is not None
@@ -330,7 +327,6 @@ class TestEnvironConfigFactory:
             "NP_NOTIFICATIONS_TOKEN": "token",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
-            "NP_ENFORCER_TOKEN": "compute-token",
             "NP_CORS_ORIGINS": "https://domain1.com,http://do.main",
             "NP_ZIPKIN_URL": "https://zipkin:9411",
             "NP_SENTRY_DSN": "https://sentry",
@@ -348,7 +344,6 @@ class TestEnvironConfigFactory:
         assert config.job_policy_enforcer.platform_api_url == URL(
             "http://platformapi:8080/api/v1"
         )
-        assert config.job_policy_enforcer.token == "compute-token"
 
         assert config.notifications is not None
         assert config.notifications.url == URL("http://notifications:8080")
