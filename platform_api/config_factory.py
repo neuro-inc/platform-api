@@ -42,7 +42,10 @@ class EnvironConfigFactory:
         auth = self.create_auth()
         jobs = self.create_jobs(orphaned_job_owner=auth.service_name)
         api_base_url = URL(self._environ["NP_API_URL"])
-        admin_url = URL(self._environ["NP_ADMIN_URL"])
+        if self._environ.get("NP_ADMIN_URL"):
+            admin_url: Optional[URL] = URL(self._environ["NP_ADMIN_URL"])
+        else:
+            admin_url = None
         config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
         return Config(
             server=self.create_server(),
@@ -210,7 +213,9 @@ class EnvironConfigFactory:
             success_redirect_url=URL(success_redirect_url),
         )
 
-    def create_notifications(self) -> NotificationsConfig:
+    def create_notifications(self) -> Optional[NotificationsConfig]:
+        if not self._environ.get("NP_NOTIFICATIONS_URL"):
+            return None
         url = URL(self._environ["NP_NOTIFICATIONS_URL"])
         token = self._environ["NP_NOTIFICATIONS_TOKEN"]
         return NotificationsConfig(url=url, token=token)

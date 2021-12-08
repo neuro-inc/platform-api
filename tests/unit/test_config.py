@@ -250,10 +250,7 @@ class TestEnvironConfigFactory:
             "NP_OAUTH_SUCCESS_REDIRECT_URL": "https://platform-default-url",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://dev.neu.ro/oauth/show-code",
             "NP_API_URL": "https://neu.ro/api/v1",
-            "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
-            "NP_NOTIFICATIONS_URL": "http://notifications:8080",
-            "NP_NOTIFICATIONS_TOKEN": "token",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_TOKEN": "compute-token",
@@ -263,7 +260,7 @@ class TestEnvironConfigFactory:
         config = EnvironConfigFactory(environ=environ).create()
 
         assert config.config_url == URL("http://platformconfig:8080/api/v1")
-        assert config.admin_url == URL("https://neu.ro/apis/admin/v1")
+        assert config.admin_url is None
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 8080
@@ -280,8 +277,7 @@ class TestEnvironConfigFactory:
             Decimal("200.33")
         )
         assert config.job_policy_enforcer.retention_delay_days == 200
-        assert config.notifications.url == URL("http://notifications:8080")
-        assert config.notifications.token == "token"
+        assert config.notifications is None
 
         assert config.auth.server_endpoint_url == URL("https://auth")
         assert config.auth.service_token == "token"
@@ -354,6 +350,7 @@ class TestEnvironConfigFactory:
         )
         assert config.job_policy_enforcer.token == "compute-token"
 
+        assert config.notifications is not None
         assert config.notifications.url == URL("http://notifications:8080")
         assert config.notifications.token == "token"
 

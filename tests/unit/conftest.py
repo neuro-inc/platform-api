@@ -23,6 +23,7 @@ import pytest
 from aiohttp import ClientResponseError
 from neuro_admin_client import (
     AdminClient,
+    AdminClientDummy,
     Balance,
     ClusterUser,
     ClusterUserRoleType,
@@ -246,7 +247,7 @@ class MockAuthClient(AuthClient):
         return f"token-{name}"
 
 
-class MockAdminClient(AdminClient):
+class MockAdminClient(AdminClientDummy):
     def __init__(self) -> None:
         self.users: Dict[str, User] = {}
         self.cluster_users: Dict[str, List[ClusterUser]] = defaultdict(list)

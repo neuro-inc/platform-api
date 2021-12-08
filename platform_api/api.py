@@ -125,7 +125,7 @@ class ConfigApiHandler:
             # backward compatibility
             data.update(data["clusters"][0])
 
-            data["admin_url"] = str(self._config.admin_url)
+            data["admin_url"] = str(self._config.admin_url or "")
         except HTTPUnauthorized:
             pass
 
@@ -296,11 +296,14 @@ async def create_app(
             )
 
             logger.info("Initializing Notifications client")
-            notifications_client = NotificationsClient(
-                url=config.notifications.url,
-                token=config.notifications.token,
-                trace_configs=make_tracing_trace_configs(config),
-            )
+            if config.notifications:
+                notifications_client = NotificationsClient(
+                    url=config.notifications.url,
+                    token=config.notifications.token,
+                    trace_configs=make_tracing_trace_configs(config),
+                )
+            else:
+                notifications_client = NotificationsClient(url=None, token="")
             await exit_stack.enter_async_context(notifications_client)
 
             logger.info("Initializing Cluster Registry")

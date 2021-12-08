@@ -145,12 +145,14 @@ class Config:
 
     database: DatabaseConfig
     auth: AuthConfig
-    notifications: NotificationsConfig
     job_policy_enforcer: JobPolicyEnforcerConfig
 
     api_base_url: URL
     config_url: URL
-    admin_url: URL
+
+    admin_url: Optional[URL] = None
+
+    notifications: Optional[NotificationsConfig] = None
 
     oauth: Optional[OAuthConfig] = None
 
@@ -171,7 +173,7 @@ class PollerConfig:
 
     auth: AuthConfig
 
-    admin_url: URL
+    admin_url: Optional[URL]
     config_url: URL
 
     registry_config: RegistryConfig
