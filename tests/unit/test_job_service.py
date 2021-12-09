@@ -43,7 +43,6 @@ from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.orchestrator.poller_service import JobsPollerService, JobsScheduler
 
 from .conftest import (
-    MockAdminClient,
     MockAuthClient,
     MockCluster,
     MockJobsPollerApi,
@@ -96,7 +95,7 @@ class TestJobsService:
         mock_notifications_client: NotificationsClient,
         test_scheduler: MockJobsScheduler,
         mock_auth_client: AuthClient,
-        mock_admin_client: MockAdminClient,
+        mock_admin_client: AdminClient,
         mock_api_base: URL,
     ) -> Callable[..., JobsService]:
         def _factory(
@@ -2026,7 +2025,7 @@ class TestJobsServiceCluster:
         mock_jobs_storage: MockJobsStorage,
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
-        mock_admin_client: MockAdminClient,
+        mock_admin_client: AdminClient,
         mock_api_base: URL,
     ) -> JobsService:
         return JobsService(
@@ -2081,7 +2080,7 @@ class TestJobsServiceCluster:
         jobs_config: JobsConfig,
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
-        mock_admin_client: MockAdminClient,
+        mock_admin_client: AdminClient,
         mock_api_base: URL,
         test_user: AuthUser,
         test_cluster: str,
@@ -2137,7 +2136,7 @@ class TestJobsServiceCluster:
         jobs_config: JobsConfig,
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
-        mock_admin_client: MockAdminClient,
+        mock_admin_client: AdminClient,
         mock_api_base: URL,
         test_user: AuthUser,
         test_cluster: str,
@@ -2192,7 +2191,7 @@ class TestJobsServiceCluster:
         jobs_config: JobsConfig,
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
-        mock_admin_client: MockAdminClient,
+        mock_admin_client: AdminClient,
         mock_api_base: URL,
         test_user: AuthUser,
         test_cluster: str,
@@ -2245,7 +2244,7 @@ class TestJobsServiceCluster:
         jobs_config: JobsConfig,
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
-        mock_admin_client: MockAdminClient,
+        mock_admin_client: AdminClient,
         mock_api_base: URL,
         user_factory: UserFactory,
         test_cluster: str,
@@ -2290,7 +2289,7 @@ class TestJobsServiceCluster:
         jobs_config: JobsConfig,
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
-        mock_admin_client: MockAdminClient,
+        mock_admin_client: AdminClient,
         mock_api_base: URL,
         test_user: AuthUser,
         test_cluster: str,
@@ -2339,7 +2338,7 @@ class TestJobsServiceCluster:
         jobs_config: JobsConfig,
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
-        mock_admin_client: MockAdminClient,
+        mock_admin_client: AdminClient,
         mock_api_base: URL,
         test_user: AuthUser,
         test_cluster: str,

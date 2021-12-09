@@ -16,7 +16,7 @@ from typing import (
 )
 
 import pytest
-from neuro_admin_client import Balance, Quota
+from neuro_admin_client import AdminClient, Balance, Quota
 from neuro_auth_client import User as AuthUser
 from neuro_notifications_client import CreditsWillRunOutSoon
 from yarl import URL
@@ -243,7 +243,7 @@ class TestJobPolicyEnforcePoller:
 class TestHasCreditsEnforcer:
     @pytest.fixture()
     def has_credits_enforcer(
-        self, jobs_service: JobsService, mock_admin_client: MockAdminClient
+        self, jobs_service: JobsService, mock_admin_client: AdminClient
     ) -> CreditsLimitEnforcer:
         return CreditsLimitEnforcer(jobs_service, mock_admin_client)
 
@@ -626,7 +626,7 @@ class TestCreditsNotificationEnforcer:
     async def test_credits_almost_run_out_user_notified(
         self,
         jobs_service: JobsService,
-        mock_admin_client: MockAdminClient,
+        mock_admin_client: AdminClient,
         mock_notifications_client: MockNotificationsClient,
         job_request_factory: Callable[[], JobRequest],
         user_factory: UserFactory,
@@ -659,7 +659,7 @@ class TestCreditsNotificationEnforcer:
     async def test_no_credits_not_notified(
         self,
         jobs_service: JobsService,
-        mock_admin_client: MockAdminClient,
+        mock_admin_client: AdminClient,
         mock_notifications_client: MockNotificationsClient,
         job_request_factory: Callable[[], JobRequest],
         caplog: Any,
