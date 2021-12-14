@@ -1050,6 +1050,7 @@ class TestJobFilterFactory:
 
 def make_access_tree(perm_dict: Dict[str, str]) -> ClientSubTreeViewRoot:
     tree = ClientSubTreeViewRoot(
+        scheme="job",
         path="/",
         sub_tree=ClientAccessSubTreeView(
             action="list" if perm_dict else "deny", children={}
