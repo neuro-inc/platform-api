@@ -165,7 +165,7 @@ class SecretsClient:
         async with self._client.post(url, json=payload) as resp:
             assert resp.status == 201, await resp.text()
             data = await resp.json()
-            assert data == {"key": key, "owner": self._user_name}
+            assert data == {"key": key, "org_name": None, "owner": self._user_name}
 
 
 @asynccontextmanager
