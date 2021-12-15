@@ -2,7 +2,7 @@ import asyncio
 import subprocess
 import sys
 from contextlib import asynccontextmanager
-from typing import Any, AsyncContextManager, AsyncIterator, Callable
+from typing import Any, AsyncContextManager, AsyncIterator, Callable, Optional
 
 import aiodocker
 import aiodocker.containers
@@ -159,15 +159,18 @@ class DiskAPIClient:
             txt = await resp.text()
             assert txt == "Pong"
 
-    async def create_disk(self, storage: int) -> Disk:
+    async def create_disk(self, storage: int, org_name: Optional[str] = None) -> Disk:
         url = self._base_url / "disk"
-        payload = {"storage": storage}
+        payload = {"storage": storage, "org_name": org_name}
         async with self._client.post(url, json=payload) as resp:
             assert resp.status == 201, await resp.text()
             data = await resp.json()
+            disk_path = data["owner"]
+            if data.get("org_name"):
+                disk_path = f"{data['org_name']}/{disk_path}"
             return Disk(
                 disk_id=data["id"],
-                user_name=data["owner"],
+                path=disk_path,
                 cluster_name=self._cluster_name,
             )
 

@@ -167,8 +167,15 @@ class TestDisk:
         uri = "disk://test-cluster/test-user/test-disk%252d"
         disk = Disk.create(uri)
         assert disk.cluster_name == "test-cluster"
-        assert disk.user_name == "test-user"
+        assert disk.path == "test-user"
         assert disk.disk_id == "test-disk%2d"
+
+    def test_create_with_org(self) -> None:
+        uri = "disk://test-cluster/org/test-user/test-disk"
+        disk = Disk.create(uri)
+        assert disk.cluster_name == "test-cluster"
+        assert disk.path == "org/test-user"
+        assert disk.disk_id == "test-disk"
 
     def test_create_uri_eq_str(self) -> None:
         uri = "disk://test-cluster/test-user/test-disk%252d"
@@ -187,7 +194,7 @@ class TestDiskContainerVolume:
             uri, dst_path=PurePath("/container"), read_only=False
         )
         assert volume.disk.cluster_name == "test-cluster"
-        assert volume.disk.user_name == "test-user"
+        assert volume.disk.path == "test-user"
         assert volume.disk.disk_id == "test-disk"
         assert volume.dst_path == PurePath("/container")
         assert not volume.read_only
