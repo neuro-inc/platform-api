@@ -544,7 +544,7 @@ class TestKubeOrchestrator:
         ns = kube_config.namespace
 
         disk_id = f"disk-{str(uuid.uuid4())}"
-        disk = Disk(disk_id=disk_id, user_name=user_name, cluster_name=cluster_name)
+        disk = Disk(disk_id=disk_id, path=user_name, cluster_name=cluster_name)
         await kube_client.create_pvc(disk_id, ns)
 
         mount_path = PurePath("/mnt/disk")
@@ -1650,17 +1650,17 @@ class TestKubeOrchestrator:
                 disk1, disk2, disk3 = [
                     Disk(
                         cluster_name=cluster_name,
-                        user_name="user",
+                        path="user",
                         disk_id="disk-1",
                     ),
                     Disk(
                         cluster_name=cluster_name,
-                        user_name="user",  # Wrong username
+                        path="user",  # Wrong username
                         disk_id="disk-2",
                     ),
                     Disk(
                         cluster_name=cluster_name,
-                        user_name="user",
+                        path="user",
                         disk_id="disk-3",  # Not existing id
                     ),
                 ]
@@ -1683,7 +1683,7 @@ class TestKubeOrchestrator:
         ns = kube_config.namespace
 
         disk_id = f"disk-{str(uuid.uuid4())}"
-        disk = Disk(disk_id=disk_id, user_name=user_name, cluster_name=cluster_name)
+        disk = Disk(disk_id=disk_id, path=user_name, cluster_name=cluster_name)
         await kube_client.create_pvc(disk_id, ns)
 
         mount_path = PurePath("/mnt/disk")

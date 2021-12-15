@@ -61,14 +61,15 @@ class ContainerVolume:
 @dataclass(frozen=True)
 class Disk:
     disk_id: str  # `disk-id` in `disk://cluster/user/disk-id`
-    user_name: str  # `user` in `disk://cluster/user/disk-id`
+    # `user` in `disk://cluster/user/disk-id`
+    # `user/with/slash` in `disk://cluster/user/with/slash/disk-id`
+    # `org/user` in `disk://cluster/org/user/disk-id
+    path: str
     cluster_name: str  # `cluster` in `disk://cluster/user/disk-id`
 
     def to_uri(self) -> URL:
         return (
-            URL.build(scheme="disk", host=self.cluster_name)
-            / self.user_name
-            / self.disk_id
+            URL.build(scheme="disk", host=self.cluster_name) / self.path / self.disk_id
         )
 
     @classmethod
@@ -77,8 +78,8 @@ class Disk:
         uri = URL(disk_uri)
         cluster_name = uri.host
         assert cluster_name, uri  # for lint
-        user_name, _, disk_id = uri.path.lstrip("/").rpartition("/")
-        return cls(disk_id=disk_id, cluster_name=cluster_name, user_name=user_name)
+        path, _, disk_id = uri.path.lstrip("/").rpartition("/")
+        return cls(disk_id=disk_id, cluster_name=cluster_name, path=path)
 
 
 @dataclass(frozen=True)

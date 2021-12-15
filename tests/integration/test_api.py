@@ -1057,6 +1057,64 @@ class TestJobs:
                 await jobs_client.delete_job(job_id)
 
     @pytest.mark.asyncio
+    async def test_create_job_with_org_disk_volume_single_ok(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        regular_user_factory: UserFactory,
+        disk_client_factory: Callable[[_User], AsyncContextManager[DiskAPIClient]],
+    ) -> None:
+        org_user = await regular_user_factory(
+            clusters=[
+                ("test-cluster", "org", Balance(), Quota()),
+            ],
+        )
+        disk_path = "/mnt/disk"
+
+        async with disk_client_factory(org_user) as disk_api:
+            disk = await disk_api.create_disk(storage=1024 * 1024, org_name="org")
+
+        disk_volumes = [
+            {
+                "src_disk_uri": str(disk.to_uri()),
+                "dst_path": disk_path,
+                "read_only": False,
+            },
+        ]
+        job_submit["container"]["disk_volumes"] = disk_volumes
+        job_submit["org_name"] = "org"
+
+        cmd = (
+            f'bash -c \'echo "value" > {disk_path}/test.txt '
+            f"&& cat {disk_path}/test.txt'"
+        )
+        job_submit["container"]["command"] = cmd
+
+        job_id = ""
+        jobs_client = jobs_client_factory(org_user)
+        try:
+            url = api.jobs_base_url
+            async with client.post(
+                url, headers=org_user.headers, json=job_submit
+            ) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
+                job_id = result["id"]
+                assert result["status"] in ["pending"]
+                assert result["container"]["disk_volumes"] == disk_volumes
+
+            response_payload = await jobs_client.long_polling_by_job_id(
+                job_id=job_id, status="succeeded"
+            )
+            assert response_payload["container"]["disk_volumes"] == disk_volumes
+
+        finally:
+            if job_id:
+                await jobs_client.delete_job(job_id)
+
+    @pytest.mark.asyncio
     async def test_create_job_with_disk_volume_user_with_slash_single_ok(
         self,
         api: ApiConfig,
