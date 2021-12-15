@@ -454,7 +454,7 @@ class KubeOrchestrator(Orchestrator):
                 )
                 pvc_path: str = pvc["metadata"]["labels"][
                     "platform.neuromation.io/user"
-                ]
+                ].replace("--", "/")
                 pvc_org: Optional[str] = pvc["metadata"]["labels"].get(
                     "platform.neuromation.io/disk-api-org-name"
                 )
