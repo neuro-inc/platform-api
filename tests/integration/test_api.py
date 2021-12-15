@@ -920,6 +920,93 @@ class TestJobs:
                 await jobs_client.delete_job(job_id)
 
     @pytest.mark.asyncio
+    async def test_create_job_with_org_secret_volume_single_ok(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        regular_user_factory: UserFactory,
+        secrets_client_factory: Callable[[_User], AsyncContextManager[SecretsClient]],
+    ) -> None:
+        org_user = await regular_user_factory(
+            clusters=[
+                ("test-cluster", "org", Balance(), Quota()),
+            ],
+        )
+        secret_name, secret_value = "key1", "value1"
+        secret_path = "/etc/foo/file.txt"
+
+        async with secrets_client_factory(org_user) as secrets_api:
+            await secrets_api.create_secret(secret_name, secret_value, org_name="org")
+
+        user = org_user
+        secret_uri = f"secret://{user.cluster_name}/org/{user.name}/{secret_name}"
+        secret_volumes = [
+            {"src_secret_uri": secret_uri, "dst_path": secret_path},
+        ]
+        job_submit["container"]["secret_volumes"] = secret_volumes
+
+        cmd = f'bash -c \'[ "$(cat {secret_path})" == "{secret_value}" ]\''
+        job_submit["container"]["command"] = cmd
+        job_submit["org_name"] = "org"
+
+        job_id = ""
+        jobs_client = jobs_client_factory(org_user)
+        try:
+            url = api.jobs_base_url
+            async with client.post(
+                url, headers=org_user.headers, json=job_submit
+            ) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
+                job_id = result["id"]
+                assert result["status"] in ["pending"]
+                assert result["container"]["secret_volumes"] == secret_volumes
+
+            response_payload = await jobs_client.long_polling_by_job_id(
+                job_id=job_id, status="succeeded"
+            )
+            assert response_payload["container"]["secret_volumes"] == secret_volumes
+
+        finally:
+            if job_id:
+                await jobs_client.delete_job(job_id)
+
+    @pytest.mark.asyncio
+    async def test_create_job_with_org_secret_env_single_ok(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: Dict[str, Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        regular_user_factory: UserFactory,
+        secrets_client_factory: Callable[[_User], AsyncContextManager[SecretsClient]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],
+    ) -> None:
+        org_user = await regular_user_factory(
+            clusters=[
+                ("test-cluster", "org", Balance(), Quota()),
+            ],
+        )
+        secret_name, secret_value = "key1", "value1"
+
+        async with secrets_client_factory(org_user) as secrets_api:
+            await secrets_api.create_secret(secret_name, secret_value, org_name="org")
+
+        secret_env = {
+            "ENV_SECRET": f"secret://{org_user.cluster_name}/org/"
+            f"{org_user.name}/{secret_name}",
+        }
+        job_submit["container"]["secret_env"] = secret_env
+
+        cmd = f'bash -c \'echo "$ENV_SECRET" && [ "$ENV_SECRET" == "{secret_value}" ]\''
+        job_submit["container"]["command"] = cmd
+        job_submit["org_name"] = "org"
+
+        await _run_job_with_secrets(job_submit, org_user, secret_env=secret_env)
+
+    @pytest.mark.asyncio
     async def test_create_job_with_secret_volume_user_with_slash_single_ok(
         self,
         api: ApiConfig,

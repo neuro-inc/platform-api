@@ -467,10 +467,10 @@ class KubeOrchestrator(Orchestrator):
         return sorted(missing, key=lambda disk: disk.disk_id)
 
     async def get_missing_secrets(
-        self, user_name: str, secret_names: List[str]
+        self, secret_path: str, secret_names: List[str]
     ) -> List[str]:
         assert secret_names, "no sec names"
-        user_secret_name = self._get_k8s_secret_name(user_name)
+        user_secret_name = self._get_k8s_secret_name(secret_path)
         try:
             raw = await self._client.get_raw_secret(
                 user_secret_name, self._kube_config.namespace

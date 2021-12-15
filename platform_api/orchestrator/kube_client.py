@@ -726,15 +726,15 @@ class PodDescriptor:
         container: Container,
         secret_volume_factory: Optional[Callable[[str], SecretVolume]] = None,
     ) -> Tuple[List[SecretVolume], List[VolumeMount]]:
-        user_volumes = container.get_user_secret_volumes()
+        path_to_secret_volumes = container.get_path_to_secret_volumes()
         if not secret_volume_factory:
             return [], []
 
         pod_volumes = []
         volume_mounts = []
 
-        for user_name, secret_volumes in user_volumes.items():
-            volume = secret_volume_factory(user_name)
+        for path, secret_volumes in path_to_secret_volumes.items():
+            volume = secret_volume_factory(path)
             pod_volumes.append(volume)
 
             for sec_volume in secret_volumes:

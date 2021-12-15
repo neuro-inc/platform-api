@@ -20,7 +20,7 @@ class Orchestrator(ABC):
 
     @abstractmethod
     async def get_missing_secrets(
-        self, user_name: str, secret_names: List[str]
+        self, secret_path: str, secret_names: List[str]
     ) -> List[str]:
         pass
 

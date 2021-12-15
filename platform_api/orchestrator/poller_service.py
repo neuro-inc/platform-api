@@ -254,15 +254,15 @@ class JobsPollerService:
         self._auth_client = auth_client
 
     async def _check_secrets(self, job: Job, orchestrator: Orchestrator) -> None:
-        grouped_secrets = job.request.container.get_user_secrets()
+        grouped_secrets = job.request.container.get_path_to_secrets()
         if not grouped_secrets:
             return
 
         missing = []
-        for user_name, user_secrets in grouped_secrets.items():
+        for secret_path, path_secrets in grouped_secrets.items():
             missing.extend(
                 await orchestrator.get_missing_secrets(
-                    user_name, [secret.secret_key for secret in user_secrets]
+                    secret_path, [secret.secret_key for secret in path_secrets]
                 )
             )
         if missing:

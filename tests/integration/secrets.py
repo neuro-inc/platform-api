@@ -3,7 +3,7 @@ import base64
 import subprocess
 import sys
 from contextlib import asynccontextmanager
-from typing import Any, AsyncContextManager, AsyncIterator, Callable
+from typing import Any, AsyncContextManager, AsyncIterator, Callable, Optional
 
 import aiodocker
 import aiodocker.containers
@@ -159,13 +159,19 @@ class SecretsClient:
     def _base64_encode(self, value: str) -> str:
         return base64.b64encode(value.encode()).decode()
 
-    async def create_secret(self, key: str, value: str) -> None:
+    async def create_secret(
+        self, key: str, value: str, org_name: Optional[str] = None
+    ) -> None:
         url = self._base_url / "secrets"
-        payload = {"key": key, "value": self._base64_encode(value)}
+        payload = {
+            "key": key,
+            "value": self._base64_encode(value),
+            "org_name": org_name,
+        }
         async with self._client.post(url, json=payload) as resp:
             assert resp.status == 201, await resp.text()
             data = await resp.json()
-            assert data == {"key": key, "org_name": None, "owner": self._user_name}
+            assert data == {"key": key, "org_name": org_name, "owner": self._user_name}
 
 
 @asynccontextmanager
