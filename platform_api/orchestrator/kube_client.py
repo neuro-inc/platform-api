@@ -861,7 +861,7 @@ class PodDescriptor:
         volumes = [volume.to_primitive() for volume in self.volumes]
         env_list = self.env_list + [env.to_primitive() for env in self.secret_env_list]
 
-        container_payload = {
+        container_payload: Dict[str, Any] = {
             "name": f"{self.name}",
             "image": f"{self.image}",
             "imagePullPolicy": "Always",
