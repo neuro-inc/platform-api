@@ -116,17 +116,20 @@ class DiskContainerVolume:
 @dataclass(frozen=True)
 class Secret:
     secret_key: str  # `sec` in `secret://cluster/user/sec`
-    user_name: str  # `user` in `secret://cluster/user/sec`
+    # `user` in `secret://cluster/user/sec`
+    # `user/with/slash` in `secret://cluster/user/with/slash/sec`
+    # `org/user` in `secret://cluster/org/user/sec
+    path: str
     cluster_name: str  # `cluster` in `secret://cluster/user/sec`
 
     @property
     def k8s_secret_name(self) -> str:
-        return f"user--{self.user_name.replace('/', '--')}--secrets"
+        return f"user--{self.path.replace('/', '--')}--secrets"
 
     def to_uri(self) -> URL:
         return (
             URL.build(scheme="secret", host=self.cluster_name)
-            / self.user_name
+            / self.path
             / self.secret_key
         )
 
@@ -136,10 +139,8 @@ class Secret:
         uri = URL(secret_uri)
         cluster_name = uri.host
         assert cluster_name, uri  # for lint
-        user_name, _, secret_key = uri.path.lstrip("/").rpartition("/")
-        return cls(
-            secret_key=secret_key, cluster_name=cluster_name, user_name=user_name
-        )
+        path, _, secret_key = uri.path.lstrip("/").rpartition("/")
+        return cls(secret_key=secret_key, cluster_name=cluster_name, path=path)
 
 
 @dataclass(frozen=True)
@@ -336,16 +337,16 @@ class Container:
             {*self.secret_env.values(), *(v.secret for v in self.secret_volumes)}
         )
 
-    def get_user_secrets(self) -> Dict[str, List[Secret]]:
-        user_secrets: Dict[str, List[Secret]] = defaultdict(list)
+    def get_path_to_secrets(self) -> Dict[str, List[Secret]]:
+        path_to_secrets: Dict[str, List[Secret]] = defaultdict(list)
         for secret in self.get_secrets():
-            user_secrets[secret.user_name].append(secret)
-        return user_secrets
+            path_to_secrets[secret.path].append(secret)
+        return path_to_secrets
 
-    def get_user_secret_volumes(self) -> Dict[str, List[SecretContainerVolume]]:
+    def get_path_to_secret_volumes(self) -> Dict[str, List[SecretContainerVolume]]:
         user_volumes: Dict[str, List[SecretContainerVolume]] = defaultdict(list)
         for volume in self.secret_volumes:
-            user_volumes[volume.secret.user_name].append(volume)
+            user_volumes[volume.secret.path].append(volume)
         return user_volumes
 
     def get_secret_uris(self) -> Sequence[URL]:
