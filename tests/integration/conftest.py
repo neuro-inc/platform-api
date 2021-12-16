@@ -791,6 +791,7 @@ def config_factory(
             cors=CORSConfig(allowed_origins=["https://neu.ro"]),
             config_url=config_url,
             admin_url=admin_url,
+            admin_public_url=admin_url,
             api_base_url=api_base_url,
             **kwargs,
         )
