@@ -258,6 +258,7 @@ class TestEnvironConfigFactory:
 
         assert config.config_url == URL("http://platformconfig:8080/api/v1")
         assert config.admin_url == URL()
+        assert config.admin_public_url == URL()
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 8080
@@ -320,7 +321,8 @@ class TestEnvironConfigFactory:
             "NP_AUTH_TOKEN": "token",
             "NP_AUTH_NAME": "servicename",
             "NP_API_URL": "https://neu.ro/api/v1",
-            "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
+            "NP_ADMIN_URL": "https://platform-admin:8080/apis/admin/v1",
+            "NP_ADMIN_PUBLIC_URL": "https://neu.ro/apis/admin/v1",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
@@ -336,6 +338,9 @@ class TestEnvironConfigFactory:
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 1111
+
+        assert config.admin_url == URL("https://platform-admin:8080/apis/admin/v1")
+        assert config.admin_public_url == URL("https://neu.ro/apis/admin/v1")
 
         assert config.jobs.deletion_delay_s == 3600
         assert config.jobs.deletion_delay == timedelta(seconds=3600)

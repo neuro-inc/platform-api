@@ -71,6 +71,8 @@ spec:
         - name: NP_API_URL
           value: {{ .Values.platform.apiPublicUrl | quote }}
         - name: NP_ADMIN_URL
+          value: {{ .Values.platform.adminUrl | quote }}
+        - name: NP_ADMIN_PUBLIC_URL
           value: {{ .Values.platform.adminPublicUrl | quote }}
         - name: NP_AUTH_PUBLIC_URL
           value: {{ .Values.platform.authPublicUrl | quote }}

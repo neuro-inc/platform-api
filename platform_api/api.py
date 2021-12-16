@@ -125,7 +125,7 @@ class ConfigApiHandler:
             # backward compatibility
             data.update(data["clusters"][0])
 
-            data["admin_url"] = str(self._config.admin_url or "")
+            data["admin_url"] = str(self._config.admin_public_url)
         except HTTPUnauthorized:
             pass
 

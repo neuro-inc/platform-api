@@ -150,6 +150,7 @@ class Config:
     api_base_url: URL
     config_url: URL
     admin_url: URL
+    admin_public_url: URL
 
     oauth: Optional[OAuthConfig] = None
 
