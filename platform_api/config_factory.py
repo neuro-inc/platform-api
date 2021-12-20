@@ -171,7 +171,7 @@ class EnvironConfigFactory:
         url = self._get_url("NP_AUTH_URL")
         token = self._environ.get("NP_AUTH_TOKEN", "")
         name = self._environ.get("NP_AUTH_NAME", AuthConfig.service_name)
-        public_endpoint_url = URL(self._environ["NP_AUTH_PUBLIC_URL"])
+        public_endpoint_url = URL(self._environ.get("NP_AUTH_PUBLIC_URL", ""))
         return AuthConfig(
             server_endpoint_url=url,
             service_token=token,
