@@ -25,7 +25,7 @@ class ZipkinConfig:
 
 @dataclass(frozen=True)
 class AuthConfig:
-    server_endpoint_url: URL
+    server_endpoint_url: Optional[URL]
     public_endpoint_url: URL
     service_token: str = field(repr=False)
     service_name: str = "compute"
@@ -149,7 +149,7 @@ class Config:
 
     api_base_url: URL
     config_url: URL
-    admin_url: URL
+    admin_url: Optional[URL]
     admin_public_url: URL
 
     oauth: Optional[OAuthConfig] = None

@@ -145,6 +145,7 @@ async def api_with_oauth(
 
 @pytest.fixture
 async def auth_api(auth_config: AuthConfig) -> AuthApiConfig:
+    assert auth_config.server_endpoint_url is not None
     return AuthApiConfig(server_endpoint_url=auth_config.server_endpoint_url)
 
 

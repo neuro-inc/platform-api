@@ -84,14 +84,14 @@ async def create_app(
             logger.info("Initializing Auth client")
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
-                    url=config.auth.server_endpoint_url or None,
+                    url=config.auth.server_endpoint_url,
                     token=config.auth.service_token,
                     trace_configs=make_tracing_trace_configs(config),
                 )
             )
             admin_client = await exit_stack.enter_async_context(
                 AdminClient(
-                    base_url=config.admin_url or None,
+                    base_url=config.admin_url,
                     service_token=config.auth.service_token,
                     trace_configs=make_tracing_trace_configs(config),
                 )

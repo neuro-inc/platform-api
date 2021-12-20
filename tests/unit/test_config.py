@@ -249,7 +249,10 @@ class TestEnvironConfigFactory:
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://dev.neu.ro/oauth/show-code",
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
+            "NP_AUTH_URL": "-",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
+            "NP_ADMIN_URL": "-",
+            "NP_ADMIN_PUBLIC_URL": "https://neu.ro/apis/admin/v1",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_CREDIT_NOTIFICATION_THRESHOLD": "200.33",
             "NP_ENFORCER_RETENTION_DELAY_DAYS": "200",
@@ -257,8 +260,8 @@ class TestEnvironConfigFactory:
         config = EnvironConfigFactory(environ=environ).create()
 
         assert config.config_url == URL("http://platformconfig:8080/api/v1")
-        assert config.admin_url == URL()
-        assert config.admin_public_url == URL()
+        assert config.admin_url is None
+        assert config.admin_public_url == URL("https://neu.ro/apis/admin/v1")
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 8080
@@ -277,7 +280,8 @@ class TestEnvironConfigFactory:
         assert config.notifications.url == URL()
         assert config.notifications.token == ""
 
-        assert config.auth.server_endpoint_url == URL()
+        assert config.auth.server_endpoint_url is None
+        assert config.auth.public_endpoint_url == URL("https://neu.ro/api/v1/users")
         assert config.auth.service_token == ""
         assert config.auth.service_name == "compute"
 
@@ -304,6 +308,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_TOKEN": "token",
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
+            "NP_ADMIN_PUBLIC_URL": "https://neu.ro/apis/admin/v1",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
         }
