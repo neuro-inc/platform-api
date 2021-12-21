@@ -52,17 +52,17 @@ spec:
 {{- end }}
         env:
         - name: NP_AUTH_URL
-          value: {{ .Values.platform.authUrl }}
+          value: {{ .Values.platform.authUrl | quote }}
         - name: NP_AUTH_TOKEN
 {{- if .Values.platform.token }}
 {{ toYaml .Values.platform.token | indent 10 }}
 {{- end }}
         - name: NP_PLATFORM_API_URL
-          value: {{ .Values.platform.apiUrl }}
+          value: {{ .Values.platform.apiUrl | quote }}
         - name: NP_PLATFORM_CONFIG_URI
-          value: {{ .Values.platform.configUrl }}
+          value: {{ .Values.platform.configUrl | quote }}
         - name: NP_PLATFORM_ADMIN_URI
-          value: {{ .Values.platform.adminUrl }}
+          value: {{ .Values.platform.adminUrl | quote }}
         {{- if .Values.zipkin }}
         - name: NP_ZIPKIN_URL
           value: {{ .Values.zipkin.url }}
