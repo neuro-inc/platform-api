@@ -2,7 +2,7 @@ import asyncio
 import subprocess
 import sys
 from contextlib import asynccontextmanager
-from typing import Any, AsyncContextManager, AsyncIterator, Callable, Optional
+from typing import Any, AsyncContextManager, AsyncIterator, Callable, Dict, Optional
 
 import aiodocker
 import aiodocker.containers
@@ -141,7 +141,9 @@ class DiskAPIClient:
     def __init__(self, cluster_name: str, url: URL, auth_token: str):
         self._cluster_name = cluster_name
         self._base_url = url / "api/v1"
-        headers = {"Authorization": f"Bearer {auth_token}"}
+        headers: Dict[str, str] = {}
+        if auth_token:
+            headers["Authorization"] = f"Bearer {auth_token}"
         self._client = aiohttp.ClientSession(headers=headers)
 
     async def __aenter__(self) -> "DiskAPIClient":

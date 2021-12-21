@@ -3,7 +3,7 @@ import base64
 import subprocess
 import sys
 from contextlib import asynccontextmanager
-from typing import Any, AsyncContextManager, AsyncIterator, Callable, Optional
+from typing import Any, AsyncContextManager, AsyncIterator, Callable, Dict, Optional
 
 import aiodocker
 import aiodocker.containers
@@ -138,7 +138,9 @@ class SecretsClient:
     def __init__(self, url: URL, user_name: str, user_token: str):
         self._base_url = url / "api/v1"
         self._user_name = user_name
-        headers = {"Authorization": f"Bearer {user_token}"}
+        headers: Dict[str, str] = {}
+        if user_token:
+            headers["Authorization"] = f"Bearer {user_token}"
         self._client = aiohttp.ClientSession(headers=headers)
 
     async def __aenter__(self) -> "SecretsClient":

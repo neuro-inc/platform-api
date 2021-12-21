@@ -160,9 +160,11 @@ class HttpJobsPollerApi(JobsPollerApi):
     async def init(self) -> None:
         if self._client:
             return
+        headers: Dict[str, str] = {}
+        if self._token:
+            headers["Authorization"] = f"Bearer {self._token}"
         self._client = aiohttp.ClientSession(
-            headers={"Authorization": "Bearer " + self._token},
-            trace_configs=self._trace_configs,
+            headers=headers, trace_configs=self._trace_configs
         )
 
     async def close(self) -> None:
