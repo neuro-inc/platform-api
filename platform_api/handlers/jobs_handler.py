@@ -67,7 +67,6 @@ from .validators import (
     sanitize_dns_name,
 )
 
-
 logger = logging.getLogger(__name__)
 
 

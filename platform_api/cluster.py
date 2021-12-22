@@ -13,7 +13,6 @@ from .config_client import ConfigClient
 from .orchestrator.base import Orchestrator
 from .utils.update_notifier import Notifier
 
-
 logger = logging.getLogger(__name__)
 
 

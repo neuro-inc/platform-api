@@ -38,6 +38,7 @@ from platform_api.orchestrator.job_request import JobRequest, JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.utils.update_notifier import InMemoryNotifier
+
 from tests.unit.conftest import (
     MockAdminClient,
     MockAuthClient,
@@ -45,7 +46,6 @@ from tests.unit.conftest import (
     OrgFactory,
     UserFactory,
 )
-
 
 _EnforcePollingRunner = Callable[
     [JobPolicyEnforcer], AbstractAsyncContextManager[JobPolicyEnforcePoller]
@@ -678,9 +678,9 @@ class TestCreditsNotificationEnforcer:
             isinstance(notification, CreditsWillRunOutSoon)
             for notification in mock_notifications_client.sent_notifications
         )
-        assert not any(record.levelno >= logging.ERROR for record in caplog.records), [
-            record for record in caplog.records
-        ]
+        assert not any(
+            record.levelno >= logging.ERROR for record in caplog.records
+        ), list(caplog.records)
 
 
 class TestStopOnClusterRemoveEnforcer:

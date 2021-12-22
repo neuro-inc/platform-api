@@ -21,6 +21,7 @@ from neuro_auth_client import AuthClient, Permission, User as AuthUser
 from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
+
 from tests.conftest import random_str
 
 

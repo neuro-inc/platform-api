@@ -29,7 +29,6 @@ from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.orchestrator.poller_service import _revoke_pass_config
 from platform_api.utils.asyncio import run_and_log_exceptions
 
-
 logger = logging.getLogger(__name__)
 
 

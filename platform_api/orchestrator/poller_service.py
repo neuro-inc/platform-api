@@ -34,7 +34,6 @@ from .job_request import (
 )
 from .jobs_storage import JobStorageTransactionError
 
-
 logger = logging.getLogger(__file__)
 
 

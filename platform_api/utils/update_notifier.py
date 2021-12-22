@@ -10,7 +10,6 @@ from typing_extensions import AsyncIterator
 
 from platform_api.orchestrator.base_postgres_storage import _safe_connect
 
-
 logger = logging.getLogger(__name__)
 
 

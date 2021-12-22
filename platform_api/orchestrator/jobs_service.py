@@ -42,7 +42,6 @@ from .jobs_storage import (
 )
 from .status import Status
 
-
 logger = logging.getLogger(__file__)
 
 

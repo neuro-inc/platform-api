@@ -9,6 +9,7 @@ from platform_api.utils.update_notifier import (
     PostgresChannelNotifier,
     ResubscribingNotifier,
 )
+
 from tests.unit.test_notifier import Counter
 
 

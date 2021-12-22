@@ -9,7 +9,6 @@ from yarl import URL
 from .cluster_config import ClusterConfig, IngressConfig, OrchestratorConfig
 from .resource import DEFAULT_PRESETS, Preset, ResourcePoolType, TPUPreset, TPUResource
 
-
 _cluster_config_validator = t.Dict({"name": t.String}).allow_extra("*")
 
 

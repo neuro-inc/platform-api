@@ -9,7 +9,6 @@ from .base import (
 from .in_memory import InMemoryJobsStorage
 from .postgres import PostgresJobsStorage
 
-
 __all__ = (
     "ClusterOwnerNameSet",
     "JobFilter",

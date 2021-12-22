@@ -3,7 +3,6 @@ import logging
 from collections.abc import Callable, Iterator
 from typing import Any
 
-
 log = logging.getLogger(__name__)
 
 

@@ -28,14 +28,14 @@ from platform_api.cluster import ClusterConfigRegistry
 from platform_api.cluster_config import ClusterConfig
 from platform_api.config import Config
 from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
-from tests.conftest import random_str
-from tests.integration.secrets import SecretsClient
-from tests.integration.test_config_client import create_config_api
 
 from .api import ApiConfig, AuthApiConfig, JobsClient
 from .auth import AuthClient, ServiceAccountFactory, UserFactory, _User
 from .conftest import MyKubeClient
 from .diskapi import DiskAPIClient
+from tests.conftest import random_str
+from tests.integration.secrets import SecretsClient
+from tests.integration.test_config_client import create_config_api
 
 
 @pytest.fixture

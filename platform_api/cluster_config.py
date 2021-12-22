@@ -8,7 +8,6 @@ from yarl import URL
 
 from .resource import DEFAULT_PRESETS, Preset, ResourcePoolType, TPUResource
 
-
 STORAGE_URI_SCHEME = "storage"
 
 

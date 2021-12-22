@@ -12,6 +12,7 @@ from neuro_admin_client import AdminClient
 from yarl import URL
 
 from platform_api.config import AuthConfig
+
 from tests.integration.conftest import ApiRunner
 
 

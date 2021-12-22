@@ -1645,13 +1645,13 @@ class TestJobStatusHistory:
         assert history.last == finished_item
         assert history.current == finished_item
         assert history.created_at == pending_item.transition_time
-        assert history.created_at_str == (pending_item.transition_time.isoformat())
+        assert history.created_at_str == pending_item.transition_time.isoformat()
         assert history.started_at == running_item.transition_time
-        assert history.started_at_str == (running_item.transition_time.isoformat())
+        assert history.started_at_str == running_item.transition_time.isoformat()
         assert history.is_finished
         assert not history.is_running
         assert history.finished_at == finished_item.transition_time
-        assert history.finished_at_str == (finished_item.transition_time.isoformat())
+        assert history.finished_at_str == finished_item.transition_time.isoformat()
 
     def test_resurraction(self) -> None:
         pending_item = JobStatusItem.create(JobStatus.PENDING)
@@ -1663,9 +1663,9 @@ class TestJobStatusHistory:
         assert history.last == running_item
         assert history.current == running_item
         assert history.created_at == pending_item.transition_time
-        assert history.created_at_str == (pending_item.transition_time.isoformat())
+        assert history.created_at_str == pending_item.transition_time.isoformat()
         assert history.started_at == running_item.transition_time
-        assert history.started_at_str == (running_item.transition_time.isoformat())
+        assert history.started_at_str == running_item.transition_time.isoformat()
         assert not history.is_finished
         assert history.is_running
         assert not history.finished_at

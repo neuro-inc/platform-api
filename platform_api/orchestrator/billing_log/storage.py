@@ -20,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from platform_api.orchestrator.base_postgres_storage import BasePostgresStorage
 from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
-
 logger = logging.getLogger(__name__)
 
 

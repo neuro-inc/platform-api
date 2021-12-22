@@ -6,7 +6,6 @@ from aiohttp_security.api import AUTZ_KEY, IDENTITY_KEY
 from neuro_auth_client import User as AuthUser
 from yarl import URL
 
-
 logger = logging.getLogger(__name__)
 
 
