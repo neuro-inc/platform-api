@@ -2,11 +2,11 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
+from importlib.metadata import version
 from typing import Any
 
 import aiohttp.web
 import aiohttp_cors
-import pkg_resources
 from aiohttp.web import HTTPUnauthorized
 from aiohttp.web_urldispatcher import AbstractRoute
 from aiohttp_security import check_permission
@@ -244,7 +244,7 @@ async def create_jobs_app(config: Config) -> aiohttp.web.Application:
     return jobs_app
 
 
-package_version = pkg_resources.get_distribution("platform-api").version
+package_version = version(__package__)
 
 
 async def add_version_to_header(
