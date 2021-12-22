@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-from typing import Tuple
 
 import pytest
 import trafaret as t
@@ -149,7 +148,7 @@ class TestUserNameValidator:
             ("with123nums-and-dash", 1),
         ],
     )
-    def test_user_name_validators__ok(self, pair: Tuple[str, int]) -> None:
+    def test_user_name_validators__ok(self, pair: tuple[str, int]) -> None:
         value = pair[0] * pair[1]
         validator = create_user_name_validator()
         assert validator.check(value)
@@ -162,7 +161,7 @@ class TestUserNameValidator:
             ("test/foo/bar", 1),
         ],
     )
-    def test_role_name_validator__ok(self, pair: Tuple[str, int]) -> None:
+    def test_role_name_validator__ok(self, pair: tuple[str, int]) -> None:
         value = pair[0] * pair[1]
         validator = create_user_name_validator()
         assert validator.check(value)
@@ -173,7 +172,7 @@ class TestUserNameValidator:
             ("test/foo/bar", 1),
         ],
     )
-    def test_base_owner_validator__fail(self, pair: Tuple[str, int]) -> None:
+    def test_base_owner_validator__fail(self, pair: tuple[str, int]) -> None:
         value = pair[0] * pair[1]
         validator = create_base_owner_name_validator()
         with pytest.raises(t.DataError):
@@ -223,7 +222,7 @@ class TestUserNameValidator:
             ("46CAC3A6-2956-481B-B4AA-A80A6EAF2CDE", 1),  # regression test
         ],
     )
-    def test_user_name_validators__fail(self, pair: Tuple[str, int]) -> None:
+    def test_user_name_validators__fail(self, pair: tuple[str, int]) -> None:
         value = pair[0] * pair[1]
         validator = create_user_name_validator()
         with pytest.raises(t.DataError):

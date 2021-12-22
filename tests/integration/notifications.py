@@ -1,4 +1,5 @@
-from typing import Any, AsyncIterator, NamedTuple, Tuple
+from collections.abc import AsyncIterator
+from typing import Any, NamedTuple
 
 import aiohttp.web
 import pytest
@@ -19,7 +20,7 @@ class NotificationsServer(NamedTuple):
         return URL(f"http://{self.address.host}:{self.address.port}")
 
     @property
-    def requests(self) -> Tuple[Tuple[str, Any]]:
+    def requests(self) -> tuple[tuple[str, Any]]:
         return tuple(request for request in self.app["requests"])  # type: ignore
 
 

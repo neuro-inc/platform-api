@@ -1,16 +1,8 @@
+from collections.abc import AsyncIterator, Iterable, Mapping, Set
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
-from typing import (
-    AbstractSet,
-    Any,
-    AsyncIterator,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-)
+from typing import Any, Optional
 
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
@@ -74,7 +66,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
 
     # Parsing/serialization
 
-    def _job_to_values(self, job: JobRecord) -> Dict[str, Any]:
+    def _job_to_values(self, job: JobRecord) -> dict[str, Any]:
         payload = job.to_primitive()
         return {
             "id": payload.pop("id"),
@@ -260,7 +252,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
-    ) -> List[JobRecord]:
+    ) -> list[JobRecord]:
         if job_filter is None:
             job_filter = JobFilter()
         if job_filter.ids:
@@ -279,7 +271,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
 
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
-    ) -> List[JobRecord]:
+    ) -> list[JobRecord]:
         job_filter = JobFilter(
             statuses={JobStatus(item) for item in JobStatus.finished_values()},
             materialized=True,
@@ -296,7 +288,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         *,
         delay: timedelta = timedelta(),
         limit: Optional[int] = None,
-    ) -> List[JobRecord]:
+    ) -> list[JobRecord]:
         job_filter = JobFilter(
             statuses={JobStatus(item) for item in JobStatus.finished_values()},
             materialized=False,
@@ -315,16 +307,16 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
 
 class JobFilterClauseBuilder:
     def __init__(self, tables: JobTables):
-        self._clauses: List[sasql.ClauseElement] = []
+        self._clauses: list[sasql.ClauseElement] = []
         self._tables = tables
 
-    def filter_statuses(self, statuses: AbstractSet[JobStatus]) -> None:
+    def filter_statuses(self, statuses: Set[JobStatus]) -> None:
         self._clauses.append(self._tables.jobs.c.status.in_(statuses))
 
-    def filter_owners(self, owners: AbstractSet[str]) -> None:
+    def filter_owners(self, owners: Set[str]) -> None:
         self._clauses.append(self._tables.jobs.c.owner.in_(owners))
 
-    def filter_base_owners(self, base_owners: AbstractSet[str]) -> None:
+    def filter_base_owners(self, base_owners: Set[str]) -> None:
         self._clauses.append(
             func.split_part(self._tables.jobs.c.owner, "/", 1).in_(base_owners)
         )
@@ -355,7 +347,7 @@ class JobFilterClauseBuilder:
         )
         self._clauses.append(or_(*cluster_clauses))
 
-    def filter_orgs(self, orgs: AbstractSet[Optional[str]]) -> None:
+    def filter_orgs(self, orgs: Set[Optional[str]]) -> None:
         not_null_orgs = [org for org in orgs if org is not None]
         or_clauses = []
         if not_null_orgs:
@@ -367,10 +359,10 @@ class JobFilterClauseBuilder:
     def filter_name(self, name: str) -> None:
         self._clauses.append(self._tables.jobs.c.name == name)
 
-    def filter_ids(self, ids: AbstractSet[str]) -> None:
+    def filter_ids(self, ids: Set[str]) -> None:
         self._clauses.append(self._tables.jobs.c.id.in_(ids))
 
-    def filter_tags(self, tags: AbstractSet[str]) -> None:
+    def filter_tags(self, tags: Set[str]) -> None:
         self._clauses.append(self._tables.jobs.c.tags.contains(list(tags)))
 
     def filter_since(self, since: datetime) -> None:

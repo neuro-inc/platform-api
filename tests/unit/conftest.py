@@ -1,23 +1,11 @@
 import asyncio
 from collections import defaultdict
+from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from functools import partial
 from pathlib import Path
-from typing import (
-    Any,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import Any, Awaitable, Optional, Union, cast
 
 import pytest
 from aiohttp import ClientResponseError
@@ -84,9 +72,9 @@ class MockOrchestrator(Orchestrator):
         self._mock_status_to_return = JobStatus.PENDING
         self._mock_reason_to_return: Optional[str] = JobStatusReason.CONTAINER_CREATING
         self._mock_exit_code_to_return: Optional[int] = None
-        self._mock_statuses: Dict[str, JobStatus] = {}
-        self._mock_reasons: Dict[str, Optional[str]] = {}
-        self._mock_exit_codes: Dict[str, Optional[int]] = {}
+        self._mock_statuses: dict[str, JobStatus] = {}
+        self._mock_reasons: dict[str, Optional[str]] = {}
+        self._mock_exit_codes: dict[str, Optional[int]] = {}
         self.raise_on_get_job_status = False
         self.raise_on_start_job_status = False
         self.get_job_status_exc_factory = self._create_get_job_status_exc
@@ -95,7 +83,7 @@ class MockOrchestrator(Orchestrator):
         self.current_datetime_factory: Callable[[], datetime] = partial(
             datetime.now, timezone.utc
         )
-        self._successfully_deleted_jobs: List[Job] = []
+        self._successfully_deleted_jobs: list[Job] = []
 
     @property
     def config(self) -> OrchestratorConfig:
@@ -167,15 +155,15 @@ class MockOrchestrator(Orchestrator):
     ) -> None:
         self._mock_exit_codes[job_id] = new_exit_code
 
-    def get_successfully_deleted_jobs(self) -> List[Job]:
+    def get_successfully_deleted_jobs(self) -> list[Job]:
         return self._successfully_deleted_jobs
 
     async def get_missing_secrets(
-        self, user_name: str, secret_names: List[str]
-    ) -> List[str]:
+        self, user_name: str, secret_names: list[str]
+    ) -> list[str]:
         pass
 
-    async def get_missing_disks(self, disks: List[Disk]) -> List[Disk]:
+    async def get_missing_disks(self, disks: list[Disk]) -> list[Disk]:
         pass
 
 
@@ -192,7 +180,7 @@ class MockJobsStorage(InMemoryJobsStorage):
 
 class MockNotificationsClient(NotificationsClient):
     def __init__(self) -> None:
-        self._sent_notifications: List[Notification] = []
+        self._sent_notifications: list[Notification] = []
         pass
 
     async def notify(self, notification: Notification) -> None:
@@ -205,7 +193,7 @@ class MockNotificationsClient(NotificationsClient):
         pass
 
     @property
-    def sent_notifications(self) -> List[Notification]:
+    def sent_notifications(self) -> list[Notification]:
         return self._sent_notifications
 
 
@@ -214,18 +202,18 @@ class MockAuthClient(AuthClient):
         self.user_to_return = AuthUser(
             name="testuser",
         )
-        self._grants: List[Tuple[str, Sequence[Permission]]] = []
-        self._revokes: List[Tuple[str, Sequence[str]]] = []
+        self._grants: list[tuple[str, Sequence[Permission]]] = []
+        self._revokes: list[tuple[str, Sequence[str]]] = []
 
     async def get_user(self, name: str, token: Optional[str] = None) -> AuthUser:
         return self.user_to_return
 
     @property
-    def grants(self) -> List[Tuple[str, Sequence[Permission]]]:
+    def grants(self) -> list[tuple[str, Sequence[Permission]]]:
         return self._grants
 
     @property
-    def revokes(self) -> List[Tuple[str, Sequence[str]]]:
+    def revokes(self) -> list[tuple[str, Sequence[str]]]:
         return self._revokes
 
     async def grant_user_permissions(
@@ -249,16 +237,16 @@ class MockAuthClient(AuthClient):
 
 class MockAdminClient(AdminClientDummy):
     def __init__(self) -> None:
-        self.users: Dict[str, User] = {}
-        self.cluster_users: Dict[str, List[ClusterUser]] = defaultdict(list)
-        self.org_clusters: Dict[str, List[OrgCluster]] = defaultdict(list)
-        self.spending_log: List[
-            Tuple[str, Optional[str], str, Decimal, Optional[str]]
+        self.users: dict[str, User] = {}
+        self.cluster_users: dict[str, list[ClusterUser]] = defaultdict(list)
+        self.org_clusters: dict[str, list[OrgCluster]] = defaultdict(list)
+        self.spending_log: list[
+            tuple[str, Optional[str], str, Decimal, Optional[str]]
         ] = []
-        self.debts_log: List[Tuple[str, str, Decimal, str]] = []
+        self.debts_log: list[tuple[str, str, Decimal, str]] = []
         self.raise_404: bool = False
 
-    async def get_user_with_clusters(self, name: str) -> Tuple[User, List[ClusterUser]]:
+    async def get_user_with_clusters(self, name: str) -> tuple[User, list[ClusterUser]]:
         if name not in self.users:
             raise ClientResponseError(None, (), status=404)  # type: ignore
         return self.users[name], self.cluster_users[name]
@@ -331,10 +319,10 @@ class MockJobsPollerApi(JobsPollerApi):
         self._jobs_service = jobs_service
         self._jobs_storage = jobs_storage
 
-    async def get_unfinished_jobs(self) -> List[JobRecord]:
+    async def get_unfinished_jobs(self) -> list[JobRecord]:
         return await self._jobs_storage.get_unfinished_jobs()
 
-    async def get_jobs_for_deletion(self, *, delay: timedelta) -> List[JobRecord]:
+    async def get_jobs_for_deletion(self, *, delay: timedelta) -> list[JobRecord]:
         return await self._jobs_storage.get_jobs_for_deletion(delay=delay)
 
     async def push_status(self, job_id: str, status: JobStatusItem) -> None:
@@ -348,7 +336,7 @@ class MockJobsPollerApi(JobsPollerApi):
 @pytest.fixture
 def job_request_factory() -> Callable[[], JobRequest]:
     def factory(with_gpu: bool = False) -> JobRequest:
-        cont_kwargs: Dict[str, Any] = {"cpu": 1, "memory_mb": 128}
+        cont_kwargs: dict[str, Any] = {"cpu": 1, "memory_mb": 128}
         if with_gpu:
             cont_kwargs["gpu"] = 1
             cont_kwargs["gpu_model_id"] = "nvidia-tesla-k80"
@@ -537,7 +525,7 @@ def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
 
 
 UserFactory = Callable[
-    [str, List[Union[Tuple[str, Balance, Quota], Tuple[str, str, Balance, Quota]]]],
+    [str, list[Union[tuple[str, Balance, Quota], tuple[str, str, Balance, Quota]]]],
     Awaitable[AuthUser],
 ]
 
@@ -548,18 +536,18 @@ def user_factory(
 ) -> UserFactory:
     async def _factory(
         name: str,
-        clusters: List[
-            Union[Tuple[str, Balance, Quota], Tuple[str, str, Balance, Quota]]
+        clusters: list[
+            Union[tuple[str, Balance, Quota], tuple[str, str, Balance, Quota]]
         ],
     ) -> AuthUser:
         mock_admin_client.users[name] = User(name=name, email=f"{name}@domain.com")
         for entry in clusters:
             org_name: Optional[str] = None
             if len(entry) == 3:
-                cluster, balance, quota = cast(Tuple[str, Balance, Quota], entry)
+                cluster, balance, quota = cast(tuple[str, Balance, Quota], entry)
             else:
                 cluster, org_name, balance, quota = cast(
-                    Tuple[str, str, Balance, Quota], entry
+                    tuple[str, str, Balance, Quota], entry
                 )
             mock_admin_client.cluster_users[name].append(
                 ClusterUser(
@@ -576,14 +564,14 @@ def user_factory(
     return _factory
 
 
-OrgFactory = Callable[[str, List[Tuple[str, Balance, Quota]]], Awaitable[str]]
+OrgFactory = Callable[[str, list[tuple[str, Balance, Quota]]], Awaitable[str]]
 
 
 @pytest.fixture
 def org_factory(
     mock_admin_client: MockAdminClient,
 ) -> OrgFactory:
-    async def _factory(name: str, clusters: List[Tuple[str, Balance, Quota]]) -> str:
+    async def _factory(name: str, clusters: list[tuple[str, Balance, Quota]]) -> str:
         mock_admin_client.users[name] = User(name=name, email=f"{name}@domain.com")
         for cluster, balance, quota in clusters:
             mock_admin_client.org_clusters[name].append(

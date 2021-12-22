@@ -1,5 +1,6 @@
+from collections.abc import AsyncIterator, Awaitable, Callable
 from decimal import Decimal
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Set
+from typing import Any
 from unittest import mock
 
 import aiohttp.web
@@ -20,7 +21,7 @@ class TestCannotStartJobNoCredits:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
         jobs_client: Callable[[], Any],
         regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
@@ -44,7 +45,7 @@ class TestCannotStartJobNoCredits:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
         jobs_client: Callable[[], Any],
         regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
@@ -75,12 +76,12 @@ class TestJobTransition:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         jobs_client_factory: Callable[[_User], JobsClient],
-    ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool, bool], Awaitable[str]]]:
+    ) -> AsyncIterator[Callable[[_User, dict[str, Any], bool, bool], Awaitable[str]]]:
         cleanup_pairs = []
 
         async def _impl(
             user: _User,
-            job_request: Dict[str, Any],
+            job_request: dict[str, Any],
             wait_for_start: bool = True,
             do_kill: bool = False,
         ) -> str:
@@ -113,7 +114,7 @@ class TestJobTransition:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_request_factory: Callable[[str], Dict[str, Any]],
+        job_request_factory: Callable[[str], dict[str, Any]],
         regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
     ) -> None:
@@ -133,7 +134,7 @@ class TestJobTransition:
     async def test_succeeded_job_workflow(
         self,
         api: ApiConfig,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
         jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
@@ -148,7 +149,7 @@ class TestJobTransition:
         await jobs_client.delete_job(job_id)
         await api.runner.close()
 
-        states: Set[str] = set()
+        states: set[str] = set()
         for (slug, payload) in mock_notifications_server.requests:
             if slug != "job-transition":
                 raise AssertionError(f"Unexpected Notification: {slug} : {payload}")
@@ -174,7 +175,7 @@ class TestJobTransition:
     async def test_failed_job_workflow(
         self,
         api: ApiConfig,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
         jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
@@ -189,7 +190,7 @@ class TestJobTransition:
         await jobs_client.long_polling_by_job_id(job_id, "failed")
         await api.runner.close()
 
-        states: Set[str] = set()
+        states: set[str] = set()
         for (slug, payload) in mock_notifications_server.requests:
             if slug != "job-transition":
                 raise AssertionError(f"Unexpected Notification: {slug} : {payload}")
@@ -217,7 +218,7 @@ class TestCreditsWillRunOutSoon:
         config: Config,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
         jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,

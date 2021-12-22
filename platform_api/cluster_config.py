@@ -1,7 +1,8 @@
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import PurePath
-from typing import Optional, Sequence
+from typing import Optional
 
 from yarl import URL
 

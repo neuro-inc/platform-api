@@ -1,7 +1,8 @@
 import asyncio
 import logging
-from contextlib import asynccontextmanager, suppress
-from typing import Any, AsyncContextManager, AsyncIterator, Optional, Sequence
+from collections.abc import AsyncIterator, Sequence
+from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppress
+from typing import Any, Optional
 
 from aiohttp import ClientResponseError
 from neuro_admin_client import AdminClient
@@ -30,7 +31,7 @@ class BillingLogService:
         self._new_entry_notifier = new_entry
         self._entry_done_notifier = entry_done
 
-        self._notifier_cm: Optional[AsyncContextManager[Any]] = None
+        self._notifier_cm: Optional[AbstractAsyncContextManager[Any]] = None
         self._last_entry_id = 0
         self._progress_cond = asyncio.Condition()
 
@@ -108,7 +109,7 @@ class BillingLogWorker:
         self._wait_timeout_s = wait_timeout_s
 
         self._task: Optional[asyncio.Task[Any]] = None
-        self._notifier_cm: Optional[AsyncContextManager[Any]] = None
+        self._notifier_cm: Optional[AbstractAsyncContextManager[Any]] = None
 
     async def __aenter__(self) -> "BillingLogWorker":
         self._unchecked_notify.set()  # Run checks initially

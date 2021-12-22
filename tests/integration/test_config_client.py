@@ -1,5 +1,6 @@
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any
 
 import aiohttp
 import pytest
@@ -11,7 +12,7 @@ from .conftest import ApiRunner
 
 
 @pytest.fixture
-def cluster_configs_payload() -> List[Dict[str, Any]]:
+def cluster_configs_payload() -> list[dict[str, Any]]:
     return [
         {
             "name": "cluster_name",
@@ -49,7 +50,7 @@ def cluster_configs_payload() -> List[Dict[str, Any]]:
     ]
 
 
-async def create_config_app(payload: List[Dict[str, Any]]) -> aiohttp.web.Application:
+async def create_config_app(payload: list[dict[str, Any]]) -> aiohttp.web.Application:
     app = aiohttp.web.Application()
 
     async def handle(request: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -63,7 +64,7 @@ async def create_config_app(payload: List[Dict[str, Any]]) -> aiohttp.web.Applic
 
 @asynccontextmanager
 async def create_config_api(
-    cluster_configs_payload: List[Dict[str, Any]]
+    cluster_configs_payload: list[dict[str, Any]]
 ) -> AsyncIterator[URL]:
     app = await create_config_app(cluster_configs_payload)
     runner = ApiRunner(app, port=8082)
@@ -75,7 +76,7 @@ async def create_config_api(
 class TestConfigClient:
     @pytest.mark.asyncio
     async def test_valid_cluster_configs(
-        self, cluster_configs_payload: List[Dict[str, Any]]
+        self, cluster_configs_payload: list[dict[str, Any]]
     ) -> None:
         async with create_config_api(cluster_configs_payload) as url:
             async with ConfigClient(base_url=url) as client:
@@ -85,7 +86,7 @@ class TestConfigClient:
 
     @pytest.mark.asyncio
     async def test_client_skips_invalid_cluster_configs(
-        self, cluster_configs_payload: List[Dict[str, Any]]
+        self, cluster_configs_payload: list[dict[str, Any]]
     ) -> None:
         cluster_configs_payload.append({})
         async with create_config_api(cluster_configs_payload) as url:

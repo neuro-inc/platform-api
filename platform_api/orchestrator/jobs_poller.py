@@ -1,8 +1,9 @@
 import asyncio
 import logging
+from collections.abc import Mapping
 from datetime import timedelta
 from pathlib import PurePath
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Optional
 
 import aiohttp
 from iso8601 import iso8601
@@ -50,12 +51,12 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
             read_only=bool(data.get("read_only")),
         )
 
-    def _parse_secret_volume(payload: Dict[str, Any]) -> SecretContainerVolume:
+    def _parse_secret_volume(payload: dict[str, Any]) -> SecretContainerVolume:
         return SecretContainerVolume.create(
             uri=payload["src_secret_uri"], dst_path=PurePath(payload["dst_path"])
         )
 
-    def _parse_disk_volume(payload: Dict[str, Any]) -> DiskContainerVolume:
+    def _parse_disk_volume(payload: dict[str, Any]) -> DiskContainerVolume:
         return DiskContainerVolume.create(
             uri=payload["src_disk_uri"],
             dst_path=PurePath(payload["dst_path"]),
@@ -150,7 +151,7 @@ class HttpJobsPollerApi(JobsPollerApi):
         url: URL,
         token: str,
         cluster_name: str,
-        trace_configs: Optional[List[aiohttp.TraceConfig]] = None,
+        trace_configs: Optional[list[aiohttp.TraceConfig]] = None,
     ):
         self._base_url = url
         self._token = token
@@ -160,7 +161,7 @@ class HttpJobsPollerApi(JobsPollerApi):
     async def init(self) -> None:
         if self._client:
             return
-        headers: Dict[str, str] = {}
+        headers: dict[str, str] = {}
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
         self._client = aiohttp.ClientSession(
@@ -179,7 +180,7 @@ class HttpJobsPollerApi(JobsPollerApi):
     async def __aexit__(self, *args: Any) -> None:
         await self.close()
 
-    async def get_unfinished_jobs(self) -> List[JobRecord]:
+    async def get_unfinished_jobs(self) -> list[JobRecord]:
         assert self._client
         url = self._base_url / "jobs"
         params: MultiDict[Any] = MultiDict()
@@ -190,7 +191,7 @@ class HttpJobsPollerApi(JobsPollerApi):
             payload = await resp.json()
         return [job_response_to_job_record(item) for item in payload["jobs"]]
 
-    async def get_jobs_for_deletion(self, *, delay: timedelta) -> List[JobRecord]:
+    async def get_jobs_for_deletion(self, *, delay: timedelta) -> list[JobRecord]:
         assert self._client
         url = self._base_url / "jobs"
         params: MultiDict[Any] = MultiDict()

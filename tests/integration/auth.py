@@ -1,18 +1,8 @@
 import asyncio
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import (
-    AsyncGenerator,
-    AsyncIterator,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Protocol,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import Optional, Protocol, Union, cast
 
 import aiodocker
 import pytest
@@ -151,7 +141,7 @@ async def wait_for_auth_server(
 class _User:
     name: str
     token: str
-    clusters: List[str] = field(default_factory=list)
+    clusters: list[str] = field(default_factory=list)
 
     @property
     def cluster_name(self) -> str:
@@ -159,7 +149,7 @@ class _User:
         return self.clusters[0]
 
     @property
-    def headers(self) -> Dict[str, str]:
+    def headers(self) -> dict[str, str]:
         return {AUTHORIZATION: f"Bearer {self.token}"}
 
 
@@ -173,7 +163,7 @@ class UserFactory(Protocol):
         self,
         name: Optional[str] = None,
         clusters: Optional[
-            List[Union[Tuple[str, Balance, Quota], Tuple[str, str, Balance, Quota]]]
+            list[Union[tuple[str, Balance, Quota], tuple[str, str, Balance, Quota]]]
         ] = None,
     ) -> _User:
         ...
@@ -190,7 +180,7 @@ async def regular_user_factory(
     async def _factory(
         name: Optional[str] = None,
         clusters: Optional[
-            List[Union[Tuple[str, Balance, Quota], Tuple[str, str, Balance, Quota]]]
+            list[Union[tuple[str, Balance, Quota], tuple[str, str, Balance, Quota]]]
         ] = None,
     ) -> _User:
         if not name:
@@ -201,10 +191,10 @@ async def regular_user_factory(
         for entry in clusters:
             org_name: Optional[str] = None
             if len(entry) == 3:
-                cluster, balance, quota = cast(Tuple[str, Balance, Quota], entry)
+                cluster, balance, quota = cast(tuple[str, Balance, Quota], entry)
             else:
                 cluster, org_name, balance, quota = cast(
-                    Tuple[str, str, Balance, Quota], entry
+                    tuple[str, str, Balance, Quota], entry
                 )
             try:
                 await admin_client.create_cluster(cluster)

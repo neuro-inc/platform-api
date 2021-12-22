@@ -1,5 +1,6 @@
 import asyncio
-from typing import Any, AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable
+from typing import Any
 
 import pytest
 from neuro_auth_client import User as AuthUser

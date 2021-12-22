@@ -6,28 +6,15 @@ import logging
 import re
 import ssl
 from base64 import b64encode
+from collections import defaultdict
+from collections.abc import AsyncIterator, Callable, Iterable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
 from pathlib import Path, PurePath
 from types import TracebackType
-from typing import (
-    Any,
-    AsyncIterator,
-    Callable,
-    ClassVar,
-    DefaultDict,
-    Dict,
-    Iterable,
-    List,
-    NoReturn,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import Any, ClassVar, NoReturn, Optional, Union
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -79,7 +66,7 @@ class NotFoundException(StatusException):
     pass
 
 
-def _raise_status_job_exception(pod: Dict[str, Any], job_id: Optional[str]) -> NoReturn:
+def _raise_status_job_exception(pod: dict[str, Any], job_id: Optional[str]) -> NoReturn:
     if pod["code"] == 409:
         raise AlreadyExistsException(pod.get("reason", "job already exists"))
     elif pod["code"] == 404:
@@ -97,7 +84,7 @@ class Volume(metaclass=abc.ABCMeta):
     def create_mount(self, container_volume: ContainerVolume) -> "VolumeMount":
         raise NotImplementedError("Cannot create mount for abstract Volume type.")
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         raise NotImplementedError
 
 
@@ -117,7 +104,7 @@ class PathVolume(Volume):
 
 @dataclass(frozen=True)
 class HostVolume(PathVolume):
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "hostPath": {"path": str(self.path), "type": "Directory"},
@@ -126,7 +113,7 @@ class HostVolume(PathVolume):
 
 @dataclass(frozen=True)
 class SharedMemoryVolume(Volume):
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {"name": self.name, "emptyDir": {"medium": "Memory"}}
 
     def create_mount(self, container_volume: ContainerVolume) -> "VolumeMount":
@@ -142,7 +129,7 @@ class SharedMemoryVolume(Volume):
 class NfsVolume(PathVolume):
     server: str
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "nfs": {"server": self.server, "path": str(self.path)},
@@ -153,7 +140,7 @@ class NfsVolume(PathVolume):
 class PVCVolume(PathVolume):
     claim_name: str
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "persistentVolumeClaim": {"claimName": self.claim_name},
@@ -169,7 +156,7 @@ class SecretEnvVar:
     def create(cls, name: str, secret: Secret) -> "SecretEnvVar":
         return cls(name=name, secret=secret)
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "valueFrom": {
@@ -188,7 +175,7 @@ class VolumeMount:
     sub_path: PurePath = PurePath("")
     read_only: bool = False
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         sub_path = str(self.sub_path)
         raw = {
             "name": self.volume.name,
@@ -212,7 +199,7 @@ class SecretVolume(Volume):
             read_only=True,
         )
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "secret": {"secretName": self.k8s_secret_name, "defaultMode": 0o400},
@@ -230,7 +217,7 @@ class PVCDiskVolume(Volume):
             read_only=disk_volume.read_only,
         )
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "persistentVolumeClaim": {"claimName": self.claim_name},
@@ -271,8 +258,8 @@ class Resources:
     def tpu_key(self) -> str:
         return self.tpu_key_template.format(version=self.tpu_version)
 
-    def to_primitive(self) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {
+    def to_primitive(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
             "requests": {"cpu": self.cpu_mcores, "memory": self.memory_mib},
             "limits": {"cpu": self.cpu_mcores, "memory": self.memory_mib},
         }
@@ -287,7 +274,7 @@ class Resources:
         return payload
 
     @classmethod
-    def _parse_tpu_resource(cls, tpu: ContainerTPUResource) -> Tuple[str, int]:
+    def _parse_tpu_resource(cls, tpu: ContainerTPUResource) -> tuple[str, int]:
         try:
             tpu_version, tpu_cores = tpu.type.rsplit("-", 1)
             return tpu_version, int(tpu_cores)
@@ -296,7 +283,7 @@ class Resources:
 
     @classmethod
     def from_container_resources(cls, resources: ContainerResources) -> "Resources":
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         if resources.tpu:
             kwargs["tpu_version"], kwargs["tpu_cores"] = cls._parse_tpu_resource(
                 resources.tpu
@@ -315,24 +302,24 @@ class Service:
     name: str
     target_port: Optional[int]
     uid: Optional[str] = None
-    selector: Dict[str, str] = field(default_factory=dict)
+    selector: dict[str, str] = field(default_factory=dict)
     port: int = 80
     service_type: ServiceType = ServiceType.CLUSTER_IP
     cluster_ip: Optional[str] = None
-    labels: Dict[str, str] = field(default_factory=dict)
+    labels: dict[str, str] = field(default_factory=dict)
 
     def _add_port_map(
         self,
         port: Optional[int],
         target_port: Optional[int],
         port_name: str,
-        ports: List[Dict[str, Any]],
+        ports: list[dict[str, Any]],
     ) -> None:
         if target_port:
             ports.append({"port": port, "targetPort": target_port, "name": port_name})
 
-    def to_primitive(self) -> Dict[str, Any]:
-        service_descriptor: Dict[str, Any] = {
+    def to_primitive(self) -> dict[str, Any]:
+        service_descriptor: dict[str, Any] = {
             "metadata": {"name": self.name},
             "spec": {
                 "type": self.service_type.value,
@@ -376,15 +363,15 @@ class Service:
 
     @classmethod
     def _find_port_by_name(
-        cls, name: str, port_mappings: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        cls, name: str, port_mappings: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         for port_mapping in port_mappings:
             if port_mapping.get("name", None) == name:
                 return port_mapping
         return {}
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "Service":
+    def from_primitive(cls, payload: dict[str, Any]) -> "Service":
         http_payload = cls._find_port_by_name("http", payload["spec"]["ports"])
         service_type = payload["spec"].get("type", Service.service_type.value)
         return cls(
@@ -406,7 +393,7 @@ class IngressRule:
     service_port: Optional[int] = None
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "IngressRule":
+    def from_primitive(cls, payload: dict[str, Any]) -> "IngressRule":
         http_paths = payload.get("http", {}).get("paths", [])
         http_path = http_paths[0] if http_paths else {}
         backend = http_path.get("backend", {})
@@ -418,8 +405,8 @@ class IngressRule:
             service_port=service_port,
         )
 
-    def to_primitive(self) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {"host": self.host}
+    def to_primitive(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {"host": self.host}
         if self.service_name:
             payload["http"] = {
                 "paths": [
@@ -441,12 +428,12 @@ class IngressRule:
 @dataclass(frozen=True)
 class Ingress:
     name: str
-    rules: List[IngressRule] = field(default_factory=list)
-    annotations: Dict[str, str] = field(default_factory=dict)
-    labels: Dict[str, str] = field(default_factory=dict)
+    rules: list[IngressRule] = field(default_factory=list)
+    annotations: dict[str, str] = field(default_factory=dict)
+    labels: dict[str, str] = field(default_factory=dict)
 
-    def to_primitive(self) -> Dict[str, Any]:
-        rules: List[Any] = [rule.to_primitive() for rule in self.rules] or [None]
+    def to_primitive(self) -> dict[str, Any]:
+        rules: list[Any] = [rule.to_primitive() for rule in self.rules] or [None]
         metadata = {"name": self.name, "annotations": self.annotations}
         if self.labels:
             metadata["labels"] = self.labels.copy()
@@ -454,7 +441,7 @@ class Ingress:
         return primitive
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "Ingress":
+    def from_primitive(cls, payload: dict[str, Any]) -> "Ingress":
         # TODO (A Danshyn 06/13/18): should be refactored along with PodStatus
         kind = payload["kind"]
         if kind == "Ingress":
@@ -515,7 +502,7 @@ class DockerRegistrySecret:
             ).encode("utf-8")
         ).decode("ascii")
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {
             "apiVersion": "v1",
             "kind": "Secret",
@@ -529,11 +516,11 @@ class DockerRegistrySecret:
 class SecretRef:
     name: str
 
-    def to_primitive(self) -> Dict[str, str]:
+    def to_primitive(self) -> dict[str, str]:
         return {"name": self.name}
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, str]) -> "SecretRef":
+    def from_primitive(cls, payload: dict[str, str]) -> "SecretRef":
         return cls(**payload)
 
 
@@ -548,7 +535,7 @@ class Toleration:
     value: str = ""
     effect: str = ""
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {
             "key": self.key,
             "operator": self.operator,
@@ -574,7 +561,7 @@ class NodeSelectorOperator(str, Enum):
 class NodeSelectorRequirement:
     key: str
     operator: NodeSelectorOperator
-    values: List[str] = field(default_factory=list)
+    values: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.key:
@@ -594,8 +581,8 @@ class NodeSelectorRequirement:
     def create_does_not_exist(cls, key: str) -> "NodeSelectorRequirement":
         return cls(key=key, operator=NodeSelectorOperator.DOES_NOT_EXIST)
 
-    def to_primitive(self) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {"key": self.key, "operator": self.operator.value}
+    def to_primitive(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {"key": self.key, "operator": self.operator.value}
         if self.values:
             payload["values"] = self.values.copy()
         return payload
@@ -603,13 +590,13 @@ class NodeSelectorRequirement:
 
 @dataclass(frozen=True)
 class NodeSelectorTerm:
-    match_expressions: List[NodeSelectorRequirement]
+    match_expressions: list[NodeSelectorRequirement]
 
     def __post_init__(self) -> None:
         if not self.match_expressions:
             raise ValueError("no expressions")
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {
             "matchExpressions": [expr.to_primitive() for expr in self.match_expressions]
         }
@@ -620,21 +607,21 @@ class NodePreferredSchedulingTerm:
     preference: NodeSelectorTerm
     weight: int = 100
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {"preference": self.preference.to_primitive(), "weight": self.weight}
 
 
 @dataclass(frozen=True)
 class NodeAffinity:
-    required: List[NodeSelectorTerm] = field(default_factory=list)
-    preferred: List[NodePreferredSchedulingTerm] = field(default_factory=list)
+    required: list[NodeSelectorTerm] = field(default_factory=list)
+    preferred: list[NodePreferredSchedulingTerm] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.required and not self.preferred:
             raise ValueError("no terms")
 
-    def to_primitive(self) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {}
+    def to_primitive(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
         if self.required:
             payload["requiredDuringSchedulingIgnoredDuringExecution"] = {
                 "nodeSelectorTerms": [term.to_primitive() for term in self.required]
@@ -663,20 +650,20 @@ class PodRestartPolicy(str, enum.Enum):
 class PodDescriptor:
     name: str
     image: str
-    command: List[str] = field(default_factory=list)
-    args: List[str] = field(default_factory=list)
+    command: list[str] = field(default_factory=list)
+    args: list[str] = field(default_factory=list)
     working_dir: Optional[str] = None
-    env: Dict[str, str] = field(default_factory=dict)
+    env: dict[str, str] = field(default_factory=dict)
     # TODO (artem): create base type `EnvVar` and merge `env` and `secret_env`
-    secret_env_list: List[SecretEnvVar] = field(default_factory=list)
-    volume_mounts: List[VolumeMount] = field(default_factory=list)
-    volumes: List[Volume] = field(default_factory=list)
+    secret_env_list: list[SecretEnvVar] = field(default_factory=list)
+    volume_mounts: list[VolumeMount] = field(default_factory=list)
+    volumes: list[Volume] = field(default_factory=list)
     resources: Optional[Resources] = None
-    node_selector: Dict[str, str] = field(default_factory=dict)
-    tolerations: List[Toleration] = field(default_factory=list)
+    node_selector: dict[str, str] = field(default_factory=dict)
+    tolerations: list[Toleration] = field(default_factory=list)
     node_affinity: Optional[NodeAffinity] = None
-    labels: Dict[str, str] = field(default_factory=dict)
-    annotations: Dict[str, str] = field(default_factory=dict)
+    labels: dict[str, str] = field(default_factory=dict)
+    annotations: dict[str, str] = field(default_factory=dict)
 
     port: Optional[int] = None
     health_check_path: str = "/"
@@ -684,7 +671,7 @@ class PodDescriptor:
 
     status: Optional["PodStatus"] = None
 
-    image_pull_secrets: List[SecretRef] = field(default_factory=list)
+    image_pull_secrets: list[SecretRef] = field(default_factory=list)
 
     # TODO (A Danshyn 12/09/2018): expose readiness probe properly
     readiness_probe: bool = False
@@ -705,7 +692,7 @@ class PodDescriptor:
         cls,
         container: Container,
         storage_volume_factory: Optional[Callable[[ContainerVolume], Volume]] = None,
-    ) -> Tuple[List[Volume], List[VolumeMount]]:
+    ) -> tuple[list[Volume], list[VolumeMount]]:
         if not storage_volume_factory:
             return [], []
 
@@ -725,7 +712,7 @@ class PodDescriptor:
         cls,
         container: Container,
         secret_volume_factory: Optional[Callable[[str], SecretVolume]] = None,
-    ) -> Tuple[List[SecretVolume], List[VolumeMount]]:
+    ) -> tuple[list[SecretVolume], list[VolumeMount]]:
         path_to_secret_volumes = container.get_path_to_secret_volumes()
         if not secret_volume_factory:
             return [], []
@@ -744,12 +731,12 @@ class PodDescriptor:
 
     @classmethod
     def _process_disk_volumes(
-        cls, disk_volumes: List[DiskContainerVolume]
-    ) -> Tuple[List[PVCDiskVolume], List[VolumeMount]]:
+        cls, disk_volumes: list[DiskContainerVolume]
+    ) -> tuple[list[PVCDiskVolume], list[VolumeMount]]:
         pod_volumes = []
         volume_mounts = []
 
-        pvc_volumes: Dict[str, PVCDiskVolume] = dict()
+        pvc_volumes: dict[str, PVCDiskVolume] = dict()
         for index, disk_volume in enumerate(disk_volumes, 1):
             pvc_volume = pvc_volumes.get(disk_volume.disk.disk_id)
             if pvc_volume is None:
@@ -767,14 +754,14 @@ class PodDescriptor:
         job_request: JobRequest,
         storage_volume_factory: Optional[Callable[[ContainerVolume], Volume]] = None,
         secret_volume_factory: Optional[Callable[[str], SecretVolume]] = None,
-        image_pull_secret_names: Optional[List[str]] = None,
-        node_selector: Optional[Dict[str, str]] = None,
-        tolerations: Optional[List[Toleration]] = None,
+        image_pull_secret_names: Optional[list[str]] = None,
+        node_selector: Optional[dict[str, str]] = None,
+        tolerations: Optional[list[Toleration]] = None,
         node_affinity: Optional[NodeAffinity] = None,
-        labels: Optional[Dict[str, str]] = None,
+        labels: Optional[dict[str, str]] = None,
         priority_class_name: Optional[str] = None,
         restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER,
-        meta_env: Optional[Dict[str, str]] = None,
+        meta_env: Optional[dict[str, str]] = None,
         privileged: bool = False,
     ) -> "PodDescriptor":
         container = job_request.container
@@ -817,7 +804,7 @@ class PodDescriptor:
         else:
             image_pull_secrets = []
 
-        annotations: Dict[str, str] = {}
+        annotations: dict[str, str] = {}
         if container.resources.tpu:
             annotations[
                 cls.tpu_version_annotation_key
@@ -853,15 +840,15 @@ class PodDescriptor:
         )
 
     @property
-    def env_list(self) -> List[Dict[str, str]]:
+    def env_list(self) -> list[dict[str, str]]:
         return [dict(name=name, value=value) for name, value in self.env.items()]
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
         volumes = [volume.to_primitive() for volume in self.volumes]
         env_list = self.env_list + [env.to_primitive() for env in self.secret_env_list]
 
-        container_payload: Dict[str, Any] = {
+        container_payload: dict[str, Any] = {
             "name": f"{self.name}",
             "image": f"{self.image}",
             "imagePullPolicy": "Always",
@@ -900,7 +887,7 @@ class PodDescriptor:
                 )
             )
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "kind": "Pod",
             "apiVersion": "v1",
             "metadata": {"name": self.name},
@@ -931,13 +918,13 @@ class PodDescriptor:
             payload["spec"]["priorityClassName"] = self.priority_class_name
         return payload
 
-    def _to_primitive_ports(self) -> List[Dict[str, int]]:
+    def _to_primitive_ports(self) -> list[dict[str, int]]:
         ports = []
         if self.port:
             ports.append({"containerPort": self.port})
         return ports
 
-    def _to_primitive_readiness_probe(self) -> Dict[str, Any]:
+    def _to_primitive_readiness_probe(self) -> dict[str, Any]:
         if not self.readiness_probe:
             return {}
 
@@ -951,7 +938,7 @@ class PodDescriptor:
         return {}
 
     @classmethod
-    def _assert_resource_kind(cls, expected_kind: str, payload: Dict[str, Any]) -> None:
+    def _assert_resource_kind(cls, expected_kind: str, payload: dict[str, Any]) -> None:
         kind = payload["kind"]
         if kind == "Status":
             _raise_status_job_exception(payload, job_id="")
@@ -959,7 +946,7 @@ class PodDescriptor:
             raise ValueError(f"unknown kind: {kind}")
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "PodDescriptor":
+    def from_primitive(cls, payload: dict[str, Any]) -> "PodDescriptor":
         cls._assert_resource_kind(expected_kind="Pod", payload=payload)
 
         metadata = payload["metadata"]
@@ -1006,11 +993,11 @@ class PodDescriptor:
 
 
 class ContainerStatus:
-    def __init__(self, payload: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, payload: Optional[dict[str, Any]] = None) -> None:
         self._payload = payload or {}
 
     @property
-    def _state(self) -> Dict[str, Any]:
+    def _state(self) -> dict[str, Any]:
         return self._payload.get("state", {})
 
     @property
@@ -1076,7 +1063,7 @@ class PodConditionType(enum.Enum):
 class PodCondition:
     # https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-conditions
 
-    def __init__(self, payload: Dict[str, Any]) -> None:
+    def __init__(self, payload: dict[str, Any]) -> None:
         self._payload = payload
 
     @property
@@ -1111,11 +1098,11 @@ class PodCondition:
 
 
 class KubernetesEvent:
-    def __init__(self, payload: Dict[str, Any]) -> None:
+    def __init__(self, payload: dict[str, Any]) -> None:
         self._payload = payload or {}
 
     @property
-    def involved_object(self) -> Dict[str, str]:
+    def involved_object(self) -> dict[str, str]:
         return self._payload["involvedObject"]
 
     @property
@@ -1140,7 +1127,7 @@ class KubernetesEvent:
 
 
 class PodStatus:
-    def __init__(self, payload: Dict[str, Any]) -> None:
+    def __init__(self, payload: dict[str, Any]) -> None:
         self._payload = payload
         self._container_status = self._init_container_status()
 
@@ -1201,11 +1188,11 @@ class PodStatus:
         return self.reason == "NodeLost"
 
     @property
-    def conditions(self) -> List[PodCondition]:
+    def conditions(self) -> list[PodCondition]:
         return [PodCondition(val) for val in self._payload.get("conditions", [])]
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "PodStatus":
+    def from_primitive(cls, payload: dict[str, Any]) -> "PodStatus":
         return cls(payload)
 
 
@@ -1225,7 +1212,7 @@ class PodExec:
 
     def __init__(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         self._ws = ws
-        self._channels: DefaultDict[ExecChannel, Stream] = DefaultDict(Stream)
+        self._channels: defaultdict[ExecChannel, Stream] = defaultdict(Stream)
         loop = asyncio.get_event_loop()
         self._reader_task = loop.create_task(self._read_data())
         self._exit_code = loop.create_future()
@@ -1288,7 +1275,7 @@ class PodExec:
 
     async def __aexit__(
         self,
-        exc_type: Optional[Type[BaseException]],
+        exc_type: Optional[type[BaseException]],
         exc_val: Optional[BaseException],
         exc_tb: Optional[TracebackType],
     ) -> None:
@@ -1314,7 +1301,7 @@ class NodeTaint:
     value: str
     effect: str = "NoSchedule"
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {"key": self.key, "value": self.value, "effect": self.effect}
 
 
@@ -1334,7 +1321,7 @@ class KubeClient:
         conn_timeout_s: int = 300,
         read_timeout_s: int = 100,
         conn_pool_size: int = 100,
-        trace_configs: Optional[List[aiohttp.TraceConfig]] = None,
+        trace_configs: Optional[list[aiohttp.TraceConfig]] = None,
     ) -> None:
         self._base_url = base_url
         self._namespace = namespace
@@ -1504,7 +1491,7 @@ class KubeClient:
         all_pvcs_url = self._generate_all_pvcs_url(namespace_name)
         return f"{all_pvcs_url}/{pvc_name}"
 
-    async def _request(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    async def _request(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         assert self._client
         async with self._client.request(*args, **kwargs) as response:
             # TODO (A Danshyn 05/21/18): check status code etc
@@ -1547,15 +1534,15 @@ class KubeClient:
 
     async def get_endpoint(
         self, name: str, namespace: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         url = self._generate_endpoint_url(name, namespace or self._namespace)
         return await self._request(method="GET", url=url)
 
     async def create_node(
         self,
         name: str,
-        capacity: Dict[str, Any],
-        labels: Optional[Dict[str, str]] = None,
+        capacity: dict[str, Any],
+        labels: Optional[dict[str, str]] = None,
         taints: Optional[Sequence[NodeTaint]] = None,
     ) -> None:
         taints = taints or []
@@ -1586,8 +1573,8 @@ class KubeClient:
         return pod
 
     async def set_raw_pod_status(
-        self, name: str, payload: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, name: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         url = self._generate_pod_url(name) + "/status"
         return await self._request(method="PUT", url=url, json=payload)
 
@@ -1596,11 +1583,11 @@ class KubeClient:
         payload = await self._request(method="GET", url=url)
         return PodDescriptor.from_primitive(payload)
 
-    async def get_raw_pod(self, name: str) -> Dict[str, Any]:
+    async def get_raw_pod(self, name: str) -> dict[str, Any]:
         url = self._generate_pod_url(name)
         return await self._request(method="GET", url=url)
 
-    async def get_raw_pods(self) -> Sequence[Dict[str, Any]]:
+    async def get_raw_pods(self) -> Sequence[dict[str, Any]]:
         payload = await self._request(method="GET", url=self._pods_url)
         return payload["items"]
 
@@ -1626,9 +1613,9 @@ class KubeClient:
     async def create_ingress(
         self,
         name: str,
-        rules: Optional[List[IngressRule]] = None,
-        annotations: Optional[Dict[str, str]] = None,
-        labels: Optional[Dict[str, str]] = None,
+        rules: Optional[list[IngressRule]] = None,
+        annotations: Optional[dict[str, str]] = None,
+        labels: Optional[dict[str, str]] = None,
     ) -> Ingress:
         rules = rules or []
         annotations = annotations or {}
@@ -1647,9 +1634,9 @@ class KubeClient:
         return Ingress.from_primitive(payload)
 
     async def delete_all_ingresses(
-        self, *, labels: Optional[Dict[str, str]] = None
+        self, *, labels: Optional[dict[str, str]] = None
     ) -> None:
-        params: Dict[str, str] = {}
+        params: dict[str, str] = {}
         if labels:
             params["labelSelector"] = ",".join(
                 "=".join(item) for item in labels.items()
@@ -1664,7 +1651,7 @@ class KubeClient:
         payload = await self._request(method="DELETE", url=url)
         self._check_status_payload(payload)
 
-    def _check_status_payload(self, payload: Dict[str, Any]) -> None:
+    def _check_status_payload(self, payload: dict[str, Any]) -> None:
         if payload["kind"] == "Status":
             if payload["status"] == "Failure":
                 if payload.get("reason") == "AlreadyExists":
@@ -1714,7 +1701,7 @@ class KubeClient:
         self._check_status_payload(payload)
         return Service.from_primitive(payload)
 
-    async def list_services(self, labels: Dict[str, str]) -> List[Service]:
+    async def list_services(self, labels: dict[str, str]) -> list[Service]:
         url = self._services_url
         labelSelector = ",".join(f"{label}={value}" for label, value in labels.items())
         payload = await self._request(
@@ -1751,7 +1738,7 @@ class KubeClient:
 
     async def get_raw_secret(
         self, secret_name: str, namespace_name: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         url = self._generate_secret_url(secret_name, namespace_name)
         payload = await self._request(method="GET", url=url)
         self._check_status_payload(payload)
@@ -1765,7 +1752,7 @@ class KubeClient:
 
     async def get_raw_pvc(
         self, pvc_name: str, namespace_name: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         url = self._generate_pvc_url(pvc_name, namespace_name)
         payload = await self._request(method="GET", url=url)
         self._check_status_payload(payload)
@@ -1773,7 +1760,7 @@ class KubeClient:
 
     async def get_pod_events(
         self, pod_id: str, namespace: str
-    ) -> List[KubernetesEvent]:
+    ) -> list[KubernetesEvent]:
         params = {
             "fieldSelector": (
                 "involvedObject.kind=Pod"
@@ -1843,12 +1830,12 @@ class KubeClient:
     async def create_default_network_policy(
         self,
         name: str,
-        pod_labels: Dict[str, str],
+        pod_labels: dict[str, str],
         namespace_name: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         assert pod_labels
         # https://tools.ietf.org/html/rfc1918#section-3
-        rules: List[Dict[str, Any]] = [
+        rules: list[dict[str, Any]] = [
             # allowing pods to connect to public networks only
             {
                 "to": [
@@ -1885,11 +1872,11 @@ class KubeClient:
         self,
         name: str,
         *,
-        pod_labels: Dict[str, str],
-        rules: List[Dict[str, Any]],
+        pod_labels: dict[str, str],
+        rules: list[dict[str, Any]],
         namespace_name: Optional[str] = None,
-        labels: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, Any]:
+        labels: Optional[dict[str, str]] = None,
+    ) -> dict[str, Any]:
         assert pod_labels
         assert rules
         labels = labels or {}
@@ -1911,7 +1898,7 @@ class KubeClient:
 
     async def get_network_policy(
         self, name: str, namespace_name: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         url = self._generate_network_policy_url(name, namespace_name)
         payload = await self._request(method="GET", url=url)
         self._check_status_payload(payload)

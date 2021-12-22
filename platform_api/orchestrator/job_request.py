@@ -2,9 +2,10 @@ import enum
 import shlex
 import uuid
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Optional, Union
 
 from yarl import URL
 
@@ -44,15 +45,15 @@ class ContainerVolume:
         return cls(uri=URL(uri), dst_path=dst_path, read_only=read_only)
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerVolume":
+    def from_primitive(cls, payload: dict[str, Any]) -> "ContainerVolume":
         return cls(
             uri=URL(payload.get("uri", "")),
             dst_path=PurePath(payload["dst_path"]),
             read_only=payload["read_only"],
         )
 
-    def to_primitive(self) -> Dict[str, Any]:
-        payload: Dict[str, Any] = asdict(self)
+    def to_primitive(self) -> dict[str, Any]:
+        payload: dict[str, Any] = asdict(self)
         payload["uri"] = str(payload["uri"])
         payload["dst_path"] = str(payload["dst_path"])
         return payload
@@ -98,14 +99,14 @@ class DiskContainerVolume:
         return cls(disk=Disk.create(uri), dst_path=dst_path, read_only=read_only)
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "DiskContainerVolume":
+    def from_primitive(cls, payload: dict[str, Any]) -> "DiskContainerVolume":
         return cls.create(
             uri=payload["src_disk_uri"],
             dst_path=PurePath(payload["dst_path"]),
             read_only=payload["read_only"],
         )
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {
             "src_disk_uri": str(self.to_uri()),
             "dst_path": str(self.dst_path),
@@ -156,12 +157,12 @@ class SecretContainerVolume:
         return cls(secret=Secret.create(uri), dst_path=dst_path)
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "SecretContainerVolume":
+    def from_primitive(cls, payload: dict[str, Any]) -> "SecretContainerVolume":
         return cls.create(
             uri=payload["src_secret_uri"], dst_path=PurePath(payload["dst_path"])
         )
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {
             "src_secret_uri": str(self.to_uri()),
             "dst_path": str(self.dst_path),
@@ -174,10 +175,10 @@ class ContainerTPUResource:
     software_version: str
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerTPUResource":
+    def from_primitive(cls, payload: dict[str, Any]) -> "ContainerTPUResource":
         return cls(type=payload["type"], software_version=payload["software_version"])
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return {"type": self.type, "software_version": self.software_version}
 
 
@@ -191,7 +192,7 @@ class ContainerResources:
     tpu: Optional[ContainerTPUResource] = None
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerResources":
+    def from_primitive(cls, payload: dict[str, Any]) -> "ContainerResources":
         tpu = None
         if payload.get("tpu"):
             tpu = ContainerTPUResource.from_primitive(payload["tpu"])
@@ -204,8 +205,8 @@ class ContainerResources:
             tpu=tpu,
         )
 
-    def to_primitive(self) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {"cpu": self.cpu, "memory_mb": self.memory_mb}
+    def to_primitive(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {"cpu": self.cpu, "memory_mb": self.memory_mb}
         if self.gpu is not None:
             payload["gpu"] = self.gpu
             payload["gpu_model_id"] = self.gpu_model_id
@@ -294,14 +295,14 @@ class ContainerHTTPServer:
     requires_auth: bool = False
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "ContainerHTTPServer":
+    def from_primitive(cls, payload: dict[str, Any]) -> "ContainerHTTPServer":
         return cls(
             port=payload["port"],
             health_check_path=payload.get("health_check_path") or cls.health_check_path,
             requires_auth=payload.get("requires_auth", cls.requires_auth),
         )
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -311,11 +312,11 @@ class Container:
     resources: ContainerResources
     entrypoint: Optional[str] = None
     command: Optional[str] = None
-    env: Dict[str, str] = field(default_factory=dict)
-    volumes: List[ContainerVolume] = field(default_factory=list)
-    secret_env: Dict[str, Secret] = field(default_factory=dict)
-    secret_volumes: List[SecretContainerVolume] = field(default_factory=list)
-    disk_volumes: List[DiskContainerVolume] = field(default_factory=list)
+    env: dict[str, str] = field(default_factory=dict)
+    volumes: list[ContainerVolume] = field(default_factory=list)
+    secret_env: dict[str, Secret] = field(default_factory=dict)
+    secret_volumes: list[SecretContainerVolume] = field(default_factory=list)
+    disk_volumes: list[DiskContainerVolume] = field(default_factory=list)
     http_server: Optional[ContainerHTTPServer] = None
     tty: bool = False
     working_dir: Optional[str] = None
@@ -332,19 +333,19 @@ class Container:
         assert cluster_name
         return URL.build(scheme="image", host=cluster_name) / path
 
-    def get_secrets(self) -> List[Secret]:
+    def get_secrets(self) -> list[Secret]:
         return list(
             {*self.secret_env.values(), *(v.secret for v in self.secret_volumes)}
         )
 
-    def get_path_to_secrets(self) -> Dict[str, List[Secret]]:
-        path_to_secrets: Dict[str, List[Secret]] = defaultdict(list)
+    def get_path_to_secrets(self) -> dict[str, list[Secret]]:
+        path_to_secrets: dict[str, list[Secret]] = defaultdict(list)
         for secret in self.get_secrets():
             path_to_secrets[secret.path].append(secret)
         return path_to_secrets
 
-    def get_path_to_secret_volumes(self) -> Dict[str, List[SecretContainerVolume]]:
-        user_volumes: Dict[str, List[SecretContainerVolume]] = defaultdict(list)
+    def get_path_to_secret_volumes(self) -> dict[str, list[SecretContainerVolume]]:
+        user_volumes: dict[str, list[SecretContainerVolume]] = defaultdict(list)
         for volume in self.secret_volumes:
             user_volumes[volume.secret.path].append(volume)
         return user_volumes
@@ -366,20 +367,20 @@ class Container:
             return self.http_server.health_check_path
         return ContainerHTTPServer.health_check_path
 
-    def _parse_command(self, command: str) -> List[str]:
+    def _parse_command(self, command: str) -> list[str]:
         try:
             return shlex.split(command)
         except ValueError:
             raise JobError("invalid command format")
 
     @property
-    def entrypoint_list(self) -> List[str]:
+    def entrypoint_list(self) -> list[str]:
         if self.entrypoint:
             return self._parse_command(self.entrypoint)
         return []
 
     @property
-    def command_list(self) -> List[str]:
+    def command_list(self) -> list[str]:
         if self.command:
             return self._parse_command(self.command)
         return []
@@ -393,7 +394,7 @@ class Container:
         return bool(self.http_server and self.http_server.requires_auth)
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "Container":
+    def from_primitive(cls, payload: dict[str, Any]) -> "Container":
         kwargs = payload.copy()
         kwargs["resources"] = ContainerResources.from_primitive(kwargs["resources"])
         kwargs["volumes"] = [
@@ -431,8 +432,8 @@ class Container:
 
         return cls(**kwargs)
 
-    def to_primitive(self) -> Dict[str, Any]:
-        payload: Dict[str, Any] = asdict(self)
+    def to_primitive(self) -> dict[str, Any]:
+        payload: dict[str, Any] = asdict(self)
         payload["resources"] = self.resources.to_primitive()
         payload["volumes"] = [volume.to_primitive() for volume in self.volumes]
 
@@ -483,12 +484,12 @@ class JobRequest:
         )
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "JobRequest":
+    def from_primitive(cls, payload: dict[str, Any]) -> "JobRequest":
         kwargs = payload.copy()
         kwargs["container"] = Container.from_primitive(kwargs["container"])
         return cls(**kwargs)
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         result = {"job_id": self.job_id, "container": self.container.to_primitive()}
         if self.description:
             result["description"] = self.description
@@ -527,15 +528,15 @@ class JobStatus(str, enum.Enum):
         return self in (self.SUCCEEDED, self.FAILED, self.CANCELLED)
 
     @classmethod
-    def values(cls) -> List[str]:
+    def values(cls) -> list[str]:
         return [item.value for item in cls]
 
     @classmethod
-    def active_values(cls) -> List[str]:
+    def active_values(cls) -> list[str]:
         return [item.value for item in cls if not item.is_finished]
 
     @classmethod
-    def finished_values(cls) -> List[str]:
+    def finished_values(cls) -> list[str]:
         return [item.value for item in cls if item.is_finished]
 
     def __repr__(self) -> str:

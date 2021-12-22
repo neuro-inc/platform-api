@@ -1,6 +1,6 @@
 from datetime import timedelta
 from itertools import islice
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -488,7 +488,7 @@ class TestJobsStorage:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("statuses", [(), (JobStatus.PENDING, JobStatus.RUNNING)])
     async def test_get_all_filter_by_date_range(
-        self, statuses: Tuple[JobStatus, ...], storage: JobsStorage
+        self, statuses: tuple[JobStatus, ...], storage: JobsStorage
     ) -> None:
         t1 = current_datetime_factory()
         job1 = self._create_job()
@@ -572,7 +572,7 @@ class TestJobsStorage:
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == []
 
-    async def prepare_filtering_test(self, storage: JobsStorage) -> List[JobRecord]:
+    async def prepare_filtering_test(self, storage: JobsStorage) -> list[JobRecord]:
         jobs = [
             # no name:
             self._create_pending_job(owner="user1", job_name=None),
@@ -706,12 +706,12 @@ class TestJobsStorage:
     )
     async def test_get_all_with_filters(
         self,
-        owners: Tuple[str, ...],
+        owners: tuple[str, ...],
         name: Optional[str],
-        statuses: Tuple[JobStatus, ...],
+        statuses: tuple[JobStatus, ...],
         storage: JobsStorage,
     ) -> None:
-        def sort_jobs_as_primitives(array: List[JobRecord]) -> List[Dict[str, Any]]:
+        def sort_jobs_as_primitives(array: list[JobRecord]) -> list[dict[str, Any]]:
             return sorted(
                 (job.to_primitive() for job in array), key=lambda job: job["id"]
             )
@@ -745,7 +745,7 @@ class TestJobsStorage:
     async def test_get_all_filter_by_name_with_no_owner(
         self,
         name: Optional[str],
-        statuses: Tuple[JobStatus, ...],
+        statuses: tuple[JobStatus, ...],
         storage: JobsStorage,
     ) -> None:
         jobs = await self.prepare_filtering_test(storage)
@@ -917,7 +917,7 @@ class TestJobsStorage:
 
     async def prepare_filtering_test_different_clusters(
         self, storage: JobsStorage
-    ) -> List[JobRecord]:
+    ) -> list[JobRecord]:
         jobs = [
             self._create_running_job(owner="user1", cluster_name="test-cluster"),
             self._create_succeeded_job(
@@ -958,7 +958,7 @@ class TestJobsStorage:
 
     async def prepare_filtering_test_different_orgs(
         self, storage: JobsStorage
-    ) -> List[JobRecord]:
+    ) -> list[JobRecord]:
         jobs = [
             self._create_running_job(
                 owner="user1", cluster_name="test-cluster", org_name=None

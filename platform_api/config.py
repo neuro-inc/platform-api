@@ -1,7 +1,8 @@
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
-from typing import Optional, Sequence
+from typing import Optional
 
 from alembic.config import Config as AlembicConfig
 from yarl import URL

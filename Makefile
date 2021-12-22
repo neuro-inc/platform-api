@@ -52,9 +52,7 @@ docker_build:
 	rm -rf build dist
 	pip install -U build
 	python -m build
-	docker build \
-		--build-arg PYTHON_BASE=slim-buster \
-		-t $(IMAGE_NAME):latest .
+	docker build -t $(IMAGE_NAME):latest .
 
 docker_push:
 	docker tag $(IMAGE_NAME):latest $(IMAGE_REPO):$(IMAGE_TAG)

@@ -1,6 +1,7 @@
 import asyncio
 import logging
-from typing import Any, Callable, Iterator, Tuple, Type
+from collections.abc import Callable, Iterator
+from typing import Any
 
 
 log = logging.getLogger(__name__)
@@ -10,7 +11,7 @@ class retries:
     def __init__(
         self,
         msg: str,
-        catch: Tuple[Type[Exception], ...],
+        catch: tuple[type[Exception], ...],
         attempts: int = 10,
         logger: Callable[[str], None] = log.info,
     ) -> None:
@@ -34,7 +35,7 @@ class retries:
         pass
 
     async def __aexit__(
-        self, type: Type[BaseException], value: BaseException, tb: Any
+        self, type: type[BaseException], value: BaseException, tb: Any
     ) -> bool:
         if type is None:
             # Stop iteration

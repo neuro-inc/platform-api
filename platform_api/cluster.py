@@ -1,8 +1,9 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Optional
 
 from aiorwlock import RWLock
 
@@ -216,10 +217,10 @@ class ClusterConfigRegistry:
     def __init__(
         self,
     ) -> None:
-        self._records: Dict[str, ClusterConfig] = {}
+        self._records: dict[str, ClusterConfig] = {}
 
     @property
-    def cluster_names(self) -> List[str]:
+    def cluster_names(self) -> list[str]:
         return list(self._records)
 
     def get(self, name: str) -> ClusterConfig:

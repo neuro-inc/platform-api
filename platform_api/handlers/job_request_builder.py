@@ -1,5 +1,5 @@
 from pathlib import PurePath
-from typing import Any, Dict
+from typing import Any
 
 from platform_api.orchestrator.job_request import (
     Container,
@@ -13,7 +13,7 @@ from platform_api.orchestrator.job_request import (
 )
 
 
-def create_container_from_payload(payload: Dict[str, Any]) -> Container:
+def create_container_from_payload(payload: dict[str, Any]) -> Container:
     if "container" in payload:
         # Deprecated. Use flat structure
         payload = payload["container"]
@@ -62,7 +62,7 @@ def create_container_from_payload(payload: Dict[str, Any]) -> Container:
     )
 
 
-def create_resources_from_payload(payload: Dict[str, Any]) -> ContainerResources:
+def create_resources_from_payload(payload: dict[str, Any]) -> ContainerResources:
     tpu = None
     if "tpu" in payload:
         tpu = create_tpu_resource_from_payload(payload["tpu"])
@@ -76,13 +76,13 @@ def create_resources_from_payload(payload: Dict[str, Any]) -> ContainerResources
     )
 
 
-def create_tpu_resource_from_payload(payload: Dict[str, Any]) -> ContainerTPUResource:
+def create_tpu_resource_from_payload(payload: dict[str, Any]) -> ContainerTPUResource:
     return ContainerTPUResource(
         type=payload["type"], software_version=payload["software_version"]
     )
 
 
-def create_volume_from_payload(payload: Dict[str, Any]) -> ContainerVolume:
+def create_volume_from_payload(payload: dict[str, Any]) -> ContainerVolume:
     dst_path = PurePath(payload["dst_path"])
     return ContainerVolume.create(
         payload["src_storage_uri"],
@@ -91,13 +91,13 @@ def create_volume_from_payload(payload: Dict[str, Any]) -> ContainerVolume:
     )
 
 
-def create_secret_volume_from_payload(payload: Dict[str, Any]) -> SecretContainerVolume:
+def create_secret_volume_from_payload(payload: dict[str, Any]) -> SecretContainerVolume:
     return SecretContainerVolume.create(
         uri=payload["src_secret_uri"], dst_path=PurePath(payload["dst_path"])
     )
 
 
-def create_disk_volume_from_payload(payload: Dict[str, Any]) -> DiskContainerVolume:
+def create_disk_volume_from_payload(payload: dict[str, Any]) -> DiskContainerVolume:
     return DiskContainerVolume.create(
         uri=payload["src_disk_uri"],
         dst_path=PurePath(payload["dst_path"]),

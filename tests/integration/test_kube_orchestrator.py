@@ -3,20 +3,11 @@ import itertools
 import shlex
 import time
 import uuid
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import replace
 from pathlib import PurePath
-from typing import (
-    Any,
-    AsyncContextManager,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-)
+from typing import Any, Optional
 from unittest import mock
 
 import aiohttp
@@ -883,7 +874,7 @@ class TestKubeOrchestrator:
         labels1 = {"label": f"value-{uuid.uuid4()}"}
         labels2 = {"label": f"value-{uuid.uuid4()}"}
 
-        def _gen_for_labels(labels: Dict[str, str]) -> List[Service]:
+        def _gen_for_labels(labels: dict[str, str]) -> list[Service]:
             return [
                 Service(name=f"job-{uuid.uuid4()}", target_port=8080, labels=labels)
                 for _ in range(5)
@@ -2284,7 +2275,7 @@ class TestNodeAffinity:
     @pytest.fixture
     async def start_job(
         self, kube_client: MyKubeClient
-    ) -> Callable[..., AsyncContextManager[MyJob]]:
+    ) -> Callable[..., AbstractAsyncContextManager[MyJob]]:
         @asynccontextmanager
         async def _create(
             kube_orchestrator: KubeOrchestrator,
@@ -2330,7 +2321,7 @@ class TestNodeAffinity:
     async def test_unschedulable_job(
         self,
         kube_orchestrator: KubeOrchestrator,
-        start_job: Callable[..., AsyncContextManager[MyJob]],
+        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
         with pytest.raises(JobError, match="Job will not fit into cluster"):
             async with start_job(kube_orchestrator, cpu=100, memory_mb=32):
@@ -2341,7 +2332,7 @@ class TestNodeAffinity:
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
-        start_job: Callable[..., AsyncContextManager[MyJob]],
+        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
         async with start_job(kube_orchestrator, cpu=0.1, memory_mb=32) as job:
             await kube_client.wait_pod_scheduled(job.id, "cpu-small")
@@ -2363,7 +2354,7 @@ class TestNodeAffinity:
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
-        start_job: Callable[..., AsyncContextManager[MyJob]],
+        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
         async with start_job(kube_orchestrator, cpu=3, memory_mb=32) as job:
             await kube_client.wait_pod_scheduled(job.id, "cpu-large-tpu")
@@ -2389,7 +2380,7 @@ class TestNodeAffinity:
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
-        start_job: Callable[..., AsyncContextManager[MyJob]],
+        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
         with pytest.raises(JobError, match="Job will not fit into cluster"):
             async with start_job(kube_orchestrator, cpu=7, memory_mb=32):
@@ -2400,7 +2391,7 @@ class TestNodeAffinity:
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
-        start_job: Callable[..., AsyncContextManager[MyJob]],
+        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
         async with start_job(
             kube_orchestrator,
@@ -2428,7 +2419,7 @@ class TestNodeAffinity:
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
-        start_job: Callable[..., AsyncContextManager[MyJob]],
+        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
         async with start_job(
             kube_orchestrator,
@@ -2458,7 +2449,7 @@ class TestNodeAffinity:
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
-        start_job: Callable[..., AsyncContextManager[MyJob]],
+        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
         async with start_job(
             kube_orchestrator,
@@ -3013,8 +3004,8 @@ class TestKubeClient:
         self,
         kube_client: KubeClient,
         delete_network_policy_later: Callable[[str], Awaitable[None]],
-    ) -> Callable[[str], Awaitable[Dict[str, Any]]]:
-        async def _f(job_id: str) -> Dict[str, Any]:
+    ) -> Callable[[str], Awaitable[dict[str, Any]]]:
+        async def _f(job_id: str) -> dict[str, Any]:
             np_name = f"networkpolicy-{uuid.uuid4().hex[:6]}"
             labels = {"platform.neuromation.io/job": job_id}
 
@@ -3030,7 +3021,7 @@ class TestKubeClient:
     async def test_get_all_job_resources_links_job_network_policy(
         self,
         kube_client: KubeClient,
-        create_network_policy: Callable[[str], Awaitable[Dict[str, Any]]],
+        create_network_policy: Callable[[str], Awaitable[dict[str, Any]]],
     ) -> None:
         job_id = f"job-{uuid.uuid4()}"
         payload = await create_network_policy(job_id)
@@ -3043,7 +3034,7 @@ class TestKubeClient:
     async def test_delete_resource_by_link_network_policy(
         self,
         kube_client: KubeClient,
-        create_network_policy: Callable[[str], Awaitable[Dict[str, Any]]],
+        create_network_policy: Callable[[str], Awaitable[dict[str, Any]]],
     ) -> None:
         job_id = f"job-{uuid.uuid4()}"
         payload = await create_network_policy(job_id)
@@ -3059,7 +3050,7 @@ class TestKubeClient:
 @pytest.fixture
 async def mock_kubernetes_server() -> AsyncIterator[ApiConfig]:
     async def _get_pod(request: web.Request) -> web.Response:
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "kind": "Pod",
             "metadata": {
                 "name": "testname",

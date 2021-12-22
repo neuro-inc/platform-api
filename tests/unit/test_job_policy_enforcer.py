@@ -1,19 +1,11 @@
 import asyncio
 import datetime
 import logging
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import replace
 from decimal import Decimal
-from typing import (
-    Any,
-    AsyncContextManager,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Iterable,
-    List,
-    Optional,
-)
+from typing import Any, Optional
 
 import pytest
 from neuro_admin_client import AdminClient, Balance, Quota
@@ -56,7 +48,7 @@ from tests.unit.conftest import (
 
 
 _EnforcePollingRunner = Callable[
-    [JobPolicyEnforcer], AsyncContextManager[JobPolicyEnforcePoller]
+    [JobPolicyEnforcer], AbstractAsyncContextManager[JobPolicyEnforcePoller]
 ]
 
 
@@ -154,7 +146,9 @@ class TestJobPolicyEnforcePoller:
     @pytest.fixture
     async def run_enforce_polling(
         self, job_policy_enforcer_config: JobPolicyEnforcerConfig
-    ) -> Callable[[JobPolicyEnforcer], AsyncContextManager[JobPolicyEnforcePoller]]:
+    ) -> Callable[
+        [JobPolicyEnforcer], AbstractAsyncContextManager[JobPolicyEnforcePoller]
+    ]:
         @asynccontextmanager
         async def _factory(
             enforcer: JobPolicyEnforcer,
@@ -252,10 +246,10 @@ class TestHasCreditsEnforcer:
         self,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
-    ) -> Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]]:
+    ) -> Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]]:
         async def _make_jobs(
             user: AuthUser, org_name: Optional[str], count: int
-        ) -> List[Job]:
+        ) -> list[Job]:
             return [
                 (
                     await jobs_service.create_job(
@@ -298,7 +292,7 @@ class TestHasCreditsEnforcer:
         self,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         user_factory: UserFactory,
         test_cluster: str,
@@ -316,7 +310,7 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         user_factory: UserFactory,
         test_cluster: str,
@@ -337,7 +331,7 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         credits: Decimal,
         mock_admin_client: MockAdminClient,
@@ -359,7 +353,7 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         mock_admin_client: MockAdminClient,
     ) -> None:
@@ -375,7 +369,7 @@ class TestHasCreditsEnforcer:
         self,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         org_factory: OrgFactory,
         user_factory: UserFactory,
@@ -397,7 +391,7 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         org_factory: OrgFactory,
         user_factory: UserFactory,
@@ -424,7 +418,7 @@ class TestHasCreditsEnforcer:
         test_user_with_org: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         credits: Decimal,
         mock_admin_client: MockAdminClient,
@@ -447,7 +441,7 @@ class TestHasCreditsEnforcer:
         test_user_with_org: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[List[Job]]],
+        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         mock_admin_client: MockAdminClient,
     ) -> None:

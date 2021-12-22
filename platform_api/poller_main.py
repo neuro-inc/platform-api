@@ -1,7 +1,8 @@
 import asyncio
 import logging
+from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack
-from typing import AsyncIterator, Callable, List, Optional
+from typing import Optional
 
 import aiohttp.web
 from aiohttp.web_urldispatcher import AbstractRoute
@@ -37,7 +38,7 @@ class Handler:
     def __init__(self, app: aiohttp.web.Application):
         self._app = app
 
-    def register(self, app: aiohttp.web.Application) -> List[AbstractRoute]:
+    def register(self, app: aiohttp.web.Application) -> list[AbstractRoute]:
         return app.add_routes((aiohttp.web.get("/ping", self.handle_ping),))
 
     @notrace
@@ -60,7 +61,7 @@ def create_cluster_factory(
     return _create_cluster
 
 
-def make_tracing_trace_configs(config: PollerConfig) -> List[aiohttp.TraceConfig]:
+def make_tracing_trace_configs(config: PollerConfig) -> list[aiohttp.TraceConfig]:
     trace_configs = []
 
     if config.zipkin:

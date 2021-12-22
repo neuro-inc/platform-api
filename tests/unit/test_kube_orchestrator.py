@@ -1,5 +1,5 @@
 from pathlib import PurePath
-from typing import Any, Dict, List
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -637,10 +637,10 @@ class TestJobStatusItemFactory:
     def test_status(
         self,
         phase: str,
-        container_statuses: List[Dict[str, Any]],
+        container_statuses: list[dict[str, Any]],
         expected_status: JobStatus,
     ) -> None:
-        payload: Dict[str, Any] = {"phase": phase}
+        payload: dict[str, Any] = {"phase": phase}
         if container_statuses:
             payload["containerStatuses"] = container_statuses
         pod_status = PodStatus.from_primitive(payload)
@@ -1035,7 +1035,7 @@ class TestIngress:
 
 class TestService:
     @pytest.fixture
-    def service_payload(self) -> Dict[str, Any]:
+    def service_payload(self) -> dict[str, Any]:
         return {
             "metadata": {"name": "testservice"},
             "spec": {
@@ -1047,8 +1047,8 @@ class TestService:
 
     @pytest.fixture
     def service_payload_with_uid(
-        self, service_payload: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, service_payload: dict[str, Any]
+    ) -> dict[str, Any]:
         return {
             **service_payload,
             "metadata": {
@@ -1057,7 +1057,7 @@ class TestService:
             },
         }
 
-    def test_to_primitive(self, service_payload: Dict[str, Dict[str, Any]]) -> None:
+    def test_to_primitive(self, service_payload: dict[str, dict[str, Any]]) -> None:
         service = Service(
             name="testservice",
             selector=service_payload["spec"]["selector"],
@@ -1066,7 +1066,7 @@ class TestService:
         assert service.to_primitive() == service_payload
 
     def test_to_primitive_with_labels(
-        self, service_payload: Dict[str, Dict[str, Any]]
+        self, service_payload: dict[str, dict[str, Any]]
     ) -> None:
         labels = {"label-name": "label-value"}
         expected_payload = service_payload.copy()
@@ -1080,7 +1080,7 @@ class TestService:
         assert service.to_primitive() == expected_payload
 
     def test_to_primitive_load_balancer(
-        self, service_payload: Dict[str, Dict[str, Any]]
+        self, service_payload: dict[str, dict[str, Any]]
     ) -> None:
         service = Service(
             name="testservice",
@@ -1092,7 +1092,7 @@ class TestService:
         assert service.to_primitive() == service_payload
 
     def test_to_primitive_headless(
-        self, service_payload: Dict[str, Dict[str, Any]]
+        self, service_payload: dict[str, dict[str, Any]]
     ) -> None:
         service = Service(
             name="testservice",
@@ -1104,7 +1104,7 @@ class TestService:
         assert service.to_primitive() == service_payload
 
     def test_from_primitive(
-        self, service_payload_with_uid: Dict[str, Dict[str, Any]]
+        self, service_payload_with_uid: dict[str, dict[str, Any]]
     ) -> None:
         service = Service.from_primitive(service_payload_with_uid)
         assert service == Service(
@@ -1115,7 +1115,7 @@ class TestService:
         )
 
     def test_from_primitive_with_labels(
-        self, service_payload_with_uid: Dict[str, Dict[str, Any]]
+        self, service_payload_with_uid: dict[str, dict[str, Any]]
     ) -> None:
         labels = {"label-name": "label-value"}
         input_payload = service_payload_with_uid.copy()
@@ -1130,7 +1130,7 @@ class TestService:
         )
 
     def test_from_primitive_node_port(
-        self, service_payload_with_uid: Dict[str, Dict[str, Any]]
+        self, service_payload_with_uid: dict[str, dict[str, Any]]
     ) -> None:
         service_payload_with_uid["spec"]["type"] = "NodePort"
         service = Service.from_primitive(service_payload_with_uid)
@@ -1143,7 +1143,7 @@ class TestService:
         )
 
     def test_from_primitive_headless(
-        self, service_payload_with_uid: Dict[str, Dict[str, Any]]
+        self, service_payload_with_uid: dict[str, dict[str, Any]]
     ) -> None:
         service_payload_with_uid["spec"]["clusterIP"] = "None"
         service = Service.from_primitive(service_payload_with_uid)
@@ -1168,7 +1168,7 @@ class TestService:
 
 class TestContainerStatus:
     def test_no_state(self) -> None:
-        payload: Dict[str, Any] = {"state": {}}
+        payload: dict[str, Any] = {"state": {}}
         status = ContainerStatus(payload)
         assert status.is_waiting
         assert status.reason is None

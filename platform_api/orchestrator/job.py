@@ -1,10 +1,11 @@
 import enum
 import logging
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from functools import partial
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence
+from typing import Any, Optional
 
 import iso8601
 from yarl import URL
@@ -100,7 +101,7 @@ class JobStatusItem:
         return cls(status=status, transition_time=transition_time, **kwargs)
 
     @classmethod
-    def from_primitive(cls, payload: Dict[str, Any]) -> "JobStatusItem":
+    def from_primitive(cls, payload: dict[str, Any]) -> "JobStatusItem":
         status = JobStatus(payload["status"])
         transition_time = iso8601.parse_date(payload["transition_time"])
         return cls(
@@ -111,8 +112,8 @@ class JobStatusItem:
             exit_code=payload.get("exit_code"),
         )
 
-    def to_primitive(self) -> Dict[str, Any]:
-        result: Dict[str, Any] = {
+    def to_primitive(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
             "status": str(self.status.value),
             "transition_time": self.transition_time.isoformat(),
             "reason": self.reason,
@@ -124,7 +125,7 @@ class JobStatusItem:
 
 
 class JobStatusHistory:
-    def __init__(self, items: List[JobStatusItem]) -> None:
+    def __init__(self, items: list[JobStatusItem]) -> None:
         assert items, "JobStatusHistory should contain at least one entry"
         self._items = items
 
@@ -430,7 +431,7 @@ class JobRecord:
             )
         )
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         if not self.allow_empty_cluster_name and not self.cluster_name:
             raise RuntimeError(
                 "empty cluster name must be already replaced with `default`"
@@ -481,7 +482,7 @@ class JobRecord:
     @classmethod
     def from_primitive(
         cls,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         orphaned_job_owner: str = DEFAULT_ORPHANED_JOB_OWNER,
     ) -> "JobRecord":
         request = JobRequest.from_primitive(payload["request"])
@@ -522,7 +523,7 @@ class JobRecord:
 
     @staticmethod
     def create_status_history_from_primitive(
-        job_id: str, payload: Dict[str, Any]
+        job_id: str, payload: dict[str, Any]
     ) -> JobStatusHistory:
         if "statuses" in payload:
             # already migrated to history
@@ -878,14 +879,14 @@ class Job:
     def org_name(self) -> Optional[str]:
         return self._record.org_name
 
-    def to_primitive(self) -> Dict[str, Any]:
+    def to_primitive(self) -> dict[str, Any]:
         return self._record.to_primitive()
 
     @classmethod
     def from_primitive(
         cls,
         orchestrator_config: OrchestratorConfig,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
     ) -> "Job":
         record = JobRecord.from_primitive(payload)
         return cls(

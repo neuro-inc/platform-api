@@ -1,6 +1,7 @@
 import asyncio
+from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, AsyncIterator, List
+from typing import Any
 
 import aiodocker
 import aiohttp.web
@@ -17,7 +18,7 @@ from tests.integration.conftest import ApiRunner
 @pytest.fixture(scope="session")
 async def fake_config_app() -> AsyncIterator[URL]:
     app = aiohttp.web.Application()
-    clusters: List[Any] = []
+    clusters: list[Any] = []
 
     async def add_cluster(request: aiohttp.web.Request) -> aiohttp.web.Response:
         payload = await request.json()

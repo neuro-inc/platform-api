@@ -1,7 +1,8 @@
 import asyncio
 import json
 import time
-from typing import Any, AsyncIterator, Callable, Dict, List, NamedTuple, Optional, Set
+from collections.abc import AsyncIterator, Callable
+from typing import Any, NamedTuple, Optional
 
 import aiohttp
 import aiohttp.web
@@ -157,13 +158,13 @@ async def client() -> AsyncIterator[aiohttp.ClientSession]:
 
 class JobsClient:
     def __init__(
-        self, api_config: ApiConfig, client: ClientSession, headers: Dict[str, str]
+        self, api_config: ApiConfig, client: ClientSession, headers: dict[str, str]
     ) -> None:
         self._api_config = api_config
         self._client = client
         self._headers = headers
 
-    async def create_job(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def create_job(self, payload: dict[str, Any]) -> dict[str, Any]:
         url = self._api_config.jobs_base_url
         async with self._client.post(url, headers=self._headers, json=payload) as resp:
             assert resp.status == HTTPAccepted.status_code, await resp.text()
@@ -171,7 +172,7 @@ class JobsClient:
             assert result["status"] == "pending"
             return result
 
-    async def get_all_jobs(self, params: Any = None) -> List[Dict[str, Any]]:
+    async def get_all_jobs(self, params: Any = None) -> list[dict[str, Any]]:
         url = self._api_config.jobs_base_url
         headers = self._headers.copy()
         headers["Accept"] = "application/x-ndjson"
@@ -189,8 +190,8 @@ class JobsClient:
     async def get_job_by_id(
         self,
         job_id: str,
-        headers: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, Any]:
+        headers: Optional[dict[str, str]] = None,
+    ) -> dict[str, Any]:
         url = self._api_config.generate_job_url(job_id)
         async with self._client.get(url, headers=headers or self._headers) as response:
             response_text = await response.text()
@@ -201,7 +202,7 @@ class JobsClient:
     async def get_job_materialized_by_id(
         self,
         job_id: str,
-        headers: Optional[Dict[str, str]] = None,
+        headers: Optional[dict[str, str]] = None,
     ) -> bool:
         url = (
             self._api_config.generate_job_url(job_id)
@@ -219,11 +220,11 @@ class JobsClient:
         interval_s: float = 0.5,
         max_time: float = 300,
         unreachable_optimization: bool = True,
-        headers: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, Any]:
+        headers: Optional[dict[str, str]] = None,
+    ) -> dict[str, Any]:
 
         # A little optimization with unreachable statuses
-        unreachable_statuses_map: Dict[str, List[str]] = {
+        unreachable_statuses_map: dict[str, list[str]] = {
             JobStatus.PENDING.value: [
                 JobStatus.RUNNING.value,
                 JobStatus.SUCCEEDED.value,
@@ -246,7 +247,7 @@ class JobsClient:
                 JobStatus.FAILED.value,
             ],
         }
-        stop_statuses: List[str] = []
+        stop_statuses: list[str] = []
         if unreachable_optimization and status in unreachable_statuses_map:
             stop_statuses = unreachable_statuses_map[status]
 
@@ -265,7 +266,7 @@ class JobsClient:
 
     async def wait_job_creation(
         self, job_id: str, interval_s: float = 0.5, max_time: float = 300
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         t0 = time.monotonic()
         while True:
             response = await self.get_job_by_id(job_id)
@@ -298,7 +299,7 @@ class JobsClient:
         self,
         job_id: str,
         assert_success: bool = True,
-        headers: Optional[Dict[str, str]] = None,
+        headers: Optional[dict[str, str]] = None,
     ) -> None:
         url = self._api_config.generate_job_url(job_id)
         async with self._client.delete(
@@ -313,7 +314,7 @@ class JobsClient:
         self,
         job_id: str,
         assert_success: bool = True,
-        headers: Optional[Dict[str, str]] = None,
+        headers: Optional[dict[str, str]] = None,
     ) -> None:
         url = self._api_config.generate_job_url(job_id) + "/drop"
         async with self._client.post(url, headers=headers or self._headers) as response:
@@ -327,7 +328,7 @@ class JobsClient:
         job_id: str,
         logs_removed: Optional[bool] = None,
         assert_success: bool = True,
-        headers: Optional[Dict[str, str]] = None,
+        headers: Optional[dict[str, str]] = None,
     ) -> None:
         url = self._api_config.generate_job_url(job_id) + "/drop_progress"
         payload = {}
@@ -346,7 +347,7 @@ class JobsClient:
 async def jobs_client_factory(
     api: ApiConfig, client: ClientSession
 ) -> AsyncIterator[Callable[[_User], JobsClient]]:
-    jobs_clients: List[JobsClient] = []
+    jobs_clients: list[JobsClient] = []
 
     def impl(user: _User) -> JobsClient:
         jobs_client = JobsClient(api, client, headers=user.headers)
@@ -355,7 +356,7 @@ async def jobs_client_factory(
 
     yield impl
 
-    deleted: Set[str] = set()
+    deleted: set[str] = set()
     for jobs_client in jobs_clients:
         try:
             jobs = await jobs_client.get_all_jobs()
@@ -406,8 +407,8 @@ async def infinite_job(
 
 
 @pytest.fixture
-def job_request_factory() -> Callable[[], Dict[str, Any]]:
-    def _factory(cluster_name: Optional[str] = None) -> Dict[str, Any]:
+def job_request_factory() -> Callable[[], dict[str, Any]]:
+    def _factory(cluster_name: Optional[str] = None) -> dict[str, Any]:
         # Note: Optional fields (as "name") should not have a value here
         request = {
             "container": {
@@ -427,6 +428,6 @@ def job_request_factory() -> Callable[[], Dict[str, Any]]:
 
 @pytest.fixture
 async def job_submit(
-    job_request_factory: Callable[[], Dict[str, Any]]
-) -> Dict[str, Any]:
+    job_request_factory: Callable[[], dict[str, Any]]
+) -> dict[str, Any]:
     return job_request_factory()

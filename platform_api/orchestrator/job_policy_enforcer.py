@@ -4,20 +4,10 @@ import contextlib
 import logging
 import uuid
 from collections import defaultdict
+from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-    TypeVar,
-)
+from typing import Any, Optional, TypeVar
 
 from aiohttp import ClientResponseError
 from neuro_admin_client import AdminClient, ClusterUser, OrgCluster
@@ -61,7 +51,7 @@ class CreditsNotificationsEnforcer(JobPolicyEnforcer):
         self._admin_client = admin_client
         self._notifications_client = notifications_client
         self._threshold = notification_threshold
-        self._sent: Dict[Tuple[str, str], Optional[Decimal]] = defaultdict(lambda: None)
+        self._sent: dict[tuple[str, str], Optional[Decimal]] = defaultdict(lambda: None)
 
     async def _notify_user_if_needed(
         self,
@@ -89,7 +79,7 @@ class CreditsNotificationsEnforcer(JobPolicyEnforcer):
 
     @trace
     async def enforce(self) -> None:
-        user_to_clusters: Dict[str, Set[Tuple[str, Optional[str]]]] = defaultdict(set)
+        user_to_clusters: dict[str, set[tuple[str, Optional[str]]]] = defaultdict(set)
         job_filter = JobFilter(
             statuses={JobStatus(item) for item in JobStatus.active_values()}
         )
@@ -102,7 +92,7 @@ class CreditsNotificationsEnforcer(JobPolicyEnforcer):
         )
 
     async def _enforce_for_user(
-        self, username: str, clusters_and_orgs: Set[Tuple[str, Optional[str]]]
+        self, username: str, clusters_and_orgs: set[tuple[str, Optional[str]]]
     ) -> None:
         base_name = username.split("/", 1)[0]  # SA inherit balance from main user
         _, cluster_users = await self._admin_client.get_user_with_clusters(base_name)
@@ -161,7 +151,7 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
 
     def _groupby(
         self, it: Iterable[_T], key: Callable[[_T], _K]
-    ) -> Mapping[_K, List[_T]]:
+    ) -> Mapping[_K, list[_T]]:
         res = defaultdict(list)
         for item in it:
             res[key(item)].append(item)
@@ -331,7 +321,7 @@ class RetentionPolicyEnforcer(JobPolicyEnforcer):
 
 class JobPolicyEnforcePoller:
     def __init__(
-        self, config: JobPolicyEnforcerConfig, enforcers: List[JobPolicyEnforcer]
+        self, config: JobPolicyEnforcerConfig, enforcers: list[JobPolicyEnforcer]
     ) -> None:
         self._loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self._enforcers = enforcers

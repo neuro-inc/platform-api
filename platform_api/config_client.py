@@ -1,5 +1,6 @@
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Optional, Sequence
+from typing import Any, Optional
 
 import aiohttp
 from multidict import CIMultiDict

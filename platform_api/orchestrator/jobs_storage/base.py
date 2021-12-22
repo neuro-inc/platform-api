@@ -1,19 +1,10 @@
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator, Iterable, Set
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import (
-    AbstractSet,
-    AsyncContextManager,
-    AsyncIterator,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Set,
-    Type,
-    cast,
-)
+from typing import Optional, cast
 
 from platform_api.orchestrator.job import JobRecord
 from platform_api.orchestrator.job_request import JobStatus
@@ -38,25 +29,23 @@ class JobStorageJobFoundError(JobsStorageException):
         )
 
 
-ClusterOwnerNameSet = Dict[str, Dict[str, AbstractSet[str]]]
+ClusterOwnerNameSet = dict[str, dict[str, Set[str]]]
 
 
 @dataclass(frozen=True)
 class JobFilter:
-    statuses: AbstractSet[JobStatus] = field(
-        default_factory=cast(Type[Set[JobStatus]], set)
-    )
+    statuses: Set[JobStatus] = field(default_factory=cast(type[Set[JobStatus]], set))
     clusters: ClusterOwnerNameSet = field(
-        default_factory=cast(Type[ClusterOwnerNameSet], dict)
+        default_factory=cast(type[ClusterOwnerNameSet], dict)
     )
-    orgs: AbstractSet[Optional[str]] = field(
-        default_factory=cast(Type[Set[Optional[str]]], set)
+    orgs: Set[Optional[str]] = field(
+        default_factory=cast(type[Set[Optional[str]]], set)
     )
-    owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
-    base_owners: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
-    tags: Set[str] = field(default_factory=cast(Type[Set[str]], set))
+    owners: Set[str] = field(default_factory=cast(type[Set[str]], set))
+    base_owners: Set[str] = field(default_factory=cast(type[Set[str]], set))
+    tags: Set[str] = field(default_factory=cast(type[Set[str]], set))
     name: Optional[str] = None
-    ids: AbstractSet[str] = field(default_factory=cast(Type[Set[str]], set))
+    ids: Set[str] = field(default_factory=cast(type[Set[str]], set))
     since: datetime = datetime(1, 1, 1, tzinfo=timezone.utc)
     until: datetime = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc)
     materialized: Optional[bool] = None
@@ -85,7 +74,7 @@ class JobFilter:
             return False
         if self.ids and job.id not in self.ids:
             return False
-        if self.tags and not self.tags.issubset(job.tags):
+        if self.tags and not self.tags <= set(job.tags):
             return False
         created_at = job.status_history.created_at
         if not self.since <= created_at <= self.until:
@@ -103,7 +92,7 @@ class JobFilter:
 
 class JobsStorage(ABC):
     @abstractmethod
-    def try_create_job(self, job: JobRecord) -> AsyncContextManager[JobRecord]:
+    def try_create_job(self, job: JobRecord) -> AbstractAsyncContextManager[JobRecord]:
         pass
 
     @abstractmethod
@@ -119,7 +108,7 @@ class JobsStorage(ABC):
         pass
 
     @abstractmethod
-    def try_update_job(self, job_id: str) -> AsyncContextManager[JobRecord]:
+    def try_update_job(self, job_id: str) -> AbstractAsyncContextManager[JobRecord]:
         pass
 
     @abstractmethod
@@ -129,13 +118,13 @@ class JobsStorage(ABC):
         *,
         reverse: bool = False,
         limit: Optional[int] = None,
-    ) -> AsyncContextManager[AsyncIterator[JobRecord]]:
+    ) -> AbstractAsyncContextManager[AsyncIterator[JobRecord]]:
         pass
 
     @abstractmethod
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
-    ) -> List[JobRecord]:
+    ) -> list[JobRecord]:
         pass
 
     # Only used in tests
@@ -144,17 +133,17 @@ class JobsStorage(ABC):
         job_filter: Optional[JobFilter] = None,
         reverse: bool = False,
         limit: Optional[int] = None,
-    ) -> List[JobRecord]:
+    ) -> list[JobRecord]:
         async with self.iter_all_jobs(job_filter, reverse=reverse, limit=limit) as it:
             return [job async for job in it]
 
     # Only used in tests
-    async def get_running_jobs(self) -> List[JobRecord]:
+    async def get_running_jobs(self) -> list[JobRecord]:
         filt = JobFilter(statuses={JobStatus.RUNNING})
         return await self.get_all_jobs(filt)
 
     # Only used in tests
-    async def get_unfinished_jobs(self) -> List[JobRecord]:
+    async def get_unfinished_jobs(self) -> list[JobRecord]:
         filt = JobFilter(
             statuses={JobStatus.PENDING, JobStatus.RUNNING, JobStatus.SUSPENDED}
         )
@@ -163,11 +152,11 @@ class JobsStorage(ABC):
     @abstractmethod
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
-    ) -> List[JobRecord]:
+    ) -> list[JobRecord]:
         pass
 
     @abstractmethod
     async def get_jobs_for_drop(
         self, *, delay: timedelta = timedelta(), limit: Optional[int] = None
-    ) -> List[JobRecord]:
+    ) -> list[JobRecord]:
         pass

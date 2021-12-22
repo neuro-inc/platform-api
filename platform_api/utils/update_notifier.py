@@ -1,8 +1,8 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from contextlib import asynccontextmanager, suppress
-from typing import Any, AsyncContextManager, Callable, List, Optional
+from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppress
+from typing import Any, Callable, Optional
 
 import asyncpg
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -30,13 +30,13 @@ class Notifier(ABC):
     @abstractmethod
     def listen_to_updates(
         self, listener: Callback
-    ) -> AsyncContextManager[Subscription]:
+    ) -> AbstractAsyncContextManager[Subscription]:
         pass
 
 
 class InMemoryNotifier(Notifier):
     def __init__(self) -> None:
-        self._callbacks: List[Callback] = []
+        self._callbacks: list[Callback] = []
 
     async def notify(self) -> None:
         for callback in self._callbacks:
@@ -124,7 +124,7 @@ class ResubscribingNotifier(Notifier):
         await self._inner_notifier.notify()
 
     class _Subscription(Subscription):
-        _inner_manager: Optional[AsyncContextManager[Subscription]] = None
+        _inner_manager: Optional[AbstractAsyncContextManager[Subscription]] = None
         _subscription: Optional[Subscription] = None
         _task: Optional["asyncio.Task[None]"] = None
 
