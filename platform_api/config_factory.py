@@ -1,8 +1,9 @@
 import os
 import pathlib
+from collections.abc import Sequence
 from decimal import Decimal
 from pathlib import PurePath
-from typing import Dict, List, Optional, Sequence
+from typing import Optional
 
 from alembic.config import Config as AlembicConfig
 from yarl import URL
@@ -29,7 +30,7 @@ from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
 
 
 class EnvironConfigFactory:
-    def __init__(self, environ: Optional[Dict[str, str]] = None):
+    def __init__(self, environ: Optional[dict[str, str]] = None):
         self._environ = environ or os.environ
 
     def _get_bool(self, name: str, default: bool = False) -> bool:
@@ -331,7 +332,7 @@ class EnvironConfigFactory:
         )
 
     def create_storages(self) -> Sequence[StorageConfig]:
-        result: List[StorageConfig] = []
+        result: list[StorageConfig] = []
         i = 0
 
         while True:

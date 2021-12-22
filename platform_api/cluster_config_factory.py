@@ -1,6 +1,7 @@
 import logging
+from collections.abc import Sequence
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Optional
 
 import trafaret as t
 from yarl import URL
@@ -14,12 +15,12 @@ _cluster_config_validator = t.Dict({"name": t.String}).allow_extra("*")
 
 class ClusterConfigFactory:
     def create_cluster_configs(
-        self, payload: Sequence[Dict[str, Any]]
+        self, payload: Sequence[dict[str, Any]]
     ) -> Sequence[ClusterConfig]:
         configs = (self.create_cluster_config(p) for p in payload)
         return [c for c in configs if c]
 
-    def create_cluster_config(self, payload: Dict[str, Any]) -> Optional[ClusterConfig]:
+    def create_cluster_config(self, payload: dict[str, Any]) -> Optional[ClusterConfig]:
         try:
             _cluster_config_validator.check(payload)
             return ClusterConfig(
@@ -31,7 +32,7 @@ class ClusterConfigFactory:
             logging.warning(f"failed to parse cluster config: {err}")
             return None
 
-    def _create_ingress_config(self, payload: Dict[str, Any]) -> IngressConfig:
+    def _create_ingress_config(self, payload: dict[str, Any]) -> IngressConfig:
         return IngressConfig(
             registry_url=URL(payload["registry"]["url"]),
             storage_url=URL(payload["storage"]["url"]),
@@ -43,7 +44,7 @@ class ClusterConfigFactory:
             buckets_url=URL(payload["buckets"]["url"]),
         )
 
-    def _create_presets(self, payload: Dict[str, Any]) -> List[Preset]:
+    def _create_presets(self, payload: dict[str, Any]) -> list[Preset]:
         result = []
         for preset in payload.get("resource_presets", []):
             result.append(
@@ -64,7 +65,7 @@ class ClusterConfigFactory:
         return result
 
     def _create_orchestrator_config(
-        self, payload: Dict[str, Any]
+        self, payload: dict[str, Any]
     ) -> OrchestratorConfig:
         orchestrator = payload["orchestrator"]
         presets = self._create_presets(orchestrator)
@@ -93,7 +94,7 @@ class ClusterConfigFactory:
         )
 
     def _create_tpu_preset(
-        self, payload: Optional[Dict[str, Any]]
+        self, payload: Optional[dict[str, Any]]
     ) -> Optional[TPUPreset]:
         if not payload:
             return None
@@ -102,7 +103,7 @@ class ClusterConfigFactory:
             type=payload["type"], software_version=payload["software_version"]
         )
 
-    def _create_resource_pool_type(self, payload: Dict[str, Any]) -> ResourcePoolType:
+    def _create_resource_pool_type(self, payload: dict[str, Any]) -> ResourcePoolType:
         cpu = payload.get("cpu")
         memory_mb = payload.get("memory_mb")
         return ResourcePoolType(
@@ -121,7 +122,7 @@ class ClusterConfigFactory:
         )
 
     def _create_tpu_resource(
-        self, payload: Optional[Dict[str, Any]]
+        self, payload: Optional[dict[str, Any]]
     ) -> Optional[TPUResource]:
         if not payload:
             return None

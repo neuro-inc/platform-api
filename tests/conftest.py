@@ -1,5 +1,5 @@
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator, Type
 from uuid import uuid1
 
 import pytest
@@ -18,7 +18,7 @@ pytest_plugins = [
 
 
 @contextmanager
-def not_raises(exc_cls: Type[Exception]) -> Iterator[None]:
+def not_raises(exc_cls: type[Exception]) -> Iterator[None]:
     try:
         yield
     except exc_cls as exc:

@@ -1,7 +1,8 @@
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, AsyncIterator, Mapping, Optional
+from typing import Any, Optional
 
 import aiohttp.web
 import pytest

@@ -2,18 +2,9 @@ import asyncio
 import json
 import logging
 from collections import defaultdict
+from collections.abc import AsyncIterator, Sequence, Set
 from dataclasses import dataclass, replace
-from typing import (
-    AbstractSet,
-    Any,
-    AsyncIterator,
-    Dict,
-    List,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-)
+from typing import Any, Optional
 
 import aiohttp.web
 import iso8601
@@ -90,8 +81,8 @@ def create_job_request_validator(
     storage_scheme: str = "storage",
 ) -> t.Trafaret:
     def _check_no_schedule_timeout_for_scheduled_jobs(
-        payload: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        payload: dict[str, Any]
+    ) -> dict[str, Any]:
         if "schedule_timeout" in payload and payload["scheduler_enabled"]:
             raise t.DataError("schedule_timeout is not allowed for scheduled jobs")
         return payload
@@ -109,7 +100,7 @@ def create_job_request_validator(
     ) -> t.Key:
         _empty = object()
 
-        def _take_first(data: Dict[str, Any]) -> Dict[str, Any]:
+        def _take_first(data: dict[str, Any]) -> dict[str, Any]:
             for key in keys:
                 if data[key] is not _empty:
                     return trafaret(data[key])
@@ -166,7 +157,7 @@ def create_job_request_validator(
 
 
 def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
-    def _check_no_resources(payload: Dict[str, Any]) -> Dict[str, Any]:
+    def _check_no_resources(payload: dict[str, Any]) -> dict[str, Any]:
         if "container" in payload:
             resources = payload["container"].get("resources")
         else:
@@ -177,7 +168,7 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
             raise t.DataError("Both preset and resources are not allowed")
         return payload
 
-    def _set_preset_resources(payload: Dict[str, Any]) -> Dict[str, Any]:
+    def _set_preset_resources(payload: dict[str, Any]) -> dict[str, Any]:
         preset_name = payload["preset_name"]
         preset = {p.name: p for p in presets}[preset_name]
         payload["scheduler_enabled"] = preset.scheduler_enabled
@@ -306,7 +297,7 @@ def create_job_set_materialized_validator() -> t.Trafaret:
 
 
 def create_job_update_max_run_time_minutes_validator() -> t.Trafaret:
-    def _check_exactly_one(payload: Dict[str, Any]) -> Dict[str, Any]:
+    def _check_exactly_one(payload: dict[str, Any]) -> dict[str, Any]:
         if not payload or (
             "max_run_time_minutes" in payload
             and "additional_max_run_time_minutes" in payload
@@ -336,8 +327,8 @@ def create_drop_progress_validator() -> t.Trafaret:
     )
 
 
-def convert_job_container_to_json(container: Container) -> Dict[str, Any]:
-    ret: Dict[str, Any] = {
+def convert_job_container_to_json(container: Container) -> dict[str, Any]:
+    ret: dict[str, Any] = {
         "image": container.image,
         "env": container.env,
         "volumes": [],
@@ -347,7 +338,7 @@ def convert_job_container_to_json(container: Container) -> Dict[str, Any]:
     if container.command is not None:
         ret["command"] = container.command
 
-    resources: Dict[str, Any] = {
+    resources: dict[str, Any] = {
         "cpu": container.resources.cpu,
         "memory_mb": container.resources.memory_mb,
     }
@@ -392,7 +383,7 @@ def convert_job_container_to_json(container: Container) -> Dict[str, Any]:
     return ret
 
 
-def convert_container_volume_to_json(volume: ContainerVolume) -> Dict[str, Any]:
+def convert_container_volume_to_json(volume: ContainerVolume) -> dict[str, Any]:
     return {
         "src_storage_uri": str(volume.uri),
         "dst_path": str(volume.dst_path),
@@ -400,14 +391,14 @@ def convert_container_volume_to_json(volume: ContainerVolume) -> Dict[str, Any]:
     }
 
 
-def convert_secret_volume_to_json(volume: SecretContainerVolume) -> Dict[str, Any]:
+def convert_secret_volume_to_json(volume: SecretContainerVolume) -> dict[str, Any]:
     return {
         "src_secret_uri": str(volume.to_uri()),
         "dst_path": str(volume.dst_path),
     }
 
 
-def convert_disk_volume_to_json(volume: DiskContainerVolume) -> Dict[str, Any]:
+def convert_disk_volume_to_json(volume: DiskContainerVolume) -> dict[str, Any]:
     return {
         "src_disk_uri": str(volume.disk.to_uri()),
         "dst_path": str(volume.dst_path),
@@ -415,13 +406,13 @@ def convert_disk_volume_to_json(volume: DiskContainerVolume) -> Dict[str, Any]:
     }
 
 
-def convert_job_to_job_response(job: Job) -> Dict[str, Any]:
+def convert_job_to_job_response(job: Job) -> dict[str, Any]:
     assert (
         job.cluster_name
     ), "empty cluster name must be already replaced with `default`"
     history = job.status_history
     current_status = history.current
-    response_payload: Dict[str, Any] = {
+    response_payload: dict[str, Any] = {
         "id": job.id,
         "owner": job.owner,
         "cluster_name": job.cluster_name,
@@ -491,7 +482,7 @@ def infer_permissions_from_container(
     registry_host: str,
     cluster_name: str,
     org_name: Optional[str],
-) -> List[Permission]:
+) -> list[Permission]:
     permissions = [
         Permission(uri=str(make_job_uri(user, cluster_name, org_name)), action="write")
     ]
@@ -814,7 +805,7 @@ class JobsHandler:
     async def _iter_filtered_jobs(
         self, bulk_job_filter: "BulkJobFilter", reverse: bool, limit: Optional[int]
     ) -> AsyncIterator[Job]:
-        def job_key(job: Job) -> Tuple[float, str, Job]:
+        def job_key(job: Job) -> tuple[float, str, Job]:
             return job.status_history.created_at_timestamp, job.id, job
 
         if bulk_job_filter.shared_ids:
@@ -1055,7 +1046,7 @@ class JobFilterFactory:
 class BulkJobFilter:
     bulk_filter: Optional[JobFilter]
 
-    shared_ids: Set[str]
+    shared_ids: set[str]
     shared_ids_filter: Optional[JobFilter]
 
 
@@ -1068,11 +1059,11 @@ class BulkJobFilterBuilder:
 
         self._has_access_to_all: bool = False
         self._has_clusters_shared_all: bool = False
-        self._clusters_shared_any: Dict[str, Dict[str, Set[str]]] = defaultdict(
+        self._clusters_shared_any: dict[str, dict[str, set[str]]] = defaultdict(
             lambda: defaultdict(set)
         )
-        self._owners_shared_any: Set[str] = set()
-        self._shared_ids: Set[str] = set()
+        self._owners_shared_any: set[str] = set()
+        self._shared_ids: set[str] = set()
 
     def build(self) -> BulkJobFilter:
         self._traverse_access_tree()
@@ -1192,9 +1183,7 @@ class BulkJobFilterBuilder:
             )
         return bulk_filter
 
-    def _optimize_clusters_owners(
-        self, owners: AbstractSet[str], name: Optional[str]
-    ) -> None:
+    def _optimize_clusters_owners(self, owners: Set[str], name: Optional[str]) -> None:
         if owners or name:
             names = {name}
             for cluster_owners in self._clusters_shared_any.values():
@@ -1221,7 +1210,7 @@ def _parse_bool(value: str) -> bool:
 
 
 async def check_any_permissions(
-    request: aiohttp.web.Request, permissions: List[Permission]
+    request: aiohttp.web.Request, permissions: list[Permission]
 ) -> None:
     user_name = await check_authorized(request)
     auth_policy = request.config_dict.get(AUTZ_KEY)
@@ -1241,7 +1230,7 @@ async def check_any_permissions(
         )
 
 
-def _permission_to_primitive(perm: Permission) -> Dict[str, str]:
+def _permission_to_primitive(perm: Permission) -> dict[str, str]:
     return {"uri": perm.uri, "action": perm.action}
 
 

@@ -1,11 +1,12 @@
 import abc
 import logging
 from collections import defaultdict
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import AsyncIterator, Callable, Dict, List, Optional, Tuple, Union
+from typing import Optional, Union
 
 from aiohttp import ClientResponseError
 from neuro_admin_client import AdminClient
@@ -39,8 +40,8 @@ logger = logging.getLogger(__file__)
 
 @dataclass(frozen=True)
 class SchedulingResult:
-    jobs_to_update: List[JobRecord]
-    jobs_to_suspend: List[JobRecord]
+    jobs_to_update: list[JobRecord]
+    jobs_to_suspend: list[JobRecord]
 
 
 current_datetime_factory = partial(datetime.now, timezone.utc)
@@ -93,11 +94,11 @@ class JobsScheduler:
     async def _enforce_running_job_quota(
         self, raw_result: SchedulingResult
     ) -> SchedulingResult:
-        jobs_to_update: List[JobRecord] = []
+        jobs_to_update: list[JobRecord] = []
 
         # Grouping by (username, cluster_name, org_name):
-        grouped_jobs: Dict[
-            Tuple[str, str, Optional[str]], List[JobRecord]
+        grouped_jobs: dict[
+            tuple[str, str, Optional[str]], list[JobRecord]
         ] = defaultdict(list)
         for record in raw_result.jobs_to_update:
             grouped_jobs[(record.owner, record.cluster_name, record.org_name)].append(
@@ -105,8 +106,8 @@ class JobsScheduler:
             )
 
         def _filter_our_for_quota(
-            quota: Optional[int], jobs: List[JobRecord]
-        ) -> List[JobRecord]:
+            quota: Optional[int], jobs: list[JobRecord]
+        ) -> list[JobRecord]:
             if quota is not None:
                 materialized_jobs = [job for job in jobs if job.materialized]
                 not_materialized = [job for job in jobs if not job.materialized]
@@ -127,8 +128,8 @@ class JobsScheduler:
             jobs_to_update.extend(_filter_our_for_quota(quota, jobs))
 
         # Grouping by (cluster_name, org_name):
-        grouped_by_org_jobs: Dict[
-            Tuple[str, Optional[str]], List[JobRecord]
+        grouped_by_org_jobs: dict[
+            tuple[str, Optional[str]], list[JobRecord]
         ] = defaultdict(list)
         for record in jobs_to_update:
             grouped_by_org_jobs[(record.cluster_name, record.org_name)].append(record)
@@ -144,9 +145,9 @@ class JobsScheduler:
             jobs_to_suspend=raw_result.jobs_to_suspend,
         )
 
-    async def schedule(self, unfinished: List[JobRecord]) -> SchedulingResult:
-        jobs_to_update: List[JobRecord] = []
-        jobs_to_suspend: List[JobRecord] = []
+    async def schedule(self, unfinished: list[JobRecord]) -> SchedulingResult:
+        jobs_to_update: list[JobRecord] = []
+        jobs_to_suspend: list[JobRecord] = []
         now = self._current_datetime_factory()
 
         # Always start/update not scheduled jobs
@@ -203,10 +204,10 @@ class JobsScheduler:
 
 
 class JobsPollerApi(abc.ABC):
-    async def get_unfinished_jobs(self) -> List[JobRecord]:
+    async def get_unfinished_jobs(self) -> list[JobRecord]:
         raise NotImplementedError
 
-    async def get_jobs_for_deletion(self, *, delay: timedelta) -> List[JobRecord]:
+    async def get_jobs_for_deletion(self, *, delay: timedelta) -> list[JobRecord]:
         raise NotImplementedError
 
     async def push_status(self, job_id: str, status: JobStatusItem) -> None:

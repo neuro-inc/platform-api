@@ -1,5 +1,5 @@
 import time
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import aiodocker
 import aiodocker.containers

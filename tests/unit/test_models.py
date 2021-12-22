@@ -1,7 +1,8 @@
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import PurePath
-from typing import Any, Dict, Sequence
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -58,7 +59,7 @@ from .conftest import MockOrchestrator
 
 class TestContainerRequestValidator:
     @pytest.fixture
-    def payload(self) -> Dict[str, Any]:
+    def payload(self) -> dict[str, Any]:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16},
@@ -71,7 +72,7 @@ class TestContainerRequestValidator:
         }
 
     @pytest.fixture
-    def payload_with_zero_gpu(self) -> Dict[str, Any]:
+    def payload_with_zero_gpu(self) -> dict[str, Any]:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 0},
@@ -84,7 +85,7 @@ class TestContainerRequestValidator:
         }
 
     @pytest.fixture
-    def payload_with_negative_gpu(self) -> Dict[str, Any]:
+    def payload_with_negative_gpu(self) -> dict[str, Any]:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": -1},
@@ -97,7 +98,7 @@ class TestContainerRequestValidator:
         }
 
     @pytest.fixture
-    def payload_with_one_gpu(self) -> Dict[str, Any]:
+    def payload_with_one_gpu(self) -> dict[str, Any]:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1},
@@ -110,7 +111,7 @@ class TestContainerRequestValidator:
         }
 
     @pytest.fixture
-    def payload_with_too_many_gpu(self) -> Dict[str, Any]:
+    def payload_with_too_many_gpu(self) -> dict[str, Any]:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 130},
@@ -123,7 +124,7 @@ class TestContainerRequestValidator:
         }
 
     @pytest.fixture
-    def payload_with_dev_shm(self) -> Dict[str, Any]:
+    def payload_with_dev_shm(self) -> dict[str, Any]:
         return {
             "image": "testimage",
             "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
@@ -135,7 +136,7 @@ class TestContainerRequestValidator:
             ],
         }
 
-    def test_allowed_volumes(self, payload: Dict[str, Any]) -> None:
+    def test_allowed_volumes(self, payload: dict[str, Any]) -> None:
         validator = create_container_request_validator(
             allow_volumes=True, cluster_name="test-cluster"
         )
@@ -144,7 +145,7 @@ class TestContainerRequestValidator:
         assert "shm" not in result["resources"]
 
     def test_allowed_volumes_with_shm(
-        self, payload_with_dev_shm: Dict[str, Any]
+        self, payload_with_dev_shm: dict[str, Any]
     ) -> None:
         validator = create_container_request_validator(
             allow_volumes=True, cluster_name="test-cluster"
@@ -153,19 +154,19 @@ class TestContainerRequestValidator:
         assert result["volumes"][0]["read_only"]
         assert result["resources"]["shm"]
 
-    def test_disallowed_volumes(self, payload: Dict[str, Any]) -> None:
+    def test_disallowed_volumes(self, payload: dict[str, Any]) -> None:
         validator = create_container_request_validator(cluster_name="test-cluster")
         with pytest.raises(ValueError, match="volumes is not allowed key"):
             validator.check(payload)
 
-    def test_with_zero_gpu(self, payload_with_zero_gpu: Dict[str, Any]) -> None:
+    def test_with_zero_gpu(self, payload_with_zero_gpu: dict[str, Any]) -> None:
         validator = create_container_request_validator(
             allow_volumes=True, cluster_name="test-cluster"
         )
         result = validator.check(payload_with_zero_gpu)
         assert result["resources"]["gpu"] == 0
 
-    def test_with_one_gpu(self, payload_with_one_gpu: Dict[str, Any]) -> None:
+    def test_with_one_gpu(self, payload_with_one_gpu: dict[str, Any]) -> None:
         validator = create_container_request_validator(
             allow_volumes=True, cluster_name="test-cluster"
         )
@@ -173,14 +174,14 @@ class TestContainerRequestValidator:
         assert result["resources"]["gpu"]
         assert result["resources"]["gpu"] == 1
 
-    def test_with_too_many_gpu(self, payload_with_too_many_gpu: Dict[str, Any]) -> None:
+    def test_with_too_many_gpu(self, payload_with_too_many_gpu: dict[str, Any]) -> None:
         validator = create_container_request_validator(
             allow_volumes=True, cluster_name="test-cluster"
         )
         with pytest.raises(ValueError, match="gpu"):
             validator.check(payload_with_too_many_gpu)
 
-    def test_with_negative_gpu(self, payload_with_negative_gpu: Dict[str, Any]) -> None:
+    def test_with_negative_gpu(self, payload_with_negative_gpu: dict[str, Any]) -> None:
         validator = create_container_request_validator(
             allow_volumes=True, cluster_name="test-cluster"
         )
@@ -289,7 +290,7 @@ class TestContainerRequestValidator:
             "software_version": "1.14",
         }
 
-    def test_with_entrypoint_and_cmd(self, payload: Dict[str, Any]) -> None:
+    def test_with_entrypoint_and_cmd(self, payload: dict[str, Any]) -> None:
         payload["entrypoint"] = "/script.sh"
         payload["command"] = "arg1 arg2 arg3"
         validator = create_container_request_validator(
@@ -299,13 +300,13 @@ class TestContainerRequestValidator:
         assert result["entrypoint"] == "/script.sh"
         assert result["command"] == "arg1 arg2 arg3"
 
-    def test_invalid_entrypoint(self, payload: Dict[str, Any]) -> None:
+    def test_invalid_entrypoint(self, payload: dict[str, Any]) -> None:
         payload["entrypoint"] = '"'
         validator = create_container_request_validator(cluster_name="test-cluster")
         with pytest.raises(DataError, match="invalid command format"):
             validator.check(payload)
 
-    def test_invalid_command(self, payload: Dict[str, Any]) -> None:
+    def test_invalid_command(self, payload: dict[str, Any]) -> None:
         payload["command"] = '"'
         validator = create_container_request_validator(cluster_name="test-cluster")
         with pytest.raises(DataError, match="invalid command format"):
@@ -461,7 +462,7 @@ class TestJobPresetValidator:
         }
 
     def test_validator_default_preset(self) -> None:
-        request: Dict[str, Any] = {"container": {}}
+        request: dict[str, Any] = {"container": {}}
         validator = create_job_preset_validator(
             [
                 Preset(
@@ -1048,7 +1049,7 @@ class TestJobFilterFactory:
             factory(MultiDict(query))  # type: ignore
 
 
-def make_access_tree(perm_dict: Dict[str, str]) -> ClientSubTreeViewRoot:
+def make_access_tree(perm_dict: dict[str, str]) -> ClientSubTreeViewRoot:
     tree = ClientSubTreeViewRoot(
         scheme="job",
         path="/",

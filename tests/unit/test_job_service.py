@@ -1,10 +1,11 @@
 import asyncio
 import base64
 import json
+from collections.abc import AsyncIterator, Callable
 from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, AsyncIterator, Callable
+from typing import Any
 from unittest import mock
 
 import pytest

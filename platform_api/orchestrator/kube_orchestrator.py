@@ -3,9 +3,10 @@ import logging
 import operator
 import secrets
 from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from dataclasses import replace
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Any, Optional, Union
 
 import aiohttp
 
@@ -122,7 +123,7 @@ class KubeOrchestrator(Orchestrator):
         registry_config: RegistryConfig,
         orchestrator_config: OrchestratorConfig,
         kube_config: KubeConfig,
-        trace_configs: Optional[List[aiohttp.TraceConfig]] = None,
+        trace_configs: Optional[list[aiohttp.TraceConfig]] = None,
     ) -> None:
         self._loop = asyncio.get_event_loop()
         self._storage_configs = storage_configs
@@ -270,7 +271,7 @@ class KubeOrchestrator(Orchestrator):
 
         name = self._get_job_pod_name(job)
         pod_labels = self._get_job_labels(job)
-        rules: List[Dict[str, Any]] = [
+        rules: list[dict[str, Any]] = [
             # allowing the pod to connect to TPU nodes within internal network
             {"to": [{"ipBlock": {"cidr": tpu_ipv4_cidr_block}}]}
         ]
@@ -361,8 +362,8 @@ class KubeOrchestrator(Orchestrator):
         # because during job lifetime node pools, presets can change and
         # node affinity assigned to the job won't be valid anymore.
         container_resources = job.request.container.resources
-        TKey = Tuple[int, float, int]
-        pool_types: Dict[TKey, List[ResourcePoolType]] = defaultdict(list)
+        TKey = tuple[int, float, int]
+        pool_types: dict[TKey, list[ResourcePoolType]] = defaultdict(list)
 
         for pool_type in self._orchestrator_config.resource_pool_types:
             # Schedule jobs only on preemptible nodes if such node specified
@@ -418,23 +419,23 @@ class KubeOrchestrator(Orchestrator):
         new_resources = replace(pod.resources, memory_request=1024)
         return replace(pod, resources=new_resources)
 
-    def _get_user_pod_labels(self, job: Job) -> Dict[str, str]:
+    def _get_user_pod_labels(self, job: Job) -> dict[str, str]:
         return {"platform.neuromation.io/user": job.owner.replace("/", "--")}
 
-    def _get_job_labels(self, job: Job) -> Dict[str, str]:
+    def _get_job_labels(self, job: Job) -> dict[str, str]:
         return {"platform.neuromation.io/job": job.id}
 
-    def _get_preset_labels(self, job: Job) -> Dict[str, str]:
+    def _get_preset_labels(self, job: Job) -> dict[str, str]:
         if job.preset_name:
             return {"platform.neuromation.io/preset": job.preset_name}
         return {}
 
-    def _get_gpu_labels(self, job: Job) -> Dict[str, str]:
+    def _get_gpu_labels(self, job: Job) -> dict[str, str]:
         if not job.has_gpu or not job.gpu_model_id:
             return {}
         return {"platform.neuromation.io/gpu-model": job.gpu_model_id}
 
-    def _get_pod_labels(self, job: Job) -> Dict[str, str]:
+    def _get_pod_labels(self, job: Job) -> dict[str, str]:
         labels = self._get_job_labels(job)
         labels.update(self._get_user_pod_labels(job))
         labels.update(self._get_gpu_labels(job))
@@ -444,7 +445,7 @@ class KubeOrchestrator(Orchestrator):
     def _get_pod_restart_policy(self, job: Job) -> PodRestartPolicy:
         return self._restart_policy_map[job.restart_policy]
 
-    async def get_missing_disks(self, disks: List[Disk]) -> List[Disk]:
+    async def get_missing_disks(self, disks: list[Disk]) -> list[Disk]:
         assert disks, "no disks"
         missing = []
         for disk in disks:
@@ -467,8 +468,8 @@ class KubeOrchestrator(Orchestrator):
         return sorted(missing, key=lambda disk: disk.disk_id)
 
     async def get_missing_secrets(
-        self, secret_path: str, secret_names: List[str]
-    ) -> List[str]:
+        self, secret_path: str, secret_names: list[str]
+    ) -> list[str]:
         assert secret_names, "no sec names"
         user_secret_name = self._get_k8s_secret_name(secret_path)
         try:
@@ -524,7 +525,7 @@ class KubeOrchestrator(Orchestrator):
 
     def _get_pod_tolerations(
         self, job: Job, tolerate_unreachable_node: bool = False
-    ) -> List[Toleration]:
+    ) -> list[Toleration]:
         tolerations = [
             Toleration(
                 key=self._kube_config.jobs_pod_job_toleration_key,
@@ -563,8 +564,8 @@ class KubeOrchestrator(Orchestrator):
         # `NodeSelectorTerm`s is satisfied.
         # `NodeSelectorTerm` is satisfied only if its `match_expressions` are
         # satisfied.
-        required_terms: List[NodeSelectorTerm] = []
-        preferred_terms: List[NodePreferredSchedulingTerm] = []
+        required_terms: list[NodeSelectorTerm] = []
+        preferred_terms: list[NodePreferredSchedulingTerm] = []
 
         if self._kube_config.node_label_node_pool:
             for pool_type in pool_types:
@@ -733,7 +734,7 @@ class KubeOrchestrator(Orchestrator):
             service = service.make_named(name)
         return await self._client.create_service(service)
 
-    async def _get_services(self, job: Job) -> List[Service]:
+    async def _get_services(self, job: Job) -> list[Service]:
         return await self._client.list_services(self._get_job_labels(job))
 
     async def _delete_service(
@@ -766,8 +767,8 @@ class KubeOrchestrator(Orchestrator):
     def _get_job_ingress_name(self, job: Job) -> str:
         return job.id
 
-    def _get_ingress_annotations(self, job: Job) -> Dict[str, str]:
-        annotations: Dict[str, str] = {}
+    def _get_ingress_annotations(self, job: Job) -> dict[str, str]:
+        annotations: dict[str, str] = {}
         if self._kube_config.jobs_ingress_class == "traefik":
             annotations = {
                 "kubernetes.io/ingress.class": "traefik",
@@ -793,13 +794,13 @@ class KubeOrchestrator(Orchestrator):
 
     def _get_job_name_ingress_labels(
         self, job: Job, service: Service
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         labels = self._get_user_pod_labels(job)
         if job.name:
             labels["platform.neuromation.io/job-name"] = job.name
         return labels
 
-    def _get_ingress_labels(self, job: Job, service: Service) -> Dict[str, str]:
+    def _get_ingress_labels(self, job: Job, service: Service) -> dict[str, str]:
         return {**service.labels, **self._get_job_name_ingress_labels(job, service)}
 
     async def _delete_ingresses_by_job_name(self, job: Job, service: Service) -> None:

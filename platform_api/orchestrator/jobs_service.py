@@ -2,11 +2,12 @@ import base64
 import json
 import logging
 from collections import defaultdict
+from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import AsyncIterator, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Optional, Union
 
 from aiohttp import ClientResponseError
 from neuro_admin_client import AdminClient, ClusterUser, OrgCluster
@@ -82,7 +83,7 @@ class NoCreditsError(JobsServiceException):
 class UserClusterConfig:
     config: ClusterConfig
     # None value means the direct access to cluster without any or:
-    orgs: List[Optional[str]]
+    orgs: list[Optional[str]]
 
 
 class JobsService:
@@ -231,7 +232,7 @@ class JobsService:
         schedule_timeout: Optional[float] = None,
         max_run_time_minutes: Optional[int] = None,
         restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
-    ) -> Tuple[Job, Status]:
+    ) -> tuple[Job, Status]:
         base_name = user.name.split("/", 1)[
             0
         ]  # SA has access to same clusters as a user
@@ -421,7 +422,7 @@ class JobsService:
 
     async def get_all_jobs(
         self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
-    ) -> List[Job]:
+    ) -> list[Job]:
         async with self.iter_all_jobs(job_filter, reverse=reverse) as it:
             return [job async for job in it]
 
@@ -436,13 +437,13 @@ class JobsService:
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
-    ) -> List[Job]:
+    ) -> list[Job]:
         records = await self._jobs_storage.get_jobs_by_ids(
             job_ids, job_filter=job_filter
         )
         return [await self._get_cluster_job(record) for record in records]
 
-    async def get_user_cluster_configs(self, user: AuthUser) -> List[UserClusterConfig]:
+    async def get_user_cluster_configs(self, user: AuthUser) -> list[UserClusterConfig]:
         configs = []
         base_name = user.name.split("/", 1)[0]  # SA has access to same clusters as user
         cluster_to_orgs = defaultdict(list)
@@ -539,7 +540,7 @@ class JobsService:
 
     async def get_job_ids_for_drop(
         self, *, delay: timedelta, limit: Optional[int] = None
-    ) -> List[str]:
+    ) -> list[str]:
         return [
             record.id
             for record in await self._jobs_storage.get_jobs_for_drop(

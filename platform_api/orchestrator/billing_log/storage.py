@@ -1,19 +1,12 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Sequence
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
-from typing import (
-    Any,
-    AsyncContextManager,
-    AsyncIterator,
-    Dict,
-    List,
-    Optional,
-    Sequence,
-)
+from typing import Any, Optional
 
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
@@ -71,13 +64,13 @@ class BillingLogStorage(ABC):
     @abstractmethod
     def entries_inserter(
         self,
-    ) -> AsyncContextManager["BillingLogStorage.EntriesInserter"]:
+    ) -> AbstractAsyncContextManager["BillingLogStorage.EntriesInserter"]:
         pass
 
     @abstractmethod
     def iter_entries(
         self, *, with_ids_greater: int = 0, limit: Optional[int] = None
-    ) -> AsyncContextManager[AsyncIterator[BillingLogEntry]]:
+    ) -> AbstractAsyncContextManager[AsyncIterator[BillingLogEntry]]:
         pass
 
     @abstractmethod
@@ -91,7 +84,7 @@ class BillingLogStorage(ABC):
 
 class InMemoryBillingLogStorage(BillingLogStorage):
     def __init__(self) -> None:
-        self._entries: List[BillingLogEntry] = []
+        self._entries: list[BillingLogEntry] = []
         self._sync_record: Optional[BillingLogSyncRecord] = None
         self._inserter_lock = asyncio.Lock()
         self._dropped_cnt: int = 0
@@ -189,7 +182,7 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
 
     # Parsing/serialization
 
-    def _log_entry_to_values(self, entry: BillingLogEntry) -> Dict[str, Any]:
+    def _log_entry_to_values(self, entry: BillingLogEntry) -> dict[str, Any]:
         return {
             "job_id": entry.job_id,
             "payload": {
@@ -213,13 +206,13 @@ class PostgresBillingLogStorage(BasePostgresStorage, BillingLogStorage):
 
     def _sync_record_to_values(
         self, sync_record: BillingLogSyncRecord
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return {
             "type": self.BILLING_SYNC_RECORD_TYPE,
             "last_entry_id": sync_record.last_entry_id,
         }
 
-    def _record_to_sync_record(self, record: Dict[str, Any]) -> BillingLogSyncRecord:
+    def _record_to_sync_record(self, record: dict[str, Any]) -> BillingLogSyncRecord:
         assert record["type"] == self.BILLING_SYNC_RECORD_TYPE
         return BillingLogSyncRecord(last_entry_id=record["last_entry_id"])
 

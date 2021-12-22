@@ -1,7 +1,8 @@
 import json
+from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from typing import AsyncIterator, Dict, Iterable, List, Optional, Tuple
+from typing import Optional
 
 from platform_api.orchestrator.job import JobRecord
 from platform_api.orchestrator.job_request import JobError
@@ -13,11 +14,11 @@ from .base import JobFilter, JobsStorage, JobStorageJobFoundError
 class InMemoryJobsStorage(JobsStorage):
     def __init__(self) -> None:
         # job_id to job mapping:
-        self._job_records: Dict[str, str] = {}
+        self._job_records: dict[str, str] = {}
         # job_name+owner to job_id mapping:
-        self._last_alive_job_records: Dict[Tuple[str, str], str] = {}
+        self._last_alive_job_records: dict[tuple[str, str], str] = {}
         # owner to job tags mapping:
-        self._owner_to_tags: Dict[str, List[str]] = {}
+        self._owner_to_tags: dict[str, list[str]] = {}
 
     @asynccontextmanager
     async def try_create_job(self, job: JobRecord) -> AsyncIterator[JobRecord]:
@@ -91,7 +92,7 @@ class InMemoryJobsStorage(JobsStorage):
 
     async def get_jobs_by_ids(
         self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
-    ) -> List[JobRecord]:
+    ) -> list[JobRecord]:
         jobs = []
         for job_id in job_ids:
             try:
@@ -105,7 +106,7 @@ class InMemoryJobsStorage(JobsStorage):
 
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
-    ) -> List[JobRecord]:
+    ) -> list[JobRecord]:
         async with self.iter_all_jobs() as it:
             return [job async for job in it if job.should_be_deleted(delay=delay)]
 
@@ -114,7 +115,7 @@ class InMemoryJobsStorage(JobsStorage):
         *,
         delay: timedelta = timedelta(),
         limit: Optional[int] = None,
-    ) -> List[JobRecord]:
+    ) -> list[JobRecord]:
         now = datetime.now(timezone.utc)
         jobs = []
         async with self.iter_all_jobs() as it:

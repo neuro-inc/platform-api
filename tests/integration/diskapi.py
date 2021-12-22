@@ -1,8 +1,9 @@
 import asyncio
 import subprocess
 import sys
-from contextlib import asynccontextmanager
-from typing import Any, AsyncContextManager, AsyncIterator, Callable, Dict, Optional
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import Any, Optional
 
 import aiodocker
 import aiodocker.containers
@@ -141,7 +142,7 @@ class DiskAPIClient:
     def __init__(self, cluster_name: str, url: URL, auth_token: str):
         self._cluster_name = cluster_name
         self._base_url = url / "api/v1"
-        headers: Dict[str, str] = {}
+        headers: dict[str, str] = {}
         if auth_token:
             headers["Authorization"] = f"Bearer {auth_token}"
         self._client = aiohttp.ClientSession(headers=headers)
@@ -188,8 +189,8 @@ async def create_disk_api_client(
 @pytest.fixture
 async def disk_client_factory(
     disk_server_url: URL,
-) -> Callable[[_User], AsyncContextManager[DiskAPIClient]]:
-    def _f(user: _User) -> AsyncContextManager[DiskAPIClient]:
+) -> Callable[[_User], AbstractAsyncContextManager[DiskAPIClient]]:
+    def _f(user: _User) -> AbstractAsyncContextManager[DiskAPIClient]:
         return create_disk_api_client(user.cluster_name, disk_server_url, user.token)
 
     return _f

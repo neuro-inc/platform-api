@@ -2,19 +2,10 @@ import asyncio
 import json
 import re
 from collections import defaultdict
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from contextlib import AbstractAsyncContextManager
 from decimal import Decimal
-from typing import (
-    Any,
-    AsyncContextManager,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Tuple,
-)
+from typing import Any, Optional
 from unittest import mock
 
 import aiohttp.web
@@ -53,7 +44,7 @@ def cluster_name() -> str:
 
 
 @pytest.fixture
-def cluster_configs_payload() -> List[Dict[str, Any]]:
+def cluster_configs_payload() -> list[dict[str, Any]]:
     return [
         {
             "name": "cluster_name",
@@ -180,14 +171,14 @@ class TestApi:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        cluster_configs_payload: List[Dict[str, Any]],
+        cluster_configs_payload: list[dict[str, Any]],
         cluster_user: _User,
     ) -> None:
         cluster_registry: ClusterConfigRegistry = api.runner._app["config_app"][
             "jobs_service"
         ]._cluster_registry
 
-        async def assert_cluster_names(names: List[str]) -> None:
+        async def assert_cluster_names(names: list[str]) -> None:
             async def _loop() -> None:
                 while names != cluster_registry.cluster_names:
                     await asyncio.sleep(0.1)
@@ -339,7 +330,7 @@ class TestApi:
                     },
                 ],
             }
-            expected_payload: Dict[str, Any] = {
+            expected_payload: dict[str, Any] = {
                 "admin_url": f"{admin_url}",
                 "clusters": [
                     expected_cluster_payload,
@@ -460,7 +451,7 @@ class TestApi:
                     },
                 ],
             }
-            expected_payload: Dict[str, Any] = {
+            expected_payload: dict[str, Any] = {
                 "admin_url": f"{admin_url}",
                 "clusters": [
                     expected_cluster_payload,
@@ -573,7 +564,7 @@ class TestApi:
                     },
                 ],
             }
-            expected_payload: Dict[str, Any] = {
+            expected_payload: dict[str, Any] = {
                 "auth_url": "https://platform-auth0-url/auth",
                 "token_url": "https://platform-auth0-url/token",
                 "logout_url": "https://platform-auth0-url/logout",
@@ -599,7 +590,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -627,7 +618,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -649,7 +640,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         regular_user: _User,
         service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
@@ -683,7 +674,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         service_account_factory: ServiceAccountFactory,
         regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
@@ -714,7 +705,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -738,7 +729,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -760,7 +751,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -784,7 +775,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -813,11 +804,11 @@ class TestJobs:
         self, api: ApiConfig, client: aiohttp.ClientSession, jobs_client: JobsClient
     ) -> Callable[..., Awaitable[None]]:
         async def _run(
-            job_submit: Dict[str, Any],
+            job_submit: dict[str, Any],
             user: _User,
             *,
-            secret_env: Optional[Dict[str, str]] = None,
-            secret_volumes: Optional[Dict[str, str]] = None,
+            secret_env: Optional[dict[str, str]] = None,
+            secret_volumes: Optional[dict[str, str]] = None,
         ) -> None:
             job_id = ""
             try:
@@ -854,7 +845,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
@@ -879,7 +870,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
@@ -924,10 +915,12 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: UserFactory,
-        secrets_client_factory: Callable[[_User], AsyncContextManager[SecretsClient]],
+        secrets_client_factory: Callable[
+            [_User], AbstractAsyncContextManager[SecretsClient]
+        ],
     ) -> None:
         org_user = await regular_user_factory(
             clusters=[
@@ -978,10 +971,12 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: UserFactory,
-        secrets_client_factory: Callable[[_User], AsyncContextManager[SecretsClient]],
+        secrets_client_factory: Callable[
+            [_User], AbstractAsyncContextManager[SecretsClient]
+        ],
         _run_job_with_secrets: Callable[..., Awaitable[None]],
     ) -> None:
         org_user = await regular_user_factory(
@@ -1011,7 +1006,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         regular_user: _User,
         service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
@@ -1066,7 +1061,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         regular_user: _User,
         service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
@@ -1098,7 +1093,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_disk_api_client: DiskAPIClient,
@@ -1148,10 +1143,12 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: UserFactory,
-        disk_client_factory: Callable[[_User], AsyncContextManager[DiskAPIClient]],
+        disk_client_factory: Callable[
+            [_User], AbstractAsyncContextManager[DiskAPIClient]
+        ],
     ) -> None:
         org_user = await regular_user_factory(
             clusters=[
@@ -1206,7 +1203,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         regular_user: _User,
         service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
@@ -1262,7 +1259,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_disk_api_client: DiskAPIClient,
@@ -1318,7 +1315,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_disk_api_client: DiskAPIClient,
@@ -1378,7 +1375,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_disk_api_client: DiskAPIClient,
@@ -1439,7 +1436,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_disk_api_client: DiskAPIClient,
@@ -1509,7 +1506,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -1541,10 +1538,10 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         test_cluster_name: str,
         regular_user_factory: UserFactory,
-        disk_client_factory: Callable[..., AsyncContextManager[DiskAPIClient]],
+        disk_client_factory: Callable[..., AbstractAsyncContextManager[DiskAPIClient]],
         read_only: bool,
     ) -> None:
         cluster = test_cluster_name
@@ -1578,7 +1575,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -1605,7 +1602,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -1635,7 +1632,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -1658,7 +1655,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -1681,7 +1678,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -1708,7 +1705,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
@@ -1749,7 +1746,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
@@ -1820,7 +1817,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
@@ -1878,7 +1875,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
@@ -1924,7 +1921,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
@@ -1970,7 +1967,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
@@ -2016,7 +2013,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
@@ -2058,7 +2055,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         secret_kind: str,
@@ -2101,7 +2098,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
@@ -2152,7 +2149,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
@@ -2198,10 +2195,12 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         test_cluster_name: str,
         regular_user_factory: UserFactory,
-        secrets_client_factory: Callable[..., AsyncContextManager[SecretsClient]],
+        secrets_client_factory: Callable[
+            ..., AbstractAsyncContextManager[SecretsClient]
+        ],
         secret_kind: str,
     ) -> None:
         cluster = test_cluster_name
@@ -2244,11 +2243,13 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         test_cluster_name: str,
         regular_user_factory: UserFactory,
-        secrets_client_factory: Callable[..., AsyncContextManager[SecretsClient]],
+        secrets_client_factory: Callable[
+            ..., AbstractAsyncContextManager[SecretsClient]
+        ],
         secret_kind: str,
         share_secret: Callable[..., Awaitable[None]],
         _run_job_with_secrets: Callable[..., Awaitable[None]],
@@ -2326,7 +2327,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         secret_kind: str,
@@ -2365,7 +2366,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
         secret_kind: str,
@@ -2403,7 +2404,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -2426,7 +2427,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -2449,7 +2450,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -2476,7 +2477,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -2494,7 +2495,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -2523,7 +2524,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -2548,7 +2549,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -2574,7 +2575,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -2599,7 +2600,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -2765,7 +2766,7 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_job_unauthorized_no_token(
-        self, api: ApiConfig, client: aiohttp.ClientSession, job_submit: Dict[str, Any]
+        self, api: ApiConfig, client: aiohttp.ClientSession, job_submit: dict[str, Any]
     ) -> None:
         url = api.jobs_base_url
         async with client.post(url, json=job_submit) as response:
@@ -2773,7 +2774,7 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_create_job_unauthorized_invalid_token(
-        self, api: ApiConfig, client: aiohttp.ClientSession, job_submit: Dict[str, Any]
+        self, api: ApiConfig, client: aiohttp.ClientSession, job_submit: dict[str, Any]
     ) -> None:
         url = api.jobs_base_url
         headers = {"Authorization": "Bearer INVALID"}
@@ -2785,7 +2786,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -2804,7 +2805,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user_with_missing_cluster_name: _User,
     ) -> None:
@@ -2823,7 +2824,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -2847,7 +2848,7 @@ class TestJobs:
         api: ApiConfig,
         auth_api: AuthApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         admin_token: str,
         regular_user_with_missing_cluster_name: _User,
@@ -2865,7 +2866,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -2915,7 +2916,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -2950,7 +2951,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -2971,7 +2972,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         regular_user: _User,
         jobs_client: JobsClient,
     ) -> None:
@@ -3006,7 +3007,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         regular_user: _User,
         jobs_client: JobsClient,
     ) -> None:
@@ -3035,7 +3036,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
         regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         test_cluster_name: str,
@@ -3062,7 +3063,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
         regular_user_factory: UserFactory,
         credits: Decimal,
         cluster_name: str,
@@ -3082,7 +3083,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         regular_user: _User,
         jobs_client: JobsClient,
     ) -> None:
@@ -3148,7 +3149,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
     ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
@@ -3184,7 +3185,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
     ) -> None:
         headers = regular_user.headers
         url = api.jobs_base_url
@@ -3204,7 +3205,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
     ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
@@ -3234,7 +3235,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
     ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
@@ -3295,7 +3296,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
     ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
@@ -3359,7 +3360,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         jobs_client: JobsClient,
         regular_user: _User,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
     ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
@@ -3408,7 +3409,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         jobs_client_factory: Callable[[_User], JobsClient],
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
         regular_user_factory: UserFactory,
     ) -> None:
         url = api.jobs_base_url
@@ -3462,12 +3463,12 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         jobs_client_factory: Callable[[_User], JobsClient],
-    ) -> AsyncIterator[Callable[[_User, Dict[str, Any], bool, bool], Awaitable[str]]]:
+    ) -> AsyncIterator[Callable[[_User, dict[str, Any], bool, bool], Awaitable[str]]]:
         cleanup_pairs = []
 
         async def _impl(
             user: _User,
-            job_request: Dict[str, Any],
+            job_request: dict[str, Any],
             do_kill: bool = False,
             do_wait: bool = True,
         ) -> str:
@@ -3529,9 +3530,9 @@ class TestJobs:
 
     @pytest.fixture
     def create_job_request_with_name(
-        self, job_request_factory: Callable[[], Dict[str, Any]]
-    ) -> Iterator[Callable[[str], Dict[str, Any]]]:
-        def _impl(job_name: str) -> Dict[str, Any]:
+        self, job_request_factory: Callable[[], dict[str, Any]]
+    ) -> Iterator[Callable[[str], dict[str, Any]]]:
+        def _impl(job_name: str) -> dict[str, Any]:
             job_request = job_request_factory()
             job_request["container"]["command"] = "sleep 30m"
             job_request["name"] = job_name
@@ -3541,9 +3542,9 @@ class TestJobs:
 
     @pytest.fixture
     def create_job_request_no_name(
-        self, job_request_factory: Callable[[], Dict[str, Any]]
-    ) -> Iterator[Callable[[], Dict[str, Any]]]:
-        def _impl() -> Dict[str, Any]:
+        self, job_request_factory: Callable[[], dict[str, Any]]
+    ) -> Iterator[Callable[[], dict[str, Any]]]:
+        def _impl() -> dict[str, Any]:
             job_request = job_request_factory()
             job_request["container"]["command"] = "sleep 30m"
             return job_request
@@ -3557,10 +3558,10 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
         run_job: Callable[..., Awaitable[str]],
-        create_job_request_no_name: Callable[[], Dict[str, Any]],
-        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+        create_job_request_no_name: Callable[[], dict[str, Any]],
+        create_job_request_with_name: Callable[[str], dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
         job_req_no_name = create_job_request_no_name()
@@ -3632,11 +3633,11 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
-        create_job_request_no_name: Callable[[], Dict[str, Any]],
-        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+        create_job_request_no_name: Callable[[], dict[str, Any]],
+        create_job_request_with_name: Callable[[str], dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
         job_req_no_name = create_job_request_no_name()
@@ -3715,11 +3716,11 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
-        create_job_request_no_name: Callable[[], Dict[str, Any]],
-        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+        create_job_request_no_name: Callable[[], dict[str, Any]],
+        create_job_request_with_name: Callable[[str], dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
         job_req_no_name = create_job_request_no_name()
@@ -3797,11 +3798,11 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
-        create_job_request_no_name: Callable[[], Dict[str, Any]],
-        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+        create_job_request_no_name: Callable[[], dict[str, Any]],
+        create_job_request_with_name: Callable[[str], dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
         job_req_no_name = create_job_request_no_name()
@@ -3979,7 +3980,7 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
         regular_user_factory: UserFactory,
         auth_client: AuthClient,
         cluster_name: str,
@@ -4033,7 +4034,7 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], Dict[str, Any]],
+        job_request_factory: Callable[[], dict[str, Any]],
         regular_user_factory: UserFactory,
         auth_client: AuthClient,
         cluster_name: str,
@@ -4083,7 +4084,7 @@ class TestJobs:
         jobs_client: JobsClient,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         regular_user: _User,
     ) -> None:
         jobs_ids = []
@@ -4132,9 +4133,9 @@ class TestJobs:
         jobs_client: JobsClient,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         regular_user: _User,
-        filters: Dict[str, Any],
+        filters: dict[str, Any],
     ) -> None:
         # unique job name generated per test-run is stored in "filters"
         job_submit["name"] = filters.get("name")
@@ -4175,7 +4176,7 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
-        create_job_request_no_name: Callable[[], Dict[str, Any]],
+        create_job_request_no_name: Callable[[], dict[str, Any]],
     ) -> None:
         job_req_no_name = create_job_request_no_name()
         usr1 = await regular_user_factory()
@@ -4234,7 +4235,7 @@ class TestJobs:
         regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         run_job: Callable[..., Awaitable[str]],
-        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+        create_job_request_with_name: Callable[[str], dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
         job_name2 = "test-job-name2"
@@ -4287,7 +4288,7 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
-        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+        create_job_request_with_name: Callable[[str], dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
         job_name2 = "test-job-name2"
@@ -4325,7 +4326,7 @@ class TestJobs:
         regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         run_job: Callable[..., Awaitable[str]],
-        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+        create_job_request_with_name: Callable[[str], dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
         job_name2 = "test-job-name2"
@@ -4365,7 +4366,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user_factory: UserFactory,
         run_job: Callable[..., Awaitable[str]],
-        create_job_request_with_name: Callable[[str], Dict[str, Any]],
+        create_job_request_with_name: Callable[[str], dict[str, Any]],
     ) -> None:
         url = api.jobs_base_url
         job_name = "test-job-name"
@@ -4397,7 +4398,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         run_job: Callable[..., Awaitable[str]],
         regular_user: _User,
@@ -4432,7 +4433,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         run_job: Callable[..., Awaitable[str]],
         regular_user: _User,
@@ -4472,7 +4473,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         run_job: Callable[..., Awaitable[str]],
         regular_user: _User,
         compute_user: _User,
@@ -4490,7 +4491,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         run_job: Callable[..., Awaitable[str]],
         regular_user: _User,
@@ -4510,7 +4511,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         run_job: Callable[..., Awaitable[str]],
         regular_user: _User,
         cluster_name: str,
@@ -4532,7 +4533,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         run_job: Callable[..., Awaitable[str]],
         regular_user: _User,
@@ -4565,7 +4566,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         run_job: Callable[..., Awaitable[str]],
         regular_user: _User,
@@ -4591,7 +4592,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -4616,7 +4617,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user_factory: UserFactory,
         regular_user: _User,
@@ -4649,7 +4650,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -4683,7 +4684,7 @@ class TestJobs:
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
     ) -> None:
@@ -4711,7 +4712,7 @@ class TestJobs:
     async def test_create_validation_failure(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
-        request_payload: Dict[str, Any] = {}
+        request_payload: dict[str, Any] = {}
         async with client.post(
             api.jobs_base_url, headers=regular_user.headers, json=request_payload
         ) as response:
@@ -4722,7 +4723,7 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_resolve_job_by_name(
-        self, job_submit: Dict[str, Any], jobs_client: JobsClient
+        self, job_submit: dict[str, Any], jobs_client: JobsClient
     ) -> None:
         job_name = f"test-job-name-{random_str()}"
         job_submit["name"] = job_name
@@ -4745,8 +4746,8 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[[_User, _User, Any], Awaitable[None]],
-        create_job_request_with_name: Callable[[str], Dict[str, Any]],
-        create_job_request_no_name: Callable[[], Dict[str, Any]],
+        create_job_request_with_name: Callable[[str], dict[str, Any]],
+        create_job_request_no_name: Callable[[], dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
         job_name2 = "test-job-name2"
@@ -4782,8 +4783,8 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         run_job: Callable[..., Awaitable[str]],
         share_job: Callable[..., Awaitable[None]],
-        create_job_request_with_name: Callable[[str], Dict[str, Any]],
-        create_job_request_no_name: Callable[[], Dict[str, Any]],
+        create_job_request_with_name: Callable[[str], dict[str, Any]],
+        create_job_request_no_name: Callable[[], dict[str, Any]],
     ) -> None:
         job_name = "test-job-name"
         job_name2 = "test-job-name2"
@@ -5265,7 +5266,7 @@ class TestRuntimeLimitEnforcer:
         auth_api: AuthApiConfig,
         config: Config,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         regular_user: _User,
     ) -> None:
@@ -5326,7 +5327,7 @@ class TestBillingEnforcer:
         config: Config,
         cluster_config: ClusterConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: Callable[[], Awaitable[_User]],
         admin_client: AdminClient,
@@ -5334,7 +5335,7 @@ class TestBillingEnforcer:
     ) -> None:
         durations = [30, 25, 20, 15, 10, 5]
 
-        test_jobs: List[Tuple[Dict[str, Any], _User, JobsClient, int]] = []
+        test_jobs: list[tuple[dict[str, Any], _User, JobsClient, int]] = []
         for duration in durations:
             job_submit["container"]["command"] = f"sleep {duration}s"
             user = await regular_user_factory()
@@ -5357,7 +5358,7 @@ class TestBillingEnforcer:
         # Wait for 7 ticks for jobs to become charged
         await asyncio.sleep(config.job_policy_enforcer.interval_sec * 7)
 
-        user_to_charge: Dict[str, Decimal] = defaultdict(Decimal)
+        user_to_charge: dict[str, Decimal] = defaultdict(Decimal)
         for cluster_user in await admin_client.list_cluster_users(cluster_name):
             user_to_charge[cluster_user.user_name] = cluster_user.balance.spent_credits
 
@@ -5381,7 +5382,7 @@ class TestBillingEnforcer:
         config: Config,
         cluster_config: ClusterConfig,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: UserFactory,
         admin_client: AdminClient,
@@ -5389,7 +5390,7 @@ class TestBillingEnforcer:
     ) -> None:
         durations = [30, 25, 20, 15, 10, 5]
 
-        test_jobs: List[Tuple[Dict[str, Any], _User, JobsClient, int]] = []
+        test_jobs: list[tuple[dict[str, Any], _User, JobsClient, int]] = []
         for duration in durations:
             job_submit["container"]["command"] = f"sleep {duration}s"
             user = await regular_user_factory(
@@ -5414,7 +5415,7 @@ class TestBillingEnforcer:
         # Wait for 7 ticks for jobs to become charged
         await asyncio.sleep(config.job_policy_enforcer.interval_sec * 7)
 
-        user_to_charge: Dict[str, Decimal] = defaultdict(Decimal)
+        user_to_charge: dict[str, Decimal] = defaultdict(Decimal)
         for cluster_user in await admin_client.list_cluster_users(cluster_name):
             if cluster_user.org_name == "org":
                 user_to_charge[
@@ -5443,7 +5444,7 @@ class TestRetentionEnforcer:
         auth_api: AuthApiConfig,
         config: Config,
         client: aiohttp.ClientSession,
-        job_submit: Dict[str, Any],
+        job_submit: dict[str, Any],
         jobs_client_factory: Callable[[_User], JobsClient],
         regular_user: _User,
     ) -> None:

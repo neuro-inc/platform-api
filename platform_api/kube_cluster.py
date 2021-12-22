@@ -1,6 +1,7 @@
 import logging
+from collections.abc import Sequence
 from contextlib import AsyncExitStack
-from typing import List, Optional, Sequence
+from typing import Optional
 
 import aiohttp
 
@@ -22,7 +23,7 @@ class KubeCluster(Cluster):
         storage_configs: Sequence[StorageConfig],
         cluster_config: ClusterConfig,
         kube_config: KubeConfig,
-        trace_configs: Optional[List[aiohttp.TraceConfig]] = None,
+        trace_configs: Optional[list[aiohttp.TraceConfig]] = None,
     ) -> None:
         self._registry_config = registry_config
         self._storage_configs = storage_configs

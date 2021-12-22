@@ -1,7 +1,8 @@
 import dataclasses
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
-from typing import Any, Callable, Dict
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -436,7 +437,7 @@ class TestContainerBuilder:
 
 
 @pytest.fixture
-def job_request_payload() -> Dict[str, Any]:
+def job_request_payload() -> dict[str, Any]:
     return {
         "job_id": "testjob",
         "description": "Description of the testjob",
@@ -459,7 +460,7 @@ def job_request_payload() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def job_payload(job_request_payload: Any) -> Dict[str, Any]:
+def job_payload(job_request_payload: Any) -> dict[str, Any]:
     finished_at_str = datetime.now(timezone.utc).isoformat()
     return {
         "id": "testjob",
@@ -472,7 +473,7 @@ def job_payload(job_request_payload: Any) -> Dict[str, Any]:
 
 
 @pytest.fixture
-def job_request_payload_with_shm(job_request_payload: Dict[str, Any]) -> Dict[str, Any]:
+def job_request_payload_with_shm(job_request_payload: dict[str, Any]) -> dict[str, Any]:
     data = job_request_payload
     data["container"]["resources"]["shm"] = True
     return data
@@ -973,7 +974,7 @@ class TestJob:
         assert primitive["org_name"] == "10250zxvgew"
 
     def test_from_primitive(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
         payload = {
             "id": "testjob",
@@ -999,7 +1000,7 @@ class TestJob:
         assert job.restart_policy == JobRestartPolicy.NEVER
 
     def test_from_primitive_check_name(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
         payload = {
             "id": "testjob",
@@ -1015,7 +1016,7 @@ class TestJob:
         assert job.name == "test-job-name"
 
     def test_from_primitive_with_preset_name(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
         payload = {
             "id": "testjob",
@@ -1030,7 +1031,7 @@ class TestJob:
         assert job.preset_name == "cpu-small"
 
     def test_from_primitive_with_tags(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
         tags = ["tag1", "tag2"]
         payload = {
@@ -1047,7 +1048,7 @@ class TestJob:
         assert job.tags == tags
 
     def test_from_primitive_with_statuses(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
         finished_at_str = datetime.now(timezone.utc).isoformat()
         payload = {
@@ -1071,7 +1072,7 @@ class TestJob:
         assert job.preemptible_node
 
     def test_from_primitive_with_cluster_name(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
         payload = {
             "id": "testjob",
@@ -1095,7 +1096,7 @@ class TestJob:
         assert not job.preemptible_node
 
     def test_from_primitive_with_entrypoint_without_command(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
         job_request_payload["container"]["entrypoint"] = "/script.sh"
         job_request_payload["container"].pop("command", None)
@@ -1113,7 +1114,7 @@ class TestJob:
         assert job.request.container.entrypoint == "/script.sh"
 
     def test_from_primitive_without_entrypoint_with_command(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
         job_request_payload["container"].pop("entrypoint", None)
         job_request_payload["container"]["command"] = "arg1 arg2 arg3"
@@ -1131,7 +1132,7 @@ class TestJob:
         assert job.request.container.entrypoint is None
 
     def test_from_primitive_without_entrypoint_without_command(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
         job_request_payload["container"].pop("entrypoint", None)
         job_request_payload["container"].pop("command", None)
@@ -1149,7 +1150,7 @@ class TestJob:
         assert job.request.container.entrypoint is None
 
     def test_from_primitive_with_entrypoint_with_command(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
         job_request_payload["container"]["entrypoint"] = "/script.sh"
         job_request_payload["container"]["command"] = "arg1 arg2 arg3"
@@ -1167,7 +1168,7 @@ class TestJob:
         assert job.request.container.entrypoint == "/script.sh"
 
     def test_from_primitive_with_max_run_time_minutes(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
         payload = {
             "id": "testjob",
@@ -1183,7 +1184,7 @@ class TestJob:
         assert job.max_run_time_minutes == 100
 
     def test_from_primitive_with_max_run_time_minutes_none(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
         payload = {
             "id": "testjob",
@@ -1199,7 +1200,7 @@ class TestJob:
         assert job.max_run_time_minutes is None
 
     def test_from_primitive_with_org_name(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
         payload = {
             "id": "testjob",
@@ -1259,7 +1260,7 @@ class TestJob:
         assert job.to_uri() == URL(f"job://test-cluster/{job.id}")
 
     def test_to_and_from_primitive(
-        self, mock_orchestrator: MockOrchestrator, job_request_payload: Dict[str, Any]
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
         finished_at_str = datetime.now(timezone.utc).isoformat()
         current_status_item = {
@@ -1292,7 +1293,7 @@ class TestJob:
 
 
 class TestJobRequest:
-    def test_to_primitive(self, job_request_payload: Dict[str, Any]) -> None:
+    def test_to_primitive(self, job_request_payload: dict[str, Any]) -> None:
         container = Container(
             image="testimage",
             env={"testvar": "testval"},
@@ -1312,7 +1313,7 @@ class TestJobRequest:
         assert request.to_primitive() == job_request_payload
 
     def test_to_primitive_with_entrypoint(
-        self, job_request_payload: Dict[str, Any]
+        self, job_request_payload: dict[str, Any]
     ) -> None:
         job_request_payload["container"]["entrypoint"] = "/bin/ls"
         container = Container(
@@ -1335,7 +1336,7 @@ class TestJobRequest:
         assert request.to_primitive() == job_request_payload
 
     def test_to_primitive_with_working_dir(
-        self, job_request_payload: Dict[str, Any]
+        self, job_request_payload: dict[str, Any]
     ) -> None:
         job_request_payload["container"]["working_dir"] = "/working/dir"
         container = Container(
@@ -1357,7 +1358,7 @@ class TestJobRequest:
         )
         assert request.to_primitive() == job_request_payload
 
-    def test_to_primitive_with_tty(self, job_request_payload: Dict[str, Any]) -> None:
+    def test_to_primitive_with_tty(self, job_request_payload: dict[str, Any]) -> None:
         job_request_payload["container"]["tty"] = True
 
         container = Container(
@@ -1379,7 +1380,7 @@ class TestJobRequest:
         )
         assert request.to_primitive() == job_request_payload
 
-    def test_from_primitive(self, job_request_payload: Dict[str, Any]) -> None:
+    def test_from_primitive(self, job_request_payload: dict[str, Any]) -> None:
         request = JobRequest.from_primitive(job_request_payload)
         assert request.job_id == "testjob"
         assert request.description == "Description of the testjob"
@@ -1397,7 +1398,7 @@ class TestJobRequest:
         assert request.container == expected_container
 
     def test_from_primitive_with_working_dir(
-        self, job_request_payload: Dict[str, Any]
+        self, job_request_payload: dict[str, Any]
     ) -> None:
         job_request_payload["container"]["working_dir"] = "/working/dir"
         request = JobRequest.from_primitive(job_request_payload)
@@ -1418,7 +1419,7 @@ class TestJobRequest:
         assert request.container == expected_container
 
     def test_from_primitive_with_shm(
-        self, job_request_payload_with_shm: Dict[str, Any]
+        self, job_request_payload_with_shm: dict[str, Any]
     ) -> None:
         request = JobRequest.from_primitive(job_request_payload_with_shm)
         assert request.job_id == "testjob"
@@ -1436,12 +1437,12 @@ class TestJobRequest:
         )
         assert request.container == expected_container
 
-    def test_to_and_from_primitive(self, job_request_payload: Dict[str, Any]) -> None:
+    def test_to_and_from_primitive(self, job_request_payload: dict[str, Any]) -> None:
         actual = JobRequest.to_primitive(JobRequest.from_primitive(job_request_payload))
         assert actual == job_request_payload
 
     def test_to_and_from_primitive_with_shm(
-        self, job_request_payload_with_shm: Dict[str, Any]
+        self, job_request_payload_with_shm: dict[str, Any]
     ) -> None:
         actual = JobRequest.to_primitive(
             JobRequest.from_primitive(job_request_payload_with_shm)
@@ -1449,7 +1450,7 @@ class TestJobRequest:
         assert actual == job_request_payload_with_shm
 
     def test_to_and_from_primitive_with_tpu(
-        self, job_request_payload: Dict[str, Any]
+        self, job_request_payload: dict[str, Any]
     ) -> None:
         job_request_payload["container"]["resources"]["tpu"] = {
             "type": "v2-8",
@@ -1459,7 +1460,7 @@ class TestJobRequest:
         assert actual == job_request_payload
 
     def test_to_and_from_primitive_with_secret_env(
-        self, job_request_payload: Dict[str, Any]
+        self, job_request_payload: dict[str, Any]
     ) -> None:
         job_request_payload["container"]["secret_env"] = {
             "ENV_SECRET1": "secret://clustername/username/key1",
@@ -1469,7 +1470,7 @@ class TestJobRequest:
         assert actual == job_request_payload
 
     def test_to_and_from_primitive_with_secret_volumes(
-        self, job_request_payload: Dict[str, Any]
+        self, job_request_payload: dict[str, Any]
     ) -> None:
         job_request_payload["container"]["secret_volumes"] = [
             {
@@ -1485,7 +1486,7 @@ class TestJobRequest:
         assert actual == job_request_payload
 
     def test_to_and_from_primitive_with_disk_volumes(
-        self, job_request_payload: Dict[str, Any]
+        self, job_request_payload: dict[str, Any]
     ) -> None:
         job_request_payload["container"]["disk_volumes"] = [
             {

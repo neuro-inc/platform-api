@@ -1,22 +1,13 @@
 import asyncio
 import json
 import uuid
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path, PurePath
-from typing import (
-    Any,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Dict,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
-)
+from typing import Any, Optional
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -78,7 +69,7 @@ def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
 
 
 @pytest.fixture(scope="session")
-async def kube_config_payload() -> Dict[str, Any]:
+async def kube_config_payload() -> dict[str, Any]:
     process = await asyncio.create_subprocess_exec(
         "kubectl", "config", "view", "-o", "json", stdout=asyncio.subprocess.PIPE
     )
@@ -88,7 +79,7 @@ async def kube_config_payload() -> Dict[str, Any]:
 
 
 @pytest.fixture(scope="session")
-async def kube_config_cluster_payload(kube_config_payload: Dict[str, Any]) -> Any:
+async def kube_config_cluster_payload(kube_config_payload: dict[str, Any]) -> Any:
     cluster_name = "minikube"
     clusters = {
         cluster["name"]: cluster["cluster"]
@@ -99,7 +90,7 @@ async def kube_config_cluster_payload(kube_config_payload: Dict[str, Any]) -> An
 
 @pytest.fixture(scope="session")
 def cert_authority_data_pem(
-    kube_config_cluster_payload: Dict[str, Any]
+    kube_config_cluster_payload: dict[str, Any]
 ) -> Optional[str]:
     ca_path = kube_config_cluster_payload["certificate-authority"]
     if ca_path:
@@ -108,7 +99,7 @@ def cert_authority_data_pem(
 
 
 @pytest.fixture(scope="session")
-async def kube_config_user_payload(kube_config_payload: Dict[str, Any]) -> Any:
+async def kube_config_user_payload(kube_config_payload: dict[str, Any]) -> Any:
     user_name = "minikube"
     users = {user["name"]: user["user"] for user in kube_config_payload["users"]}
     return users[user_name]
@@ -246,8 +237,8 @@ async def orchestrator_config(
 
 @pytest.fixture(scope="session")
 def kube_config_factory(
-    kube_config_cluster_payload: Dict[str, Any],
-    kube_config_user_payload: Dict[str, Any],
+    kube_config_cluster_payload: dict[str, Any],
+    kube_config_user_payload: dict[str, Any],
     cert_authority_data_pem: Optional[str],
 ) -> Iterator[Callable[..., KubeConfig]]:
     cluster = kube_config_cluster_payload
@@ -321,13 +312,13 @@ def kube_job_nodes_factory(
 
 
 @pytest.fixture(scope="session")
-async def kube_ingress_ip(kube_config_cluster_payload: Dict[str, Any]) -> str:
+async def kube_ingress_ip(kube_config_cluster_payload: dict[str, Any]) -> str:
     cluster = kube_config_cluster_payload
     return urlsplit(cluster["server"]).hostname
 
 
 class MyKubeClient(KubeClient):
-    _created_pvcs: List[str]
+    _created_pvcs: list[str]
 
     async def init(self) -> None:
         await super().init()
@@ -373,7 +364,7 @@ class MyKubeClient(KubeClient):
         self._check_status_payload(payload)
 
     async def update_or_create_secret(
-        self, secret_name: str, namespace: str, data: Optional[Dict[str, str]] = None
+        self, secret_name: str, namespace: str, data: Optional[dict[str, str]] = None
     ) -> None:
         url = self._generate_all_secrets_url(namespace)
         data = data or {}
@@ -394,7 +385,7 @@ class MyKubeClient(KubeClient):
         timeout_s: float = 5.0,
         interval_s: float = 1.0,
     ) -> None:
-        raw_pod: Optional[Dict[str, Any]] = None
+        raw_pod: Optional[dict[str, Any]] = None
         try:
             async with timeout(timeout_s):
                 while True:
@@ -675,7 +666,7 @@ def kube_node() -> str:
 
 
 @pytest.fixture
-def default_node_capacity() -> Dict[str, Any]:
+def default_node_capacity() -> dict[str, Any]:
     return {"pods": "110", "memory": "1Gi", "cpu": 2, "nvidia.com/gpu": 1}
 
 
@@ -684,7 +675,7 @@ async def kube_node_gpu(
     kube_config: KubeConfig,
     kube_client: MyKubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
-    default_node_capacity: Dict[str, Any],
+    default_node_capacity: dict[str, Any],
 ) -> AsyncIterator[str]:
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)
@@ -736,7 +727,7 @@ async def kube_node_preemptible(
     kube_config_node_preemptible: KubeConfig,
     kube_client: MyKubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
-    default_node_capacity: Dict[str, Any],
+    default_node_capacity: dict[str, Any],
 ) -> AsyncIterator[str]:
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)

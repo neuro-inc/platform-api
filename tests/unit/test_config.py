@@ -1,7 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import PurePath
-from typing import Dict
 
 import pytest
 from yarl import URL
@@ -234,7 +233,7 @@ class TestSecretVolume:
 
 class TestEnvironConfigFactory:
     def test_create_key_error(self) -> None:
-        environ: Dict[str, str] = {}
+        environ: dict[str, str] = {}
         with pytest.raises(KeyError):
             EnvironConfigFactory(environ=environ).create()
 

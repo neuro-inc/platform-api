@@ -1,7 +1,8 @@
 import asyncio
 import sys
-from contextlib import asynccontextmanager
-from typing import AsyncContextManager, AsyncIterator, List, Optional
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import Optional
 
 import sqlalchemy.sql as sasql
 from sqlalchemy.engine import Row
@@ -43,7 +44,7 @@ class BasePostgresStorage:
 
     async def _fetch(
         self, query: sasql.ClauseElement, conn: Optional[AsyncConnection] = None
-    ) -> List[Row]:
+    ) -> list[Row]:
         if conn:
             result = await conn.execute(query)
             return result.all()
@@ -61,7 +62,7 @@ class BasePostgresStorage:
 
 @asynccontextmanager
 async def _safe_connect(
-    conn_cm: AsyncContextManager[AsyncConnection],
+    conn_cm: AbstractAsyncContextManager[AsyncConnection],
 ) -> AsyncConnection:
     # Workaround of the SQLAlchemy bug.
     conn_task = asyncio.create_task(conn_cm.__aenter__())

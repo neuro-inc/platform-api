@@ -1,6 +1,7 @@
 import shlex
+from collections.abc import Sequence
 from pathlib import PurePath
-from typing import Any, Dict, Optional, Sequence, Set, Union
+from typing import Any, Optional, Union
 from urllib.parse import unquote, urlsplit
 
 import trafaret as t
@@ -150,9 +151,9 @@ def create_mount_path_validator() -> t.Trafaret:
 
 
 def _validate_unique_volume_paths(
-    volumes: Sequence[Dict[str, Any]]
-) -> Sequence[Dict[str, Any]]:
-    paths: Set[str] = set()
+    volumes: Sequence[dict[str, Any]]
+) -> Sequence[dict[str, Any]]:
+    paths: set[str] = set()
     for volume in volumes:
         path = volume["dst_path"]
         if path in paths:

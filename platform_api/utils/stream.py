@@ -1,5 +1,6 @@
 import asyncio
-from typing import Deque, Optional
+from collections import deque
+from typing import Optional
 
 
 class Stream:
@@ -11,7 +12,7 @@ class Stream:
     def __init__(self) -> None:
         self._loop = asyncio.get_event_loop()
         self._waiter: Optional[asyncio.Future[None]] = None
-        self._data: Deque[bytes] = Deque()
+        self._data: deque[bytes] = deque()
         self._closed = False
 
     @property

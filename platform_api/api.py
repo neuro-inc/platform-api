@@ -1,11 +1,12 @@
 import asyncio
 import logging
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Sequence
+from importlib.metadata import version
+from typing import Any
 
 import aiohttp.web
 import aiohttp_cors
-import pkg_resources
 from aiohttp.web import HTTPUnauthorized
 from aiohttp.web_urldispatcher import AbstractRoute
 from aiohttp_security import check_permission
@@ -62,7 +63,7 @@ logger = logging.getLogger(__name__)
 
 
 class ApiHandler:
-    def register(self, app: aiohttp.web.Application) -> List[AbstractRoute]:
+    def register(self, app: aiohttp.web.Application) -> list[AbstractRoute]:
         return app.add_routes((aiohttp.web.get("/ping", self.handle_ping),))
 
     @notrace
@@ -104,7 +105,7 @@ class ConfigApiHandler:
         return aiohttp.web.Response(text="OK")
 
     async def handle_config(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
-        data: Dict[str, Any] = {}
+        data: dict[str, Any] = {}
 
         try:
             user = await authorized_user(request)
@@ -147,7 +148,7 @@ class ConfigApiHandler:
 
     def _convert_cluster_config_to_payload(
         self, user_cluster_config: UserClusterConfig
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         cluster_config = user_cluster_config.config
         orgs = user_cluster_config.orgs
         presets = [
@@ -169,8 +170,8 @@ class ConfigApiHandler:
             "orgs": orgs,
         }
 
-    def _convert_preset_to_payload(self, preset: Preset) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {
+    def _convert_preset_to_payload(self, preset: Preset) -> dict[str, Any]:
+        payload: dict[str, Any] = {
             "name": preset.name,
             "credits_per_hour": str(preset.credits_per_hour),
             "cpu": preset.cpu,
@@ -243,7 +244,7 @@ async def create_jobs_app(config: Config) -> aiohttp.web.Application:
     return jobs_app
 
 
-package_version = pkg_resources.get_distribution("platform-api").version
+package_version = version(__package__)
 
 
 async def add_version_to_header(
@@ -252,7 +253,7 @@ async def add_version_to_header(
     response.headers["X-Service-Version"] = f"platform-api/{package_version}"
 
 
-def make_tracing_trace_configs(config: Config) -> List[aiohttp.TraceConfig]:
+def make_tracing_trace_configs(config: Config) -> list[aiohttp.TraceConfig]:
     trace_configs = []
 
     if config.zipkin:

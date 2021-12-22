@@ -1,5 +1,6 @@
+from collections.abc import Sequence
 from decimal import Decimal
-from typing import Any, Dict, List, Sequence
+from typing import Any
 
 import pytest
 from yarl import URL
@@ -9,7 +10,7 @@ from platform_api.resource import GKEGPUModels, Preset, TPUPreset, TPUResource
 
 
 @pytest.fixture
-def host_storage_payload() -> Dict[str, Any]:
+def host_storage_payload() -> dict[str, Any]:
     return {
         "storage": {
             "host": {"mount_path": "/host/mount/path"},
@@ -19,7 +20,7 @@ def host_storage_payload() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def nfs_storage_payload() -> Dict[str, Any]:
+def nfs_storage_payload() -> dict[str, Any]:
     return {
         "storage": {
             "nfs": {"server": "127.0.0.1", "export_path": "/nfs/export/path"},
@@ -29,7 +30,7 @@ def nfs_storage_payload() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def pvc_storage_payload() -> Dict[str, Any]:
+def pvc_storage_payload() -> dict[str, Any]:
     return {
         "storage": {
             "pvc": {"name": "platform-storage"},
@@ -39,7 +40,7 @@ def pvc_storage_payload() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def clusters_payload(nfs_storage_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         {
             "name": "cluster_name",
@@ -193,7 +194,7 @@ def users_url() -> URL:
 
 class TestClusterConfigFactory:
     def test_valid_cluster_config(
-        self, clusters_payload: Sequence[Dict[str, Any]]
+        self, clusters_payload: Sequence[dict[str, Any]]
     ) -> None:
         storage_payload = clusters_payload[0]["storage"]
         registry_payload = clusters_payload[0]["registry"]
@@ -297,7 +298,7 @@ class TestClusterConfigFactory:
         assert orchestrator.tpu_ipv4_cidr_block == "1.1.1.1/32"
 
     def test_orchestrator_resource_presets(
-        self, clusters_payload: Sequence[Dict[str, Any]]
+        self, clusters_payload: Sequence[dict[str, Any]]
     ) -> None:
         factory = ClusterConfigFactory()
         clusters_payload[0]["orchestrator"]["resource_presets"] = [
@@ -342,7 +343,7 @@ class TestClusterConfigFactory:
         ]
 
     def test_orchestrator_job_schedule_settings_default(
-        self, clusters_payload: Sequence[Dict[str, Any]]
+        self, clusters_payload: Sequence[dict[str, Any]]
     ) -> None:
         orchestrator = clusters_payload[0]["orchestrator"]
         del orchestrator["job_schedule_timeout_s"]
@@ -355,7 +356,7 @@ class TestClusterConfigFactory:
         assert clusters[0].orchestrator.job_schedule_scaleup_timeout == 900
 
     def test_factory_skips_invalid_cluster_configs(
-        self, clusters_payload: List[Dict[str, Any]]
+        self, clusters_payload: list[dict[str, Any]]
     ) -> None:
         clusters_payload.append({})
         factory = ClusterConfigFactory()

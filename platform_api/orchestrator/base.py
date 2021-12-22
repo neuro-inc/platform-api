@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import List
 
 from .job import Job, JobStatusItem
 from .job_request import Disk, JobStatus
@@ -20,10 +19,10 @@ class Orchestrator(ABC):
 
     @abstractmethod
     async def get_missing_secrets(
-        self, secret_path: str, secret_names: List[str]
-    ) -> List[str]:
+        self, secret_path: str, secret_names: list[str]
+    ) -> list[str]:
         pass
 
     @abstractmethod
-    async def get_missing_disks(self, disks: List[Disk]) -> List[Disk]:
+    async def get_missing_disks(self, disks: list[Disk]) -> list[Disk]:
         pass
