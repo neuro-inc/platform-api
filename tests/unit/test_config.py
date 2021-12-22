@@ -249,9 +249,9 @@ class TestEnvironConfigFactory:
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_AUTH_URL": "-",
-            "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
+            "NP_AUTH_PUBLIC_URL": "-",
             "NP_ADMIN_URL": "-",
-            "NP_ADMIN_PUBLIC_URL": "https://neu.ro/apis/admin/v1",
+            "NP_ADMIN_PUBLIC_URL": "-",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_CREDIT_NOTIFICATION_THRESHOLD": "200.33",
             "NP_ENFORCER_RETENTION_DELAY_DAYS": "200",
@@ -260,7 +260,7 @@ class TestEnvironConfigFactory:
 
         assert config.config_url == URL("http://platformconfig:8080/api/v1")
         assert config.admin_url is None
-        assert config.admin_public_url == URL("https://neu.ro/apis/admin/v1")
+        assert config.admin_public_url is None
 
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 8080
@@ -280,7 +280,7 @@ class TestEnvironConfigFactory:
         assert config.notifications.token == ""
 
         assert config.auth.server_endpoint_url is None
-        assert config.auth.public_endpoint_url == URL("https://neu.ro/api/v1/users")
+        assert config.auth.public_endpoint_url is None
         assert config.auth.service_token == ""
         assert config.auth.service_name == "compute"
 
@@ -322,6 +322,7 @@ class TestEnvironConfigFactory:
             "NP_DB_POSTGRES_POOL_MIN": "50",
             "NP_DB_POSTGRES_POOL_MAX": "500",
             "NP_AUTH_URL": "https://auth",
+            "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_AUTH_TOKEN": "token",
             "NP_AUTH_NAME": "servicename",
             "NP_API_URL": "https://neu.ro/api/v1",
@@ -331,7 +332,6 @@ class TestEnvironConfigFactory:
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
-            "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_CORS_ORIGINS": "https://domain1.com,http://do.main",
             "NP_ZIPKIN_URL": "https://zipkin:9411",
@@ -365,6 +365,7 @@ class TestEnvironConfigFactory:
         assert config.database.postgres.pool_max_size == 500
 
         assert config.auth.server_endpoint_url == URL("https://auth")
+        assert config.auth.public_endpoint_url == URL("https://neu.ro/api/v1/users")
         assert config.auth.service_token == "token"
         assert config.auth.service_name == "servicename"
 

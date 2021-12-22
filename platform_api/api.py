@@ -126,7 +126,8 @@ class ConfigApiHandler:
             # backward compatibility
             data.update(data["clusters"][0])
 
-            data["admin_url"] = str(self._config.admin_public_url)
+            if self._config.admin_public_url:
+                data["admin_url"] = str(self._config.admin_public_url)
         except HTTPUnauthorized:
             pass
 
@@ -155,12 +156,11 @@ class ConfigApiHandler:
             self._convert_preset_to_payload(preset)
             for preset in cluster_config.orchestrator.presets
         ]
-        return {
+        result = {
             "name": cluster_config.name,
             "registry_url": str(cluster_config.ingress.registry_url),
             "storage_url": str(cluster_config.ingress.storage_url),
             "blob_storage_url": str(cluster_config.ingress.blob_storage_url),
-            "users_url": str(self._config.auth.public_endpoint_url),
             "monitoring_url": str(cluster_config.ingress.monitoring_url),
             "secrets_url": str(cluster_config.ingress.secrets_url),
             "metrics_url": str(cluster_config.ingress.metrics_url),
@@ -169,6 +169,9 @@ class ConfigApiHandler:
             "resource_presets": presets,
             "orgs": orgs,
         }
+        if self._config.auth.public_endpoint_url:
+            result["users_url"] = str(self._config.auth.public_endpoint_url)
+        return result
 
     def _convert_preset_to_payload(self, preset: Preset) -> dict[str, Any]:
         payload: dict[str, Any] = {
