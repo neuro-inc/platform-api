@@ -53,6 +53,8 @@ spec:
         env:
         - name: NP_AUTH_URL
           value: {{ .Values.platform.authUrl | quote }}
+        - name: NP_AUTH_PUBLIC_URL
+          value: {{ .Values.platform.authUrl | quote }}
         - name: NP_AUTH_TOKEN
 {{- if .Values.platform.token }}
 {{ toYaml .Values.platform.token | indent 10 }}
