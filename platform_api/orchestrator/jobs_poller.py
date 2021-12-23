@@ -28,7 +28,6 @@ from .job_request import (
 from .jobs_storage import JobStorageTransactionError
 from .poller_service import JobsPollerApi, JobsPollerService
 
-
 logger = logging.getLogger(__name__)
 
 

@@ -16,6 +16,7 @@ from yarl import URL
 
 from platform_api.config import AuthConfig
 from platform_api.orchestrator.kube_config import KubeConfig
+
 from tests.integration.auth import _User
 
 

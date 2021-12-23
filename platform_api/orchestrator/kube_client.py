@@ -40,7 +40,6 @@ from .job_request import (
 )
 from .kube_config import KubeClientAuthType
 
-
 logger = logging.getLogger(__name__)
 
 

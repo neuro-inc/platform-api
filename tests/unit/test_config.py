@@ -272,8 +272,8 @@ class TestEnvironConfigFactory:
         assert config.job_policy_enforcer.platform_api_url == URL(
             "http://platformapi:8080/api/v1"
         )
-        assert config.job_policy_enforcer.credit_notification_threshold == (
-            Decimal("200.33")
+        assert config.job_policy_enforcer.credit_notification_threshold == Decimal(
+            "200.33"
         )
         assert config.job_policy_enforcer.retention_delay_days == 200
         assert config.notifications.url == URL()

@@ -5,8 +5,9 @@ from decimal import Decimal
 from pathlib import PurePath
 from typing import Optional
 
-from alembic.config import Config as AlembicConfig
 from yarl import URL
+
+from alembic.config import Config as AlembicConfig
 
 from .cluster_config import RegistryConfig, StorageConfig, StorageType
 from .config import (

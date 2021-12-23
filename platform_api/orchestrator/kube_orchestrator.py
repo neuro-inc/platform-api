@@ -52,7 +52,6 @@ from .kube_client import (
 )
 from .kube_config import KubeConfig
 
-
 logger = logging.getLogger(__name__)
 
 

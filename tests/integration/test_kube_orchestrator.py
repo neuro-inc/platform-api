@@ -66,10 +66,10 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeOrchestrator,
 )
 from platform_api.resource import GKEGPUModels, ResourcePoolType, TPUResource
-from tests.conftest import random_str
-from tests.integration.test_api import ApiConfig
 
 from .conftest import ApiRunner, MyKubeClient
+from tests.conftest import random_str
+from tests.integration.test_api import ApiConfig
 
 
 class MyJob(Job):

@@ -11,7 +11,6 @@ from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.resource import TPUResource
 
-
 JOB_NAME_PATTERN = r"\A[a-z](?:-?[a-z0-9])*\Z"
 USER_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
 ROLE_NAME_PATTERN = r"\A[a-z0-9](?:[-/]?[a-z0-9])*\Z"

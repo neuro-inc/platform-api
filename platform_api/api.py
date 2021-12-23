@@ -58,7 +58,6 @@ from .utils.update_notifier import (
     ResubscribingNotifier,
 )
 
-
 logger = logging.getLogger(__name__)
 
 

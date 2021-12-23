@@ -1,7 +1,8 @@
 import asyncio
 
-import alembic
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+
+import alembic
 
 from .config import PostgresConfig
 

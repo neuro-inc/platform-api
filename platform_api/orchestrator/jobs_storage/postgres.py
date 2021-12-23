@@ -353,7 +353,7 @@ class JobFilterClauseBuilder:
         if not_null_orgs:
             or_clauses.append(self._tables.jobs.c.org_name.in_(not_null_orgs))
         if None in orgs:
-            or_clauses.append(self._tables.jobs.c.org_name == None)  # noqa
+            or_clauses.append(self._tables.jobs.c.org_name is None)
         self._clauses.append(or_(*or_clauses))
 
     def filter_name(self, name: str) -> None:
@@ -376,7 +376,7 @@ class JobFilterClauseBuilder:
         if filter_val:
             self._clauses.append(val_sql == filter_val)
         else:
-            self._clauses.append(or_(val_sql == filter_val, val_sql == None))  # noqa
+            self._clauses.append(or_(val_sql == filter_val, val_sql is None))  # noqa
 
     def filter_materialized(self, materialized: bool) -> None:
         self._filter_bool_from_payload("materialized", materialized)

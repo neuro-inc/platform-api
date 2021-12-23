@@ -9,7 +9,6 @@ from typing import Optional, cast
 from platform_api.orchestrator.job import JobRecord
 from platform_api.orchestrator.job_request import JobStatus
 
-
 logger = logging.getLogger(__name__)
 
 

@@ -30,7 +30,6 @@ from .orchestrator.jobs_poller import HttpJobsPollerApi, JobsPoller, JobsPollerS
 from .orchestrator.jobs_storage.base import JobStorageTransactionError
 from .orchestrator.poller_service import JobsScheduler
 
-
 logger = logging.getLogger(__name__)
 
 

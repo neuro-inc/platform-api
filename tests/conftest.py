@@ -4,7 +4,6 @@ from uuid import uuid1
 
 import pytest
 
-
 pytest_plugins = [
     "tests.integration.auth",
     "tests.integration.api",

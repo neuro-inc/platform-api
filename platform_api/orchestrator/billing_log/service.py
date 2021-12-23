@@ -16,7 +16,6 @@ from platform_api.orchestrator.job_request import JobError
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.utils.update_notifier import Notifier
 
-
 logger = logging.getLogger(__name__)
 
 

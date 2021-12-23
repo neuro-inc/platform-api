@@ -49,12 +49,12 @@ class TestInMemoryJobsStorage:
         is_gpu_job: bool = False,
         job_status: JobStatus = JobStatus.SUCCEEDED,
         cluster_name: str = "test-cluster",
-        **kwargs: Any
+        **kwargs: Any,
     ) -> JobRecord:
         job = JobRecord.create(
             request=self._create_job_request(is_gpu_job=is_gpu_job),
             cluster_name=cluster_name,
-            **kwargs
+            **kwargs,
         )
         current_time = current_datetime_factory()
         job.set_status(

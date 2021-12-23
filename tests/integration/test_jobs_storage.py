@@ -20,6 +20,7 @@ from platform_api.orchestrator.jobs_storage import (
     JobStorageTransactionError,
 )
 from platform_api.orchestrator.jobs_storage.postgres import PostgresJobsStorage
+
 from tests.conftest import not_raises
 
 

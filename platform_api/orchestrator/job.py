@@ -21,7 +21,6 @@ from .job_request import (
     JobStatus,
 )
 
-
 # For named jobs, their hostname is of the form of
 # `{job-name}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
 

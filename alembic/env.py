@@ -1,11 +1,10 @@
 import sys
 
-from alembic import context
 from neuro_logging import init_logging
 from sqlalchemy import engine_from_config, pool
 
+from alembic import context
 from platform_api.config_factory import EnvironConfigFactory, to_sync_postgres_dsn
-
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

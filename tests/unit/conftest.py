@@ -62,7 +62,6 @@ from platform_api.orchestrator.poller_service import (
 )
 from platform_api.resource import ResourcePoolType
 
-
 CA_DATA_PEM = "this-is-certificate-authority-public-key"
 
 
@@ -181,7 +180,6 @@ class MockJobsStorage(InMemoryJobsStorage):
 class MockNotificationsClient(NotificationsClient):
     def __init__(self) -> None:
         self._sent_notifications: list[Notification] = []
-        pass
 
     async def notify(self, notification: Notification) -> None:
         self._sent_notifications.append(notification)
