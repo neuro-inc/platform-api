@@ -1,6 +1,6 @@
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: 'v4.0.1'
+  rev: 'v4.1.0'
   hooks:
   - id: check-merge-conflict
     exclude: "rst$"
@@ -9,7 +9,7 @@ repos:
   hooks:
   - id: yesqa
 - repo: https://github.com/sondrelg/pep585-upgrade
-  rev: v1.0.1
+  rev: v1
   hooks:
   - id: upgrade-type-hints
     args:
@@ -26,7 +26,7 @@ repos:
     - markdown
     - rst
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: 'v4.0.1'
+  rev: 'v4.1.0'
   hooks:
   - id: check-case-conflict
   - id: check-json
@@ -40,7 +40,7 @@ repos:
   - id: debug-statements
 # Another entry is required to apply file-contents-sorter to another file
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: 'v4.0.1'
+  rev: 'v4.1.0'
   hooks:
   - id: file-contents-sorter
     files: |
@@ -58,7 +58,7 @@ repos:
     - -ignore
     - 'SC1004:'
 - repo: https://github.com/sirosen/check-jsonschema
-  rev: 0.9.0
+  rev: 0.9.1
   hooks:
   - id: check-github-actions
 ci:
