@@ -14,10 +14,6 @@ repos:
   - id: upgrade-type-hints
     args:
     - --futures=true
-- repo: https://github.com/PyCQA/flake8
-  rev: 4.0.1
-  hooks:
-  - id: flake8
 - repo: https://github.com/Zac-HD/shed
   rev: 0.7.0
   hooks:
@@ -29,6 +25,10 @@ repos:
     - python
     - markdown
     - rst
+- repo: https://github.com/PyCQA/flake8
+  rev: 4.0.1
+  hooks:
+  - id: flake8
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: 'v4.1.0'
   hooks:
