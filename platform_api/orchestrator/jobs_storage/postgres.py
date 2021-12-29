@@ -376,7 +376,7 @@ class JobFilterClauseBuilder:
         if filter_val:
             self._clauses.append(val_sql == filter_val)
         else:
-            self._clauses.append(or_(val_sql == filter_val, val_sql.is_(None)))  # noqa
+            self._clauses.append(or_(val_sql == filter_val, val_sql.is_(None)))
 
     def filter_materialized(self, materialized: bool) -> None:
         self._filter_bool_from_payload("materialized", materialized)
