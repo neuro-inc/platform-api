@@ -12,8 +12,9 @@ async def run_and_log_exceptions(coros: Iterable[Awaitable[Any]]) -> None:
     tasks = [asyncio.create_task(coro) for coro in coros]
     await asyncio.gather(*tasks, return_exceptions=True)
     for task in tasks:
-        if task.exception():
-            logging.exception(task.exception())
+        exc = task.exception()
+        if exc:
+            logging.exception(exc, exc_info=exc)
 
 
 T_co = TypeVar("T_co", covariant=True)
