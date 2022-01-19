@@ -19,7 +19,6 @@ class TestBillingLogStorage:
     def storage(self) -> BillingLogStorage:
         return InMemoryBillingLogStorage()
 
-    @pytest.mark.asyncio
     async def test_sync_record_retrieval(self, storage: BillingLogStorage) -> None:
         record = await storage.get_or_create_sync_record()
         assert record.last_entry_id == 0
@@ -27,7 +26,6 @@ class TestBillingLogStorage:
         record = await storage.get_or_create_sync_record()
         assert record.last_entry_id == 10
 
-    @pytest.mark.asyncio
     async def test_sync_record_update_not_existing(
         self, storage: BillingLogStorage
     ) -> None:
@@ -43,7 +41,6 @@ class TestBillingLogStorage:
             last_billed=datetime.now(tz=timezone.utc),
         )
 
-    @pytest.mark.asyncio
     async def test_create_and_get_entries(self, storage: BillingLogStorage) -> None:
         entries = [
             self._make_log_entry(job_id="test1", key="key1"),
@@ -77,7 +74,6 @@ class TestBillingLogStorage:
                 fetched_entries.append(entry)
         assert fetched_entries == expected_entries[1:3]
 
-    @pytest.mark.asyncio
     async def test_get_last_id(self, storage: BillingLogStorage) -> None:
         entries = [
             self._make_log_entry(job_id="test1", key="key1"),
@@ -99,7 +95,6 @@ class TestBillingLogStorage:
         # Job without entries:
         assert 0 == await storage.get_last_entry_id("test3")
 
-    @pytest.mark.asyncio
     async def test_concurrent_add(self, storage: BillingLogStorage) -> None:
         async def adder(job_id: str) -> None:
             async with storage.entries_inserter() as inserter:
@@ -124,7 +119,6 @@ class TestBillingLogStorage:
                 else:
                     assert group_to_job[group_id] == entry.job_id, group_id
 
-    @pytest.mark.asyncio
     async def test_delete_entries(self, storage: BillingLogStorage) -> None:
         entries = [
             self._make_log_entry(job_id="test1", key="key1"),

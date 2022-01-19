@@ -61,7 +61,6 @@ def job_policy_enforcer_config() -> JobPolicyEnforcerConfig:
 
 
 class TestRuntimeLimitEnforcer:
-    @pytest.mark.asyncio
     async def test_enforce_nothing_killed(
         self,
         test_user: AuthUser,
@@ -95,7 +94,6 @@ class TestRuntimeLimitEnforcer:
         )
         assert cancelled == []
 
-    @pytest.mark.asyncio
     async def test_enforce_killed(
         self,
         test_user: AuthUser,
@@ -160,7 +158,6 @@ class TestJobPolicyEnforcePoller:
 
         return _factory
 
-    @pytest.mark.asyncio
     async def test_basic_no_exception_short_response(
         self,
         run_enforce_polling: _EnforcePollingRunner,
@@ -174,7 +171,6 @@ class TestJobPolicyEnforcePoller:
             await asyncio.sleep(interval * 1.5)
             assert enforcer.called_times == 2
 
-    @pytest.mark.asyncio
     async def test_basic_exception_thrown_short_response(
         self,
         run_enforce_polling: _EnforcePollingRunner,
@@ -188,7 +184,6 @@ class TestJobPolicyEnforcePoller:
             await asyncio.sleep(interval * 1.5)
             assert enforcer.called_times == 2
 
-    @pytest.mark.asyncio
     async def test_basic_no_exception_long_enforce(
         self,
         run_enforce_polling: _EnforcePollingRunner,
@@ -202,7 +197,6 @@ class TestJobPolicyEnforcePoller:
             await asyncio.sleep(interval * 1.5)
             assert enforcer.called_times == 1
 
-    @pytest.mark.asyncio
     async def test_basic_exception_thrown_long_enforce(
         self,
         run_enforce_polling: _EnforcePollingRunner,
@@ -216,7 +210,6 @@ class TestJobPolicyEnforcePoller:
             await asyncio.sleep(interval * 1.5)
             assert enforcer.called_times == 1
 
-    @pytest.mark.asyncio
     async def test_concurrent_call_not_allowed(
         self,
         run_enforce_polling: _EnforcePollingRunner,
@@ -287,7 +280,6 @@ class TestHasCreditsEnforcer:
 
         return _check
 
-    @pytest.mark.asyncio
     async def test_user_credits_disabled_do_nothing(
         self,
         has_credits_enforcer: CreditsLimitEnforcer,
@@ -304,7 +296,6 @@ class TestHasCreditsEnforcer:
 
         await check_not_cancelled(jobs)
 
-    @pytest.mark.asyncio
     async def test_user_has_credits_do_nothing(
         self,
         test_user: AuthUser,
@@ -325,7 +316,6 @@ class TestHasCreditsEnforcer:
         await check_not_cancelled(jobs)
 
     @pytest.mark.parametrize("credits", [Decimal("0"), Decimal("-0.5")])
-    @pytest.mark.asyncio
     async def test_user_has_no_credits_kill_all(
         self,
         test_user: AuthUser,
@@ -347,7 +337,6 @@ class TestHasCreditsEnforcer:
 
         await check_cancelled(jobs, JobStatusReason.QUOTA_EXHAUSTED)
 
-    @pytest.mark.asyncio
     async def test_user_has_no_access_to_cluster_kill_all(
         self,
         test_user: AuthUser,
@@ -364,7 +353,6 @@ class TestHasCreditsEnforcer:
 
         await check_cancelled(jobs, JobStatusReason.QUOTA_EXHAUSTED)
 
-    @pytest.mark.asyncio
     async def test_orgs_credits_disabled_do_nothing(
         self,
         has_credits_enforcer: CreditsLimitEnforcer,
@@ -385,7 +373,6 @@ class TestHasCreditsEnforcer:
 
         await check_not_cancelled(jobs)
 
-    @pytest.mark.asyncio
     async def test_org_has_credits_do_nothing(
         self,
         test_user: AuthUser,
@@ -411,7 +398,6 @@ class TestHasCreditsEnforcer:
         await check_not_cancelled(jobs)
 
     @pytest.mark.parametrize("credits", [Decimal("0"), Decimal("-0.5")])
-    @pytest.mark.asyncio
     async def test_org_has_no_credits_kill_all(
         self,
         test_org: str,
@@ -434,7 +420,6 @@ class TestHasCreditsEnforcer:
 
         await check_cancelled(jobs, JobStatusReason.QUOTA_EXHAUSTED)
 
-    @pytest.mark.asyncio
     async def test_org_has_no_access_to_cluster_kill_all(
         self,
         test_org: str,
@@ -469,7 +454,6 @@ class TestBillingEnforcer:
         ) as service:
             yield service
 
-    @pytest.mark.asyncio
     async def test_jobs_charged(
         self,
         test_user: AuthUser,
@@ -500,7 +484,6 @@ class TestBillingEnforcer:
         assert entries[0].charge <= (Decimal("1.5") + second) * per_hour
         assert not entries[0].fully_billed
 
-    @pytest.mark.asyncio
     async def test_idempotency_key_unique(
         self,
         test_user: AuthUser,
@@ -529,7 +512,6 @@ class TestBillingEnforcer:
             keys = {entry.idempotency_key async for entry in it}
         assert len(keys) == 1000
 
-    @pytest.mark.asyncio
     async def test_jobs_charged_fully(
         self,
         test_user: AuthUser,
@@ -554,7 +536,6 @@ class TestBillingEnforcer:
         assert len(entries) == 1
         assert entries[0].fully_billed
 
-    @pytest.mark.asyncio
     async def test_waits_for_previous_entry(
         self,
         test_user: AuthUser,
@@ -616,7 +597,6 @@ class TestBillingEnforcer:
 
 
 class TestCreditsNotificationEnforcer:
-    @pytest.mark.asyncio
     async def test_credits_almost_run_out_user_notified(
         self,
         jobs_service: JobsService,
@@ -649,7 +629,6 @@ class TestCreditsNotificationEnforcer:
             in mock_notifications_client.sent_notifications
         )
 
-    @pytest.mark.asyncio
     async def test_no_credits_not_notified(
         self,
         jobs_service: JobsService,
@@ -684,7 +663,6 @@ class TestCreditsNotificationEnforcer:
 
 
 class TestStopOnClusterRemoveEnforcer:
-    @pytest.mark.asyncio
     async def test_job_untouched_by_default(
         self,
         test_user: AuthUser,
@@ -705,7 +683,6 @@ class TestStopOnClusterRemoveEnforcer:
         job = await jobs_service.get_job(job.id)
         assert job.status == JobStatus.PENDING
 
-    @pytest.mark.asyncio
     async def test_job_removed_cluster_gone(
         self,
         test_user: AuthUser,
@@ -728,7 +705,6 @@ class TestStopOnClusterRemoveEnforcer:
         assert job.status == JobStatus.FAILED
         assert job.status_history.current.reason == JobStatusReason.CLUSTER_NOT_FOUND
 
-    @pytest.mark.asyncio
     async def test_job_with_pass_config_removed_cluster_gone(
         self,
         test_user: AuthUser,
@@ -758,7 +734,6 @@ class TestStopOnClusterRemoveEnforcer:
 
 
 class TestRetentionPolicyEnforcer:
-    @pytest.mark.asyncio
     async def test_job_untouched_by_default(
         self,
         test_user: AuthUser,
@@ -775,7 +750,6 @@ class TestRetentionPolicyEnforcer:
         job = await jobs_service.get_job(job.id)
         assert job.status == JobStatus.PENDING
 
-    @pytest.mark.asyncio
     async def test_job_not_marked_to_drop_if_delay_is_smaller(
         self,
         test_user: AuthUser,
@@ -801,7 +775,6 @@ class TestRetentionPolicyEnforcer:
         job = await jobs_service.get_job(job.id)
         assert not job.being_dropped
 
-    @pytest.mark.asyncio
     async def test_job_marked_to_drop(
         self,
         test_user: AuthUser,

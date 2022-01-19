@@ -16,7 +16,6 @@ from .notifications import NotificationsServer
 
 
 class TestCannotStartJobNoCredits:
-    @pytest.mark.asyncio
     async def test_not_sent_has_credits(
         self,
         api: ApiConfig,
@@ -40,7 +39,6 @@ class TestCannotStartJobNoCredits:
             if slug == JobCannotStartNoCredits.slug():
                 raise AssertionError("Unexpected JobCannotStartQuotaReached sent")
 
-    @pytest.mark.asyncio
     async def test_sent_if_no_credits(
         self,
         api: ApiConfig,
@@ -109,7 +107,6 @@ class TestJobTransition:
             for jobs_client, job_id in cleanup_pairs:
                 await jobs_client.delete_job(job_id=job_id, assert_success=False)
 
-    @pytest.mark.asyncio
     async def test_not_sent_job_creating_failed(
         self,
         api: ApiConfig,
@@ -130,7 +127,6 @@ class TestJobTransition:
             if slug == "job-transition":
                 raise AssertionError("Unexpected JobTransition sent")
 
-    @pytest.mark.asyncio
     async def test_succeeded_job_workflow(
         self,
         api: ApiConfig,
@@ -171,7 +167,6 @@ class TestJobTransition:
                 raise AssertionError(f"Unexpected JobTransition payload: {payload}")
         assert states == {"pending", "running", "cancelled"}
 
-    @pytest.mark.asyncio
     async def test_failed_job_workflow(
         self,
         api: ApiConfig,
@@ -212,7 +207,6 @@ class TestJobTransition:
 
 
 class TestCreditsWillRunOutSoon:
-    @pytest.mark.asyncio
     async def test_sent_if_credits_less_then_threshold(
         self,
         config: Config,

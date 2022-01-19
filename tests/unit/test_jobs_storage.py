@@ -18,7 +18,6 @@ from platform_api.orchestrator.jobs_storage import (
 
 
 class TestInMemoryJobsStorage:
-    @pytest.mark.asyncio
     async def test_get_all_jobs_empty(self) -> None:
         jobs_storage = InMemoryJobsStorage()
         jobs = await jobs_storage.get_all_jobs()
@@ -63,7 +62,6 @@ class TestInMemoryJobsStorage:
         job.set_status(job_status, current_datetime_factory=lambda: current_time)
         return job
 
-    @pytest.mark.asyncio
     async def test_set_get_job(self) -> None:
         jobs_storage = InMemoryJobsStorage()
 
@@ -100,7 +98,6 @@ class TestInMemoryJobsStorage:
         jobs = await jobs_storage.get_jobs_for_deletion()
         assert {job.id for job in jobs} == {succeeded_job.id}
 
-    @pytest.mark.asyncio
     async def test_try_create_job(self) -> None:
         jobs_storage = InMemoryJobsStorage()
 

@@ -1,6 +1,5 @@
 import asyncio
 
-import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -13,7 +12,6 @@ from platform_api.utils.update_notifier import (
 from tests.unit.test_notifier import Counter
 
 
-@pytest.mark.asyncio
 async def test_postgres_available(sqalchemy_engine: AsyncEngine) -> None:
     async with sqalchemy_engine.connect() as connection:
         result = await connection.execute(sa.text("SELECT 2 + 2;"))
@@ -21,7 +19,6 @@ async def test_postgres_available(sqalchemy_engine: AsyncEngine) -> None:
         assert row == (4,)
 
 
-@pytest.mark.asyncio
 async def test_channel_notifier(sqalchemy_engine: AsyncEngine) -> None:
     notifier = PostgresChannelNotifier(sqalchemy_engine, "channel")
     counter = Counter()
@@ -38,7 +35,6 @@ async def test_channel_notifier(sqalchemy_engine: AsyncEngine) -> None:
     await counter.assert_count(2)
 
 
-@pytest.mark.asyncio
 async def test_channel_notifier_connection_lost(sqalchemy_engine: AsyncEngine) -> None:
     notifier: Notifier = PostgresChannelNotifier(sqalchemy_engine, "channel")
     notifier = ResubscribingNotifier(notifier, check_interval=0.1)

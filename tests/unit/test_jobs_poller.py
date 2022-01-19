@@ -48,7 +48,6 @@ class TestJobsPoller:
         yield poller
         await poller.stop()
 
-    @pytest.mark.asyncio
     async def test_polling(
         self,
         jobs_poller: JobsPoller,
@@ -71,7 +70,6 @@ class TestJobsPoller:
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await self.wait_for_job_status(jobs_service=jobs_service)
 
-    @pytest.mark.asyncio
     async def test_polling_exception(
         self,
         jobs_poller: JobsPoller,

@@ -1,7 +1,5 @@
 import asyncio
 
-import pytest
-
 from platform_api.utils.update_notifier import InMemoryNotifier
 
 
@@ -24,7 +22,6 @@ class Counter:
 
 
 class TestInMemoryNotifier:
-    @pytest.mark.asyncio
     async def test_notifier(self) -> None:
         notifier = InMemoryNotifier()
         counter = Counter()

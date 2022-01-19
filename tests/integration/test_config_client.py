@@ -74,7 +74,6 @@ async def create_config_api(
 
 
 class TestConfigClient:
-    @pytest.mark.asyncio
     async def test_valid_cluster_configs(
         self, cluster_configs_payload: list[dict[str, Any]]
     ) -> None:
@@ -84,7 +83,6 @@ class TestConfigClient:
 
                 assert len(result) == 1
 
-    @pytest.mark.asyncio
     async def test_client_skips_invalid_cluster_configs(
         self, cluster_configs_payload: list[dict[str, Any]]
     ) -> None:
