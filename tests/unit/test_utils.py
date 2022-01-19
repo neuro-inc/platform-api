@@ -1,4 +1,3 @@
-import pytest
 from _pytest.logging import LogCaptureFixture
 
 from platform_api.utils.asyncio import run_and_log_exceptions

@@ -1,7 +1,5 @@
 import asyncio
 
-import pytest
-
 from platform_api.utils.update_notifier import InMemoryNotifier
 
 

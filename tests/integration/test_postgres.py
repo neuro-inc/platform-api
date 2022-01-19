@@ -1,6 +1,5 @@
 import asyncio
 
-import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncEngine
 
