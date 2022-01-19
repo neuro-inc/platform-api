@@ -154,7 +154,6 @@ class TestJobsService:
     ) -> JobsPollerService:
         return poller_service_factory()
 
-    @pytest.mark.asyncio
     async def test_create_job(
         self,
         jobs_service: JobsService,
@@ -175,7 +174,6 @@ class TestJobsService:
         assert job.status == JobStatus.PENDING
         assert job.owner == test_user.name
 
-    @pytest.mark.asyncio
     async def test_create_job_with_org(
         self,
         jobs_service: JobsService,
@@ -199,7 +197,6 @@ class TestJobsService:
         assert job.owner == test_user_with_org.name
         assert job.org_name == test_org
 
-    @pytest.mark.asyncio
     async def test_create_job_privileged_not_allowed(
         self,
         cluster_config: ClusterConfig,
@@ -229,7 +226,6 @@ class TestJobsService:
                 privileged=True,
             )
 
-    @pytest.mark.asyncio
     async def test_create_job_privileged_allowed(
         self,
         cluster_config: ClusterConfig,
@@ -256,7 +252,6 @@ class TestJobsService:
         )
         assert original_job.privileged
 
-    @pytest.mark.asyncio
     async def test_create_job_pass_config(
         self,
         jobs_service: JobsService,
@@ -286,7 +281,6 @@ class TestJobsService:
             [Permission(uri=token_uri, action="read")],
         )
 
-    @pytest.mark.asyncio
     async def test_create_job_pass_config_with_org(
         self,
         jobs_service: JobsService,
@@ -318,7 +312,6 @@ class TestJobsService:
             [Permission(uri=token_uri, action="read")],
         )
 
-    @pytest.mark.asyncio
     async def test_pass_config_revoke_after_complete(
         self,
         jobs_service: JobsService,
@@ -342,7 +335,6 @@ class TestJobsService:
         token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (test_user.name, [token_uri])
 
-    @pytest.mark.asyncio
     async def test_pass_config_revoke_after_failure(
         self,
         jobs_service: JobsService,
@@ -366,7 +358,6 @@ class TestJobsService:
         token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (test_user.name, [token_uri])
 
-    @pytest.mark.asyncio
     async def test_pass_config_revoke_fail_to_start(
         self,
         jobs_service: JobsService,
@@ -395,7 +386,6 @@ class TestJobsService:
         token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (test_user.name, [token_uri])
 
-    @pytest.mark.asyncio
     async def test_pass_config_revoke_fail_on_update(
         self,
         jobs_service: JobsService,
@@ -421,7 +411,6 @@ class TestJobsService:
         token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (test_user.name, [token_uri])
 
-    @pytest.mark.asyncio
     async def test_pass_config_revoke_cluster_unavail(
         self,
         jobs_service: JobsService,
@@ -451,7 +440,6 @@ class TestJobsService:
         token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
         assert mock_auth_client._revokes[0] == (test_user.name, [token_uri])
 
-    @pytest.mark.asyncio
     async def test_create_job_pass_config_env_present(
         self,
         jobs_service: JobsService,
@@ -474,7 +462,6 @@ class TestJobsService:
                 pass_config=True,
             )
 
-    @pytest.mark.asyncio
     async def test_create_job_fail(
         self,
         jobs_service: JobsService,
@@ -505,7 +492,6 @@ class TestJobsService:
         assert f"JobError: Bad job {job.id}" in caplog.text
         assert "Unexpected exception in cluster" not in caplog.text
 
-    @pytest.mark.asyncio
     async def test_create_job__name_conflict_with_pending(
         self,
         jobs_service: JobsService,
@@ -531,7 +517,6 @@ class TestJobsService:
                 request, user=test_user, cluster_name=test_cluster, job_name=job_name
             )
 
-    @pytest.mark.asyncio
     async def test_create_job__name_conflict_with_running(
         self,
         mock_orchestrator: MockOrchestrator,
@@ -574,7 +559,6 @@ class TestJobsService:
                 request, user=test_user, cluster_name=test_cluster, job_name=job_name
             )
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "first_job_status", [JobStatus.FAILED, JobStatus.SUCCEEDED]
     )
@@ -623,7 +607,6 @@ class TestJobsService:
         assert job.id == second_job.id
         assert job.status == JobStatus.PENDING
 
-    @pytest.mark.asyncio
     async def test_create_job__transaction_error(
         self,
         jobs_service: JobsService,
@@ -646,7 +629,6 @@ class TestJobsService:
                 request, user=test_user, cluster_name=test_cluster, job_name=job_name
             )
 
-    @pytest.mark.asyncio
     async def test_get_status_by_job_id(
         self,
         jobs_service: JobsService,
@@ -661,7 +643,6 @@ class TestJobsService:
         job_status = await jobs_service.get_job_status(job_id=job.id)
         assert job_status == JobStatus.PENDING
 
-    @pytest.mark.asyncio
     async def test_set_status_by_job_id(
         self,
         jobs_service: JobsService,
@@ -698,7 +679,6 @@ class TestJobsService:
         status_item = job.status_history.last
         assert status_item.reason == "Test failure"
 
-    @pytest.mark.asyncio
     async def test_set_materialized_by_job_id(
         self,
         jobs_service: JobsService,
@@ -719,7 +699,6 @@ class TestJobsService:
         job = await jobs_service.get_job(job.id)
         assert not job.materialized
 
-    @pytest.mark.asyncio
     async def test_update_max_run_time_by_job_id(
         self,
         jobs_service: JobsService,
@@ -742,7 +721,6 @@ class TestJobsService:
         job = await jobs_service.get_job(job.id)
         assert job.max_run_time_minutes == 25
 
-    @pytest.mark.asyncio
     async def test_get_all(
         self,
         jobs_service: JobsService,
@@ -763,7 +741,6 @@ class TestJobsService:
         jobs = await jobs_service.get_all_jobs()
         assert job_ids == [job.id for job in jobs]
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_status(
         self,
         jobs_service: JobsService,
@@ -817,7 +794,6 @@ class TestJobsService:
         job_ids = {job.id for job in jobs}
         assert job_ids == {job_running.id}
 
-    @pytest.mark.asyncio
     async def test_get_job_by_name(
         self,
         jobs_service: JobsService,
@@ -865,7 +841,6 @@ class TestJobsService:
         with pytest.raises(JobError):
             await jobs_service.get_job_by_name("job2", otheruser)
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_date_range(
         self,
         jobs_service: JobsService,
@@ -916,7 +891,6 @@ class TestJobsService:
         job_ids = {job.id for job in await jobs_service.get_all_jobs(job_filter)}
         assert job_ids == set()
 
-    @pytest.mark.asyncio
     async def test_update_jobs_statuses_running(
         self,
         jobs_service_factory: Callable[..., JobsService],
@@ -950,7 +924,6 @@ class TestJobsService:
         assert job.finished_at
         assert not job.materialized
 
-    @pytest.mark.asyncio
     async def test_update_jobs_statuses_for_deletion(
         self,
         jobs_service_factory: Callable[..., JobsService],
@@ -983,7 +956,6 @@ class TestJobsService:
         assert job.finished_at
         assert not job.materialized
 
-    @pytest.mark.asyncio
     async def test_update_jobs_statuses_pending_missing(
         self,
         jobs_service_factory: Callable[..., JobsService],
@@ -1026,7 +998,6 @@ class TestJobsService:
             description="The job could not be scheduled or was preempted.",
         )
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "reason,description",
         [
@@ -1079,7 +1050,6 @@ class TestJobsService:
         assert status_item.reason == JobStatusReason.COLLECTED
         assert status_item.description == description
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "reason",
         [
@@ -1124,7 +1094,6 @@ class TestJobsService:
         status_item = job.status_history.last
         assert status_item.reason == reason
 
-    @pytest.mark.asyncio
     async def test_update_jobs_statuses_image_errors_cycle(
         self,
         jobs_service_factory: Callable[..., JobsService],
@@ -1178,7 +1147,6 @@ class TestJobsService:
         assert status_item.reason == JobStatusReason.COLLECTED
         assert status_item.description == "Image 'testimage' can not be pulled"
 
-    @pytest.mark.asyncio
     async def test_update_jobs_statuses_pending_scale_up(
         self,
         jobs_service_factory: Callable[..., JobsService],
@@ -1215,7 +1183,6 @@ class TestJobsService:
         assert job.finished_at
         assert not job.materialized
 
-    @pytest.mark.asyncio
     async def test_update_jobs_statuses_succeeded_missing(
         self,
         jobs_service_factory: Callable[..., JobsService],
@@ -1248,7 +1215,6 @@ class TestJobsService:
         assert job.finished_at
         assert not job.materialized
 
-    @pytest.mark.asyncio
     async def test_update_jobs_handles_running_quota(
         self,
         jobs_service_factory: Callable[..., JobsService],
@@ -1319,7 +1285,6 @@ class TestJobsService:
             job = await jobs_service.get_job(job.id)
             assert job.status == JobStatus.SUCCEEDED
 
-    @pytest.mark.asyncio
     async def test_update_jobs_handles_org_level_running_quota(
         self,
         jobs_service_factory: Callable[..., JobsService],
@@ -1410,7 +1375,6 @@ class TestJobsService:
             job = await jobs_service.get_job(job.id)
             assert job.status == JobStatus.SUCCEEDED
 
-    @pytest.mark.asyncio
     async def test_update_jobs_scheduled_additional_when_no_pending(
         self,
         jobs_service_factory: Callable[..., JobsService],
@@ -1473,7 +1437,6 @@ class TestJobsService:
         assert job.status == JobStatus.PENDING
         assert job.materialized
 
-    @pytest.mark.asyncio
     async def test_update_jobs_scheduled_additional_when_has_pending(
         self,
         jobs_service_factory: Callable[..., JobsService],
@@ -1540,7 +1503,6 @@ class TestJobsService:
         assert job.status == JobStatus.PENDING
         assert not job.materialized
 
-    @pytest.mark.asyncio
     async def test_update_jobs_scheduled_cycling(
         self,
         jobs_service_factory: Callable[..., JobsService],
@@ -1659,7 +1621,6 @@ class TestJobsService:
             assert job.status == JobStatus.SUSPENDED
             assert not job.materialized
 
-    @pytest.mark.asyncio
     async def test_update_jobs_scheduled_max_suspended_time(
         self,
         jobs_service_factory: Callable[..., JobsService],
@@ -1731,7 +1692,6 @@ class TestJobsService:
         assert job3.status == JobStatus.PENDING
         assert job3.materialized
 
-    @pytest.mark.asyncio
     async def test_cancel_running(
         self,
         jobs_service: JobsService,
@@ -1758,7 +1718,6 @@ class TestJobsService:
         assert job.finished_at
         assert job.materialized
 
-    @pytest.mark.asyncio
     async def test_cancel_deleted_after_sync(
         self,
         jobs_service_factory: Callable[[float], JobsService],
@@ -1786,7 +1745,6 @@ class TestJobsService:
         assert job.finished_at
         assert not job.materialized
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "balance",
         [
@@ -1808,7 +1766,6 @@ class TestJobsService:
         job, _ = await jobs_service.create_job(request, user, cluster_name=test_cluster)
         assert job.status == JobStatus.PENDING
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "balance",
         [
@@ -1833,7 +1790,6 @@ class TestJobsService:
         ):
             await jobs_service.create_job(request, user, cluster_name=test_cluster)
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "balance",
         [
@@ -1863,7 +1819,6 @@ class TestJobsService:
                 request, user, cluster_name=test_cluster, org_name=org_name
             )
 
-    @pytest.mark.asyncio
     async def test_raise_for_jobs_limit(
         self,
         jobs_service: JobsService,
@@ -1883,7 +1838,6 @@ class TestJobsService:
         with pytest.raises(RunningJobsQuotaExceededError):
             await jobs_service.create_job(request, user=user, cluster_name=test_cluster)
 
-    @pytest.mark.asyncio
     async def test_raise_for_jobs_limit_in_org(
         self,
         jobs_service: JobsService,
@@ -1918,7 +1872,6 @@ class TestJobsService:
                 request, user=user, cluster_name=test_cluster, org_name=org_name
             )
 
-    @pytest.mark.asyncio
     async def test_no_raise_for_jobs_limit_if_wait_flag(
         self,
         jobs_service: JobsService,
@@ -1940,7 +1893,6 @@ class TestJobsService:
             request, user=user, cluster_name=test_cluster, wait_for_jobs_quota=True
         )
 
-    @pytest.mark.asyncio
     async def test_job_billing_defaults(
         self,
         jobs_service: JobsService,
@@ -1956,7 +1908,6 @@ class TestJobsService:
         assert job.last_billed is None
         assert job.total_price_credits == Decimal("0")
 
-    @pytest.mark.asyncio
     async def test_job_update_billing(
         self,
         jobs_service: JobsService,
@@ -1981,7 +1932,6 @@ class TestJobsService:
         assert job.last_billed == now
         assert job.total_price_credits == Decimal("11.11")
 
-    @pytest.mark.asyncio
     async def test_get_not_billed_jobs(
         self,
         jobs_service: JobsService,
@@ -2039,7 +1989,6 @@ class TestJobsServiceCluster:
             api_base_url=mock_api_base,
         )
 
-    @pytest.mark.asyncio
     async def test_create_job_missing_cluster(
         self,
         jobs_service: JobsService,
@@ -2054,7 +2003,6 @@ class TestJobsServiceCluster:
                 mock_job_request, user=user, cluster_name="missing"
             )
 
-    @pytest.mark.asyncio
     async def test_create_job_user_cluster_name_fallback(
         self,
         jobs_service: JobsService,
@@ -2070,7 +2018,6 @@ class TestJobsServiceCluster:
                 mock_job_request, user=test_user, cluster_name=test_cluster
             )
 
-    @pytest.mark.asyncio
     async def test_update_pending_job_missing_cluster(
         self,
         cluster_holder: ClusterHolder,
@@ -2126,7 +2073,6 @@ class TestJobsServiceCluster:
         status = await jobs_service.get_job_status(job.id)
         assert status == JobStatus.PENDING
 
-    @pytest.mark.asyncio
     async def test_update_pending_job_unavail_cluster(
         self,
         cluster_holder: ClusterHolder,
@@ -2181,7 +2127,6 @@ class TestJobsServiceCluster:
         )
         assert not record.materialized
 
-    @pytest.mark.asyncio
     async def test_update_succeeded_job_missing_cluster(
         self,
         cluster_holder: ClusterHolder,
@@ -2235,7 +2180,6 @@ class TestJobsServiceCluster:
         assert record.status == JobStatus.SUCCEEDED
         assert not record.materialized
 
-    @pytest.mark.asyncio
     async def test_get_job_fallback(
         self,
         cluster_config_registry: ClusterConfigRegistry,
@@ -2279,7 +2223,6 @@ class TestJobsServiceCluster:
         assert job.http_host == f"{job.id}.missing-cluster"
         assert job.http_host_named is None
 
-    @pytest.mark.asyncio
     async def test_delete_missing_cluster(
         self,
         cluster_holder: ClusterHolder,
@@ -2328,7 +2271,6 @@ class TestJobsServiceCluster:
         assert record.status == JobStatus.CANCELLED
         assert not record.materialized
 
-    @pytest.mark.asyncio
     async def test_delete_unavail_cluster(
         self,
         cluster_holder: ClusterHolder,
@@ -2414,7 +2356,6 @@ class TestJobServiceNotification:
     ) -> JobsService:
         return jobs_service_factory()
 
-    @pytest.mark.asyncio
     async def test_no_credits(
         self,
         jobs_service: JobsService,
@@ -2440,7 +2381,6 @@ class TestJobServiceNotification:
             )
         ]
 
-    @pytest.mark.asyncio
     async def test_new_job_created(
         self,
         jobs_service: JobsService,
@@ -2484,7 +2424,6 @@ class TestJobServiceNotification:
         )
         assert notifications == mock_notifications_client.sent_notifications
 
-    @pytest.mark.asyncio
     async def test_status_update_same_status_will_send_notification(
         self,
         jobs_service: JobsService,
@@ -2534,7 +2473,6 @@ class TestJobServiceNotification:
 
         assert notifications == mock_notifications_client.sent_notifications
 
-    @pytest.mark.asyncio
     async def test_job_failed_errimagepull_workflow(
         self,
         jobs_service: JobsService,
@@ -2612,7 +2550,6 @@ class TestJobServiceNotification:
 
         assert notifications == mock_notifications_client.sent_notifications
 
-    @pytest.mark.asyncio
     async def test_job_succeeded_workflow(
         self,
         jobs_service: JobsService,
@@ -2700,7 +2637,6 @@ class TestJobServiceNotification:
 
         assert notifications == mock_notifications_client.sent_notifications
 
-    @pytest.mark.asyncio
     async def test_create_job_bad_name(
         self,
         jobs_service: JobsService,

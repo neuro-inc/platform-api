@@ -99,7 +99,6 @@ class TestBillingLogProcessing:
     def worker(self, worker_factory: BillingWorkerFactory) -> BillingLogWorker:
         return worker_factory()
 
-    @pytest.mark.asyncio
     async def test_syncs_old_entries(
         self,
         test_user: User,
@@ -139,7 +138,6 @@ class TestBillingLogProcessing:
                 "key",
             )
 
-    @pytest.mark.asyncio
     async def test_syncs_job_with_org(
         self,
         test_org: str,
@@ -183,7 +181,6 @@ class TestBillingLogProcessing:
                 "key",
             )
 
-    @pytest.mark.asyncio
     async def test_sub_user_correct_user_charged(
         self,
         test_user: User,
@@ -228,7 +225,6 @@ class TestBillingLogProcessing:
                 "key",
             )
 
-    @pytest.mark.asyncio
     async def test_user_removed_from_cluster(
         self,
         test_user: User,
@@ -268,7 +264,6 @@ class TestBillingLogProcessing:
                 "key",
             )
 
-    @pytest.mark.asyncio
     async def test_syncs_new_entries(
         self,
         test_user: User,
@@ -309,7 +304,6 @@ class TestBillingLogProcessing:
                 "key",
             )
 
-    @pytest.mark.asyncio
     async def test_syncs_by_timeout(
         self,
         test_user: User,
@@ -353,7 +347,6 @@ class TestBillingLogProcessing:
                 "key",
             )
 
-    @pytest.mark.asyncio
     async def test_syncs_concurrent(
         self,
         test_user: User,

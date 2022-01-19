@@ -1518,7 +1518,6 @@ class TestInferPermissionsFromContainer:
         ]
 
 
-@pytest.mark.asyncio
 async def test_parse_response(mock_orchestrator: MockOrchestrator) -> None:
     job = Job(
         orchestrator_config=mock_orchestrator.config,
@@ -1578,7 +1577,6 @@ async def test_parse_response(mock_orchestrator: MockOrchestrator) -> None:
     assert job_response_to_job_record(response).to_primitive() == job.to_primitive()
 
 
-@pytest.mark.asyncio
 async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
     job = Job(
         orchestrator_config=mock_orchestrator.config,
@@ -1642,7 +1640,6 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
     }
 
 
-@pytest.mark.asyncio
 async def test_job_to_job_response_nonzero_runtime(
     mock_orchestrator: MockOrchestrator,
 ) -> None:
@@ -1683,7 +1680,6 @@ async def test_job_to_job_response_nonzero_runtime(
     assert run_time == (time_now - running_at).total_seconds()
 
 
-@pytest.mark.asyncio
 async def test_job_to_job_response_with_job_name_and_http_exposed(
     mock_orchestrator: MockOrchestrator,
 ) -> None:
@@ -1752,7 +1748,6 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
     }
 
 
-@pytest.mark.asyncio
 async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
     mock_orchestrator: MockOrchestrator,
 ) -> None:
@@ -1822,7 +1817,6 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
     }
 
 
-@pytest.mark.asyncio
 async def test_job_to_job_response_assert_non_empty_cluster_name(
     mock_orchestrator: MockOrchestrator,
 ) -> None:
@@ -1842,7 +1836,6 @@ async def test_job_to_job_response_assert_non_empty_cluster_name(
         convert_job_to_job_response(job)
 
 
-@pytest.mark.asyncio
 async def test_job_to_job_response_with_preset_name(
     mock_orchestrator: MockOrchestrator,
 ) -> None:

@@ -89,7 +89,6 @@ async def http_jobs_poller_api(
 
 
 class TestHttpJobsStorage:
-    @pytest.mark.asyncio
     async def test_get_unfinished(
         self,
         http_jobs_poller_api: HttpJobsPollerApi,
@@ -105,7 +104,6 @@ class TestHttpJobsStorage:
         )
         assert jobs_api_mock.last_query["cluster_name"] == "default"
 
-    @pytest.mark.asyncio
     async def test_get_for_deletion(
         self,
         http_jobs_poller_api: HttpJobsPollerApi,
@@ -122,7 +120,6 @@ class TestHttpJobsStorage:
         )
         assert jobs_api_mock.last_query["cluster_name"] == "default"
 
-    @pytest.mark.asyncio
     async def test_push_status(
         self,
         http_jobs_poller_api: HttpJobsPollerApi,
@@ -143,7 +140,6 @@ class TestHttpJobsStorage:
         assert jobs_api_mock.last_payload["description"] == status_item.description
         assert jobs_api_mock.last_payload["exit_code"] == status_item.exit_code
 
-    @pytest.mark.asyncio
     async def test_set_materialized(
         self,
         http_jobs_poller_api: HttpJobsPollerApi,

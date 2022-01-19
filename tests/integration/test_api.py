@@ -77,12 +77,10 @@ def cluster_configs_payload() -> list[dict[str, Any]]:
 
 
 class TestApi:
-    @pytest.mark.asyncio
     async def test_ping(self, api: ApiConfig, client: aiohttp.ClientSession) -> None:
         async with client.get(api.ping_url) as response:
             assert response.status == HTTPOk.status_code, await response.text()
 
-    @pytest.mark.asyncio
     async def test_ping_includes_version(
         self, api: ApiConfig, client: aiohttp.ClientSession
     ) -> None:
@@ -90,7 +88,6 @@ class TestApi:
             assert response.status == HTTPOk.status_code, await response.text()
             assert "platform-api" in response.headers["X-Service-Version"]
 
-    @pytest.mark.asyncio
     async def test_ping_unknown_origin(
         self, api: ApiConfig, client: aiohttp.ClientSession
     ) -> None:
@@ -100,7 +97,6 @@ class TestApi:
             assert response.status == HTTPOk.status_code, await response.text()
             assert "Access-Control-Allow-Origin" not in response.headers
 
-    @pytest.mark.asyncio
     async def test_ping_allowed_origin(
         self, api: ApiConfig, client: aiohttp.ClientSession
     ) -> None:
@@ -112,7 +108,6 @@ class TestApi:
             assert resp.headers["Access-Control-Allow-Credentials"] == "true"
             assert resp.headers["Access-Control-Expose-Headers"]
 
-    @pytest.mark.asyncio
     async def test_ping_options_no_headers(
         self, api: ApiConfig, client: aiohttp.ClientSession
     ) -> None:
@@ -123,7 +118,6 @@ class TestApi:
                 "origin header is not specified in the request"
             )
 
-    @pytest.mark.asyncio
     async def test_ping_options_unknown_origin(
         self, api: ApiConfig, client: aiohttp.ClientSession
     ) -> None:
@@ -140,7 +134,6 @@ class TestApi:
                 "origin 'http://unknown' is not allowed"
             )
 
-    @pytest.mark.asyncio
     async def test_ping_options(
         self, api: ApiConfig, client: aiohttp.ClientSession
     ) -> None:
@@ -156,7 +149,6 @@ class TestApi:
             assert resp.headers["Access-Control-Allow-Credentials"] == "true"
             assert resp.headers["Access-Control-Allow-Methods"] == "GET"
 
-    @pytest.mark.asyncio
     async def test_config_unauthorized(
         self, api: ApiConfig, client: aiohttp.ClientSession
     ) -> None:
@@ -166,7 +158,6 @@ class TestApi:
             result = await resp.json()
             assert result == {}
 
-    @pytest.mark.asyncio
     async def test_clusters_sync(
         self,
         api: ApiConfig,
@@ -203,7 +194,6 @@ class TestApi:
 
             await assert_cluster_names([])
 
-    @pytest.mark.asyncio
     async def test_config_no_clusters(
         self,
         api: ApiConfig,
@@ -220,7 +210,6 @@ class TestApi:
             error = await resp.json()
             assert error["error"] == "Current user doesn't have access to any cluster."
 
-    @pytest.mark.asyncio
     async def test_config(
         self,
         api: ApiConfig,
@@ -340,7 +329,6 @@ class TestApi:
             }
             assert result == expected_payload
 
-    @pytest.mark.asyncio
     async def test_config_with_orgs(
         self,
         api: ApiConfig,
@@ -460,7 +448,6 @@ class TestApi:
             }
             assert result == expected_payload
 
-    @pytest.mark.asyncio
     async def test_config_with_oauth(
         self,
         api_with_oauth: ApiConfig,
@@ -585,7 +572,6 @@ class TestApi:
 
 
 class TestJobs:
-    @pytest.mark.asyncio
     async def test_create_job_with_http(
         self,
         api: ApiConfig,
@@ -613,7 +599,6 @@ class TestJobs:
         await jobs_client.delete_job(job_id=job_id)
         assert job_response_payload["restart_policy"] == "on-failure"
 
-    @pytest.mark.asyncio
     async def test_create_job_without_http(
         self,
         api: ApiConfig,
@@ -635,7 +620,6 @@ class TestJobs:
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_owner_with_slash(
         self,
         api: ApiConfig,
@@ -669,7 +653,6 @@ class TestJobs:
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_org(
         self,
         api: ApiConfig,
@@ -700,7 +683,6 @@ class TestJobs:
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_pass_config(
         self,
         api: ApiConfig,
@@ -724,7 +706,6 @@ class TestJobs:
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_wait_for_jobs_quota(
         self,
         api: ApiConfig,
@@ -746,7 +727,6 @@ class TestJobs:
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_privileged_flag(
         self,
         api: ApiConfig,
@@ -770,7 +750,6 @@ class TestJobs:
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_tty(
         self,
         api: ApiConfig,
@@ -840,7 +819,6 @@ class TestJobs:
 
         return _run
 
-    @pytest.mark.asyncio
     async def test_create_job_with_secret_env_single_ok(
         self,
         api: ApiConfig,
@@ -865,7 +843,6 @@ class TestJobs:
 
         await _run_job_with_secrets(job_submit, user, secret_env=secret_env)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_secret_volume_single_ok(
         self,
         api: ApiConfig,
@@ -910,7 +887,6 @@ class TestJobs:
             if job_id:
                 await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_org_secret_volume_single_ok(
         self,
         api: ApiConfig,
@@ -966,7 +942,6 @@ class TestJobs:
             if job_id:
                 await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_org_secret_env_single_ok(
         self,
         api: ApiConfig,
@@ -1001,7 +976,6 @@ class TestJobs:
 
         await _run_job_with_secrets(job_submit, org_user, secret_env=secret_env)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_secret_volume_user_with_slash_single_ok(
         self,
         api: ApiConfig,
@@ -1056,7 +1030,6 @@ class TestJobs:
             if job_id:
                 await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_secret_env_user_with_slash_single_ok(
         self,
         api: ApiConfig,
@@ -1088,7 +1061,6 @@ class TestJobs:
 
         await _run_job_with_secrets(job_submit, service_user, secret_env=secret_env)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_disk_volume_single_ok(
         self,
         api: ApiConfig,
@@ -1138,7 +1110,6 @@ class TestJobs:
             if job_id:
                 await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_org_disk_volume_single_ok(
         self,
         api: ApiConfig,
@@ -1198,7 +1169,6 @@ class TestJobs:
             if job_id:
                 await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_disk_volume_user_with_slash_single_ok(
         self,
         api: ApiConfig,
@@ -1254,7 +1224,6 @@ class TestJobs:
             if job_id:
                 await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_one_disk_volume_multiple_mounts_ok(
         self,
         api: ApiConfig,
@@ -1310,7 +1279,6 @@ class TestJobs:
             if job_id:
                 await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_multiple_disk_volumes_ok(
         self,
         api: ApiConfig,
@@ -1370,7 +1338,6 @@ class TestJobs:
             if job_id:
                 await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     async def test_disk_volume_data_persisted_between_jobs(
         self,
         api: ApiConfig,
@@ -1431,7 +1398,6 @@ class TestJobs:
             if job2_id:
                 await jobs_client.delete_job(job2_id)
 
-    @pytest.mark.asyncio
     async def test_disk_volume_race_between_jobs_ok(
         self,
         api: ApiConfig,
@@ -1501,7 +1467,6 @@ class TestJobs:
             for job_id in job_ids:
                 await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_disk_volumes_unexisting_fail(
         self,
         api: ApiConfig,
@@ -1532,7 +1497,6 @@ class TestJobs:
             if job_id:
                 await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("read_only", [True, False])
     async def test_create_job_with_other_user_disk_fail(
         self,
@@ -1570,7 +1534,6 @@ class TestJobs:
             }
             assert perm in result["missing"]
 
-    @pytest.mark.asyncio
     async def test_create_job_with_disk_volume_wrong_scheme_fail(
         self,
         api: ApiConfig,
@@ -1597,7 +1560,6 @@ class TestJobs:
             err = f"Invalid URI scheme: \\\\*'{wrong_scheme}\\\\*' != \\\\*'disk\\\\*'"
             assert re.search(err, msg["error"]), msg
 
-    @pytest.mark.asyncio
     async def test_create_job_with_disk_volume_wrong_cluster_fail(
         self,
         api: ApiConfig,
@@ -1627,7 +1589,6 @@ class TestJobs:
             )
             assert re.search(err, msg["error"]), msg
 
-    @pytest.mark.asyncio
     async def test_create_job_with_disk_volume_invalid_mount_with_dots_fail(
         self,
         api: ApiConfig,
@@ -1650,7 +1611,6 @@ class TestJobs:
             err = f"Invalid path: \\\\*'{invalid_path}\\\\*'"
             assert re.search(err, msg["error"]), msg
 
-    @pytest.mark.asyncio
     async def test_create_job_with_disk_volume_invalid_mount_relative_fail(
         self,
         api: ApiConfig,
@@ -1673,7 +1633,6 @@ class TestJobs:
             err = f"Mount path must be absolute: \\\\*'{invalid_path}\\\\*'"
             assert re.search(err, msg["error"]), msg
 
-    @pytest.mark.asyncio
     async def test_create_job_disk_volumes_same_mount_points_fail(
         self,
         api: ApiConfig,
@@ -1700,7 +1659,6 @@ class TestJobs:
             )
             assert re.search(err, msg["error"]), msg["error"]
 
-    @pytest.mark.asyncio
     async def test_create_job_with_secret_volumes_different_dirs_same_filenames_ok(
         self,
         api: ApiConfig,
@@ -1741,7 +1699,6 @@ class TestJobs:
 
         await _run_job_with_secrets(job_submit, user, secret_volumes=secret_volumes)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_secret_env_and_secret_volumes_ok(
         self,
         api: ApiConfig,
@@ -1812,7 +1769,6 @@ class TestJobs:
             job_submit, user, secret_env=secret_env, secret_volumes=secret_volumes
         )
 
-    @pytest.mark.asyncio
     async def test_create_job_with_secret_same_secret_in_env_and_volumes_ok(
         self,
         api: ApiConfig,
@@ -1870,7 +1826,6 @@ class TestJobs:
             job_submit, user, secret_env=secret_env, secret_volumes=secret_volumes
         )
 
-    @pytest.mark.asyncio
     async def test_create_job_with_secret_same_secret_env_ok(
         self,
         api: ApiConfig,
@@ -1916,7 +1871,6 @@ class TestJobs:
 
         await _run_job_with_secrets(job_submit, user, secret_env=secret_env)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_secret_same_secret_volumes_different_dirs_ok(
         self,
         api: ApiConfig,
@@ -1962,7 +1916,6 @@ class TestJobs:
 
         await _run_job_with_secrets(job_submit, user, secret_volumes=secret_volumes)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_secret_same_secret_volumes_different_filenames_ok(
         self,
         api: ApiConfig,
@@ -2008,7 +1961,6 @@ class TestJobs:
 
         await _run_job_with_secrets(job_submit, user, secret_volumes=secret_volumes)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_secret_volumes_relative_directory_ok(
         self,
         api: ApiConfig,
@@ -2049,7 +2001,6 @@ class TestJobs:
 
         await _run_job_with_secrets(job_submit, user, secret_volumes=secret_volumes)
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
     async def test_create_job_with_secret_missing_all_user_secrets_fail(
         self,
@@ -2092,7 +2043,6 @@ class TestJobs:
             if job_id:
                 await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
     async def test_create_job_with_secret_missing_all_requested_secrets_fail(
         self,
@@ -2143,7 +2093,6 @@ class TestJobs:
             if job_id:
                 await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
     async def test_create_job_with_secret_env_missing_some_requested_secrets_fail(
         self,
@@ -2189,7 +2138,6 @@ class TestJobs:
             if job_id:
                 await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
     async def test_create_job_with_secret_env_use_other_user_secret_fail(
         self,
@@ -2237,7 +2185,6 @@ class TestJobs:
             result = await resp.json()
             assert result == {"missing": [{"uri": secret_uri_2, "action": "read"}]}
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
     async def test_create_job_with_secret_env_use_other_user_secret_success(
         self,
@@ -2321,7 +2268,6 @@ class TestJobs:
             job_submit, usr_2, secret_env=secret_env, secret_volumes=secret_volumes
         )
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
     async def test_create_job_with_secret_env_wrong_scheme_fail(
         self,
@@ -2360,7 +2306,6 @@ class TestJobs:
             )
             assert re.search(err, msg["error"]), msg
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("secret_kind", ["secret_env", "secret_volumes"])
     async def test_create_job_with_secret_env_wrong_cluster_fail(
         self,
@@ -2399,7 +2344,6 @@ class TestJobs:
             )
             assert re.search(err, msg["error"]), msg
 
-    @pytest.mark.asyncio
     async def test_create_job_with_secret_volume_invalid_mount_with_dots_fail(
         self,
         api: ApiConfig,
@@ -2422,7 +2366,6 @@ class TestJobs:
             err = f"Invalid path: \\\\*'{invalid_path}\\\\*'"
             assert re.search(err, msg["error"]), msg
 
-    @pytest.mark.asyncio
     async def test_create_job_with_secret_volume_invalid_mount_relative_fail(
         self,
         api: ApiConfig,
@@ -2445,7 +2388,6 @@ class TestJobs:
             err = f"Mount path must be absolute: \\\\*'{invalid_path}\\\\*'"
             assert re.search(err, msg["error"]), msg
 
-    @pytest.mark.asyncio
     async def test_create_job_with_and_secret_volumes_same_mount_points_fail(
         self,
         api: ApiConfig,
@@ -2472,7 +2414,6 @@ class TestJobs:
             )
             assert re.search(err, msg["error"]), msg
 
-    @pytest.mark.asyncio
     async def test_create_job_set_max_run_time(
         self,
         api: ApiConfig,
@@ -2490,7 +2431,6 @@ class TestJobs:
             assert result["status"] in ["pending"]
             assert result["max_run_time_minutes"] == 10
 
-    @pytest.mark.asyncio
     async def test_get_job_run_time_seconds(
         self,
         api: ApiConfig,
@@ -2519,7 +2459,6 @@ class TestJobs:
             # so we should give it time to actually kill the job
             assert 3 - 2 < run_time < 3 + 2
 
-    @pytest.mark.asyncio
     async def test_create_job_volume_wrong_storage_scheme(
         self,
         api: ApiConfig,
@@ -2544,7 +2483,6 @@ class TestJobs:
             err = "Invalid URI scheme: \\\\*'wrong-scheme\\\\*'"
             assert re.search(err, payload["error"]), payload
 
-    @pytest.mark.asyncio
     async def test_create_job_volume_wrong_cluster_name(
         self,
         api: ApiConfig,
@@ -2570,7 +2508,6 @@ class TestJobs:
             )
             assert re.search(err, payload["error"]), payload
 
-    @pytest.mark.asyncio
     async def test_create_job_volume_wrong_path_with_dots(
         self,
         api: ApiConfig,
@@ -2595,7 +2532,6 @@ class TestJobs:
             err = r"Invalid path: \\*'/var/storage/../another\\*'"
             assert re.search(err, payload["error"]), payload
 
-    @pytest.mark.asyncio
     async def test_create_job_volume_wrong_path_not_absolute(
         self,
         api: ApiConfig,
@@ -2620,7 +2556,6 @@ class TestJobs:
             err = r"Mount path must be absolute: \\*'var/storage\\*'"
             assert re.search(err, payload["error"]), payload
 
-    @pytest.mark.asyncio
     async def test_incorrect_request(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
@@ -2633,7 +2568,6 @@ class TestJobs:
             data = await response.json()
             assert "'container': DataError('is required')" in data["error"]
 
-    @pytest.mark.asyncio
     async def test_broken_docker_image(
         self,
         api: ApiConfig,
@@ -2673,7 +2607,6 @@ class TestJobs:
             job_id = data["id"]
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="failed")
 
-    @pytest.mark.asyncio
     async def test_forbidden_storage_uri(
         self,
         api: ApiConfig,
@@ -2707,7 +2640,6 @@ class TestJobs:
                 "missing": [{"action": "write", "uri": f"storage://{cluster_name}"}]
             }
 
-    @pytest.mark.asyncio
     async def test_forbidden_image(
         self,
         api: ApiConfig,
@@ -2739,7 +2671,6 @@ class TestJobs:
                 ]
             }
 
-    @pytest.mark.asyncio
     async def test_allowed_image(
         self,
         api: ApiConfig,
@@ -2764,7 +2695,6 @@ class TestJobs:
             job_id = result["id"]
         await jobs_client.delete_job(job_id=job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_unauthorized_no_token(
         self, api: ApiConfig, client: aiohttp.ClientSession, job_submit: dict[str, Any]
     ) -> None:
@@ -2772,7 +2702,6 @@ class TestJobs:
         async with client.post(url, json=job_submit) as response:
             assert response.status == HTTPUnauthorized.status_code
 
-    @pytest.mark.asyncio
     async def test_create_job_unauthorized_invalid_token(
         self, api: ApiConfig, client: aiohttp.ClientSession, job_submit: dict[str, Any]
     ) -> None:
@@ -2781,7 +2710,6 @@ class TestJobs:
         async with client.post(url, headers=headers, json=job_submit) as response:
             assert response.status == HTTPUnauthorized.status_code
 
-    @pytest.mark.asyncio
     async def test_create_job_invalid_job_name(
         self,
         api: ApiConfig,
@@ -2800,7 +2728,6 @@ class TestJobs:
             payload = await response.json()
             assert "does not match pattern" in payload["error"]
 
-    @pytest.mark.asyncio
     async def test_create_job_user_has_unknown_cluster_name(
         self,
         api: ApiConfig,
@@ -2819,7 +2746,6 @@ class TestJobs:
             payload = await response.json()
             assert payload == {"error": "No clusters"}
 
-    @pytest.mark.asyncio
     async def test_create_job_unknown_cluster_name(
         self,
         api: ApiConfig,
@@ -2842,7 +2768,6 @@ class TestJobs:
                 "error": "User is not allowed to submit jobs to the specified cluster"
             }
 
-    @pytest.mark.asyncio
     async def test_create_job_no_clusters(
         self,
         api: ApiConfig,
@@ -2861,7 +2786,6 @@ class TestJobs:
             payload = await response.json()
             assert payload == {"error": "No clusters"}
 
-    @pytest.mark.asyncio
     async def test_create_job(
         self,
         api: ApiConfig,
@@ -2911,7 +2835,6 @@ class TestJobs:
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_from_preset(
         self,
         api: ApiConfig,
@@ -2946,7 +2869,6 @@ class TestJobs:
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_without_name_http_url_named_not_sent(
         self,
         api: ApiConfig,
@@ -2967,7 +2889,6 @@ class TestJobs:
 
         await jobs_client.delete_job(job_id=job_id)
 
-    @pytest.mark.asyncio
     async def test_create_multiple_jobs_with_same_name_fail(
         self,
         api: ApiConfig,
@@ -3002,7 +2923,6 @@ class TestJobs:
         # cleanup
         await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     async def test_create_job_with_tags(
         self,
         api: ApiConfig,
@@ -3030,8 +2950,6 @@ class TestJobs:
         # cleanup
         await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
-    @pytest.mark.asyncio
     async def test_create_job_has_credits(
         self,
         api: ApiConfig,
@@ -3050,7 +2968,6 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
         jobs_client_factory(user)  # perform jobs cleanup after test
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "credits",
         [
@@ -3058,7 +2975,6 @@ class TestJobs:
             Decimal("-0.01"),
         ],
     )
-    @pytest.mark.asyncio
     async def test_create_job_no_credits(
         self,
         api: ApiConfig,
@@ -3078,7 +2994,6 @@ class TestJobs:
             data = await response.json()
             assert data == {"error": f"No credits left for user '{user.name}'"}
 
-    @pytest.mark.asyncio
     async def test_create_multiple_jobs_with_same_name_after_first_finished(
         self,
         api: ApiConfig,
@@ -3107,12 +3022,10 @@ class TestJobs:
             job_id = payload["id"]
             await jobs_client.delete_job(job_id)
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_clear(self, jobs_client: JobsClient) -> None:
         jobs = await jobs_client.get_all_jobs()
         assert jobs == []
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_bad_args(
         self,
         api: ApiConfig,
@@ -3142,7 +3055,6 @@ class TestJobs:
             data = await response.json()
             assert "limit should be > 0" in data["error"]
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_not_streamed(
         self,
         api: ApiConfig,
@@ -3178,7 +3090,6 @@ class TestJobs:
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job1_id, job2_id}
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_wrong_status(
         self,
         api: ApiConfig,
@@ -3198,7 +3109,6 @@ class TestJobs:
         async with client.get(url, headers=headers, params=filters2) as response:
             assert response.status == HTTPBadRequest.status_code, await response.text()
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_status_only_single_status_pending(
         self,
         api: ApiConfig,
@@ -3228,7 +3138,6 @@ class TestJobs:
         job_ids = {job["id"] for job in jobs}
         assert job_ids == set()
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_tags(
         self,
         api: ApiConfig,
@@ -3289,7 +3198,6 @@ class TestJobs:
         job_ids = {job["id"] for job in jobs}
         assert not job_ids
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_status_only(
         self,
         api: ApiConfig,
@@ -3353,7 +3261,6 @@ class TestJobs:
         for job_id in job_ids_alive:
             await jobs_client.delete_job(job_id=job_id)
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_date_range(
         self,
         api: ApiConfig,
@@ -3403,7 +3310,6 @@ class TestJobs:
         job_ids = {job["id"] for job in await jobs_client.get_all_jobs(filters)}
         assert job_ids == {job_1, job_2, job_3}
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_org(
         self,
         api: ApiConfig,
@@ -3551,7 +3457,6 @@ class TestJobs:
 
         yield _impl
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_job_name_and_statuses(
         self,
         api: ApiConfig,
@@ -3626,7 +3531,6 @@ class TestJobs:
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [job_usr_with_name, job_usr_with_name_killed]
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_job_name_self_owner_and_statuses(
         self,
         api: ApiConfig,
@@ -3709,7 +3613,6 @@ class TestJobs:
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [job_usr1_with_name_killed]
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_job_name_another_owner_and_statuses(
         self,
         api: ApiConfig,
@@ -3791,7 +3694,6 @@ class TestJobs:
         job_ids = [job["id"] for job in jobs]
         assert job_ids == [job_usr2_with_name_killed]
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_job_name_multiple_owners_and_statuses(
         self,
         api: ApiConfig,
@@ -3957,7 +3859,6 @@ class TestJobs:
             job_usr1_with_name_killed,
         ]
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_filter_by_job_name_owner_and_status_invalid_name(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
@@ -3974,7 +3875,6 @@ class TestJobs:
         async with client.get(url, headers=headers, params=filters2) as resp:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
 
-    @pytest.mark.asyncio
     async def test_get_all_jobs_shared(
         self,
         jobs_client_factory: Callable[[_User], JobsClient],
@@ -4028,7 +3928,6 @@ class TestJobs:
             job_ids = {json.loads(line)["id"] async for line in response.content}
             assert job_ids == {job_id}
 
-    @pytest.mark.asyncio
     async def test_get_shared_job(
         self,
         jobs_client_factory: Callable[[_User], JobsClient],
@@ -4078,7 +3977,6 @@ class TestJobs:
         async with client.get(url, headers=follower.headers) as response:
             assert response.status == HTTPOk.status_code, await response.text()
 
-    @pytest.mark.asyncio
     async def test_get_jobs_return_corrects_id(
         self,
         jobs_client: JobsClient,
@@ -4111,7 +4009,6 @@ class TestJobs:
         for job in jobs:
             await jobs_client.delete_job(job_id=job["id"])
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "filters",
         [
@@ -4167,7 +4064,6 @@ class TestJobs:
         for job_id in jobs_ids:
             await jobs_client.delete_job(job_id=job_id)
 
-    @pytest.mark.asyncio
     async def test_get_job_by_cluster_name_and_statuses(
         self,
         api: ApiConfig,
@@ -4227,7 +4123,6 @@ class TestJobs:
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job_usr2}
 
-    @pytest.mark.asyncio
     async def test_get_job_by_hostname_self_owner(
         self,
         api: ApiConfig,
@@ -4279,7 +4174,6 @@ class TestJobs:
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
         assert not jobs
 
-    @pytest.mark.asyncio
     async def test_get_job_by_hostname_another_owner(
         self,
         api: ApiConfig,
@@ -4318,7 +4212,6 @@ class TestJobs:
         jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
         assert not jobs
 
-    @pytest.mark.asyncio
     async def test_get_job_by_hostname_and_status(
         self,
         api: ApiConfig,
@@ -4359,7 +4252,6 @@ class TestJobs:
             job_ids = {job["id"] for job in jobs}
             assert job_ids == {job_id}
 
-    @pytest.mark.asyncio
     async def test_get_job_by_hostname_invalid_request(
         self,
         api: ApiConfig,
@@ -4393,7 +4285,6 @@ class TestJobs:
                 response_text = await response.text()
                 assert response.status == HTTPBadRequest.status_code, response_text
 
-    @pytest.mark.asyncio
     async def test_set_job_status_no_reason(
         self,
         api: ApiConfig,
@@ -4428,7 +4319,6 @@ class TestJobs:
             assert result["history"].get("description") is None
             assert result["history"].get("exit_code") is None
 
-    @pytest.mark.asyncio
     async def test_set_job_status_with_details(
         self,
         api: ApiConfig,
@@ -4468,7 +4358,6 @@ class TestJobs:
             assert result["history"]["description"] == "test_set_job_status"
             assert result["history"]["exit_code"] == 42
 
-    @pytest.mark.asyncio
     async def test_set_job_status_wrong_status(
         self,
         api: ApiConfig,
@@ -4486,7 +4375,6 @@ class TestJobs:
         async with client.put(url, headers=headers, json=payload) as response:
             assert response.status == HTTPBadRequest.status_code, await response.text()
 
-    @pytest.mark.asyncio
     async def test_set_job_status_bad_transition(
         self,
         api: ApiConfig,
@@ -4506,7 +4394,6 @@ class TestJobs:
         async with client.put(url, headers=headers, json=payload) as response:
             assert response.status == HTTPBadRequest.status_code, await response.text()
 
-    @pytest.mark.asyncio
     async def test_set_job_status_unprivileged(
         self,
         api: ApiConfig,
@@ -4528,7 +4415,6 @@ class TestJobs:
                 "missing": [{"uri": f"job://{cluster_name}", "action": "manage"}]
             }
 
-    @pytest.mark.asyncio
     async def test_set_job_materialized(
         self,
         api: ApiConfig,
@@ -4561,7 +4447,6 @@ class TestJobs:
 
         await asyncio.wait_for(_try_check(), timeout=5)
 
-    @pytest.mark.asyncio
     async def test_update_max_run_time(
         self,
         api: ApiConfig,
@@ -4587,7 +4472,6 @@ class TestJobs:
         result = await jobs_client.get_job_by_id(job_id)
         assert result["max_run_time_minutes"] == 25
 
-    @pytest.mark.asyncio
     async def test_delete_job(
         self,
         api: ApiConfig,
@@ -4612,7 +4496,6 @@ class TestJobs:
         assert jobs[0]["status"] == "succeeded"
         assert jobs[0]["id"] == job_id
 
-    @pytest.mark.asyncio
     async def test_delete_job_forbidden(
         self,
         api: ApiConfig,
@@ -4645,7 +4528,6 @@ class TestJobs:
                 ]
             }
 
-    @pytest.mark.asyncio
     async def test_delete_already_deleted(
         self,
         api: ApiConfig,
@@ -4668,7 +4550,6 @@ class TestJobs:
         # delete again (same result expected)
         await jobs_client.delete_job(job_id=job_id)
 
-    @pytest.mark.asyncio
     async def test_delete_not_exist(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
@@ -4679,7 +4560,6 @@ class TestJobs:
             result = await response.json()
             assert result["error"] == f"no such job {job_id}"
 
-    @pytest.mark.asyncio
     async def test_drop_job(
         self,
         api: ApiConfig,
@@ -4708,7 +4588,6 @@ class TestJobs:
         jobs = await jobs_client.get_all_jobs()
         assert len(jobs) == 0
 
-    @pytest.mark.asyncio
     async def test_create_validation_failure(
         self, api: ApiConfig, client: aiohttp.ClientSession, regular_user: _User
     ) -> None:
@@ -4721,7 +4600,6 @@ class TestJobs:
             assert response_payload == {"error": mock.ANY}
             assert "is required" in response_payload["error"]
 
-    @pytest.mark.asyncio
     async def test_resolve_job_by_name(
         self, job_submit: dict[str, Any], jobs_client: JobsClient
     ) -> None:
@@ -4737,7 +4615,6 @@ class TestJobs:
 
         await jobs_client.delete_job(job_name)
 
-    @pytest.mark.asyncio
     async def test_get_job_shared_by_name(
         self,
         api: ApiConfig,
@@ -4774,7 +4651,6 @@ class TestJobs:
             async with client.get(url, headers=usr1.headers) as resp:
                 assert resp.status == HTTPForbidden.status_code, await resp.text()
 
-    @pytest.mark.asyncio
     async def test_delete_job_shared_by_name(
         self,
         api: ApiConfig,
@@ -4808,7 +4684,6 @@ class TestJobs:
             async with client.delete(url, headers=usr1.headers) as resp:
                 assert resp.status == HTTPForbidden.status_code, await resp.text()
 
-    @pytest.mark.asyncio
     async def test_create_with_custom_volumes(
         self,
         jobs_client: JobsClient,
@@ -4943,7 +4818,6 @@ class TestJobs:
             "price_credits_per_hour": "10",
         }
 
-    @pytest.mark.asyncio
     async def test_job_failed(
         self,
         jobs_client: JobsClient,
@@ -5040,7 +4914,6 @@ class TestJobs:
             "price_credits_per_hour": "10",
         }
 
-    @pytest.mark.asyncio
     async def test_job_create_unknown_gpu_model(
         self,
         jobs_client: JobsClient,
@@ -5073,7 +4946,6 @@ class TestJobs:
                 data["error"],
             ), data
 
-    @pytest.mark.asyncio
     async def test_create_gpu_model(
         self,
         jobs_client: JobsClient,
@@ -5152,7 +5024,6 @@ class TestJobs:
                 "price_credits_per_hour": "10",
             }
 
-    @pytest.mark.asyncio
     async def test_create_unknown_tpu_model(
         self,
         jobs_client: JobsClient,
@@ -5182,7 +5053,6 @@ class TestJobs:
                 r"\\*'type\\*': DataError\(\"value doesn\\*'t match", data["error"]
             )
 
-    @pytest.mark.asyncio
     async def test_create_tpu_model(
         self,
         jobs_client: JobsClient,
@@ -5259,7 +5129,6 @@ class TestJobs:
 
 
 class TestRuntimeLimitEnforcer:
-    @pytest.mark.asyncio
     async def test_enforce_runtime(
         self,
         api: ApiConfig,
@@ -5320,7 +5189,6 @@ class TestRuntimeLimitEnforcer:
 
 
 class TestBillingEnforcer:
-    @pytest.mark.asyncio
     async def test_enforce_billing(
         self,
         api: ApiConfig,
@@ -5375,7 +5243,6 @@ class TestBillingEnforcer:
                 f"delta from right value is {expected_charge - real_charge}"
             )
 
-    @pytest.mark.asyncio
     async def test_enforce_billing_with_org(
         self,
         api: ApiConfig,
@@ -5437,7 +5304,6 @@ class TestBillingEnforcer:
 
 
 class TestRetentionEnforcer:
-    @pytest.mark.asyncio
     async def test_enforce_retention(
         self,
         api: ApiConfig,

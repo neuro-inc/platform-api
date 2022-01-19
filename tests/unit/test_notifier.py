@@ -24,7 +24,6 @@ class Counter:
 
 
 class TestInMemoryNotifier:
-    @pytest.mark.asyncio
     async def test_notifier(self) -> None:
         notifier = InMemoryNotifier()
         counter = Counter()

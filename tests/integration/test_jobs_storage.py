@@ -86,7 +86,6 @@ class TestJobsStorage:
             name=job_name, status=JobStatus.CANCELLED, owner=owner, **kwargs
         )
 
-    @pytest.mark.asyncio
     async def test_set_get(self, storage: JobsStorage) -> None:
         original_job = self._create_pending_job()
         await storage.set_job(original_job)
@@ -95,7 +94,6 @@ class TestJobsStorage:
         assert job.id == original_job.id
         assert job.status == original_job.status
 
-    @pytest.mark.asyncio
     async def test_drop_job(self, storage: JobsStorage) -> None:
         original_job = self._create_pending_job()
         await storage.set_job(original_job)
@@ -107,13 +105,11 @@ class TestJobsStorage:
         with pytest.raises(JobError):
             await storage.get_job(original_job.id)
 
-    @pytest.mark.asyncio
     async def test_drop_unexisting_job(self, storage: JobsStorage) -> None:
         original_job = self._create_pending_job()
         with pytest.raises(JobError):
             await storage.drop_job(original_job.id)
 
-    @pytest.mark.asyncio
     async def test_try_create_job__no_name__ok(self, storage: JobsStorage) -> None:
 
         pending_job = self._create_pending_job()
@@ -132,7 +128,6 @@ class TestJobsStorage:
         result_job = await storage.get_job(running_job.id)
         assert result_job.status == JobStatus.SUCCEEDED
 
-    @pytest.mark.asyncio
     async def test_try_create_job__no_name__job_changed_while_creation(
         self, storage: JobsStorage
     ) -> None:
@@ -165,7 +160,6 @@ class TestJobsStorage:
         result_job = await storage.get_job(job.id)
         assert result_job.status == JobStatus.SUCCEEDED
 
-    @pytest.mark.asyncio
     async def test_try_create_job__different_name_same_owner__ok(
         self, storage: JobsStorage
     ) -> None:
@@ -190,7 +184,6 @@ class TestJobsStorage:
         assert job.id == job_2.id
         assert job.status == JobStatus.RUNNING
 
-    @pytest.mark.asyncio
     async def test_try_create_job__same_name_different_owner__ok(
         self, storage: JobsStorage
     ) -> None:
@@ -216,7 +209,6 @@ class TestJobsStorage:
         assert job.id == job_2.id
         assert job.status == JobStatus.RUNNING
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("first_job_status", [JobStatus.PENDING, JobStatus.RUNNING])
     async def test_try_create_job__same_name_with_an_active_job__conflict(
         self, storage: JobsStorage, first_job_status: JobStatus
@@ -243,7 +235,6 @@ class TestJobsStorage:
             async with storage.try_create_job(second_job):
                 pass
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("first_job_status", [JobStatus.PENDING, JobStatus.RUNNING])
     async def test_try_create_job__same_name_and_base_owner_with_active_job__conflict(
         self, storage: JobsStorage, first_job_status: JobStatus
@@ -272,7 +263,6 @@ class TestJobsStorage:
             async with storage.try_create_job(second_job):
                 pass
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "first_job_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
     )
@@ -301,7 +291,6 @@ class TestJobsStorage:
         assert job.id == second_job.id
         assert job.status == JobStatus.PENDING
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "first_job_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
     )
@@ -332,7 +321,6 @@ class TestJobsStorage:
         assert job.id == second_job.id
         assert job.status == JobStatus.PENDING
 
-    @pytest.mark.asyncio
     async def test_try_create_job_with_tags(self, storage: JobsStorage) -> None:
 
         tags = ["tag1", "tag2"]
@@ -344,18 +332,15 @@ class TestJobsStorage:
         result_job = await storage.get_job(job.id)
         assert result_job.tags == tags
 
-    @pytest.mark.asyncio
     async def test_get_non_existent(self, storage: JobsStorage) -> None:
         with pytest.raises(JobError, match="no such job unknown"):
             await storage.get_job("unknown")
 
-    @pytest.mark.asyncio
     async def test_get_all_no_filter_empty_result(self, storage: JobsStorage) -> None:
 
         jobs = await storage.get_all_jobs()
         assert not jobs
 
-    @pytest.mark.asyncio
     async def test_get_all_no_filter_single_job(self, storage: JobsStorage) -> None:
         original_job = self._create_pending_job()
         await storage.set_job(original_job)
@@ -366,7 +351,6 @@ class TestJobsStorage:
         assert job.id == original_job.id
         assert job.status == original_job.status
 
-    @pytest.mark.asyncio
     async def test_get_all_no_filter_multiple_jobs(self, storage: JobsStorage) -> None:
         original_jobs = [
             self._create_pending_job(job_name="jobname1"),
@@ -388,7 +372,6 @@ class TestJobsStorage:
         )
         assert job_reprs == original_job_reprs
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_status(self, storage: JobsStorage) -> None:
         pending_job = self._create_pending_job()
         running_job = self._create_running_job()
@@ -435,7 +418,6 @@ class TestJobsStorage:
         job_ids = [job.id for job in jobs]
         assert job_ids == [succeeded_job.id]
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_tags(self, storage: JobsStorage) -> None:
         job1 = self._create_job(tags=["t1"])
         job2 = self._create_job(tags=["t1", "t2"])
@@ -486,7 +468,6 @@ class TestJobsStorage:
         job_ids = [job.id for job in jobs]
         assert not job_ids
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("statuses", [(), (JobStatus.PENDING, JobStatus.RUNNING)])
     async def test_get_all_filter_by_date_range(
         self, statuses: tuple[JobStatus, ...], storage: JobsStorage
@@ -625,7 +606,6 @@ class TestJobsStorage:
                 pass
         return jobs
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_single_owner(self, storage: JobsStorage) -> None:
         jobs = await self.prepare_filtering_test(storage)
 
@@ -636,7 +616,6 @@ class TestJobsStorage:
         assert expected
         assert job_ids == expected
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_single_base_owner(
         self, storage: JobsStorage
     ) -> None:
@@ -649,7 +628,6 @@ class TestJobsStorage:
         assert expected
         assert job_ids == expected
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_multiple_owners(
         self, storage: JobsStorage
     ) -> None:
@@ -668,7 +646,6 @@ class TestJobsStorage:
     canc = JobStatus.CANCELLED
     fail = JobStatus.FAILED
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "name,owners,statuses",
         [
@@ -731,7 +708,6 @@ class TestJobsStorage:
         )
         assert actual == expected
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "name,statuses",
         [
@@ -759,7 +735,6 @@ class TestJobsStorage:
         ]
         assert job_ids == expected
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_owner_and_name(
         self,
         storage: JobsStorage,
@@ -774,7 +749,6 @@ class TestJobsStorage:
         expected = [job.id for job in jobs if job.name == name and job.owner == owner]
         assert job_ids == expected
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_owner_name_and_status(
         self,
         storage: JobsStorage,
@@ -829,7 +803,6 @@ class TestJobsStorage:
         ]
         assert job_ids == expected
 
-    @pytest.mark.asyncio
     async def test_get_all_shared_by_name(self, storage: JobsStorage) -> None:
         jobs = await self.prepare_filtering_test(storage)
 
@@ -850,7 +823,6 @@ class TestJobsStorage:
         ]
         assert job_ids == expected
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_hostname(
         self,
         storage: JobsStorage,
@@ -867,7 +839,6 @@ class TestJobsStorage:
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == {job1.id, job2.id}
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_hostname_and_status(
         self,
         storage: JobsStorage,
@@ -941,7 +912,6 @@ class TestJobsStorage:
                 pass
         return jobs
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_cluster(self, storage: JobsStorage) -> None:
         jobs = await self.prepare_filtering_test_different_clusters(storage)
 
@@ -1003,7 +973,6 @@ class TestJobsStorage:
                 pass
         return jobs
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_org(self, storage: JobsStorage) -> None:
         jobs = await self.prepare_filtering_test_different_orgs(storage)
 
@@ -1023,7 +992,6 @@ class TestJobsStorage:
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == set()
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_fully_billed(self, storage: JobsStorage) -> None:
         jobs = [
             self._create_job(fully_billed=True),
@@ -1037,7 +1005,6 @@ class TestJobsStorage:
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[0].id, jobs[2].id]
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_being_dropped(self, storage: JobsStorage) -> None:
         jobs = [
             self._create_job(being_dropped=True),
@@ -1055,7 +1022,6 @@ class TestJobsStorage:
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[1].id]
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_logs_removed(self, storage: JobsStorage) -> None:
         jobs = [
             self._create_job(logs_removed=True),
@@ -1073,7 +1039,6 @@ class TestJobsStorage:
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[1].id]
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_cluster_and_owner(
         self, storage: JobsStorage
     ) -> None:
@@ -1131,7 +1096,6 @@ class TestJobsStorage:
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[0].id, jobs[1].id, jobs[6].id, jobs[7].id, jobs[8].id]
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_cluster_and_name(
         self, storage: JobsStorage
     ) -> None:
@@ -1157,7 +1121,6 @@ class TestJobsStorage:
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == []
 
-    @pytest.mark.asyncio
     async def test_get_all_filter_by_cluster_and_status(
         self, storage: JobsStorage
     ) -> None:
@@ -1189,13 +1152,11 @@ class TestJobsStorage:
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == []
 
-    @pytest.mark.asyncio
     async def test_get_running_empty(self, storage: JobsStorage) -> None:
 
         jobs = await storage.get_running_jobs()
         assert not jobs
 
-    @pytest.mark.asyncio
     async def test_get_running(self, storage: JobsStorage) -> None:
         pending_job = self._create_pending_job()
         running_job = self._create_running_job()
@@ -1210,12 +1171,10 @@ class TestJobsStorage:
         assert job.id == running_job.id
         assert job.status == JobStatus.RUNNING
 
-    @pytest.mark.asyncio
     async def test_get_unfinished_empty(self, storage: JobsStorage) -> None:
         jobs = await storage.get_unfinished_jobs()
         assert not jobs
 
-    @pytest.mark.asyncio
     async def test_get_unfinished(self, storage: JobsStorage) -> None:
         pending_job = self._create_pending_job()
         running_job = self._create_running_job()
@@ -1229,12 +1188,10 @@ class TestJobsStorage:
         assert [job.id for job in jobs] == [pending_job.id, running_job.id]
         assert all([not job.is_finished for job in jobs])
 
-    @pytest.mark.asyncio
     async def test_get_for_deletion_empty(self, storage: JobsStorage) -> None:
         jobs = await storage.get_jobs_for_deletion()
         assert not jobs
 
-    @pytest.mark.asyncio
     async def test_get_for_deletion(self, storage: JobsStorage) -> None:
         pending_job = self._create_pending_job()
         running_job = self._create_running_job()
@@ -1252,12 +1209,10 @@ class TestJobsStorage:
         assert job.status == JobStatus.SUCCEEDED
         assert job.materialized
 
-    @pytest.mark.asyncio
     async def test_get_for_drop_empty(self, storage: JobsStorage) -> None:
         jobs = await storage.get_jobs_for_drop()
         assert not jobs
 
-    @pytest.mark.asyncio
     async def test_get_for_drop(self, storage: JobsStorage) -> None:
         pending_job = self._create_pending_job()
         running_job = self._create_running_job()
@@ -1306,7 +1261,6 @@ class TestJobsStorage:
         assert len(jobs) == 1
         assert {deleted_job_1.id, deleted_job_2.id}.issuperset({job.id for job in jobs})
 
-    @pytest.mark.asyncio
     async def test_job_lifecycle(self, storage: JobsStorage) -> None:
         job = self._create_pending_job()
         job_id = job.id
@@ -1368,7 +1322,6 @@ class TestJobsStorage:
         jobs = await storage.get_jobs_for_deletion()
         assert not jobs
 
-    @pytest.mark.asyncio
     async def test_try_update_job__no_name__ok(self, storage: JobsStorage) -> None:
         pending_job = self._create_pending_job()
         await storage.set_job(pending_job)
@@ -1380,7 +1333,6 @@ class TestJobsStorage:
         running_job = await storage.get_job(pending_job.id)
         assert running_job.status == JobStatus.RUNNING
 
-    @pytest.mark.asyncio
     async def test_try_update_job__not_found(self, storage: JobsStorage) -> None:
         pending_job = self._create_pending_job()
 
@@ -1388,7 +1340,6 @@ class TestJobsStorage:
             async with storage.try_update_job(pending_job.id):
                 pass
 
-    @pytest.mark.asyncio
     async def test_try_update_job__no_name__job_changed_while_creation(
         self, storage: JobsStorage
     ) -> None:
@@ -1422,7 +1373,6 @@ class TestJobsStorage:
         result_job = await storage.get_job(job.id)
         assert result_job.status == JobStatus.RUNNING
 
-    @pytest.mark.asyncio
     async def test_try_update_job__different_name_same_owner__ok(
         self, storage: JobsStorage
     ) -> None:
@@ -1450,7 +1400,6 @@ class TestJobsStorage:
         assert job.id == job_2.id
         assert job.status == JobStatus.FAILED
 
-    @pytest.mark.asyncio
     async def test_try_update_job__same_name_different_owner__ok(
         self, storage: JobsStorage
     ) -> None:
@@ -1478,7 +1427,6 @@ class TestJobsStorage:
         assert job.id == job_2.id
         assert job.status == JobStatus.FAILED
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "first_job_status", [JobStatus.SUCCEEDED, JobStatus.FAILED]
     )
@@ -1514,12 +1462,10 @@ class TestJobsStorage:
         assert job.id == second_job.id
         assert job.status == JobStatus.RUNNING
 
-    @pytest.mark.asyncio
     async def test_get_jobs_by_ids_missing_only(self, storage: JobsStorage) -> None:
         jobs = await storage.get_jobs_by_ids({"missing"})
         assert not jobs
 
-    @pytest.mark.asyncio
     async def test_get_jobs_by_ids(self, storage: JobsStorage) -> None:
         first_job = self._create_pending_job(owner="testuser")
         second_job = self._create_running_job(owner="anotheruser")
