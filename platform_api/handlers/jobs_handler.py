@@ -212,12 +212,12 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
 
 
 def create_job_cluster_org_name_validator(
-    default_cluster_name: str, org_name: Optional[str]
+    default_cluster_name: str, default_org_name: Optional[str]
 ) -> t.Trafaret:
     return t.Dict(
         {
             t.Key("cluster_name", default=default_cluster_name): t.String,
-            t.Key("org_name", default=org_name): t.String | t.Null,
+            t.Key("org_name", default=default_org_name): t.String | t.Null,
         }
     ).allow_extra("*")
 
@@ -616,10 +616,14 @@ class JobsHandler:
         cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
         self._check_user_can_submit_jobs(cluster_configs)
         default_cluster_name = cluster_configs[0].config.name
-        default_org_name_name = cluster_configs[0].orgs[0]
+        default_org_name = cluster_configs[0].orgs[0]
+        if None in cluster_configs[0].orgs:
+            # Always use NO_ORG as default if
+            # use has direct access to cluster
+            default_org_name = None
 
         job_cluster_org_name_validator = create_job_cluster_org_name_validator(
-            default_cluster_name, default_org_name_name
+            default_cluster_name, default_org_name
         )
         request_payload = job_cluster_org_name_validator.check(orig_payload)
         cluster_name = request_payload["cluster_name"]
