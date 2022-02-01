@@ -197,13 +197,13 @@ class TestStorageVolume:
             kube_config=kube_config,
         )
         container_volume = ContainerVolume.create(
-            "storage:/isolated/dir",
+            "storage://isolated/dir",
             dst_path=PurePath("/vat/storage"),
             read_only=True,
         )
         volume = kube_orchestrator.create_storage_volume(container_volume)
         assert volume == PVCVolume(
-            name="storage", path=PurePath("/tmp"), claim_name="isolated-claim"
+            name="storage-isolated", path=PurePath("/tmp"), claim_name="isolated-claim"
         )
 
 

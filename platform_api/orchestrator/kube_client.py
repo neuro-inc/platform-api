@@ -696,11 +696,13 @@ class PodDescriptor:
             return [], []
 
         volumes = []
+        volume_names = []
         volume_mounts = []
 
         for container_volume in container.volumes:
             volume = storage_volume_factory(container_volume)
-            if volume not in volumes:
+            if volume.name not in volume_names:
+                volume_names.append(volume.name)
                 volumes.append(volume)
             volume_mounts.append(volume.create_mount(container_volume))
 
@@ -1205,8 +1207,8 @@ class ExecChannel(int, enum.Enum):
 
 class PodExec:
     RE_EXIT = re.compile(
-        br"^command terminated with non-zero exit code: "
-        br"Error executing in Docker Container: (\d+)$"
+        rb"^command terminated with non-zero exit code: "
+        rb"Error executing in Docker Container: (\d+)$"
     )
 
     def __init__(self, ws: aiohttp.ClientWebSocketResponse) -> None:

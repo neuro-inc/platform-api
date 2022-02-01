@@ -6,6 +6,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import replace
 from datetime import datetime, timezone
+from pathlib import PurePath
 from typing import Any, Optional, Union
 
 import aiohttp
@@ -192,7 +193,8 @@ class KubeOrchestrator(Orchestrator):
     def create_storage_volume(self, container_volume: ContainerVolume) -> Volume:
         for sc in self.extra_storage_configs:
             try:
-                container_volume.src_path.relative_to(str(sc.path))
+                src_path = PurePath("/") / (container_volume.uri.host or "")
+                src_path.relative_to(str(sc.path or ""))
                 storage_config = sc
                 break
             except ValueError:
@@ -200,23 +202,31 @@ class KubeOrchestrator(Orchestrator):
         else:
             storage_config = self.main_storage_config
 
+        name = self._create_storage_volume_name(storage_config.path)
+
         if storage_config.is_nfs:
             return NfsVolume(
-                name=self._kube_config.storage_volume_name,
+                name=name,
                 server=storage_config.nfs_server,  # type: ignore
                 path=storage_config.nfs_export_path,  # type: ignore
             )
         if storage_config.is_pvc:
             assert storage_config.pvc_name
             return PVCVolume(
-                name=self._kube_config.storage_volume_name,
+                name=name,
                 path=storage_config.host_mount_path,
                 claim_name=storage_config.pvc_name,
             )
         return HostVolume(
-            name=self._kube_config.storage_volume_name,
+            name=name,
             path=storage_config.host_mount_path,
         )
+
+    def _create_storage_volume_name(self, path: Optional[PurePath] = None) -> str:
+        if path is None or path == PurePath("/"):
+            return self._kube_config.storage_volume_name
+        name_suffix = str(path).replace("/", "-").replace("_", "-")
+        return self._kube_config.storage_volume_name + name_suffix
 
     @classmethod
     def create_secret_volume(cls, user_name: str) -> SecretVolume:

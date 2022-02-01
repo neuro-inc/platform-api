@@ -534,6 +534,62 @@ class TestPodDescriptor:
         assert pod.annotations == {"tf-version.cloud-tpus.google.com": "1.14"}
         assert pod.priority_class_name is None
 
+    def test_from_job_request_multiple_volumes(self) -> None:
+        def create_storage_volume(volume: ContainerVolume) -> Volume:
+            if volume.uri.host == "org":
+                return PVCVolume(
+                    name="storage-org", path=PurePath("/"), claim_name="storage-org"
+                )
+            return PVCVolume(name="storage", path=PurePath("/"), claim_name="storage")
+
+        container = Container(
+            image="testimage",
+            command="testcommand 123",
+            resources=ContainerResources(cpu=1, memory_mb=128, gpu=1),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://cluster/user1"),
+                    dst_path=PurePath("/var/storage-user1"),
+                ),
+                ContainerVolume(
+                    uri=URL("storage://cluster/user2"),
+                    dst_path=PurePath("/var/storage-user2"),
+                ),
+                ContainerVolume(
+                    uri=URL("storage://org/user3"),
+                    dst_path=PurePath("/var/storage-user3"),
+                ),
+            ],
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            job_request, storage_volume_factory=create_storage_volume
+        )
+        volume_cluster = PVCVolume(
+            name="storage", path=PurePath("/"), claim_name="storage"
+        )
+        volume_org = PVCVolume(
+            name="storage-org", path=PurePath("/"), claim_name="storage-org"
+        )
+        assert pod.volumes == [volume_cluster, volume_org]
+        assert pod.volume_mounts == [
+            VolumeMount(
+                volume=volume_cluster,
+                mount_path=PurePath("/var/storage-user1"),
+                sub_path=PurePath("user1"),
+            ),
+            VolumeMount(
+                volume=volume_cluster,
+                mount_path=PurePath("/var/storage-user2"),
+                sub_path=PurePath("user2"),
+            ),
+            VolumeMount(
+                volume=volume_org,
+                mount_path=PurePath("/var/storage-user3"),
+                sub_path=PurePath("user3"),
+            ),
+        ]
+
     def test_from_primitive_defaults(self) -> None:
         payload = {
             "kind": "Pod",
