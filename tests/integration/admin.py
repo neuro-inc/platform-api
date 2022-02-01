@@ -7,6 +7,7 @@ import aiodocker
 import aiohttp.web
 import pytest
 from aiohttp import ClientError, ClientResponseError
+from aiohttp.web_exceptions import HTTPCreated, HTTPNoContent
 from async_timeout import timeout
 from neuro_admin_client import AdminClient
 from yarl import URL
@@ -29,8 +30,33 @@ async def fake_config_app() -> AsyncIterator[URL]:
     async def list_clusters(request: aiohttp.web.Request) -> aiohttp.web.Response:
         return aiohttp.web.json_response(clusters)
 
+    async def add_storage(request: aiohttp.web.Request) -> aiohttp.web.Response:
+        return aiohttp.web.Response(status=HTTPCreated.status_code)
+
+    async def delete_storage(
+        request: aiohttp.web.Request,
+    ) -> aiohttp.web.Response:
+        return aiohttp.web.Response(status=HTTPNoContent.status_code)
+
     app.add_routes((aiohttp.web.post("/api/v1/clusters", add_cluster),))
     app.add_routes((aiohttp.web.get("/api/v1/clusters", list_clusters),))
+    app.add_routes(
+        (
+            aiohttp.web.post(
+                "/api/v1/clusters/{cluster_name}/cloud_provider/storages",
+                add_storage,
+            ),
+        )
+    )
+    app.add_routes(
+        (
+            aiohttp.web.delete(
+                "/api/v1/clusters/{cluster_name}/cloud_provider"
+                "/storages/{storage_name}",
+                delete_storage,
+            ),
+        )
+    )
 
     runner = ApiRunner(app, port=8089)
     api_address = await runner.run()
