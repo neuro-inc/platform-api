@@ -85,7 +85,7 @@ class TestStorageVolume:
         )
         volume = kube_orchestrator.create_storage_volume(container_volume)
         assert volume == NfsVolume(
-            name="storage", path=PurePath("/tmp"), server="4.3.2.1"
+            name="storage", path=None, server="4.3.2.1", export_path=PurePath("/tmp")
         )
 
     def test_create_storage_volume_host(self, registry_config: RegistryConfig) -> None:
@@ -110,7 +110,9 @@ class TestStorageVolume:
             read_only=True,
         )
         volume = kube_orchestrator.create_storage_volume(container_volume)
-        assert volume == HostVolume(name="storage", path=PurePath("/tmp"))
+        assert volume == HostVolume(
+            name="storage", path=None, host_path=PurePath("/tmp")
+        )
 
     def test_create_storage_volume_pvc(self, registry_config: RegistryConfig) -> None:
         storage_config = StorageConfig(
@@ -134,9 +136,7 @@ class TestStorageVolume:
             read_only=True,
         )
         volume = kube_orchestrator.create_storage_volume(container_volume)
-        assert volume == PVCVolume(
-            name="storage", path=PurePath("/tmp"), claim_name="testclaim"
-        )
+        assert volume == PVCVolume(name="storage", path=None, claim_name="testclaim")
 
     def test_create_main_storage_volume(self, registry_config: RegistryConfig) -> None:
         main_storage_config = StorageConfig(
@@ -163,20 +163,18 @@ class TestStorageVolume:
             kube_config=kube_config,
         )
         container_volume = ContainerVolume.create(
-            "storage://user",
+            "storage://cluster/user",
             dst_path=PurePath("/vat/storage"),
             read_only=True,
         )
         volume = kube_orchestrator.create_storage_volume(container_volume)
-        assert volume == PVCVolume(
-            name="storage", path=PurePath("/tmp"), claim_name="main-claim"
-        )
+        assert volume == PVCVolume(name="storage", path=None, claim_name="main-claim")
 
     def test_create_extra_storage_volume(self, registry_config: RegistryConfig) -> None:
         main_storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"),
             type=StorageType.PVC,
-            pvc_name="main-clain",
+            pvc_name="main-claim",
         )
         isolated_storage_config = StorageConfig(
             path=PurePath("/isolated"),
@@ -197,13 +195,15 @@ class TestStorageVolume:
             kube_config=kube_config,
         )
         container_volume = ContainerVolume.create(
-            "storage://isolated/dir",
+            "storage://cluster/isolated/dir",
             dst_path=PurePath("/vat/storage"),
             read_only=True,
         )
         volume = kube_orchestrator.create_storage_volume(container_volume)
         assert volume == PVCVolume(
-            name="storage-isolated", path=PurePath("/tmp"), claim_name="isolated-claim"
+            name="storage-isolated",
+            path=PurePath("/isolated"),
+            claim_name="isolated-claim",
         )
 
 

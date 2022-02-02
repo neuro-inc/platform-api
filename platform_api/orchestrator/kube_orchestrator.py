@@ -193,8 +193,7 @@ class KubeOrchestrator(Orchestrator):
     def create_storage_volume(self, container_volume: ContainerVolume) -> Volume:
         for sc in self.extra_storage_configs:
             try:
-                src_path = PurePath("/") / (container_volume.uri.host or "")
-                src_path.relative_to(str(sc.path or ""))
+                container_volume.src_path.relative_to(str(sc.path))
                 storage_config = sc
                 break
             except ValueError:
@@ -207,19 +206,21 @@ class KubeOrchestrator(Orchestrator):
         if storage_config.is_nfs:
             return NfsVolume(
                 name=name,
+                path=storage_config.path,
                 server=storage_config.nfs_server,  # type: ignore
-                path=storage_config.nfs_export_path,  # type: ignore
+                export_path=storage_config.nfs_export_path,  # type: ignore
             )
         if storage_config.is_pvc:
             assert storage_config.pvc_name
             return PVCVolume(
                 name=name,
-                path=storage_config.host_mount_path,
+                path=storage_config.path,
                 claim_name=storage_config.pvc_name,
             )
         return HostVolume(
             name=name,
-            path=storage_config.host_mount_path,
+            path=storage_config.path,
+            host_path=storage_config.host_mount_path,
         )
 
     def _create_storage_volume_name(self, path: Optional[PurePath] = None) -> str:
