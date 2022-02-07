@@ -89,10 +89,14 @@ class Volume(metaclass=abc.ABCMeta):
 
 @dataclass(frozen=True)
 class PathVolume(Volume):
-    path: PurePath
+    # None for cluster storage.
+    # /org for organization/additional storage.
+    path: Optional[PurePath]
 
     def create_mount(self, container_volume: ContainerVolume) -> "VolumeMount":
-        sub_path = container_volume.src_path.relative_to("/")
+        sub_path = container_volume.src_path.relative_to(
+            "/" if self.path is None else str(self.path)
+        )
         return VolumeMount(
             volume=self,
             mount_path=container_volume.dst_path,
@@ -103,10 +107,12 @@ class PathVolume(Volume):
 
 @dataclass(frozen=True)
 class HostVolume(PathVolume):
+    host_path: PurePath
+
     def to_primitive(self) -> dict[str, Any]:
         return {
             "name": self.name,
-            "hostPath": {"path": str(self.path), "type": "Directory"},
+            "hostPath": {"path": str(self.host_path), "type": "Directory"},
         }
 
 
@@ -127,11 +133,12 @@ class SharedMemoryVolume(Volume):
 @dataclass(frozen=True)
 class NfsVolume(PathVolume):
     server: str
+    export_path: PurePath
 
     def to_primitive(self) -> dict[str, Any]:
         return {
             "name": self.name,
-            "nfs": {"server": self.server, "path": str(self.path)},
+            "nfs": {"server": self.server, "path": str(self.export_path)},
         }
 
 
@@ -696,11 +703,13 @@ class PodDescriptor:
             return [], []
 
         volumes = []
+        volume_names = []
         volume_mounts = []
 
         for container_volume in container.volumes:
             volume = storage_volume_factory(container_volume)
-            if volume not in volumes:
+            if volume.name not in volume_names:
+                volume_names.append(volume.name)
                 volumes.append(volume)
             volume_mounts.append(volume.create_mount(container_volume))
 
@@ -1205,8 +1214,8 @@ class ExecChannel(int, enum.Enum):
 
 class PodExec:
     RE_EXIT = re.compile(
-        br"^command terminated with non-zero exit code: "
-        br"Error executing in Docker Container: (\d+)$"
+        rb"^command terminated with non-zero exit code: "
+        rb"Error executing in Docker Container: (\d+)$"
     )
 
     def __init__(self, ws: aiohttp.ClientWebSocketResponse) -> None:

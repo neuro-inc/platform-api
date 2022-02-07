@@ -49,14 +49,28 @@ class TestVolume:
     @pytest.mark.parametrize(
         "volume",
         (
-            HostVolume("testvolume", path=PurePath("/host")),
-            NfsVolume("testvolume", server="1.2.3.4", path=PurePath("/host")),
-            PVCVolume("testvolume", claim_name="testclaim", path=PurePath("/host")),
+            HostVolume("testvolume", path=None, host_path=PurePath("/host")),
+            NfsVolume(
+                "testvolume", path=None, server="1.2.3.4", export_path=PurePath("/host")
+            ),
+            PVCVolume("testvolume", path=None, claim_name="testclaim"),
         ),
     )
     def test_create_mount(self, volume: Volume) -> None:
         container_volume = ContainerVolume(
             uri=URL("storage://host/path/to/dir"),
+            dst_path=PurePath("/container/path/to/dir"),
+        )
+        mount = volume.create_mount(container_volume)
+        assert mount.volume == volume
+        assert mount.mount_path == PurePath("/container/path/to/dir")
+        assert mount.sub_path == PurePath("path/to/dir")
+        assert not mount.read_only
+
+    def test_create_org_mount(self) -> None:
+        volume = PVCVolume("testvolume", path=PurePath("/org"), claim_name="testclaim")
+        container_volume = ContainerVolume(
+            uri=URL("storage://cluster/org/path/to/dir"),
             dst_path=PurePath("/container/path/to/dir"),
         )
         mount = volume.create_mount(container_volume)
@@ -78,7 +92,7 @@ class TestAbstractVolume:
 
 class TestHostVolume:
     def test_to_primitive(self) -> None:
-        volume = HostVolume("testvolume", path=PurePath("/tmp"))
+        volume = HostVolume("testvolume", path=None, host_path=PurePath("/tmp"))
         assert volume.to_primitive() == {
             "name": "testvolume",
             "hostPath": {"path": "/tmp", "type": "Directory"},
@@ -87,7 +101,9 @@ class TestHostVolume:
 
 class TestNfsVolume:
     def test_to_primitive(self) -> None:
-        volume = NfsVolume("testvolume", server="1.2.3.4", path=PurePath("/tmp"))
+        volume = NfsVolume(
+            "testvolume", path=None, server="1.2.3.4", export_path=PurePath("/tmp")
+        )
         assert volume.to_primitive() == {
             "name": "testvolume",
             "nfs": {"server": "1.2.3.4", "path": "/tmp"},
@@ -155,7 +171,7 @@ class TestSecretEnvVar:
 
 class TestVolumeMount:
     def test_to_primitive(self) -> None:
-        volume = HostVolume(name="testvolume", path=PurePath("/tmp"))
+        volume = HostVolume(name="testvolume", path=None, host_path=PurePath("/tmp"))
         mount = VolumeMount(
             volume=volume,
             mount_path=PurePath("/dst"),
@@ -533,6 +549,59 @@ class TestPodDescriptor:
         pod = PodDescriptor.from_job_request(job_request)
         assert pod.annotations == {"tf-version.cloud-tpus.google.com": "1.14"}
         assert pod.priority_class_name is None
+
+    def test_from_job_request_multiple_volumes(self) -> None:
+        volume_cluster = PVCVolume(
+            name="storage", path=PurePath("/"), claim_name="storage"
+        )
+        volume_org = PVCVolume(
+            name="storage-org", path=PurePath("/org"), claim_name="storage-org"
+        )
+
+        def create_storage_volume(volume: ContainerVolume) -> Volume:
+            return volume_org if volume.uri.path.startswith("/org") else volume_cluster
+
+        container = Container(
+            image="testimage",
+            command="testcommand 123",
+            resources=ContainerResources(cpu=1, memory_mb=128, gpu=1),
+            volumes=[
+                ContainerVolume(
+                    uri=URL("storage://cluster/user1"),
+                    dst_path=PurePath("/var/storage-user1"),
+                ),
+                ContainerVolume(
+                    uri=URL("storage://cluster/user2"),
+                    dst_path=PurePath("/var/storage-user2"),
+                ),
+                ContainerVolume(
+                    uri=URL("storage://cluster/org/user3"),
+                    dst_path=PurePath("/var/storage-user3"),
+                ),
+            ],
+        )
+        job_request = JobRequest.create(container)
+        pod = PodDescriptor.from_job_request(
+            job_request, storage_volume_factory=create_storage_volume
+        )
+        assert pod.volumes == [volume_cluster, volume_org]
+        assert pod.volume_mounts == [
+            VolumeMount(
+                volume=volume_cluster,
+                mount_path=PurePath("/var/storage-user1"),
+                sub_path=PurePath("user1"),
+            ),
+            VolumeMount(
+                volume=volume_cluster,
+                mount_path=PurePath("/var/storage-user2"),
+                sub_path=PurePath("user2"),
+            ),
+            VolumeMount(
+                volume=volume_org,
+                mount_path=PurePath("/var/storage-user3"),
+                sub_path=PurePath("user3"),
+            ),
+        ]
 
     def test_from_primitive_defaults(self) -> None:
         payload = {
