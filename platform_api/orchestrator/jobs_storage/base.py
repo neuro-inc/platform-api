@@ -28,14 +28,14 @@ class JobStorageJobFoundError(JobsStorageException):
         )
 
 
-ClusterOwnerNameSet = dict[str, dict[str, Set[str]]]
+ClusterOrgOwnerNameSet = dict[str, dict[Optional[str], dict[str, Set[str]]]]
 
 
 @dataclass(frozen=True)
 class JobFilter:
     statuses: Set[JobStatus] = field(default_factory=cast(type[Set[JobStatus]], set))
-    clusters: ClusterOwnerNameSet = field(
-        default_factory=cast(type[ClusterOwnerNameSet], dict)
+    clusters: ClusterOrgOwnerNameSet = field(
+        default_factory=cast(type[ClusterOrgOwnerNameSet], dict)
     )
     orgs: Set[Optional[str]] = field(
         default_factory=cast(type[Set[Optional[str]]], set)
@@ -60,15 +60,19 @@ class JobFilter:
         if self.base_owners and job.base_owner not in self.base_owners:
             return False
         if self.clusters:
-            owners = self.clusters.get(job.cluster_name)
-            if owners is None:
+            orgs = self.clusters.get(job.cluster_name)
+            if orgs is None:
                 return False
-            if owners:
-                names = owners.get(job.owner)
-                if names is None:
+            if orgs:
+                owners = orgs.get(job.org_name)
+                if owners is None:
                     return False
-                if names and job.name not in names:
-                    return False
+                if owners:
+                    names = owners.get(job.owner)
+                    if names is None:
+                        return False
+                    if names and job.name not in names:
+                        return False
         if self.name and self.name != job.name:
             return False
         if self.ids and job.id not in self.ids:

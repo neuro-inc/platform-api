@@ -44,7 +44,7 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.jobs_service import JobsService, UserClusterConfig
 from platform_api.orchestrator.jobs_storage import (
-    ClusterOwnerNameSet,
+    ClusterOrgOwnerNameSet,
     JobFilter,
     JobStorageTransactionError,
 )
@@ -998,7 +998,7 @@ class JobFilterFactory:
                 self._base_owner_name_validator.check(owner)
                 for owner in query.getall("base_owner", [])
             }
-            clusters: ClusterOwnerNameSet = {
+            clusters: ClusterOrgOwnerNameSet = {
                 self._cluster_name_validator.check(cluster_name): {}
                 for cluster_name in query.getall("cluster_name", [])
             }
@@ -1062,10 +1062,12 @@ class BulkJobFilterBuilder:
 
         self._has_access_to_all: bool = False
         self._has_clusters_shared_all: bool = False
-        self._clusters_shared_any: dict[str, dict[str, set[str]]] = defaultdict(
-            lambda: defaultdict(set)
-        )
+        self._has_orgs_shared_all: bool = False
+        self._clusters_shared_any: dict[
+            str, dict[Optional[str], dict[str, set[str]]]
+        ] = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
         self._owners_shared_any: set[str] = set()
+        self._orgs_shared_any: set[Optional[str]] = set()
         self._shared_ids: set[str] = set()
 
     def build(self) -> BulkJobFilter:
@@ -1094,6 +1096,7 @@ class BulkJobFilterBuilder:
 
         if (
             not self._clusters_shared_any
+            and not self._orgs_shared_any
             and not self._owners_shared_any
             and not self._shared_ids
         ):
@@ -1118,10 +1121,30 @@ class BulkJobFilterBuilder:
                 self._has_clusters_shared_all = True
                 self._clusters_shared_any[cluster_name] = {}
             else:
-                self._traverse_owners(sub_tree, cluster_name)
+                self._traverse_orgs(sub_tree, cluster_name)
+                self._traverse_owners(sub_tree, cluster_name, None)
+
+    def _traverse_orgs(self, tree: ClientAccessSubTreeView, cluster_name: str) -> None:
+        for org_name, sub_tree in tree.children.items():
+            if not sub_tree.can_list():
+                continue
+
+            if self._query_filter.orgs and org_name not in self._query_filter.orgs:
+                # skipping owners
+                continue
+
+            if sub_tree.can_read():
+                # read/write/manage access to all org's jobs =
+                # job://cluster/org
+                self._has_orgs_shared_all = True
+                self._orgs_shared_any.add(org_name)
+                self._clusters_shared_any[cluster_name][org_name] = {}
+            else:
+                # specific ids or names
+                self._traverse_owners(sub_tree, cluster_name, org_name)
 
     def _traverse_owners(
-        self, tree: ClientAccessSubTreeView, cluster_name: str
+        self, tree: ClientAccessSubTreeView, cluster_name: str, org_name: Optional[str]
     ) -> None:
         for owner, sub_tree in tree.children.items():
             if not sub_tree.can_list():
@@ -1133,15 +1156,20 @@ class BulkJobFilterBuilder:
 
             if sub_tree.can_read():
                 # read/write/manage access to all owner's jobs =
-                # job://cluster/owner
+                # job://cluster/owner or job://cluster/org/owner
+                self._orgs_shared_any.add(org_name)
                 self._owners_shared_any.add(owner)
-                self._clusters_shared_any[cluster_name][owner] = set()
+                self._clusters_shared_any[cluster_name][org_name][owner] = set()
             else:
                 # specific ids or names
-                self._traverse_jobs(sub_tree, cluster_name, owner)
+                self._traverse_jobs(sub_tree, cluster_name, org_name, owner)
 
     def _traverse_jobs(
-        self, tree: ClientAccessSubTreeView, cluster_name: str, owner: str
+        self,
+        tree: ClientAccessSubTreeView,
+        cluster_name: str,
+        org_name: Optional[str],
+        owner: str,
     ) -> None:
         for name, sub_tree in tree.children.items():
             if sub_tree.can_read():
@@ -1153,53 +1181,75 @@ class BulkJobFilterBuilder:
                     # skipping name
                     continue
 
+                self._orgs_shared_any.add(org_name)
                 self._owners_shared_any.add(owner)
-                self._clusters_shared_any[cluster_name][owner].add(name)
+                self._clusters_shared_any[cluster_name][org_name][owner].add(name)
 
     def _create_bulk_filter(self) -> Optional[JobFilter]:
         if not (
             self._has_access_to_all
             or self._clusters_shared_any
+            or self._orgs_shared_any
             or self._owners_shared_any
         ):
             return None
         bulk_filter = self._query_filter
+        # `self._orgs_shared_any` is already filtered against
+        # `self._query_filter.orgs`.
+        # if `self._orgs_shared_any` is empty and no clusters share full
+        # access, we still want to try to limit the scope to the orgs
+        # passed in the query, otherwise pull all.
+        if not self._has_clusters_shared_all and self._orgs_shared_any:
+            bulk_filter = replace(bulk_filter, orgs=self._orgs_shared_any)
         # `self._owners_shared_any` is already filtered against
         # `self._query_filter.owners`.
-        # if `self._owners_shared_any` is empty and no clusters share full
+        # if `self._owners_shared_any` is empty and no org share full
         # access, we still want to try to limit the scope to the owners
         # passed in the query, otherwise pull all.
-        if not self._has_clusters_shared_all and self._owners_shared_any:
+        if not self._has_orgs_shared_all and self._owners_shared_any:
             bulk_filter = replace(bulk_filter, owners=self._owners_shared_any)
         # `self._clusters_shared_any` is already filtered against
         # `self._query_filter.clusters`.
         # if `self._clusters_shared_any` is empty, we still want to try to limit
         # the scope to the clusters passed in the query, otherwise pull all.
         if not self._has_access_to_all:
-            self._optimize_clusters_owners(bulk_filter.owners, bulk_filter.name)
+            self._optimize_clusters_owners(
+                bulk_filter.orgs, bulk_filter.owners, bulk_filter.name
+            )
             bulk_filter = replace(
                 bulk_filter,
                 clusters={
-                    cluster_name: dict(owners)
-                    for cluster_name, owners in self._clusters_shared_any.items()
+                    cluster_name: {
+                        org_name: dict(owners) for org_name, owners in orgs.items()
+                    }
+                    for cluster_name, orgs in self._clusters_shared_any.items()
                 },
             )
         return bulk_filter
 
-    def _optimize_clusters_owners(self, owners: Set[str], name: Optional[str]) -> None:
-        if owners or name:
+    def _optimize_clusters_owners(
+        self, orgs: Set[Optional[str]], owners: Set[str], name: Optional[str]
+    ) -> None:
+        if orgs or owners or name:
             names = {name}
-            for cluster_owners in self._clusters_shared_any.values():
-                if name:
-                    for owner_names in cluster_owners.values():
-                        if owner_names == names:
-                            owner_names.clear()
+            for cluster_orgs in self._clusters_shared_any.values():
+                for org_owners in cluster_orgs.values():
+                    if name:
+                        for owner_names in org_owners.values():
+                            if owner_names == names:
+                                owner_names.clear()
+                    if (
+                        owners
+                        and org_owners.keys() == owners
+                        and not any(org_owners.values())
+                    ):
+                        org_owners.clear()
                 if (
-                    owners
-                    and cluster_owners.keys() == owners
-                    and not any(cluster_owners.values())
+                    orgs
+                    and cluster_orgs.keys() == orgs
+                    and not any(cluster_orgs.values())
                 ):
-                    cluster_owners.clear()
+                    cluster_orgs.clear()
 
 
 def _parse_bool(value: str) -> bool:
