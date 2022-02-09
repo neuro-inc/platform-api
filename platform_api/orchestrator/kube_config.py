@@ -30,7 +30,10 @@ class KubeConfig:
     client_conn_pool_size: int = 100
 
     jobs_ingress_class: str = "traefik"
-    jobs_ingress_oauth_url: URL = URL("https://neu.ro/oauth/authorize")
+    jobs_ingress_oauth_url: URL = URL(
+        "https://neu.ro/oauth/authorize"
+    )  # TODO: not used in traefik v2
+    jobs_ingress_middleware: str = "ingress-auth@kubernetescrd"
     jobs_pod_job_toleration_key: str = "platform.neuromation.io/job"
     jobs_pod_preemptible_toleration_key: Optional[str] = None
     jobs_pod_priority_class_name: Optional[str] = None
