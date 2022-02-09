@@ -101,6 +101,10 @@ spec:
         - name: NP_KUBE_INGRESS_CLASS
           value: {{ .Values.jobs.ingressClass | quote }}
         {{- end }}
+        {{- if .Values.jobs.ingressMiddleware }}
+        - name: NP_KUBE_INGRESS_MIDDLEWARE
+          value: {{ .Values.jobs.ingressMiddleware | quote }}
+        {{- end }}
         {{- if .Values.jobs.ingressOAuthAuthorizeUrl }}
         - name: NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL
           value: {{ .Values.jobs.ingressOAuthAuthorizeUrl | quote }}
