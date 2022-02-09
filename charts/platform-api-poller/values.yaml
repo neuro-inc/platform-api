@@ -46,6 +46,7 @@ resources:
 
 ingress:
   enabled: false
+  # annotations:
 
 secrets: []
 

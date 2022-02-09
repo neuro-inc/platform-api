@@ -1497,6 +1497,9 @@ class TestKubeOrchestrator:
                             "  backend: error-pages\n"
                             "  query: /"
                         ),
+                        "traefik.ingress.kubernetes.io/router.middlewares": (
+                            "ingress-auth@kubernetescrd"
+                        ),
                         "ingress.kubernetes.io/auth-type": "forward",
                         "ingress.kubernetes.io/auth-trust-headers": "true",
                         "ingress.kubernetes.io/auth-url": (

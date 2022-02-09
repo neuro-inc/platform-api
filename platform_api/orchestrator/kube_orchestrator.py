@@ -793,8 +793,12 @@ class KubeOrchestrator(Orchestrator):
             if job.requires_http_auth:
                 oauth_url = self._kube_config.jobs_ingress_oauth_url
                 assert oauth_url
+                middleware = self._kube_config.jobs_ingress_middleware
+                assert middleware
                 annotations.update(
                     {
+                        "traefik.ingress.kubernetes.io/router.middlewares": middleware,
+                        # TODO: remove traefik v1 annotations
                         "ingress.kubernetes.io/auth-type": "forward",
                         "ingress.kubernetes.io/auth-trust-headers": "true",
                         "ingress.kubernetes.io/auth-url": str(oauth_url),
