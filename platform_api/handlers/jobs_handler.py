@@ -1122,6 +1122,9 @@ class BulkJobFilterBuilder:
                 self._clusters_shared_any[cluster_name] = {}
             else:
                 self._traverse_orgs(sub_tree, cluster_name)
+                if self._query_filter.orgs and None not in self._query_filter.orgs:
+                    # skipping None org
+                    continue
                 self._traverse_owners(sub_tree, cluster_name, None)
 
     def _traverse_orgs(self, tree: ClientAccessSubTreeView, cluster_name: str) -> None:
