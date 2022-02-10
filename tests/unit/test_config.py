@@ -498,7 +498,10 @@ class TestEnvironConfigFactory:
                 "NP_KUBE_READ_TIMEOUT": "2",
                 "NP_KUBE_CONN_POOL_SIZE": "3",
                 "NP_KUBE_INGRESS_CLASS": "nginx",
-                "NP_KUBE_INGRESS_MIDDLEWARE": "forward-auth@kubernetescrd",
+                "NP_KUBE_INGRESS_AUTH_MIDDLEWARE": "custom-ingress-auth@kubernetescrd",
+                "NP_KUBE_INGRESS_ERROR_PAGE_MIDDLEWARE": (
+                    "custom-error-page@kubernetescrd"
+                ),
                 "NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL": "http://ingress-auth",
                 "NP_KUBE_POD_JOB_TOLERATION_KEY": "job",
                 "NP_KUBE_POD_PREEMPTIBLE_TOLERATION_KEY": "preemptible",
@@ -524,7 +527,8 @@ class TestEnvironConfigFactory:
             client_read_timeout_s=2,
             client_conn_pool_size=3,
             jobs_ingress_class="nginx",
-            jobs_ingress_middleware="forward-auth@kubernetescrd",
+            jobs_ingress_auth_middleware="custom-ingress-auth@kubernetescrd",
+            jobs_ingress_error_page_middleware="custom-error-page@kubernetescrd",
             jobs_ingress_oauth_url=URL("http://ingress-auth"),
             jobs_pod_job_toleration_key="job",
             jobs_pod_preemptible_toleration_key="preemptible",

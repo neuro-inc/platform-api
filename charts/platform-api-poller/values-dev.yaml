@@ -12,7 +12,8 @@ platform:
 
 jobs:
   priorityClassName: platform-job
-  ingressMiddleware: platform-platform-ingress-auth@kubernetescrd
+  ingressAuthMiddleware: platform-platform-ingress-auth@kubernetescrd
+  ingressErrorPageMiddleware: platform-platform-error-pages@kubernetescrd
   ingressOAuthAuthorizeUrl: https://dev.neu.ro/oauth/authorize
 
 storages:

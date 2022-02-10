@@ -1448,6 +1448,9 @@ class TestKubeOrchestrator:
                     ingress = await kube_client.get_ingress(pod_name)
                     assert ingress.annotations == {
                         "kubernetes.io/ingress.class": "traefik",
+                        "traefik.ingress.kubernetes.io/router.middlewares": (
+                            "error-page@kubernetescrd"
+                        ),
                         "traefik.ingress.kubernetes.io/error-pages": (
                             "default:\n"
                             "  status:\n"
@@ -1490,15 +1493,15 @@ class TestKubeOrchestrator:
                     ingress = await kube_client.get_ingress(pod_name)
                     assert ingress.annotations == {
                         "kubernetes.io/ingress.class": "traefik",
+                        "traefik.ingress.kubernetes.io/router.middlewares": (
+                            "error-page@kubernetescrd,ingress-auth@kubernetescrd"
+                        ),
                         "traefik.ingress.kubernetes.io/error-pages": (
                             "default:\n"
                             "  status:\n"
                             '  - "500-600"\n'
                             "  backend: error-pages\n"
                             "  query: /"
-                        ),
-                        "traefik.ingress.kubernetes.io/router.middlewares": (
-                            "ingress-auth@kubernetescrd"
                         ),
                         "ingress.kubernetes.io/auth-type": "forward",
                         "ingress.kubernetes.io/auth-trust-headers": "true",
