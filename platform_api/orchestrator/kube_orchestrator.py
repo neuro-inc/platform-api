@@ -782,6 +782,7 @@ class KubeOrchestrator(Orchestrator):
         if self._kube_config.jobs_ingress_class == "traefik":
             annotations = {
                 "kubernetes.io/ingress.class": "traefik",
+                # TODO: remove traefik v1 annotations
                 "traefik.ingress.kubernetes.io/error-pages": (
                     "default:\n"
                     "  status:\n"
@@ -790,20 +791,27 @@ class KubeOrchestrator(Orchestrator):
                     "  query: /"
                 ),
             }
+            middlewares = []
+            middlewares.append(self._kube_config.jobs_ingress_error_page_middleware)
             if job.requires_http_auth:
+                middlewares.append(self._kube_config.jobs_ingress_auth_middleware)
+                # TODO: remove traefik v1 annotations
                 oauth_url = self._kube_config.jobs_ingress_oauth_url
                 assert oauth_url
-                middleware = self._kube_config.jobs_ingress_middleware
-                assert middleware
                 annotations.update(
                     {
-                        "traefik.ingress.kubernetes.io/router.middlewares": middleware,
-                        # TODO: remove traefik v1 annotations
                         "ingress.kubernetes.io/auth-type": "forward",
                         "ingress.kubernetes.io/auth-trust-headers": "true",
                         "ingress.kubernetes.io/auth-url": str(oauth_url),
                     }
                 )
+            annotations.update(
+                {
+                    "traefik.ingress.kubernetes.io/router.middlewares": ",".join(
+                        middlewares
+                    ),
+                }
+            )
         return annotations
 
     def _get_job_name_ingress_labels(

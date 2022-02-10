@@ -6,9 +6,11 @@ metadata:
   name: {{ include "platformApi.fullname" . }}
   labels: {{ include "platformApi.labels.standard" . | nindent 4 }}
     service: platform-api
-{{- with .Values.ingress.annotations }}
-  annotations: {{ toYaml . | nindent 4}}
-{{- end }}
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    external-dns.platform.neuromation.io: "true"
+    # TODO: remove traefik v1 annotations
+    traefik.frontend.rule.type: PathPrefix
 spec:
   rules:
 {{- range .Values.ingress.hosts }}
