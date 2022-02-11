@@ -36,7 +36,7 @@ lint: format
 	mypy --show-error-codes platform_api tests alembic
 
 format:
-ifdef CI_LINT_RUN
+ifdef CI
 	pre-commit run --all-files --show-diff-on-failure
 else
 	pre-commit run --all-files
@@ -52,14 +52,7 @@ docker_build:
 	rm -rf build dist
 	pip install -U build
 	python -m build
-	docker build -t $(IMAGE_NAME):latest .
-
-docker_push:
-	docker tag $(IMAGE_NAME):latest $(IMAGE_REPO):$(IMAGE_TAG)
-	docker push $(IMAGE_REPO):$(IMAGE_TAG)
-
-	docker tag $(IMAGE_NAME):latest $(IMAGE_REPO):latest
-	docker push $(IMAGE_REPO):latest
+	docker build -t platformapi:latest .
 
 run_api_k8s:
 	NP_STORAGE_HOST_MOUNT_PATH=/tmp \
@@ -78,7 +71,7 @@ run_api_k8s_container:
 	    -e NP_K8S_CA_PATH=$$HOME/.minikube/ca.crt \
 	    -e NP_K8S_AUTH_CERT_PATH=$$HOME/.minikube/client.crt \
 	    -e NP_K8S_AUTH_CERT_KEY_PATH=$$HOME/.minikube/client.key \
-	    $(IMAGE_NAME):latest
+	    platformapi:latest
 
 docker_pull_test_images:
 	docker pull $(PLATFORMAUTHAPI_IMAGE)
@@ -91,20 +84,3 @@ docker_pull_test_images:
 	docker tag $(PLATFORMSECRETS_IMAGE) platformsecrets:latest
 	docker tag $(PLATFORMDISKAPI_IMAGE) platformdiskapi:latest
 	docker tag $(PLATFORMADMIN_IMAGE) platformadmin:latest
-
-helm_create_chart:
-	export IMAGE_REPO=$(IMAGE_REPO); \
-	export IMAGE_TAG=$(IMAGE_TAG); \
-	export CHART_VERSION=$(HELM_CHART_VERSION); \
-	export APP_VERSION=$(HELM_APP_VERSION); \
-	VALUES=$$(cat charts/$(HELM_CHART)/values.yaml | envsubst); \
-	echo "$$VALUES" > charts/$(HELM_CHART)/values.yaml; \
-	CHART=$$(cat charts/$(HELM_CHART)/Chart.yaml | envsubst); \
-	echo "$$CHART" > charts/$(HELM_CHART)/Chart.yaml
-
-helm_deploy: helm_create_chart
-	helm dependency update charts/$(HELM_CHART)
-	helm upgrade $(HELM_RELEASE) charts/$(HELM_CHART) \
-		-f charts/$(HELM_CHART)/values-$(HELM_ENV).yaml \
-		--set "platform.clusterName=$(CLUSTER_NAME)" \
-		--namespace platform --install --wait --timeout 600s
