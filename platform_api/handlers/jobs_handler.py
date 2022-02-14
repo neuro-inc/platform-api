@@ -1147,9 +1147,17 @@ class BulkJobFilterBuilder:
                 self._traverse_owners(sub_tree, cluster_name, org_name)
 
     def _traverse_owners(
-        self, tree: ClientAccessSubTreeView, cluster_name: str, org_name: Optional[str]
+        self,
+        tree: ClientAccessSubTreeView,
+        cluster_name: str,
+        org_name: Optional[str],
+        owner_prefix: Optional[str] = None,
     ) -> None:
         for owner, sub_tree in tree.children.items():
+            if owner_prefix:
+                owner = f"{owner_prefix}/{owner}"
+            if sub_tree.children.keys():
+                self._traverse_owners(sub_tree, cluster_name, org_name, owner)
             if not sub_tree.can_list():
                 continue
 
@@ -1175,6 +1183,8 @@ class BulkJobFilterBuilder:
         owner: str,
     ) -> None:
         for name, sub_tree in tree.children.items():
+            if sub_tree.children.keys():
+                continue  # Not a leaf node
             if sub_tree.can_read():
                 if maybe_job_id(name):
                     self._shared_ids.add(name)

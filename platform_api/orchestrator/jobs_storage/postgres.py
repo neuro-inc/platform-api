@@ -348,25 +348,27 @@ class JobFilterClauseBuilder:
                         & (self._tables.jobs.c.owner == owner)
                         & self._tables.jobs.c.name.in_(names)
                     )
-
+                if owners_empty_names:
+                    cluster_clauses.append(
+                        (self._tables.jobs.c.cluster_name == cluster)
+                        & org_pred
+                        & self._tables.jobs.c.owner.in_(owners_empty_names)
+                    )
+            not_null_orgs = [org for org in orgs_empty_owners if org is not None]
+            if not_null_orgs:
                 cluster_clauses.append(
                     (self._tables.jobs.c.cluster_name == cluster)
-                    & org_pred
-                    & self._tables.jobs.c.owner.in_(owners_empty_names)
+                    & self._tables.jobs.c.org_name.in_(not_null_orgs)
                 )
-            not_null_orgs = [org for org in orgs_empty_owners if org is not None]
-            cluster_clauses.append(
-                (self._tables.jobs.c.cluster_name == cluster)
-                & self._tables.jobs.c.org_name.in_(not_null_orgs)
-            )
             if None in orgs_empty_owners:
                 cluster_clauses.append(
                     (self._tables.jobs.c.cluster_name == cluster)
                     & self._tables.jobs.c.org_name.is_(None)
                 )
-        cluster_clauses.append(
-            self._tables.jobs.c.cluster_name.in_(clusters_empty_orgs)
-        )
+        if clusters_empty_orgs:
+            cluster_clauses.append(
+                self._tables.jobs.c.cluster_name.in_(clusters_empty_orgs)
+            )
         self._clauses.append(or_(*cluster_clauses))
 
     def filter_orgs(self, orgs: Set[Optional[str]]) -> None:
