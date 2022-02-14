@@ -1,4 +1,5 @@
 platform:
+  clusterName: default
   authUrl: http://platform-auth:8080
   configUrl: http://platform-config:8080/api/v1
   adminUrl: http://platform-admin:8080/apis/admin/v1
@@ -12,6 +13,8 @@ platform:
 
 jobs:
   priorityClassName: platform-job
+  ingressAuthMiddleware: platform-platform-ingress-auth@kubernetescrd
+  ingressErrorPageMiddleware: platform-platform-web-ui-error-pages@kubernetescrd
   ingressOAuthAuthorizeUrl: https://dev.neu.ro/oauth/authorize
 
 storages:
@@ -20,10 +23,12 @@ storages:
 
 ingress:
   enabled: true
-
-  extraAnnotations:
-    external-dns.platform.neuromation.io: "true"
   hosts: [dev.neu.ro]
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    external-dns.platform.neuromation.io: "true"
+    # TODO: remove traefik v1 annotations
+    traefik.frontend.rule.type: PathPrefix
 
 sentry:
   dsn: https://432bc48cd2444be7afec5efeb1fc03a6@o489136.ingest.sentry.io/5530426

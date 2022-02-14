@@ -42,8 +42,6 @@ jobs:
       run: |
         echo "::add-matcher::.github/actionlint-matcher.json"
         make lint
-      env:
-        CI_LINT_RUN: 1
     - name: Run unit tests
       run: make test_unit
     - name: Upload coverage to Codecov
@@ -59,8 +57,12 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
-    - name: Login to AWS ECR
-      uses: aws-actions/amazon-ecr-login@v1
+    - name: Login to ghcr.io
+      uses: docker/login-action@v1.12.0
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
     - name: Install NFS
       run: |
         sudo apt-get -q update
@@ -91,63 +93,23 @@ jobs:
       with:
         image: platformapi
         token: ${{ secrets.GITHUB_TOKEN }}
-  deploy_dev:
-    name: Deploy to dev
-    runs-on: ubuntu-latest
+
+  release:
+    name: Create release
     needs: test
-    environment: dev
-    concurrency: deploy_dev
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    env:
-      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-      AWS_REGION: us-east-1
-      CLUSTER_NAME: aws-dev
-      HELM_ENV: dev
-      IMAGE_REGISTRY: aws
-      IMAGE_TAG: ${{ github.sha }}
-    steps:
-    - name: Checkout commit
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-    - name: Install python
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.9.9
-    - name: Install Helm
-      uses: azure/setup-helm@v2.0
-      with:
-        version: v3.7.0
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-    - name: Login to AWS ECR
-      uses: aws-actions/amazon-ecr-login@v1
-    - name: Build image
-      run: make docker_build
-    - name: Push images to registry
-      run: |
-        make docker_push
-        IMAGE_TAG=latest make docker_push
-    - name: Update kube config
-      run: aws eks --region $AWS_REGION update-kubeconfig --name $CLUSTER_NAME
-    - name: Deploy Main service to kubernetes
-      run: make helm_deploy
-      env:
-        HELM_CHART: platform-api
-        HELM_RELEASE: platform-api
-    - name: Deploy poller service to kubernetes (default)
-      run: make helm_deploy
-      env:
-        HELM_CHART: platform-api-poller
-        HELM_RELEASE: platform-api-poller
-        CLUSTER_NAME: default
-    - name: Deploy poller service to kubernetes (default2)
-      run: make helm_deploy
-      env:
-        HELM_CHART: platform-api-poller
-        HELM_RELEASE: platform-api-poller-default2
-        CLUSTER_NAME: default2
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    uses: neuro-inc/reuse/.github/workflows/release-service.yaml@v0.0.24
+    with:
+      image: platformapi
+      helm_charts: platform-api platform-api-poller
+
+  deploy_dev:
+    name: Deploy on dev
+    needs: release
+    uses: neuro-inc/reuse/.github/workflows/deploy-dev.yaml@v0.0.24
+    with:
+      helm_charts: platform-api platform-api-poller
+      version: ${{ needs.release.outputs.version }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

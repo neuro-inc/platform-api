@@ -66,9 +66,6 @@ postgres-db-init:
 
 ingress:
   enabled: true
-
-  extraAnnotations:
-    external-dns.platform.neuromation.io: "true"
   hosts: [dev.neu.ro]
 
 sentry:

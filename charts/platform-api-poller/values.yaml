@@ -25,6 +25,8 @@ platform:
 jobs:
   namespace: platform-jobs
   ingressClass: traefik
+  ingressAuthMiddleware:
+  ingressErrorPageMiddleware:
   ingressOAuthAuthorizeUrl:
   tolerationKey: platform.neuromation.io/job
   preemptibleTolerationKey:
@@ -46,6 +48,7 @@ resources:
 
 ingress:
   enabled: false
+  # annotations:
 
 secrets: []
 

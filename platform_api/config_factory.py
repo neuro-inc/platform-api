@@ -302,6 +302,14 @@ class EnvironConfigFactory:
             jobs_ingress_class=self._environ.get(
                 "NP_KUBE_INGRESS_CLASS", KubeConfig.jobs_ingress_class
             ),
+            jobs_ingress_auth_middleware=self._environ.get(
+                "NP_KUBE_INGRESS_AUTH_MIDDLEWARE",
+                KubeConfig.jobs_ingress_auth_middleware,
+            ),
+            jobs_ingress_error_page_middleware=self._environ.get(
+                "NP_KUBE_INGRESS_ERROR_PAGE_MIDDLEWARE",
+                KubeConfig.jobs_ingress_error_page_middleware,
+            ),
             jobs_ingress_oauth_url=URL(
                 self._environ.get(
                     "NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL",

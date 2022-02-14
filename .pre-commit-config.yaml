@@ -15,7 +15,7 @@ repos:
     args:
     - --futures=true
 - repo: https://github.com/Zac-HD/shed
-  rev: 0.8.0
+  rev: 0.9.0
   hooks:
   - id: shed
     args:
@@ -50,22 +50,24 @@ repos:
     files: |
       docs/spelling_wordlist.txt|
       .gitignore
-- repo: https://github.com/rhysd/actionlint
-  rev: v1.6.8
-  hooks:
-  - id: actionlint-docker
-    args:
-    - -ignore
-    - 'SC2155:'
-    - -ignore
-    - 'SC2086:'
-    - -ignore
-    - 'SC1004:'
+# - repo: https://github.com/rhysd/actionlint
+#   rev: v1.6.8
+#   hooks:
+#   - id: actionlint-docker
+#     args:
+#     - -ignore
+#     - 'SC2155:'
+#     - -ignore
+#     - 'SC2086:'
+#     - -ignore
+#     - 'SC1004:'
 - repo: https://github.com/sirosen/check-jsonschema
-  rev: 0.10.0
+  rev: 0.10.2
   hooks:
   - id: check-github-actions
+  - id: check-github-workflows
 ci:
   skip:
-  - actionlint-docker
+  # - actionlint-docker
   - check-github-actions
+  - check-github-workflows
