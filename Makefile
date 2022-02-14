@@ -1,24 +1,3 @@
-AWS_REGION ?= us-east-1
-
-GITHUB_OWNER ?= neuro-inc
-
-IMAGE_TAG ?= latest
-
-IMAGE_REPO_aws    = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
-IMAGE_REPO_github = ghcr.io/$(GITHUB_OWNER)
-
-IMAGE_REGISTRY ?= aws
-
-IMAGE_NAME      = platformapi
-IMAGE_REPO_BASE = $(IMAGE_REPO_$(IMAGE_REGISTRY))
-IMAGE_REPO      = $(IMAGE_REPO_BASE)/$(IMAGE_NAME)
-
-HELM_ENV           ?= dev
-HELM_CHART         ?= platform-api
-HELM_RELEASE       ?= platform-api
-HELM_CHART_VERSION ?= 1.0.0
-HELM_APP_VERSION   ?= 1.0.0
-
 PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
 PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
 PLATFORMSECRETS_IMAGE = $(shell cat PLATFORMSECRETS_IMAGE)
