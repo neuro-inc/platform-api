@@ -11,7 +11,6 @@ import iso8601
 import trafaret as t
 import trafaret.keys
 from aiohttp_security import check_authorized
-from aiohttp_security.api import AUTZ_KEY
 from multidict import MultiDictProxy
 from neuro_auth_client import (
     AuthClient,
@@ -707,7 +706,7 @@ class JobsHandler:
             permissions.append(
                 Permission(uri=str(_job_uri_with_name(uri, job.name)), action=action)
             )
-        await check_any_permissions(request, permissions)
+        await check_permissions(request, [permissions])
         return job
 
     async def handle_get(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -1210,27 +1209,6 @@ def _parse_bool(value: str) -> bool:
         return True
     else:
         raise ValueError('Required "0", "1", "false" or "true"')
-
-
-async def check_any_permissions(
-    request: aiohttp.web.Request, permissions: list[Permission]
-) -> None:
-    user_name = await check_authorized(request)
-    auth_policy = request.config_dict.get(AUTZ_KEY)
-    if not auth_policy:
-        raise RuntimeError("Auth policy not configured")
-
-    try:
-        missing = await auth_policy.get_missing_permissions(user_name, permissions)
-    except aiohttp.ClientError as e:
-        # re-wrap in order not to expose the client
-        raise RuntimeError(e) from e
-
-    if len(missing) >= len(permissions):
-        payload = {"missing": [_permission_to_primitive(p) for p in missing]}
-        raise aiohttp.web.HTTPForbidden(
-            text=json.dumps(payload), content_type="application/json"
-        )
 
 
 def _permission_to_primitive(perm: Permission) -> dict[str, str]:
