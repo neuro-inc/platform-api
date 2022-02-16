@@ -1,6 +1,9 @@
 
 {{- if .Values.ingress.enabled }}
-apiVersion: networking.k8s.io/v1beta1
+{{- $ingressApiIsStable := eq (include "k8s.ingress.isStable" .) "true" -}}
+{{- $ingressSupportsIngressClassName := eq (include "k8s.ingress.supportsIngressClassName" .) "true" -}}
+{{- $ingressSupportsPathType := eq (include "k8s.ingress.supportsPathType" .) "true" -}}
+apiVersion: {{ include "k8s.ingress.apiVersion" . }}
 kind: Ingress
 metadata:
   name: {{ include "platformApi.fullname" . }}
@@ -8,18 +11,30 @@ metadata:
     service: platform-api
   annotations:
     kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/router.pathmatcher: PathPrefix
     external-dns.platform.neuromation.io: "true"
-    # TODO: remove traefik v1 annotations
-    traefik.frontend.rule.type: PathPrefix
 spec:
+  {{- if $ingressSupportsIngressClassName }}
+  ingressClassName: traefik
+  {{- end }}
   rules:
-{{- range .Values.ingress.hosts }}
+  {{- range .Values.ingress.hosts }}
   - host: {{ . | quote }}
     http:
       paths:
       - path: /api/v1
+        {{- if $ingressSupportsPathType }}
+        pathType: Prefix
+        {{- end }}
         backend:
+          {{- if $ingressApiIsStable }}
+          service:
+            name: {{ include "platformApi.fullname" $ }}
+            port:
+              name: http
+          {{- else }}
           serviceName: {{ include "platformApi.fullname" $ }}
           servicePort: http
-{{- end }}
+          {{- end }}
+  {{- end }}
 {{- end }}

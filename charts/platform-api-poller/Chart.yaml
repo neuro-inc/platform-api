@@ -3,3 +3,7 @@ name: platform-api-poller
 description: A Helm chart for platform-api-poller service
 version: $CHART_VERSION
 appVersion: $APP_VERSION
+dependencies:
+  - name: k8s-resources
+    version: "1.0.0"
+    repository: https://neuro-inc.github.io/helm-charts

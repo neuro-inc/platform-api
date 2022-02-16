@@ -4,6 +4,9 @@ description: A Helm chart for platform-api service
 version: $CHART_VERSION
 appVersion: $APP_VERSION
 dependencies:
+  - name: k8s-resources
+    version: "1.0.0"
+    repository: https://neuro-inc.github.io/helm-charts
   - name: postgres-db-init
     version: "1.2.14"
     repository: https://neuro-inc.github.io/helm-charts

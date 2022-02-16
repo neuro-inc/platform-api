@@ -48,7 +48,9 @@ resources:
 
 ingress:
   enabled: false
-  # annotations:
+  ingressClassName: ""
+  hosts: []
+  annotations: {}
 
 secrets: []
 
