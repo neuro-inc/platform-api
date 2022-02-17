@@ -1451,13 +1451,6 @@ class TestKubeOrchestrator:
                         "traefik.ingress.kubernetes.io/router.middlewares": (
                             "error-page@kubernetescrd"
                         ),
-                        "traefik.ingress.kubernetes.io/error-pages": (
-                            "default:\n"
-                            "  status:\n"
-                            '  - "500-600"\n'
-                            "  backend: error-pages\n"
-                            "  query: /"
-                        ),
                     }
                 finally:
                     await orchestrator.delete_job(job)
@@ -1495,18 +1488,6 @@ class TestKubeOrchestrator:
                         "kubernetes.io/ingress.class": "traefik",
                         "traefik.ingress.kubernetes.io/router.middlewares": (
                             "error-page@kubernetescrd,ingress-auth@kubernetescrd"
-                        ),
-                        "traefik.ingress.kubernetes.io/error-pages": (
-                            "default:\n"
-                            "  status:\n"
-                            '  - "500-600"\n'
-                            "  backend: error-pages\n"
-                            "  query: /"
-                        ),
-                        "ingress.kubernetes.io/auth-type": "forward",
-                        "ingress.kubernetes.io/auth-trust-headers": "true",
-                        "ingress.kubernetes.io/auth-url": (
-                            "https://neu.ro/oauth/authorize"
                         ),
                     }
                 finally:
@@ -2958,6 +2939,7 @@ class TestKubeClient:
     ) -> None:
         job_id = f"job-{uuid.uuid4()}"
         payload = await create_network_policy(job_id)
+        print(payload)
         link = payload["metadata"]["selfLink"]
         np_name = payload["metadata"]["name"]
 

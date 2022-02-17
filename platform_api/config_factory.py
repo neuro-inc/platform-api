@@ -310,12 +310,6 @@ class EnvironConfigFactory:
                 "NP_KUBE_INGRESS_ERROR_PAGE_MIDDLEWARE",
                 KubeConfig.jobs_ingress_error_page_middleware,
             ),
-            jobs_ingress_oauth_url=URL(
-                self._environ.get(
-                    "NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL",
-                    KubeConfig.jobs_ingress_oauth_url,
-                )
-            ),
             jobs_pod_job_toleration_key=self._environ.get(
                 "NP_KUBE_POD_JOB_TOLERATION_KEY", KubeConfig.jobs_pod_job_toleration_key
             ),

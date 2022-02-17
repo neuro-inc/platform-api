@@ -782,29 +782,11 @@ class KubeOrchestrator(Orchestrator):
         if self._kube_config.jobs_ingress_class == "traefik":
             annotations = {
                 "kubernetes.io/ingress.class": "traefik",
-                # TODO: remove traefik v1 annotations
-                "traefik.ingress.kubernetes.io/error-pages": (
-                    "default:\n"
-                    "  status:\n"
-                    '  - "500-600"\n'
-                    "  backend: error-pages\n"
-                    "  query: /"
-                ),
             }
             middlewares = []
             middlewares.append(self._kube_config.jobs_ingress_error_page_middleware)
             if job.requires_http_auth:
                 middlewares.append(self._kube_config.jobs_ingress_auth_middleware)
-                # TODO: remove traefik v1 annotations
-                oauth_url = self._kube_config.jobs_ingress_oauth_url
-                assert oauth_url
-                annotations.update(
-                    {
-                        "ingress.kubernetes.io/auth-type": "forward",
-                        "ingress.kubernetes.io/auth-trust-headers": "true",
-                        "ingress.kubernetes.io/auth-url": str(oauth_url),
-                    }
-                )
             annotations.update(
                 {
                     "traefik.ingress.kubernetes.io/router.middlewares": ",".join(
@@ -843,7 +825,11 @@ class KubeOrchestrator(Orchestrator):
         labels = self._get_ingress_labels(job, service)
         annotations = self._get_ingress_annotations(job)
         await self._client.create_ingress(
-            name, rules=rules, annotations=annotations, labels=labels
+            name,
+            ingress_class=self._kube_config.jobs_ingress_class,
+            rules=rules,
+            annotations=annotations,
+            labels=labels,
         )
 
     async def _delete_ingress(self, job: Job) -> None:

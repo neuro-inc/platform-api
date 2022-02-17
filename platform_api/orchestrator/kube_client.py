@@ -399,7 +399,7 @@ class IngressRule:
     service_port: Optional[int] = None
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "IngressRule":
+    def from_v1beta1_primitive(cls, payload: dict[str, Any]) -> "IngressRule":
         http_paths = payload.get("http", {}).get("paths", [])
         http_path = http_paths[0] if http_paths else {}
         backend = http_path.get("backend", {})
@@ -411,7 +411,20 @@ class IngressRule:
             service_port=service_port,
         )
 
-    def to_primitive(self) -> dict[str, Any]:
+    @classmethod
+    def from_v1_primitive(cls, payload: dict[str, Any]) -> "IngressRule":
+        http_paths = payload.get("http", {}).get("paths", [])
+        http_path = http_paths[0] if http_paths else {}
+        service = http_path.get("backend", {}).get("service", {})
+        service_name = service.get("name")
+        service_port = service.get("port", {}).get("number")
+        return cls(
+            host=payload.get("host", ""),
+            service_name=service_name,
+            service_port=service_port,
+        )
+
+    def to_v1beta1_primitive(self) -> dict[str, Any]:
         payload: dict[str, Any] = {"host": self.host}
         if self.service_name:
             payload["http"] = {
@@ -426,6 +439,23 @@ class IngressRule:
             }
         return payload
 
+    def to_v1_primitive(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {"host": self.host}
+        if self.service_name:
+            payload["http"] = {
+                "paths": [
+                    {
+                        "backend": {
+                            "service": {
+                                "name": self.service_name,
+                                "port": {"number": self.service_port},
+                            }
+                        }
+                    }
+                ]
+            }
+        return payload
+
     @classmethod
     def from_service(cls, host: str, service: Service) -> "IngressRule":
         return cls(host=host, service_name=service.name, service_port=service.port)
@@ -434,16 +464,37 @@ class IngressRule:
 @dataclass(frozen=True)
 class Ingress:
     name: str
+    ingress_class: Optional[str] = None
     rules: list[IngressRule] = field(default_factory=list)
     annotations: dict[str, str] = field(default_factory=dict)
     labels: dict[str, str] = field(default_factory=dict)
 
-    def to_primitive(self) -> dict[str, Any]:
-        rules: list[Any] = [rule.to_primitive() for rule in self.rules] or [None]
-        metadata = {"name": self.name, "annotations": self.annotations}
+    def to_v1beta1_primitive(self) -> dict[str, Any]:
+        rules: list[Any] = [rule.to_v1beta1_primitive() for rule in self.rules] or [
+            None
+        ]
+        annotations = self.annotations.copy()
+        if self.ingress_class:
+            annotations["kubernetes.io/ingress.class"] = self.ingress_class
+        metadata = {"name": self.name, "annotations": annotations}
         if self.labels:
             metadata["labels"] = self.labels.copy()
         primitive = {"metadata": metadata, "spec": {"rules": rules}}
+        return primitive
+
+    def to_v1_primitive(self) -> dict[str, Any]:
+        rules: list[Any] = [rule.to_v1_primitive() for rule in self.rules] or [None]
+        annotations = self.annotations.copy()
+        metadata = {"name": self.name, "annotations": annotations}
+        spec: dict[str, Any] = {"rules": rules}
+        primitive: dict[str, Any] = {"metadata": metadata, "spec": spec}
+        if self.ingress_class:
+            annotations.pop(
+                "kubernetes.io/ingress.class", None
+            )  # deprecated and has conflict with ingressClassName
+            spec["ingressClassName"] = self.ingress_class
+        if self.labels:
+            metadata["labels"] = self.labels.copy()
         return primitive
 
     @classmethod
@@ -451,22 +502,46 @@ class Ingress:
         # TODO (A Danshyn 06/13/18): should be refactored along with PodStatus
         kind = payload["kind"]
         if kind == "Ingress":
-            rules = [
-                IngressRule.from_primitive(rule) for rule in payload["spec"]["rules"]
-            ]
-            payload_metadata = payload["metadata"]
-            return cls(
-                name=payload_metadata["name"],
-                rules=rules,
-                annotations=payload_metadata.get("annotations", {}),
-                labels=payload_metadata.get("labels", {}),
-            )
+            if payload["apiVersion"] == "networking.k8s.io/v1":
+                return cls._from_v1_primitive(payload)
+            return cls._from_v1beta1_primitive(payload)
         elif kind == "Status":
             # TODO (A.Yushkovskiy, 28-Jun-2019) patch this method to raise a proper
             #  error, not always `JobNotFoundException` (see issue #792)
             _raise_status_job_exception(payload, job_id=None)
         else:
             raise ValueError(f"unknown kind: {kind}")
+
+    @classmethod
+    def _from_v1beta1_primitive(cls, payload: dict[str, Any]) -> "Ingress":
+        metadata = payload["metadata"]
+        spec = payload["spec"]
+        annotations = metadata.get("annotations", {})
+        rules = [IngressRule.from_v1beta1_primitive(rule) for rule in spec["rules"]]
+        return cls(
+            name=metadata["name"],
+            ingress_class=annotations.get("kubernetes.io/ingress.class"),
+            rules=rules,
+            annotations=metadata.get("annotations", {}),
+            labels=metadata.get("labels", {}),
+        )
+
+    @classmethod
+    def _from_v1_primitive(cls, payload: dict[str, Any]) -> "Ingress":
+        metadata = payload["metadata"]
+        spec = payload["spec"]
+        annotations = metadata.get("annotations", {})
+        rules = [IngressRule.from_v1_primitive(rule) for rule in spec["rules"]]
+        return cls(
+            name=metadata["name"],
+            ingress_class=spec.get("ingressClassName")
+            or annotations.get(
+                "kubernetes.io/ingress.class"
+            ),  # for backward compatibility with old ingresses
+            rules=rules,
+            annotations=annotations,
+            labels=metadata.get("labels", {}),
+        )
 
     def find_rule_index_by_host(self, host: str) -> int:
         for idx, rule in enumerate(self.rules):
@@ -1313,6 +1388,38 @@ class NodeTaint:
         return {"key": self.key, "value": self.value, "effect": self.effect}
 
 
+@dataclass(frozen=True)
+class APIResource:
+    group_version: str
+    resources: Sequence[str]
+
+    @property
+    def has_ingress(self) -> bool:
+        return self.has_resource("ingresses")
+
+    def has_resource(self, resource_name: str) -> bool:
+        return resource_name in self.resources
+
+    @classmethod
+    def from_primitive(cls, payload: dict[str, Any]) -> "APIResource":
+        return cls(
+            group_version=payload["groupVersion"],
+            resources=[p["name"] for p in payload["resources"]],
+        )
+
+
+class APIResources(dict[str, APIResource]):
+    group_versions: list[str] = ["networking.k8s.io/v1"]
+
+    @property
+    def networking_v1(self) -> Optional[APIResource]:
+        return self.get("networking.k8s.io/v1")
+
+    @property
+    def has_networking_v1_ingress(self) -> bool:
+        return self.networking_v1 is not None and self.networking_v1.has_ingress
+
+
 class KubeClient:
     def __init__(
         self,
@@ -1333,6 +1440,8 @@ class KubeClient:
     ) -> None:
         self._base_url = base_url
         self._namespace = namespace
+
+        self._api_resources: APIResources = APIResources()
 
         self._cert_authority_data_pem = cert_authority_data_pem
         self._cert_authority_path = cert_authority_path
@@ -1393,6 +1502,15 @@ class KubeClient:
             trace_configs=self._trace_configs,
         )
 
+    async def init_api_resources(self) -> None:
+        assert self._client
+        for gv in APIResources.group_versions:
+            try:
+                self._api_resources[gv] = await self.get_api_resource(gv)
+            except aiohttp.ClientResponseError as ex:
+                if ex.status != 404:
+                    raise
+
     async def close(self) -> None:
         if self._client:
             await self._client.close()
@@ -1400,6 +1518,7 @@ class KubeClient:
 
     async def __aenter__(self) -> "KubeClient":
         await self.init()
+        await self.init_api_resources()
         return self
 
     async def __aexit__(self, *args: Any) -> None:
@@ -1458,7 +1577,16 @@ class KubeClient:
         )
 
     @property
+    def _networking_v1_namespace_url(self) -> str:
+        return (
+            f"{self._base_url}/apis/networking.k8s.io/v1"
+            f"/namespaces/{self._namespace}"
+        )
+
+    @property
     def _ingresses_url(self) -> str:
+        if self._api_resources.has_networking_v1_ingress:
+            return f"{self._networking_v1_namespace_url}/ingresses"
         return f"{self._networking_v1beta1_namespace_url}/ingresses"
 
     def _generate_ingress_url(self, ingress_name: str) -> str:
@@ -1506,6 +1634,11 @@ class KubeClient:
             payload = await response.json()
             logging.debug("k8s response payload: %s", payload)
             return payload
+
+    async def get_api_resource(self, group_version: str) -> APIResource:
+        url = f"{self._base_url}/apis/{group_version}"
+        payload = await self._request(method="GET", url=url, raise_for_status=True)
+        return APIResource.from_primitive(payload)
 
     async def get_all_job_resources_links(self, job_id: str) -> AsyncIterator[str]:
         job_label_name = "platform.neuromation.io/job"
@@ -1621,6 +1754,7 @@ class KubeClient:
     async def create_ingress(
         self,
         name: str,
+        ingress_class: Optional[str] = None,
         rules: Optional[list[IngressRule]] = None,
         annotations: Optional[dict[str, str]] = None,
         labels: Optional[dict[str, str]] = None,
@@ -1629,10 +1763,18 @@ class KubeClient:
         annotations = annotations or {}
         labels = labels or {}
         ingress = Ingress(
-            name=name, rules=rules, annotations=annotations, labels=labels
+            name=name,
+            ingress_class=ingress_class,
+            rules=rules,
+            annotations=annotations,
+            labels=labels,
         )
+        if self._api_resources.has_networking_v1_ingress:
+            payload = ingress.to_v1_primitive()
+        else:
+            payload = ingress.to_v1beta1_primitive()
         payload = await self._request(
-            method="POST", url=self._ingresses_url, json=ingress.to_primitive()
+            method="POST", url=self._ingresses_url, json=payload
         )
         return Ingress.from_primitive(payload)
 
@@ -1672,7 +1814,11 @@ class KubeClient:
         # TODO (A Danshyn 06/13/18): test if does not exist already
         url = self._generate_ingress_url(name)
         headers = {"Content-Type": "application/json-patch+json"}
-        patches = [{"op": "add", "path": "/spec/rules/-", "value": rule.to_primitive()}]
+        if self._api_resources.has_networking_v1_ingress:
+            rule_payload = rule.to_v1_primitive()
+        else:
+            rule_payload = rule.to_v1beta1_primitive()
+        patches = [{"op": "add", "path": "/spec/rules/-", "value": rule_payload}]
         payload = await self._request(
             method="PATCH", url=url, headers=headers, json=patches
         )
