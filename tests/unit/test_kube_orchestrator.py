@@ -1025,9 +1025,10 @@ class TestIngressV1Rule:
             "http": {
                 "paths": [
                     {
+                        "pathType": "ImplementationSpecific",
                         "backend": {
                             "service": {"name": "testname", "port": {"number": 1234}}
-                        }
+                        },
                     }
                 ]
             },
@@ -1294,12 +1295,13 @@ class TestIngressV1:
                         "http": {
                             "paths": [
                                 {
+                                    "pathType": "ImplementationSpecific",
                                     "backend": {
                                         "service": {
                                             "name": "testservice",
                                             "port": {"number": 1234},
                                         }
-                                    }
+                                    },
                                 }
                             ]
                         },
@@ -1325,12 +1327,13 @@ class TestIngressV1:
                         "http": {
                             "paths": [
                                 {
+                                    "pathType": "ImplementationSpecific",
                                     "backend": {
                                         "service": {
                                             "name": "testservice",
                                             "port": {"number": 1234},
                                         }
-                                    }
+                                    },
                                 }
                             ]
                         },
@@ -1363,12 +1366,13 @@ class TestIngressV1:
                         "http": {
                             "paths": [
                                 {
+                                    "pathType": "ImplementationSpecific",
                                     "backend": {
                                         "service": {
                                             "name": "testservice",
                                             "port": {"number": 1234},
                                         }
-                                    }
+                                    },
                                 }
                             ]
                         },
