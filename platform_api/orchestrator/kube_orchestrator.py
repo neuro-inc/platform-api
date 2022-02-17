@@ -168,12 +168,11 @@ class KubeOrchestrator(Orchestrator):
         return self._kube_config
 
     async def __aenter__(self) -> "KubeOrchestrator":
-        await self._client.init()
+        await self._client.__aenter__()
         return self
 
     async def __aexit__(self, *args: Any) -> None:
-        if self._client:
-            await self._client.close()
+        await self._client.close()
 
     @property
     def main_storage_config(self) -> StorageConfig:

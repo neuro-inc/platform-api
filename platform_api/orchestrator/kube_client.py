@@ -445,12 +445,13 @@ class IngressRule:
             payload["http"] = {
                 "paths": [
                     {
+                        "pathType": "ImplementationSpecific",
                         "backend": {
                             "service": {
                                 "name": self.service_name,
                                 "port": {"number": self.service_port},
                             }
-                        }
+                        },
                     }
                 ]
             }
