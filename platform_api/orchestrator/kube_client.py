@@ -1127,7 +1127,11 @@ class KubernetesEvent:
 
     @property
     def last_timestamp(self) -> datetime:
-        return iso8601.parse_date(self._payload["lastTimestamp"])
+        # Fallback to firstTimestamp if lastTimestamp is None.
+        ts = self._payload["lastTimestamp"]
+        if not ts:
+            return self.first_timestamp
+        return iso8601.parse_date(ts)
 
     @property
     def count(self) -> int:
