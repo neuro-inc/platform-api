@@ -777,11 +777,10 @@ class KubeOrchestrator(Orchestrator):
         return job.id
 
     def _get_ingress_annotations(self, job: Job) -> dict[str, str]:
-        annotations: dict[str, str] = {}
+        annotations: dict[str, str] = {
+            "kubernetes.io/ingress.class": self._kube_config.jobs_ingress_class,
+        }
         if self._kube_config.jobs_ingress_class == "traefik":
-            annotations = {
-                "kubernetes.io/ingress.class": "traefik",
-            }
             middlewares = []
             middlewares.append(self._kube_config.jobs_ingress_error_page_middleware)
             if job.requires_http_auth:

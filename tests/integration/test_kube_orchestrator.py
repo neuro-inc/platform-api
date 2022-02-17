@@ -1413,7 +1413,7 @@ class TestKubeOrchestrator:
                         pod_name=pod_name, timeout_s=60.0
                     )
                     ingress = await kube_client.get_ingress(pod_name)
-                    assert ingress.annotations == dict()
+                    assert ingress.ingress_class == "nginx"
                 finally:
                     await orchestrator.delete_job(job)
 
