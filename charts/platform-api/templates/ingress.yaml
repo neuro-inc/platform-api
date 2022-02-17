@@ -10,7 +10,9 @@ metadata:
   labels: {{ include "platformApi.labels.standard" . | nindent 4 }}
     service: platform-api
   annotations:
+    {{- if not $ingressSupportsIngressClassName }}
     kubernetes.io/ingress.class: traefik
+    {{- end }}
     traefik.ingress.kubernetes.io/router.pathmatcher: PathPrefix
     external-dns.platform.neuromation.io: "true"
 spec:
