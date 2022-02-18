@@ -76,6 +76,42 @@ def _raise_status_job_exception(pod: dict[str, Any], job_id: Optional[str]) -> N
         raise JobError("unexpected")
 
 
+class GroupVersion(str, Enum):
+    NETWORKING_V1 = "networking.k8s.io/v1"
+
+
+@dataclass(frozen=True)
+class APIResource:
+    group_version: str
+    resources: Sequence[str]
+
+    @property
+    def has_ingress(self) -> bool:
+        return self.has_resource("ingresses")
+
+    def has_resource(self, resource_name: str) -> bool:
+        return resource_name in self.resources
+
+    @classmethod
+    def from_primitive(cls, payload: dict[str, Any]) -> "APIResource":
+        return cls(
+            group_version=payload["groupVersion"],
+            resources=[p["name"] for p in payload["resources"]],
+        )
+
+
+class APIResources(dict[str, APIResource]):
+    group_versions: list[str] = [GroupVersion.NETWORKING_V1]
+
+    @property
+    def networking_v1(self) -> Optional[APIResource]:
+        return self.get(GroupVersion.NETWORKING_V1)
+
+    @property
+    def has_networking_v1_ingress(self) -> bool:
+        return self.networking_v1 is not None and self.networking_v1.has_ingress
+
+
 @dataclass(frozen=True)
 class Volume(metaclass=abc.ABCMeta):
     name: str
@@ -503,7 +539,7 @@ class Ingress:
         # TODO (A Danshyn 06/13/18): should be refactored along with PodStatus
         kind = payload["kind"]
         if kind == "Ingress":
-            if payload["apiVersion"] == "networking.k8s.io/v1":
+            if payload["apiVersion"] == GroupVersion.NETWORKING_V1:
                 return cls._from_v1_primitive(payload)
             return cls._from_v1beta1_primitive(payload)
         elif kind == "Status":
@@ -1387,38 +1423,6 @@ class NodeTaint:
 
     def to_primitive(self) -> dict[str, Any]:
         return {"key": self.key, "value": self.value, "effect": self.effect}
-
-
-@dataclass(frozen=True)
-class APIResource:
-    group_version: str
-    resources: Sequence[str]
-
-    @property
-    def has_ingress(self) -> bool:
-        return self.has_resource("ingresses")
-
-    def has_resource(self, resource_name: str) -> bool:
-        return resource_name in self.resources
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "APIResource":
-        return cls(
-            group_version=payload["groupVersion"],
-            resources=[p["name"] for p in payload["resources"]],
-        )
-
-
-class APIResources(dict[str, APIResource]):
-    group_versions: list[str] = ["networking.k8s.io/v1"]
-
-    @property
-    def networking_v1(self) -> Optional[APIResource]:
-        return self.get("networking.k8s.io/v1")
-
-    @property
-    def has_networking_v1_ingress(self) -> bool:
-        return self.networking_v1 is not None and self.networking_v1.has_ingress
 
 
 class KubeClient:
