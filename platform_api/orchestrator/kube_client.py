@@ -7,7 +7,7 @@ import re
 import ssl
 from base64 import b64encode
 from collections import defaultdict
-from collections.abc import AsyncIterator, Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -1645,25 +1645,6 @@ class KubeClient:
         payload = await self._request(method="GET", url=url, raise_for_status=True)
         return APIResource.from_primitive(payload)
 
-    async def get_all_job_resources_links(self, job_id: str) -> AsyncIterator[str]:
-        job_label_name = "platform.neuromation.io/job"
-        params = {"labelSelector": f"{job_label_name}={job_id}"}
-        urls = [
-            self._pods_url,
-            self._ingresses_url,
-            self._services_url,
-            self._generate_all_network_policies_url(),
-        ]
-        for url in urls:
-            payload = await self._request(method="GET", url=url, params=params)
-            for item in payload["items"]:
-                metadata = item["metadata"]
-                assert metadata["labels"][job_label_name] == job_id
-                yield metadata["selfLink"]
-
-    async def delete_resource_by_link(self, link: str) -> None:
-        await self._delete_resource_url(f"{self._base_url}{link}")
-
     async def _delete_resource_url(self, url: str, uid: Optional[str] = None) -> None:
         request_payload = None
         if uid:
@@ -1755,6 +1736,17 @@ class KubeClient:
         payload = await self._request(method="DELETE", url=url, json=request_payload)
         pod = PodDescriptor.from_primitive(payload)
         return pod.status  # type: ignore
+
+    async def delete_all_pods(self, *, labels: dict[str, str]) -> None:
+        params: dict[str, str] = {}
+        if labels:
+            params["labelSelector"] = ",".join(
+                "=".join(item) for item in labels.items()
+            )
+        payload = await self._request(
+            method="DELETE", url=self._pods_url, params=params
+        )
+        self._check_status_payload(payload)
 
     async def create_ingress(
         self,
@@ -1872,6 +1864,19 @@ class KubeClient:
     async def delete_service(self, name: str, uid: Optional[str] = None) -> None:
         url = self._generate_service_url(name)
         await self._delete_resource_url(url, uid)
+
+    async def delete_all_services(
+        self, *, labels: Optional[dict[str, str]] = None
+    ) -> None:
+        params: dict[str, str] = {}
+        if labels:
+            params["labelSelector"] = ",".join(
+                "=".join(item) for item in labels.items()
+            )
+        payload = await self._request(
+            method="DELETE", url=self._services_url, params=params
+        )
+        self._check_status_payload(payload)
 
     async def create_docker_secret(self, secret: DockerRegistrySecret) -> None:
         url = self._generate_all_secrets_url(secret.namespace)
@@ -2068,6 +2073,24 @@ class KubeClient:
     ) -> None:
         url = self._generate_network_policy_url(name, namespace_name)
         await self._delete_resource_url(url)
+
+    async def delete_all_network_policies(
+        self,
+        *,
+        namespace_name: Optional[str] = None,
+        labels: Optional[dict[str, str]] = None,
+    ) -> None:
+        params: dict[str, str] = {}
+        if labels:
+            params["labelSelector"] = ",".join(
+                "=".join(item) for item in labels.items()
+            )
+        payload = await self._request(
+            method="DELETE",
+            url=self._generate_all_network_policies_url(namespace_name),
+            params=params,
+        )
+        self._check_status_payload(payload)
 
     def _generate_node_proxy_url(self, name: str, port: int) -> str:
         return f"{self._api_v1_url}/nodes/{name}:{port}/proxy"

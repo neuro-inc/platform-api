@@ -768,7 +768,11 @@ class TestKubeOrchestrator:
         annotations = {"key/1": "value 1", "key/2": "value 2"}
         labels = {"label/1": "label-value-1", "label/2": "label-value-2"}
         expected_ingress = Ingress(
-            name=name, rules=rules, annotations=annotations, labels=labels
+            name=name,
+            ingress_class=mock.ANY,
+            rules=rules,
+            annotations=annotations,
+            labels=labels,
         )
 
         created_ingress = await kube_client.create_ingress(
@@ -787,13 +791,13 @@ class TestKubeOrchestrator:
     async def test_ingress_add_rules(
         self, kube_client: KubeClient, ingress: Ingress
     ) -> None:
-
         await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host1"))
         await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host2"))
         await kube_client.add_ingress_rule(ingress.name, IngressRule(host="host3"))
         result_ingress = await kube_client.get_ingress(ingress.name)
         assert result_ingress == Ingress(
             name=ingress.name,
+            ingress_class=mock.ANY,
             rules=[
                 IngressRule(host=""),
                 IngressRule(host="host1"),
@@ -806,6 +810,7 @@ class TestKubeOrchestrator:
         result_ingress = await kube_client.get_ingress(ingress.name)
         assert result_ingress == Ingress(
             name=ingress.name,
+            ingress_class=mock.ANY,
             rules=[
                 IngressRule(host=""),
                 IngressRule(host="host1"),
@@ -1446,8 +1451,8 @@ class TestKubeOrchestrator:
                         pod_name=pod_name, timeout_s=60.0
                     )
                     ingress = await kube_client.get_ingress(pod_name)
+                    assert ingress.ingress_class == "traefik"
                     assert ingress.annotations == {
-                        "kubernetes.io/ingress.class": "traefik",
                         "traefik.ingress.kubernetes.io/router.middlewares": (
                             "error-page@kubernetescrd"
                         ),
@@ -1484,8 +1489,8 @@ class TestKubeOrchestrator:
                         pod_name=pod_name, timeout_s=60.0
                     )
                     ingress = await kube_client.get_ingress(pod_name)
+                    assert ingress.ingress_class == "traefik"
                     assert ingress.annotations == {
-                        "kubernetes.io/ingress.class": "traefik",
                         "traefik.ingress.kubernetes.io/router.middlewares": (
                             "error-page@kubernetescrd,ingress-auth@kubernetescrd"
                         ),
@@ -2789,34 +2794,6 @@ class TestKubeClient:
 
         return _f
 
-    async def test_get_all_job_resources_links_pod(
-        self,
-        kube_client: MyKubeClient,
-        create_pod: Callable[[str], Awaitable[PodDescriptor]],
-    ) -> None:
-        job_id = f"job-{uuid.uuid4()}"
-        pod = await create_pod(job_id)
-        link = URL(kube_client._generate_pod_url(pod.name)).path
-
-        resources = [r async for r in kube_client.get_all_job_resources_links(job_id)]
-        assert resources == [link]
-
-    async def test_delete_resource_by_link_pod(
-        self,
-        kube_client: MyKubeClient,
-        create_pod: Callable[[str], Awaitable[PodDescriptor]],
-    ) -> None:
-        job_id = f"job-{uuid.uuid4()}"
-        pod = await create_pod(job_id)
-        assert await kube_client.get_pod(pod.name)
-        link = URL(kube_client._generate_pod_url(pod.name)).path
-
-        await kube_client.delete_resource_by_link(link)
-        await kube_client.wait_pod_non_existent(pod.name, timeout_s=60.0)
-
-        with pytest.raises(JobNotFoundException):
-            await kube_client.get_pod(pod.name)
-
     @pytest.fixture
     async def create_ingress(
         self,
@@ -2831,33 +2808,6 @@ class TestKubeClient:
             return ingress
 
         return _f
-
-    async def test_get_all_job_resources_links_ingress(
-        self,
-        kube_client: KubeClient,
-        create_ingress: Callable[[str], Awaitable[Ingress]],
-    ) -> None:
-        job_id = f"job-{uuid.uuid4()}"
-        ingress = await create_ingress(job_id)
-        link = URL(kube_client._generate_ingress_url(ingress.name)).path
-
-        resources = [r async for r in kube_client.get_all_job_resources_links(job_id)]
-        assert resources == [link]
-
-    async def test_delete_resource_by_link_ingress(
-        self,
-        kube_client: KubeClient,
-        create_ingress: Callable[[str], Awaitable[Ingress]],
-    ) -> None:
-        job_id = f"job-{uuid.uuid4()}"
-        ingress = await create_ingress(job_id)
-        assert await kube_client.get_ingress(ingress.name)
-
-        link = URL(kube_client._generate_ingress_url(ingress.name)).path
-        await kube_client.delete_resource_by_link(link)
-
-        with pytest.raises(JobNotFoundException):
-            await kube_client.get_ingress(ingress.name)
 
     @pytest.fixture
     async def create_service(
@@ -2874,33 +2824,6 @@ class TestKubeClient:
             return service
 
         return _f
-
-    async def test_get_all_job_resources_links_service(
-        self,
-        kube_client: KubeClient,
-        create_service: Callable[[str], Awaitable[Service]],
-    ) -> None:
-        job_id = f"job-{uuid.uuid4()}"
-        service = await create_service(job_id)
-        link = URL(kube_client._generate_service_url(service.name)).path
-
-        resources = [r async for r in kube_client.get_all_job_resources_links(job_id)]
-        assert resources == [link]
-
-    async def test_delete_resource_by_link_service(
-        self,
-        kube_client: KubeClient,
-        create_service: Callable[[str], Awaitable[Service]],
-    ) -> None:
-        job_id = f"job-{uuid.uuid4()}"
-        service = await create_service(job_id)
-        assert await kube_client.get_service(service.name)
-
-        link = URL(kube_client._generate_service_url(service.name)).path
-        await kube_client.delete_resource_by_link(link)
-
-        with pytest.raises(StatusException, match="NotFound"):
-            await kube_client.get_service(service.name)
 
     @pytest.fixture
     async def create_network_policy(
@@ -2919,34 +2842,6 @@ class TestKubeClient:
             return payload
 
         return _f
-
-    async def test_get_all_job_resources_links_job_network_policy(
-        self,
-        kube_client: KubeClient,
-        create_network_policy: Callable[[str], Awaitable[dict[str, Any]]],
-    ) -> None:
-        job_id = f"job-{uuid.uuid4()}"
-        payload = await create_network_policy(job_id)
-        link = payload["metadata"]["selfLink"]
-
-        resources = [r async for r in kube_client.get_all_job_resources_links(job_id)]
-        assert resources == [link]
-
-    async def test_delete_resource_by_link_network_policy(
-        self,
-        kube_client: KubeClient,
-        create_network_policy: Callable[[str], Awaitable[dict[str, Any]]],
-    ) -> None:
-        job_id = f"job-{uuid.uuid4()}"
-        payload = await create_network_policy(job_id)
-        print(payload)
-        link = payload["metadata"]["selfLink"]
-        np_name = payload["metadata"]["name"]
-
-        await kube_client.delete_resource_by_link(link)
-
-        with pytest.raises(StatusException, match="NotFound"):
-            await kube_client.get_network_policy(np_name)
 
 
 @pytest.fixture

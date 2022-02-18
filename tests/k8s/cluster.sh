@@ -4,8 +4,7 @@
 # https://github.com/kubernetes/minikube#linux-continuous-integration-without-vm-support
 
 function k8s::install_minikube {
-    local minikube_version="v1.11.0"
-    curl -Lo minikube https://storage.googleapis.com/minikube/releases/${minikube_version}/minikube-linux-amd64
+    curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
     chmod +x minikube
     sudo mv minikube /usr/local/bin/
 }
@@ -27,7 +26,6 @@ function k8s::start {
 
     sudo -E minikube start \
         --vm-driver=none \
-        --kubernetes-version=v1.16.15 \
         --install-addons=true \
         --addons=ingress \
         --feature-gates=DevicePlugins=true \

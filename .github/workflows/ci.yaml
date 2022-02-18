@@ -69,6 +69,8 @@ jobs:
         sudo apt-get -q install -y nfs-common
         sudo modprobe nfs
         sudo modprobe nfsd
+    - name: Install Conntrack
+      run: sudo apt-get -q install -y conntrack
     - name: Start minikube
       run: |
         make install_k8s
