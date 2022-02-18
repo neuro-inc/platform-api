@@ -109,10 +109,6 @@ spec:
         - name: NP_KUBE_INGRESS_ERROR_PAGE_MIDDLEWARE
           value: {{ .Values.jobs.ingressErrorPageMiddleware | quote }}
         {{- end }}
-        {{- if .Values.jobs.ingressOAuthAuthorizeUrl }}
-        - name: NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL
-          value: {{ .Values.jobs.ingressOAuthAuthorizeUrl | quote }}
-        {{- end }}
         {{- if .Values.jobs.tolerationKey }}
         - name: NP_KUBE_POD_JOB_TOLERATION_KEY
           value: {{ .Values.jobs.tolerationKey | quote }}

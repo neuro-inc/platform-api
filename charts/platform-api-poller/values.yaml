@@ -27,7 +27,6 @@ jobs:
   ingressClass: traefik
   ingressAuthMiddleware:
   ingressErrorPageMiddleware:
-  ingressOAuthAuthorizeUrl:
   tolerationKey: platform.neuromation.io/job
   preemptibleTolerationKey:
   priorityClassName:

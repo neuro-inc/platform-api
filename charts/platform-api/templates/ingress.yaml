@@ -1,8 +1,6 @@
 
 {{- if .Values.ingress.enabled }}
 {{- $ingressApiIsStable := eq (include "k8s.ingress.isStable" .) "true" -}}
-{{- $ingressSupportsIngressClassName := eq (include "k8s.ingress.supportsIngressClassName" .) "true" -}}
-{{- $ingressSupportsPathType := eq (include "k8s.ingress.supportsPathType" .) "true" -}}
 apiVersion: {{ include "k8s.ingress.apiVersion" . }}
 kind: Ingress
 metadata:
@@ -10,13 +8,13 @@ metadata:
   labels: {{ include "platformApi.labels.standard" . | nindent 4 }}
     service: platform-api
   annotations:
-    {{- if not $ingressSupportsIngressClassName }}
+    {{- if not $ingressApiIsStable }}
     kubernetes.io/ingress.class: traefik
     {{- end }}
     traefik.ingress.kubernetes.io/router.pathmatcher: PathPrefix
     external-dns.platform.neuromation.io: "true"
 spec:
-  {{- if $ingressSupportsIngressClassName }}
+  {{- if $ingressApiIsStable }}
   ingressClassName: traefik
   {{- end }}
   rules:
@@ -25,7 +23,7 @@ spec:
     http:
       paths:
       - path: /api/v1
-        {{- if $ingressSupportsPathType }}
+        {{- if $ingressApiIsStable }}
         pathType: Prefix
         {{- end }}
         backend:

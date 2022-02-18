@@ -15,7 +15,6 @@ jobs:
   priorityClassName: platform-job
   ingressAuthMiddleware: platform-platform-ingress-auth@kubernetescrd
   ingressErrorPageMiddleware: platform-platform-web-ui-error-pages@kubernetescrd
-  ingressOAuthAuthorizeUrl: https://dev.neu.ro/oauth/authorize
 
 storages:
 - type: pvc
@@ -26,7 +25,6 @@ ingress:
   ingressClassName: traefik
   hosts: [dev.neu.ro]
   annotations:
-    kubernetes.io/ingress.class: traefik
     traefik.ingress.kubernetes.io/router.pathmatcher: PathPrefix
     external-dns.platform.neuromation.io: "true"
 
