@@ -838,5 +838,8 @@ class KubeOrchestrator(Orchestrator):
             logger.warning(f"Failed to remove ingress {name}: {e}")
 
     async def delete_all_job_resources(self, job_id: str) -> None:
-        async for link in self._client.get_all_job_resources_links(job_id):
-            await self._client.delete_resource_by_link(link)
+        labels = {"platform.neuromation.io/job": job_id}
+        await self._client.delete_all_pods(labels=labels)
+        await self._client.delete_all_ingresses(labels=labels)
+        await self._client.delete_all_services(labels=labels)
+        await self._client.delete_all_network_policies(labels=labels)
