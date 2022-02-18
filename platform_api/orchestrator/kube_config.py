@@ -2,8 +2,6 @@ import enum
 from dataclasses import dataclass
 from typing import Optional
 
-from yarl import URL
-
 
 class KubeClientAuthType(str, enum.Enum):
     NONE = "none"
@@ -30,9 +28,6 @@ class KubeConfig:
     client_conn_pool_size: int = 100
 
     jobs_ingress_class: str = "traefik"
-    jobs_ingress_oauth_url: URL = URL(
-        "https://neu.ro/oauth/authorize"
-    )  # TODO: not used in traefik v2
     jobs_ingress_auth_middleware: str = "ingress-auth@kubernetescrd"
     jobs_ingress_error_page_middleware: str = "error-page@kubernetescrd"
     jobs_pod_job_toleration_key: str = "platform.neuromation.io/job"
@@ -49,7 +44,5 @@ class KubeConfig:
     image_pull_secret_name: Optional[str] = None
 
     def __post_init__(self) -> None:
-        if not self.endpoint_url or (
-            self.jobs_ingress_class == "traefik" and not self.jobs_ingress_oauth_url
-        ):
+        if not self.endpoint_url:
             raise ValueError("Missing required settings")

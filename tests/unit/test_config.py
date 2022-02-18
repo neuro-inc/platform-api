@@ -529,7 +529,6 @@ class TestEnvironConfigFactory:
             jobs_ingress_class="nginx",
             jobs_ingress_auth_middleware="custom-ingress-auth@kubernetescrd",
             jobs_ingress_error_page_middleware="custom-error-page@kubernetescrd",
-            jobs_ingress_oauth_url=URL("http://ingress-auth"),
             jobs_pod_job_toleration_key="job",
             jobs_pod_preemptible_toleration_key="preemptible",
             jobs_pod_priority_class_name="job-priority",
@@ -652,39 +651,4 @@ class TestKubeConfig:
                 namespace="value",
                 node_label_gpu="value",
                 node_label_preemptible="value",
-                jobs_ingress_oauth_url=URL("value"),
             )
-
-    def test_traefik_missing_jobs_ingress_oauth_url(self) -> None:
-        with pytest.raises(ValueError, match="Missing required settings"):
-            KubeConfig(
-                endpoint_url="value",
-                cert_authority_data_pem="value",
-                cert_authority_path="value",
-                auth_cert_path="value",
-                auth_cert_key_path="value",
-                token="value",
-                token_path="value",
-                namespace="value",
-                node_label_gpu="value",
-                node_label_preemptible="value",
-                jobs_ingress_class="traefik",
-                jobs_ingress_oauth_url=URL(""),
-            )
-
-    def test_non_traefik_missing_jobs_ingress_oauth_url(self) -> None:
-        # does not raise ValueError
-        KubeConfig(
-            endpoint_url="value",
-            cert_authority_data_pem="value",
-            cert_authority_path="value",
-            auth_cert_path="value",
-            auth_cert_key_path="value",
-            token="value",
-            token_path="value",
-            namespace="value",
-            node_label_gpu="value",
-            node_label_preemptible="value",
-            jobs_ingress_class="nginx",
-            jobs_ingress_oauth_url=URL(""),
-        )
