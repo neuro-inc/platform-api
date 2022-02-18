@@ -1279,6 +1279,17 @@ class TestIngressV1:
             "spec": {"ingressClassName": "traefik", "rules": [None]},
         }
 
+    def test_to_primitive_with_ingress_class_annotation_removed(self) -> None:
+        ingress = Ingress(
+            name="testingress",
+            ingress_class="traefik",
+            annotations={"kubernetes.io/ingress.class": "traefik"},
+        )
+        assert ingress.to_v1_primitive() == {
+            "metadata": {"name": "testingress", "annotations": {}},
+            "spec": {"ingressClassName": "traefik", "rules": [None]},
+        }
+
     def test_to_primitive(self) -> None:
         ingress = Ingress(
             name="testingress",
