@@ -5,7 +5,7 @@ version: $CHART_VERSION
 appVersion: $APP_VERSION
 dependencies:
   - name: k8s-resources
-    version: "1.0.0"
+    version: "1.0.1"
     repository: https://neuro-inc.github.io/helm-charts
   - name: postgres-db-init
     version: "1.2.14"

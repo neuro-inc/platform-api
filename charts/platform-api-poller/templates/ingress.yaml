@@ -7,14 +7,14 @@ metadata:
   labels: {{ include "platformApiPoller.labels.standard" . | nindent 4 }}
     service: platform-api-poller
   annotations:
-    {{- if not $ingressApiIsStable }}
+    {{- if and (not $ingressApiIsStable) .Values.ingress.ingressClassName }}
     kubernetes.io/ingress.class: {{ .Values.ingress.ingressClassName }}
     {{- end }}
 {{- with .Values.ingress.annotations }}
 {{ toYaml . | indent 4}}
 {{- end }}
 spec:
-  {{- if $ingressApiIsStable }}
+  {{- if and $ingressApiIsStable .Values.ingress.ingressClassName }}
   ingressClassName: {{ .Values.ingress.ingressClassName }}
   {{- end }}
   rules:
