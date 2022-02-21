@@ -650,6 +650,15 @@ class TestJobs:
                 == f"http://{job_name}--{regular_user.name}.jobs.neu.ro"
             )
 
+        url = api.jobs_base_url
+
+        async with client.get(url, headers=service_user.headers) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            assert response.headers["Content-Type"] == "application/json; charset=utf-8"
+            result = await response.json()
+
+        assert job_id in {job["id"] for job in result["jobs"]}
+
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
@@ -678,6 +687,15 @@ class TestJobs:
             assert result["status"] in ["pending"]
             job_id = result["id"]
             assert result["org_name"] == "org"
+
+        url = api.jobs_base_url
+
+        async with client.get(url, headers=org_user.headers) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            assert response.headers["Content-Type"] == "application/json; charset=utf-8"
+            result = await response.json()
+
+        assert job_id in {job["id"] for job in result["jobs"]}
 
         jobs_client = jobs_client_factory(org_user)
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")

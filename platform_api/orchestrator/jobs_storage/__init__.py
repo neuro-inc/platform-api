@@ -1,5 +1,5 @@
 from .base import (
-    ClusterOwnerNameSet,
+    ClusterOrgOwnerNameSet,
     JobFilter,
     JobsStorage,
     JobsStorageException,
@@ -10,7 +10,7 @@ from .in_memory import InMemoryJobsStorage
 from .postgres import PostgresJobsStorage
 
 __all__ = (
-    "ClusterOwnerNameSet",
+    "ClusterOrgOwnerNameSet",
     "JobFilter",
     "JobsStorage",
     "JobsStorageException",

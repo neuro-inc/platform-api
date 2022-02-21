@@ -20,7 +20,7 @@ from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
 from ..base_postgres_storage import BasePostgresStorage
 from .base import (
-    ClusterOwnerNameSet,
+    ClusterOrgOwnerNameSet,
     JobsStorage,
     JobStorageJobFoundError,
     JobStorageTransactionError,
@@ -321,30 +321,54 @@ class JobFilterClauseBuilder:
             func.split_part(self._tables.jobs.c.owner, "/", 1).in_(base_owners)
         )
 
-    def filter_clusters(self, clusters: ClusterOwnerNameSet) -> None:
+    def filter_clusters(self, clusters: ClusterOrgOwnerNameSet) -> None:
         cluster_clauses = []
-        clusters_empty_owners = []
-        for cluster, owners in clusters.items():
-            if not owners:
-                clusters_empty_owners.append(cluster)
+        clusters_empty_orgs = []
+        for cluster, orgs in clusters.items():
+            if not orgs:
+                clusters_empty_orgs.append(cluster)
                 continue
-            owners_empty_names = []
-            for owner, names in owners.items():
-                if not names:
-                    owners_empty_names.append(owner)
+            orgs_empty_owners = []
+            for org, owners in orgs.items():
+                if not owners:
+                    orgs_empty_owners.append(org)
                     continue
+                if org is None:
+                    org_pred = self._tables.jobs.c.org_name.is_(None)
+                else:
+                    org_pred = self._tables.jobs.c.org_name == org
+                owners_empty_names = []
+                for owner, names in owners.items():
+                    if not names:
+                        owners_empty_names.append(owner)
+                        continue
+                    cluster_clauses.append(
+                        (self._tables.jobs.c.cluster_name == cluster)
+                        & org_pred
+                        & (self._tables.jobs.c.owner == owner)
+                        & self._tables.jobs.c.name.in_(names)
+                    )
+                if owners_empty_names:
+                    cluster_clauses.append(
+                        (self._tables.jobs.c.cluster_name == cluster)
+                        & org_pred
+                        & self._tables.jobs.c.owner.in_(owners_empty_names)
+                    )
+            not_null_orgs = [org for org in orgs_empty_owners if org is not None]
+            if not_null_orgs:
                 cluster_clauses.append(
                     (self._tables.jobs.c.cluster_name == cluster)
-                    & (self._tables.jobs.c.owner == owner)
-                    & self._tables.jobs.c.name.in_(names)
+                    & self._tables.jobs.c.org_name.in_(not_null_orgs)
                 )
+            if None in orgs_empty_owners:
+                cluster_clauses.append(
+                    (self._tables.jobs.c.cluster_name == cluster)
+                    & self._tables.jobs.c.org_name.is_(None)
+                )
+        if clusters_empty_orgs:
             cluster_clauses.append(
-                (self._tables.jobs.c.cluster_name == cluster)
-                & self._tables.jobs.c.owner.in_(owners_empty_names)
+                self._tables.jobs.c.cluster_name.in_(clusters_empty_orgs)
             )
-        cluster_clauses.append(
-            self._tables.jobs.c.cluster_name.in_(clusters_empty_owners)
-        )
         self._clauses.append(or_(*cluster_clauses))
 
     def filter_orgs(self, orgs: Set[Optional[str]]) -> None:
