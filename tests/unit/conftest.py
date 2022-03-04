@@ -32,12 +32,8 @@ from platform_api.cluster import (
     ClusterConfigRegistry,
     ClusterHolder,
 )
-from platform_api.cluster_config import (
-    IngressConfig,
-    OrchestratorConfig,
-    RegistryConfig,
-)
-from platform_api.config import JobsConfig, JobsSchedulerConfig
+from platform_api.cluster_config import IngressConfig, OrchestratorConfig
+from platform_api.config import JobsConfig, JobsSchedulerConfig, RegistryConfig
 from platform_api.orchestrator.base import Orchestrator
 from platform_api.orchestrator.job import Job, JobRecord, JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_request import (
