@@ -166,6 +166,20 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
             raise t.DataError("Both preset and resources are not allowed")
         return payload
 
+    def _check_preset_exists(payload: dict[str, Any]) -> dict[str, Any]:
+        if not presets:
+            raise t.DataError("At least one preset is required to run a job")
+        preset_name = payload.get("preset_name")
+        preset_names = [p.name for p in presets]
+        if not preset_name:
+            payload["preset_name"] = preset_names[0]
+            return payload
+        if preset_name not in preset_names:
+            raise t.DataError(
+                "Preset is not defined", name="preset_name", value=preset_name
+            )
+        return payload
+
     def _set_preset_resources(payload: dict[str, Any]) -> dict[str, Any]:
         preset_name = payload["preset_name"]
         preset = {p.name: p for p in presets}[preset_name]
@@ -195,18 +209,8 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
         return payload
 
     validator = (
-        t.Dict(
-            {
-                # Presets are always not empty
-                t.Key("preset_name", optional=True, default=presets[0].name): t.Enum(
-                    *(p.name for p in presets)
-                )
-            }
-        ).allow_extra("*")
-        >> _check_no_resources
-        >> _set_preset_resources
+        t.Call(_check_no_resources) >> _check_preset_exists >> _set_preset_resources
     )
-
     return validator
 
 

@@ -7,7 +7,7 @@ import trafaret as t
 from yarl import URL
 
 from .cluster_config import ClusterConfig, IngressConfig, OrchestratorConfig
-from .resource import DEFAULT_PRESETS, Preset, ResourcePoolType, TPUPreset, TPUResource
+from .resource import Preset, ResourcePoolType, TPUPreset, TPUResource
 
 _cluster_config_validator = t.Dict({"name": t.String}).allow_extra("*")
 
@@ -67,7 +67,6 @@ class ClusterConfigFactory:
         self, payload: dict[str, Any]
     ) -> OrchestratorConfig:
         orchestrator = payload["orchestrator"]
-        presets = self._create_presets(orchestrator)
         return OrchestratorConfig(
             is_http_ingress_secure=orchestrator["is_http_ingress_secure"],
             jobs_domain_name_template=orchestrator["job_hostname_template"],
@@ -78,7 +77,7 @@ class ClusterConfigFactory:
                 self._create_resource_pool_type(r)
                 for r in orchestrator["resource_pool_types"]
             ],
-            presets=presets or DEFAULT_PRESETS,
+            presets=self._create_presets(orchestrator),
             job_schedule_timeout=orchestrator.get(
                 "job_schedule_timeout_s", OrchestratorConfig.job_schedule_timeout
             ),

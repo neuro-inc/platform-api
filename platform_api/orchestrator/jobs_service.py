@@ -107,6 +107,7 @@ class JobsService:
             jobs_domain_name_template="{job_id}.missing-cluster",
             jobs_internal_domain_name_template="{job_id}.missing-cluster",
             resource_pool_types=(),
+            presets=(),
         )
         self._auth_client = auth_client
         self._admin_client = admin_client

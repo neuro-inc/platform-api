@@ -16,3 +16,10 @@ exclude = '''
     | __pycache__
 )/
 '''
+
+[tool.isort]
+line_length = 88
+include_trailing_comma = true
+multi_line_output = 3
+combine_as_imports = true
+known_third_party = ["alembic"]
