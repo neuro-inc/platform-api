@@ -13,8 +13,14 @@ from yarl import URL
 
 from platform_api import poller_main
 from platform_api.api import create_app
-from platform_api.cluster_config import ClusterConfig, RegistryConfig, StorageConfig
-from platform_api.config import AuthConfig, Config, PollerConfig
+from platform_api.cluster_config import ClusterConfig
+from platform_api.config import (
+    AuthConfig,
+    Config,
+    PollerConfig,
+    RegistryConfig,
+    StorageConfig,
+)
 from platform_api.orchestrator.job import JobStatus
 from platform_api.orchestrator.kube_config import KubeConfig
 

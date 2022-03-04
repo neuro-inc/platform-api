@@ -5,13 +5,14 @@ from pathlib import PurePath
 import pytest
 from yarl import URL
 
-from platform_api.cluster_config import (
-    OrchestratorConfig,
+from platform_api.cluster_config import OrchestratorConfig
+from platform_api.config import (
     RegistryConfig,
+    SentryConfig,
     StorageConfig,
     StorageType,
+    ZipkinConfig,
 )
-from platform_api.config import SentryConfig, ZipkinConfig
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.job_request import ContainerVolume
 from platform_api.orchestrator.kube_client import SecretVolume

@@ -11,11 +11,8 @@ from typing import Any, Optional, Union
 
 import aiohttp
 
-from platform_api.cluster_config import (
-    OrchestratorConfig,
-    RegistryConfig,
-    StorageConfig,
-)
+from platform_api.cluster_config import OrchestratorConfig
+from platform_api.config import RegistryConfig, StorageConfig
 from platform_api.resource import ResourcePoolType
 
 from .base import Orchestrator

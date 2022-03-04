@@ -17,13 +17,7 @@ import pytest
 from async_timeout import timeout
 from yarl import URL
 
-from platform_api.cluster_config import (
-    ClusterConfig,
-    IngressConfig,
-    OrchestratorConfig,
-    RegistryConfig,
-    StorageConfig,
-)
+from platform_api.cluster_config import ClusterConfig, IngressConfig, OrchestratorConfig
 from platform_api.config import (
     AuthConfig,
     Config,
@@ -34,7 +28,9 @@ from platform_api.config import (
     NotificationsConfig,
     OAuthConfig,
     PostgresConfig,
+    RegistryConfig,
     ServerConfig,
+    StorageConfig,
 )
 from platform_api.orchestrator.job_request import JobNotFoundException
 from platform_api.orchestrator.kube_client import (

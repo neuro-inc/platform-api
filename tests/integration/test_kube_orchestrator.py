@@ -15,12 +15,8 @@ import pytest
 from aiohttp import web
 from yarl import URL
 
-from platform_api.cluster_config import (
-    STORAGE_URI_SCHEME,
-    OrchestratorConfig,
-    RegistryConfig,
-    StorageConfig,
-)
+from platform_api.cluster_config import OrchestratorConfig
+from platform_api.config import STORAGE_URI_SCHEME, RegistryConfig, StorageConfig
 from platform_api.orchestrator.job import (
     Job,
     JobRecord,

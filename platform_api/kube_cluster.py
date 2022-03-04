@@ -6,7 +6,8 @@ from typing import Optional
 import aiohttp
 
 from .cluster import Cluster
-from .cluster_config import ClusterConfig, RegistryConfig, StorageConfig
+from .cluster_config import ClusterConfig
+from .config import RegistryConfig, StorageConfig
 from .orchestrator.kube_config import KubeConfig
 from .orchestrator.kube_orchestrator import KubeOrchestrator, Orchestrator
 

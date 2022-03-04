@@ -9,7 +9,6 @@ from yarl import URL
 
 from alembic.config import Config as AlembicConfig
 
-from .cluster_config import RegistryConfig, StorageConfig, StorageType
 from .config import (
     AuthConfig,
     Config,
@@ -23,8 +22,11 @@ from .config import (
     PlatformConfig,
     PollerConfig,
     PostgresConfig,
+    RegistryConfig,
     SentryConfig,
     ServerConfig,
+    StorageConfig,
+    StorageType,
     ZipkinConfig,
 )
 from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
