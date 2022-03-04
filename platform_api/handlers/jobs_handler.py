@@ -176,7 +176,7 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
             return payload
         if preset_name not in preset_names:
             raise t.DataError(
-                "Preset is not defined", name="preset_name", value=preset_name
+                "Preset was not found", name="preset_name", value=preset_name
             )
         return payload
 

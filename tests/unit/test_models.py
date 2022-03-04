@@ -524,7 +524,7 @@ class TestJobPresetValidator:
                 )
             ]
         )
-        with pytest.raises(DataError, match="Preset is not defined"):
+        with pytest.raises(DataError, match="Preset was not found"):
             validator.check(request)
 
     def test_validator_preset_name_and_resources(self) -> None:
