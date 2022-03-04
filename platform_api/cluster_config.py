@@ -153,7 +153,6 @@ class OrchestratorConfig:
 class IngressConfig:
     registry_url: URL
     storage_url: URL
-    blob_storage_url: URL
     monitoring_url: URL
     secrets_url: URL
     metrics_url: URL

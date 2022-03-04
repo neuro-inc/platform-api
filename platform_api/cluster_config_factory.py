@@ -35,7 +35,6 @@ class ClusterConfigFactory:
         return IngressConfig(
             registry_url=URL(payload["registry"]["url"]),
             storage_url=URL(payload["storage"]["url"]),
-            blob_storage_url=URL(payload["blob_storage"]["url"]),
             monitoring_url=URL(payload["monitoring"]["url"]),
             secrets_url=URL(payload["secrets"]["url"]),
             metrics_url=URL(payload["metrics"]["url"]),

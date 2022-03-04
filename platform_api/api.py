@@ -159,7 +159,6 @@ class ConfigApiHandler:
             "name": cluster_config.name,
             "registry_url": str(cluster_config.ingress.registry_url),
             "storage_url": str(cluster_config.ingress.storage_url),
-            "blob_storage_url": str(cluster_config.ingress.blob_storage_url),
             "monitoring_url": str(cluster_config.ingress.monitoring_url),
             "secrets_url": str(cluster_config.ingress.secrets_url),
             "metrics_url": str(cluster_config.ingress.metrics_url),
