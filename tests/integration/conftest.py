@@ -583,6 +583,7 @@ async def kube_orchestrator_factory(
 ) -> Callable[..., KubeOrchestrator]:
     def _f(**kwargs: Any) -> KubeOrchestrator:
         defaults = dict(
+            cluster_name="default",
             storage_configs=[storage_config_host],
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
@@ -611,6 +612,7 @@ async def kube_orchestrator_nfs(
     event_loop: Any,
 ) -> AsyncIterator[KubeOrchestrator]:
     orchestrator = KubeOrchestrator(
+        cluster_name="default",
         storage_configs=[storage_config_nfs],
         registry_config=registry_config,
         orchestrator_config=orchestrator_config,
@@ -629,6 +631,7 @@ async def kube_orchestrator_pvc(
     event_loop: Any,
 ) -> AsyncIterator[KubeOrchestrator]:
     orchestrator = KubeOrchestrator(
+        cluster_name="default",
         storage_configs=[storage_config_pvc],
         registry_config=registry_config,
         orchestrator_config=orchestrator_config,

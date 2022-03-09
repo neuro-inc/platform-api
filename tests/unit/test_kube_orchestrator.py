@@ -32,6 +32,7 @@ from platform_api.orchestrator.kube_client import (
     SecretVolume,
     ServiceType,
     SharedMemoryVolume,
+    Volume,
     VolumeMount,
 )
 from platform_api.orchestrator.kube_config import KubeConfig
@@ -49,7 +50,6 @@ from platform_api.orchestrator.kube_orchestrator import (
     PVCVolume,
     Service,
     Toleration,
-    Volume,
 )
 
 
@@ -625,6 +625,10 @@ class TestPodDescriptor:
                     uri=URL("storage://cluster/user1"),
                     dst_path=PurePath("/var/storage-user1"),
                 ),
+                ContainerVolume(
+                    uri=URL("storage://cluster/user1"),
+                    dst_path=PurePath("/var/storage-user1"),
+                ),  # duplicate volume, should be ignored
                 ContainerVolume(
                     uri=URL("storage://cluster/user2"),
                     dst_path=PurePath("/var/storage-user2"),
@@ -1701,24 +1705,6 @@ class TestKubeOrchestrator:
         assert volumes == [
             PVCVolume(path=None, name="storage", claim_name="main"),
             PVCVolume(path=PurePath("/org"), name="storage-org", claim_name="org"),
-        ]
-
-    def test_create_main_storage_volume_mounts(
-        self, orchestrator: KubeOrchestrator
-    ) -> None:
-        container_volume = ContainerVolume(
-            uri=URL("storage://cluster/user"),
-            dst_path=PurePath("/var/storage"),
-        )
-        volume = PVCVolume(path=PurePath("/org"), name="storage", claim_name="org")
-        mounts = orchestrator.create_storage_volume_mounts(container_volume, [volume])
-
-        assert mounts == [
-            VolumeMount(
-                volume=volume,
-                mount_path=PurePath("/var/storage"),
-                sub_path=PurePath("user"),
-            )
         ]
 
     def test_create_org_storage_volume_mounts(
