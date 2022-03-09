@@ -1746,3 +1746,17 @@ class TestKubeOrchestrator:
                 mount_path=PurePath("/var/storage/org"),
             ),
         ]
+
+    def test_create_all_storage_volume_mounts_for_single_volume(
+        self, orchestrator: KubeOrchestrator
+    ) -> None:
+        container_volume = ContainerVolume(
+            uri=URL("storage://cluster"),
+            dst_path=PurePath("/var/storage"),
+        )
+        volume = PVCVolume(path=None, name="storage", claim_name="main")
+        mounts = orchestrator.create_storage_volume_mounts(container_volume, [volume])
+
+        assert mounts == [
+            VolumeMount(volume=volume, mount_path=PurePath("/var/storage"))
+        ]

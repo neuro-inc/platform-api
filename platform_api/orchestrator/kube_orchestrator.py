@@ -209,9 +209,6 @@ class KubeOrchestrator(Orchestrator):
             return storage_configs
 
         for sc in self.extra_storage_configs:
-            if container_volume.src_path == PurePath("/"):
-                storage_configs.append(sc)
-                continue
             try:
                 container_volume.src_path.relative_to(str(sc.path))
                 storage_configs.append(sc)
@@ -251,17 +248,16 @@ class KubeOrchestrator(Orchestrator):
     def create_storage_volume_mounts(
         self, container_volume: ContainerVolume, volumes: Sequence[PathVolume]
     ) -> Sequence[VolumeMount]:
+        if len(volumes) == 1:
+            return [volumes[0].create_mount(container_volume)]
+
         result = []
         for v in volumes:
-            if container_volume.src_path == PurePath("/"):
-                if v.path is None or v.path == PurePath("/"):
-                    dst_path = PurePath(self._cluster_name)
-                else:
-                    dst_path = PurePath(v.path.name)
-                vm = v.create_mount(container_volume, dst_path)
+            if v.path is None or v.path == PurePath("/"):
+                dst_path = PurePath(self._cluster_name)
             else:
-                vm = v.create_mount(container_volume)
-            result.append(vm)
+                dst_path = PurePath(v.path.name)
+            result.append(v.create_mount(container_volume, dst_path))
         return result
 
     def _create_storage_volume_name(self, path: Optional[PurePath] = None) -> str:
