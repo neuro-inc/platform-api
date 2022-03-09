@@ -37,6 +37,7 @@ from .kube_client import (
     NodeSelectorRequirement,
     NodeSelectorTerm,
     NotFoundException,
+    PathVolume,
     PodDescriptor,
     PodExec,
     PodRestartPolicy,
@@ -46,7 +47,7 @@ from .kube_client import (
     Service,
     StatusException,
     Toleration,
-    Volume,
+    VolumeMount,
 )
 from .kube_config import KubeConfig
 
@@ -116,6 +117,7 @@ class KubeOrchestrator(Orchestrator):
     def __init__(
         self,
         *,
+        cluster_name: str,
         storage_configs: Sequence[StorageConfig],
         registry_config: RegistryConfig,
         orchestrator_config: OrchestratorConfig,
@@ -123,6 +125,7 @@ class KubeOrchestrator(Orchestrator):
         trace_configs: Optional[list[aiohttp.TraceConfig]] = None,
     ) -> None:
         self._loop = asyncio.get_event_loop()
+        self._cluster_name = cluster_name
         self._storage_configs = storage_configs
         self._registry_config = registry_config
         self._orchestrator_config = orchestrator_config
@@ -186,17 +189,43 @@ class KubeOrchestrator(Orchestrator):
                 result.append(sc)
         return result
 
-    def create_storage_volume(self, container_volume: ContainerVolume) -> Volume:
+    def create_storage_volumes(
+        self, container_volume: ContainerVolume
+    ) -> Sequence[PathVolume]:
+        storage_configs = self._get_storage_configs_from_container(container_volume)
+        volumes = []
+        for sc in storage_configs:
+            volumes.append(self._get_volume_from_storage_config(sc))
+        return volumes
+
+    def _get_storage_configs_from_container(
+        self, container_volume: ContainerVolume
+    ) -> Sequence[StorageConfig]:
+        storage_configs = []
+
+        if container_volume.src_path == PurePath("/"):
+            storage_configs.append(self.main_storage_config)
+            storage_configs.extend(self.extra_storage_configs)
+            return storage_configs
+
         for sc in self.extra_storage_configs:
+            if container_volume.src_path == PurePath("/"):
+                storage_configs.append(sc)
+                continue
             try:
                 container_volume.src_path.relative_to(str(sc.path))
-                storage_config = sc
+                storage_configs.append(sc)
                 break
             except ValueError:
                 pass
         else:
-            storage_config = self.main_storage_config
+            storage_configs.append(self.main_storage_config)
 
+        return storage_configs
+
+    def _get_volume_from_storage_config(
+        self, storage_config: StorageConfig
+    ) -> PathVolume:
         name = self._create_storage_volume_name(storage_config.path)
 
         if storage_config.is_nfs:
@@ -218,6 +247,22 @@ class KubeOrchestrator(Orchestrator):
             path=storage_config.path,
             host_path=storage_config.host_mount_path,
         )
+
+    def create_storage_volume_mounts(
+        self, container_volume: ContainerVolume, volumes: Sequence[PathVolume]
+    ) -> Sequence[VolumeMount]:
+        result = []
+        for v in volumes:
+            if container_volume.src_path == PurePath("/"):
+                if v.path is None or v.path == PurePath("/"):
+                    dst_path = PurePath(self._cluster_name)
+                else:
+                    dst_path = PurePath(v.path.name)
+                vm = v.create_mount(container_volume, dst_path)
+            else:
+                vm = v.create_mount(container_volume)
+            result.append(vm)
+        return result
 
     def _create_storage_volume_name(self, path: Optional[PurePath] = None) -> str:
         if path is None or path == PurePath("/"):
@@ -347,7 +392,8 @@ class KubeOrchestrator(Orchestrator):
 
         pod = PodDescriptor.from_job_request(
             job.request,
-            storage_volume_factory=self.create_storage_volume,
+            storage_volume_factory=self.create_storage_volumes,
+            storage_volume_mount_factory=self.create_storage_volume_mounts,
             secret_volume_factory=self.create_secret_volume,
             image_pull_secret_names=pull_secrets,
             tolerations=tolerations,

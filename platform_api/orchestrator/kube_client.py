@@ -116,7 +116,11 @@ class APIResources(dict[str, APIResource]):
 class Volume(metaclass=abc.ABCMeta):
     name: str
 
-    def create_mount(self, container_volume: ContainerVolume) -> "VolumeMount":
+    def create_mount(
+        self,
+        container_volume: ContainerVolume,
+        mount_sub_path: Optional[PurePath] = None,
+    ) -> "VolumeMount":
         raise NotImplementedError("Cannot create mount for abstract Volume type.")
 
     def to_primitive(self) -> dict[str, Any]:
@@ -129,13 +133,21 @@ class PathVolume(Volume):
     # /org for organization/additional storage.
     path: Optional[PurePath]
 
-    def create_mount(self, container_volume: ContainerVolume) -> "VolumeMount":
-        sub_path = container_volume.src_path.relative_to(
-            "/" if self.path is None else str(self.path)
-        )
+    def create_mount(
+        self,
+        container_volume: ContainerVolume,
+        mount_sub_path: Optional[PurePath] = None,
+    ) -> "VolumeMount":
+        try:
+            sub_path = container_volume.src_path.relative_to(
+                "/" if self.path is None else str(self.path)
+            )
+        except ValueError:
+            sub_path = container_volume.src_path.relative_to("/")
+        mount_sub_path = mount_sub_path or PurePath("")
         return VolumeMount(
             volume=self,
-            mount_path=container_volume.dst_path,
+            mount_path=container_volume.dst_path / mount_sub_path,
             sub_path=sub_path,
             read_only=container_volume.read_only,
         )
@@ -157,10 +169,15 @@ class SharedMemoryVolume(Volume):
     def to_primitive(self) -> dict[str, Any]:
         return {"name": self.name, "emptyDir": {"medium": "Memory"}}
 
-    def create_mount(self, container_volume: ContainerVolume) -> "VolumeMount":
+    def create_mount(
+        self,
+        container_volume: ContainerVolume,
+        mount_sub_path: Optional[PurePath] = None,
+    ) -> "VolumeMount":
+        mount_sub_path = mount_sub_path or PurePath("")
         return VolumeMount(
             volume=self,
-            mount_path=container_volume.dst_path,
+            mount_path=container_volume.dst_path / mount_sub_path,
             sub_path=PurePath(""),
             read_only=container_volume.read_only,
         )
@@ -809,23 +826,30 @@ class PodDescriptor:
     def _process_storage_volumes(
         cls,
         container: Container,
-        storage_volume_factory: Optional[Callable[[ContainerVolume], Volume]] = None,
-    ) -> tuple[list[Volume], list[VolumeMount]]:
-        if not storage_volume_factory:
+        storage_volume_factory: Optional[
+            Callable[[ContainerVolume], Sequence[PathVolume]]
+        ] = None,
+        storage_volume_mount_factory: Optional[
+            Callable[[ContainerVolume, Sequence[PathVolume]], Sequence[VolumeMount]]
+        ] = None,
+    ) -> tuple[list[PathVolume], list[VolumeMount]]:
+        if not storage_volume_factory or not storage_volume_mount_factory:
             return [], []
 
-        volumes = []
-        volume_names = []
-        volume_mounts = []
+        result_volumes = []
+        result_volume_mounts = []
 
         for container_volume in container.volumes:
-            volume = storage_volume_factory(container_volume)
-            if volume.name not in volume_names:
-                volume_names.append(volume.name)
-                volumes.append(volume)
-            volume_mounts.append(volume.create_mount(container_volume))
+            volumes = storage_volume_factory(container_volume)
+            for v in storage_volume_factory(container_volume):
+                if v not in result_volumes:
+                    result_volumes.append(v)
+            volume_mounts = storage_volume_mount_factory(container_volume, volumes)
+            for vm in volume_mounts:
+                if vm not in result_volume_mounts:
+                    result_volume_mounts.append(vm)
 
-        return volumes, volume_mounts
+        return result_volumes, result_volume_mounts
 
     @classmethod
     def _process_secret_volumes(
@@ -872,7 +896,12 @@ class PodDescriptor:
     def from_job_request(
         cls,
         job_request: JobRequest,
-        storage_volume_factory: Optional[Callable[[ContainerVolume], Volume]] = None,
+        storage_volume_factory: Optional[
+            Callable[[ContainerVolume], Sequence[PathVolume]]
+        ] = None,
+        storage_volume_mount_factory: Optional[
+            Callable[[ContainerVolume, Sequence[PathVolume]], Sequence[VolumeMount]]
+        ] = None,
         secret_volume_factory: Optional[Callable[[str], SecretVolume]] = None,
         image_pull_secret_names: Optional[list[str]] = None,
         node_selector: Optional[dict[str, str]] = None,
@@ -887,7 +916,7 @@ class PodDescriptor:
         container = job_request.container
 
         storage_volumes, storage_volume_mounts = cls._process_storage_volumes(
-            container, storage_volume_factory
+            container, storage_volume_factory, storage_volume_mount_factory
         )
         secret_volumes, secret_volume_mounts = cls._process_secret_volumes(
             container, secret_volume_factory
