@@ -175,14 +175,14 @@ class KubeOrchestrator(Orchestrator):
         await self._client.close()
 
     @property
-    def main_storage_config(self) -> StorageConfig:
+    def _main_storage_config(self) -> StorageConfig:
         for sc in self._storage_configs:
             if sc.path is None:
                 return sc
         raise JobError("Main storage is not configured")
 
     @property
-    def extra_storage_configs(self) -> Sequence[StorageConfig]:
+    def _extra_storage_configs(self) -> list[StorageConfig]:
         result = []
         for sc in self._storage_configs:
             if sc.path is not None:
@@ -201,24 +201,17 @@ class KubeOrchestrator(Orchestrator):
     def _get_storage_configs_from_container(
         self, container_volume: ContainerVolume
     ) -> Sequence[StorageConfig]:
-        storage_configs = []
-
         if container_volume.src_path == PurePath("/"):
-            storage_configs.append(self.main_storage_config)
-            storage_configs.extend(self.extra_storage_configs)
-            return storage_configs
+            return [self._main_storage_config] + self._extra_storage_configs
 
-        for sc in self.extra_storage_configs:
+        for sc in self._extra_storage_configs:
             try:
                 container_volume.src_path.relative_to(str(sc.path))
-                storage_configs.append(sc)
-                break
+                return [sc]
             except ValueError:
                 pass
         else:
-            storage_configs.append(self.main_storage_config)
-
-        return storage_configs
+            return [self._main_storage_config]
 
     def _get_volume_from_storage_config(
         self, storage_config: StorageConfig
