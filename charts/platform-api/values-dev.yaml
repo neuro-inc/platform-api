@@ -10,9 +10,6 @@ platform:
         name: platformservices-secret
         key: compute_token
 
-jobPriorityClass:
-  enabled: true
-
 oauth:
   authUrl: https://login-dev.neu.ro/authorize
   tokenUrl: https://login-dev.neu.ro/oauth/token

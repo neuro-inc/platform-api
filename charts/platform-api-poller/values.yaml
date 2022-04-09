@@ -29,7 +29,6 @@ jobs:
   ingressErrorPageMiddleware:
   tolerationKey: platform.neuromation.io/job
   preemptibleTolerationKey:
-  priorityClassName:
   imagePullSecret:
 
 nodeLabels:

@@ -12,7 +12,6 @@ platform:
         key: compute_token
 
 jobs:
-  priorityClassName: platform-job
   ingressAuthMiddleware: platform-platform-ingress-auth@kubernetescrd
   ingressErrorPageMiddleware: platform-platform-web-ui-error-pages@kubernetescrd
 
