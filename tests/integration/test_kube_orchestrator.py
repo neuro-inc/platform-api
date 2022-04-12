@@ -2199,6 +2199,7 @@ class TestNodeAffinity:
         )
         await kube_job_nodes_factory(orchestrator_config, kube_config)
         async with KubeOrchestrator(
+            cluster_name="default",
             storage_configs=[storage_config_host],
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,

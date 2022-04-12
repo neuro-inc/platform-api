@@ -48,6 +48,7 @@ class KubeCluster(Cluster):
     async def _init_orchestrator(self) -> None:
         logger.info(f"Cluster '{self.name}': initializing Orchestrator")
         orchestrator = KubeOrchestrator(
+            cluster_name=self.name,
             storage_configs=self._storage_configs,
             registry_config=self._registry_config,
             orchestrator_config=self._cluster_config.orchestrator,

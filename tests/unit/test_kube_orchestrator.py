@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from collections.abc import Sequence
 from pathlib import PurePath
 from typing import Any
 from unittest import mock
@@ -5,6 +8,8 @@ from unittest import mock
 import pytest
 from yarl import URL
 
+from platform_api.cluster_config import OrchestratorConfig
+from platform_api.config import RegistryConfig, StorageConfig, StorageType
 from platform_api.orchestrator.job import JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_request import (
     Container,
@@ -20,18 +25,22 @@ from platform_api.orchestrator.kube_client import (
     AlreadyExistsException,
     ContainerStatus,
     Ingress,
+    PathVolume,
     Resources,
     SecretEnvVar,
     SecretRef,
     SecretVolume,
     ServiceType,
     SharedMemoryVolume,
+    Volume,
     VolumeMount,
 )
+from platform_api.orchestrator.kube_config import KubeConfig
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume,
     IngressRule,
     JobStatusItemFactory,
+    KubeOrchestrator,
     NfsVolume,
     NodeAffinity,
     NodeSelectorRequirement,
@@ -41,7 +50,6 @@ from platform_api.orchestrator.kube_orchestrator import (
     PVCVolume,
     Service,
     Toleration,
-    Volume,
 )
 
 
@@ -77,6 +85,42 @@ class TestVolume:
         assert mount.volume == volume
         assert mount.mount_path == PurePath("/container/path/to/dir")
         assert mount.sub_path == PurePath("path/to/dir")
+        assert not mount.read_only
+
+    def test_create_org_root_mount(self) -> None:
+        volume = PVCVolume("testvolume", path=PurePath("/org"), claim_name="testclaim")
+        container_volume = ContainerVolume(
+            uri=URL("storage://cluster"),
+            dst_path=PurePath("/container/path/to/dir"),
+        )
+        mount = volume.create_mount(container_volume)
+        assert mount.volume == volume
+        assert mount.mount_path == PurePath("/container/path/to/dir")
+        assert mount.sub_path == PurePath("")
+        assert not mount.read_only
+
+    def test_create_mount_with_mount_sub_path(self) -> None:
+        volume = PVCVolume("testvolume", path=None, claim_name="testclaim")
+        container_volume = ContainerVolume(
+            uri=URL("storage://cluster/path/to/dir"),
+            dst_path=PurePath("/container/path/to/dir"),
+        )
+        mount = volume.create_mount(container_volume, PurePath("sub/dir"))
+        assert mount.volume == volume
+        assert mount.mount_path == PurePath("/container/path/to/dir/sub/dir")
+        assert mount.sub_path == PurePath("path/to/dir")
+        assert not mount.read_only
+
+    def test_create_mount_shared_with_mount_sub_path(self) -> None:
+        volume = SharedMemoryVolume("testvolume")
+        container_volume = ContainerVolume(
+            uri=URL("storage://"),
+            dst_path=PurePath("/dev/shm"),
+        )
+        mount = volume.create_mount(container_volume, PurePath("sub/dir"))
+        assert mount.volume == volume
+        assert mount.mount_path == PurePath("/dev/shm/sub/dir")
+        assert mount.sub_path == PurePath("")
         assert not mount.read_only
 
 
@@ -558,8 +602,19 @@ class TestPodDescriptor:
             name="storage-org", path=PurePath("/org"), claim_name="storage-org"
         )
 
-        def create_storage_volume(volume: ContainerVolume) -> Volume:
-            return volume_org if volume.uri.path.startswith("/org") else volume_cluster
+        def create_storage_volume(volume: ContainerVolume) -> Sequence[PathVolume]:
+            return (
+                [volume_org] if volume.uri.path.startswith("/org") else [volume_cluster]
+            )
+
+        def create_storage_volume_mount(
+            volume: ContainerVolume, volumes: Sequence[PathVolume]
+        ) -> Sequence[VolumeMount]:
+            return (
+                [volume_org.create_mount(volume)]
+                if volume.uri.path.startswith("/org")
+                else [volume_cluster.create_mount(volume)]
+            )
 
         container = Container(
             image="testimage",
@@ -570,6 +625,10 @@ class TestPodDescriptor:
                     uri=URL("storage://cluster/user1"),
                     dst_path=PurePath("/var/storage-user1"),
                 ),
+                ContainerVolume(
+                    uri=URL("storage://cluster/user1"),
+                    dst_path=PurePath("/var/storage-user1"),
+                ),  # duplicate volume, should be ignored
                 ContainerVolume(
                     uri=URL("storage://cluster/user2"),
                     dst_path=PurePath("/var/storage-user2"),
@@ -582,7 +641,9 @@ class TestPodDescriptor:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            job_request, storage_volume_factory=create_storage_volume
+            job_request,
+            storage_volume_factory=create_storage_volume,
+            storage_volume_mount_factory=create_storage_volume_mount,
         )
         assert pod.volumes == [volume_cluster, volume_org]
         assert pod.volume_mounts == [
@@ -1583,3 +1644,119 @@ class TestContainerStatus:
         assert status.reason == "Error"
         assert status.message == "Failed!"
         assert status.exit_code == 123
+
+
+class TestKubeOrchestrator:
+    @pytest.fixture
+    def orchestrator(self) -> KubeOrchestrator:
+        return KubeOrchestrator(
+            cluster_name="default",
+            storage_configs=[
+                StorageConfig(
+                    host_mount_path=PurePath("/tmp"),
+                    type=StorageType.PVC,
+                    pvc_name="main",
+                ),
+                StorageConfig(
+                    path=PurePath("/org"),
+                    host_mount_path=PurePath("/tmp"),
+                    type=StorageType.PVC,
+                    pvc_name="org",
+                ),
+            ],
+            registry_config=RegistryConfig(username="username", password="password"),
+            orchestrator_config=OrchestratorConfig(
+                jobs_domain_name_template="{job_id}.default.org.neu.ro",
+                jobs_internal_domain_name_template="{job_id}.platform-jobs",
+                resource_pool_types=[],
+            ),
+            kube_config=KubeConfig(endpoint_url="https://kuberrnetes.svc"),
+        )
+
+    def test_create_main_storage_volumes(self, orchestrator: KubeOrchestrator) -> None:
+        container_volume = ContainerVolume(
+            uri=URL("storage://cluster/user"),
+            dst_path=PurePath("/var/storage"),
+        )
+        volumes = orchestrator.create_storage_volumes(container_volume)
+
+        assert volumes == [PVCVolume(path=None, name="storage", claim_name="main")]
+
+    def test_create_org_storage_volumes(self, orchestrator: KubeOrchestrator) -> None:
+        container_volume = ContainerVolume(
+            uri=URL("storage://cluster/org"),
+            dst_path=PurePath("/var/storage"),
+        )
+        volumes = orchestrator.create_storage_volumes(container_volume)
+
+        assert volumes == [
+            PVCVolume(path=PurePath("/org"), name="storage-org", claim_name="org")
+        ]
+
+    def test_create_storage_volumes_all_storages(
+        self, orchestrator: KubeOrchestrator
+    ) -> None:
+        container_volume = ContainerVolume(
+            uri=URL("storage://cluster"),
+            dst_path=PurePath("/var/storage"),
+        )
+        volumes = orchestrator.create_storage_volumes(container_volume)
+
+        assert volumes == [
+            PVCVolume(path=None, name="storage", claim_name="main"),
+            PVCVolume(path=PurePath("/org"), name="storage-org", claim_name="org"),
+        ]
+
+    def test_create_org_storage_volume_mounts(
+        self, orchestrator: KubeOrchestrator
+    ) -> None:
+        container_volume = ContainerVolume(
+            uri=URL("storage://cluster/org"),
+            dst_path=PurePath("/var/storage"),
+        )
+        volume = PVCVolume(path=PurePath("/org"), name="storage-org", claim_name="org")
+        mounts = orchestrator.create_storage_volume_mounts(container_volume, [volume])
+
+        assert mounts == [
+            VolumeMount(volume=volume, mount_path=PurePath("/var/storage"))
+        ]
+
+    def test_create_all_storage_volume_mounts(
+        self, orchestrator: KubeOrchestrator
+    ) -> None:
+        container_volume = ContainerVolume(
+            uri=URL("storage://cluster"),
+            dst_path=PurePath("/var/storage"),
+        )
+        main_volume = PVCVolume(path=None, name="storage", claim_name="main")
+        org_volume = PVCVolume(
+            path=PurePath("/org"), name="storage-org", claim_name="org"
+        )
+        mounts = orchestrator.create_storage_volume_mounts(
+            container_volume, [main_volume, org_volume]
+        )
+
+        assert mounts == [
+            VolumeMount(
+                volume=main_volume,
+                mount_path=PurePath("/var/storage/default"),
+            ),
+            VolumeMount(
+                volume=org_volume,
+                mount_path=PurePath("/var/storage/org"),
+            ),
+        ]
+
+    def test_create_all_storage_volume_mounts_for_single_volume(
+        self, orchestrator: KubeOrchestrator
+    ) -> None:
+        container_volume = ContainerVolume(
+            uri=URL("storage://cluster"),
+            dst_path=PurePath("/var/storage"),
+        )
+        volume = PVCVolume(path=None, name="storage", claim_name="main")
+        mounts = orchestrator.create_storage_volume_mounts(container_volume, [volume])
+
+        assert mounts == [
+            VolumeMount(volume=volume, mount_path=PurePath("/var/storage"))
+        ]
