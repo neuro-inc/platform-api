@@ -794,7 +794,6 @@ def cluster_config_factory(
         ingress_config = IngressConfig(
             registry_url=URL("https://registry.dev.neuromation.io"),
             storage_url=URL("https://neu.ro/api/v1/storage"),
-            blob_storage_url=URL("https://neu.ro/api/v1/blob"),
             monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
             secrets_url=URL("https://neu.ro/api/v1/secrets"),
             metrics_url=URL("https://neu.ro/api/v1/metrics"),
