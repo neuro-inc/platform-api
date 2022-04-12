@@ -24,7 +24,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     NfsVolume,
     PVCVolume,
 )
-from platform_api.resource import DEFAULT_PRESETS, ResourcePoolType
+from platform_api.resource import ResourcePoolType
 
 
 class TestStorageConfig:
@@ -71,6 +71,7 @@ class TestStorageVolume:
             jobs_domain_name_template="{job_id}.testdomain",
             jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
+            presets=[],
         )
         kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
         kube_orchestrator = KubeOrchestrator(
@@ -97,6 +98,7 @@ class TestStorageVolume:
             jobs_domain_name_template="{job_id}.testdomain",
             jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
+            presets=[],
         )
         kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
         kube_orchestrator = KubeOrchestrator(
@@ -123,6 +125,7 @@ class TestStorageVolume:
             jobs_domain_name_template="{job_id}.testdomain",
             jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
+            presets=[],
         )
         kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
         kube_orchestrator = KubeOrchestrator(
@@ -155,6 +158,7 @@ class TestStorageVolume:
             jobs_domain_name_template="{job_id}.testdomain",
             jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
+            presets=[],
         )
         kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
         kube_orchestrator = KubeOrchestrator(
@@ -187,6 +191,7 @@ class TestStorageVolume:
             jobs_domain_name_template="{job_id}.testdomain",
             jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
+            presets=[],
         )
         kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
         kube_orchestrator = KubeOrchestrator(
@@ -217,6 +222,7 @@ class TestSecretVolume:
             jobs_domain_name_template="{job_id}.testdomain",
             jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
+            presets=[],
         )
         kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
         kube_orchestrator = KubeOrchestrator(
@@ -626,16 +632,6 @@ class TestRegistryConfig:
             password="compute_token",
         )
         assert config.host == "registry.com:5000"
-
-
-class TestOrchestratorConfig:
-    def test_default_presets(self) -> None:
-        config = OrchestratorConfig(
-            jobs_domain_name_template="test",
-            jobs_internal_domain_name_template="test",
-            resource_pool_types=(),
-        )
-        assert config.presets == DEFAULT_PRESETS
 
 
 class TestKubeConfig:

@@ -461,6 +461,15 @@ class TestJobPresetValidator:
             "preemptible_node": False,
         }
 
+    def test_validator_no_presets(self) -> None:
+        request = {"preset_name": "preset", "container": {}}
+        validator = create_job_preset_validator([])
+
+        with pytest.raises(
+            DataError, match="At least one preset is required to run a job"
+        ):
+            validator.check(request)
+
     def test_validator_default_preset(self) -> None:
         request: dict[str, Any] = {"container": {}}
         validator = create_job_preset_validator(
@@ -515,7 +524,7 @@ class TestJobPresetValidator:
                 )
             ]
         )
-        with pytest.raises(DataError, match="value doesn't match any variant"):
+        with pytest.raises(DataError, match="Preset was not found"):
             validator.check(request)
 
     def test_validator_preset_name_and_resources(self) -> None:

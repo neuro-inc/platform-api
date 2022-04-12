@@ -73,27 +73,3 @@ class ResourcePoolType:
     def __post_init__(self) -> None:
         if self.gpu and not self.gpu_model:
             raise ValueError("GPU model unspecified")
-
-
-DEFAULT_PRESETS = (
-    Preset(
-        name="gpu-small",
-        credits_per_hour=Decimal("10"),
-        cpu=7,
-        memory_mb=30 * 1024,
-        gpu=1,
-        gpu_model=next(iter(GKEGPUModels)).value.id,
-    ),
-    Preset(
-        name="gpu-large",
-        credits_per_hour=Decimal("10"),
-        cpu=7,
-        memory_mb=60 * 1024,
-        gpu=1,
-        gpu_model=next(reversed(GKEGPUModels)).value.id,
-    ),
-    Preset(name="cpu-small", credits_per_hour=Decimal("10"), cpu=2, memory_mb=2 * 1024),
-    Preset(
-        name="cpu-large", credits_per_hour=Decimal("10"), cpu=3, memory_mb=14 * 1024
-    ),
-)

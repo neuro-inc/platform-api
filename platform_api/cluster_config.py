@@ -4,7 +4,7 @@ from typing import Optional
 
 from yarl import URL
 
-from .resource import DEFAULT_PRESETS, Preset, ResourcePoolType, TPUResource
+from .resource import Preset, ResourcePoolType, TPUResource
 
 
 @dataclass(frozen=True)
@@ -13,7 +13,7 @@ class OrchestratorConfig:
     jobs_internal_domain_name_template: str
 
     resource_pool_types: Sequence[ResourcePoolType]
-    presets: Sequence[Preset] = DEFAULT_PRESETS
+    presets: Sequence[Preset]
 
     is_http_ingress_secure: bool = False
 

@@ -56,7 +56,7 @@ from platform_api.orchestrator.poller_service import (
     JobsPollerService,
     JobsScheduler,
 )
-from platform_api.resource import ResourcePoolType
+from platform_api.resource import Preset, ResourcePoolType
 
 CA_DATA_PEM = "this-is-certificate-authority-public-key"
 
@@ -385,6 +385,14 @@ def cluster_config() -> ClusterConfig:
         jobs_domain_name_template="{job_id}.jobs",
         jobs_internal_domain_name_template="{job_id}.default",
         resource_pool_types=[ResourcePoolType()],
+        presets=[
+            Preset(
+                name="cpu-small",
+                credits_per_hour=Decimal("10"),
+                cpu=2,
+                memory_mb=2 * 1024,
+            ),
+        ],
     )
     return ClusterConfig(
         name="test-cluster",
