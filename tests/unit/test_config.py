@@ -242,6 +242,7 @@ class TestStorageVolume:
             jobs_domain_name_template="{job_id}.testdomain",
             jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
+            presets=[],
         )
         kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
         kube_orchestrator = KubeOrchestrator(

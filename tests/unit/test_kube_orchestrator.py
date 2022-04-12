@@ -1669,6 +1669,7 @@ class TestKubeOrchestrator:
                 jobs_domain_name_template="{job_id}.default.org.neu.ro",
                 jobs_internal_domain_name_template="{job_id}.platform-jobs",
                 resource_pool_types=[],
+                presets=[],
             ),
             kube_config=KubeConfig(endpoint_url="https://kuberrnetes.svc"),
         )
