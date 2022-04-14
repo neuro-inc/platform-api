@@ -37,6 +37,7 @@ from platform_api.orchestrator.kube_client import (
     AlreadyExistsException,
     KubeClient,
     NodeTaint,
+    PodDescriptor,
     Resources,
 )
 from platform_api.orchestrator.kube_config import KubeClientAuthType
@@ -743,6 +744,24 @@ async def kube_node_preemptible(
     )
 
     yield node_name
+
+
+@pytest.fixture
+async def delete_pod_later(
+    kube_client: KubeClient,
+) -> AsyncIterator[Callable[[PodDescriptor], Awaitable[None]]]:
+    pods = []
+
+    async def _add_pod(pod: PodDescriptor) -> None:
+        pods.append(pod)
+
+    yield _add_pod
+
+    for pod in pods:
+        try:
+            await kube_client.delete_pod(pod.name)
+        except Exception:
+            pass
 
 
 @pytest.fixture
