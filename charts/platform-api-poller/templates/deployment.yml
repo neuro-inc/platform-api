@@ -117,10 +117,8 @@ spec:
         - name: NP_KUBE_POD_PREEMPTIBLE_TOLERATION_KEY
           value: {{ .Values.jobs.preemptibleTolerationKey | quote }}
         {{- end }}
-        {{- if .Values.jobs.priorityClassName }}
         - name: NP_KUBE_POD_PRIORITY_CLASS_NAME
-          value: {{ .Values.jobs.priorityClassName | quote }}
-        {{- end }}
+          value: {{ include "platformApiPoller.fullname" . }}-job
         {{- if .Values.nodeLabels.job }}
         - name: NP_KUBE_NODE_LABEL_JOB
           value: {{ .Values.nodeLabels.job | quote }}
