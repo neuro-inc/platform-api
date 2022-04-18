@@ -691,6 +691,22 @@ class NodeSelectorOperator(str, Enum):
     def requires_no_values(self) -> bool:
         return self in (self.DOES_NOT_EXIST, self.EXISTS)
 
+    def apply(self, label_value: Optional[str], values: list[str]) -> bool:
+        if self == self.IN:
+            assert values, "Values are required"
+            return label_value is not None and label_value in values
+        if self == self.EXISTS:
+            return label_value is not None
+        if self == self.DOES_NOT_EXIST:
+            return label_value is None
+        if self == self.GT:
+            assert len(values) == 1, "Exactly one value is required"
+            return label_value is not None and int(label_value) > int(values[0])
+        if self == self.LT:
+            assert len(values) == 1, "Exactly one value is required"
+            return label_value is not None and int(label_value) < int(values[0])
+        raise NotImplementedError
+
 
 @dataclass(frozen=True)
 class NodeSelectorRequirement:
@@ -716,6 +732,18 @@ class NodeSelectorRequirement:
     def create_does_not_exist(cls, key: str) -> "NodeSelectorRequirement":
         return cls(key=key, operator=NodeSelectorOperator.DOES_NOT_EXIST)
 
+    @classmethod
+    def create_gt(cls, key: str, value: int) -> "NodeSelectorRequirement":
+        return cls(key=key, operator=NodeSelectorOperator.GT, values=[str(value)])
+
+    @classmethod
+    def create_lt(cls, key: str, value: int) -> "NodeSelectorRequirement":
+        return cls(key=key, operator=NodeSelectorOperator.LT, values=[str(value)])
+
+    def is_satisfied(self, node_labels: dict[str, str]) -> bool:
+        label_value = node_labels.get(self.key)
+        return self.operator.apply(label_value, self.values)
+
     def to_primitive(self) -> dict[str, Any]:
         payload: dict[str, Any] = {"key": self.key, "operator": self.operator.value}
         if self.values:
@@ -730,6 +758,9 @@ class NodeSelectorTerm:
     def __post_init__(self) -> None:
         if not self.match_expressions:
             raise ValueError("no expressions")
+
+    def is_satisfied(self, node_labels: dict[str, str]) -> bool:
+        return all(e.is_satisfied(node_labels) for e in self.match_expressions)
 
     def to_primitive(self) -> dict[str, Any]:
         return {
@@ -754,6 +785,9 @@ class NodeAffinity:
     def __post_init__(self) -> None:
         if not self.required and not self.preferred:
             raise ValueError("no terms")
+
+    def is_satisfied(self, node_labels: dict[str, str]) -> bool:
+        return any(t.is_satisfied(node_labels) for t in self.required)
 
     def to_primitive(self) -> dict[str, Any]:
         payload: dict[str, Any] = {}
@@ -991,6 +1025,18 @@ class PodDescriptor:
     @property
     def env_list(self) -> list[dict[str, str]]:
         return [dict(name=name, value=value) for name, value in self.env.items()]
+
+    def can_be_scheduled(self, node_labels: dict[str, str]) -> bool:
+        affinities: list[NodeAffinity] = []
+        if self.node_selector:
+            requirements = [
+                NodeSelectorRequirement.create_in(k, v)
+                for k, v in self.node_selector.items()
+            ]
+            affinities.append(NodeAffinity(required=[NodeSelectorTerm(requirements)]))
+        if self.node_affinity:
+            affinities.append(self.node_affinity)
+        return all(a.is_satisfied(node_labels) for a in affinities)
 
     def to_primitive(self) -> dict[str, Any]:
         volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
