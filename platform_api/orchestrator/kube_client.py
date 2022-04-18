@@ -7,7 +7,7 @@ import re
 import ssl
 from base64 import b64encode
 from collections import defaultdict
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import AsyncIterator, Callable, Iterable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -62,6 +62,10 @@ class AlreadyExistsException(StatusException):
 
 
 class NotFoundException(StatusException):
+    pass
+
+
+class ResourceGoneException(KubeClientException):
     pass
 
 
@@ -1458,6 +1462,55 @@ class NodeTaint:
         return {"key": self.key, "value": self.value, "effect": self.effect}
 
 
+@dataclass(frozen=True)
+class RawPodListResult:
+    resource_version: str
+    raw_pods: list[dict[str, Any]]
+
+    @classmethod
+    def from_primitive(cls, payload: dict[str, Any]) -> "RawPodListResult":
+        return cls(
+            resource_version=payload["metadata"]["resourceVersion"],
+            raw_pods=payload["items"],
+        )
+
+
+class WatchEventType(str, Enum):
+    ADDED = "ADDED"
+    MODIFIED = "MODIFIED"
+    DELETED = "DELETED"
+    ERROR = "ERROR"
+
+
+@dataclass(frozen=True)
+class WatchBookmarkEvent:
+    resource_version: str
+
+    @classmethod
+    def from_primitive(cls, payload: dict[str, Any]) -> "WatchBookmarkEvent":
+        return cls(
+            resource_version=payload["object"]["metadata"]["resourceVersion"],
+        )
+
+    @classmethod
+    def is_bookmark(cls, payload: dict[str, Any]) -> bool:
+        return "BOOKMARK" == payload["type"].upper()
+
+
+@dataclass(frozen=True)
+class PodWatchEvent:
+    type: WatchEventType
+    raw_pod: dict[str, Any]
+
+    @classmethod
+    def from_primitive(cls, payload: dict[str, Any]) -> "PodWatchEvent":
+        return cls(type=WatchEventType(payload["type"]), raw_pod=payload["object"])
+
+    @classmethod
+    def is_error(cls, payload: dict[str, Any]) -> bool:
+        return WatchEventType.ERROR == payload["type"].upper()
+
+
 class KubeClient:
     def __init__(
         self,
@@ -1581,8 +1634,15 @@ class KubeClient:
     def _pods_url(self) -> str:
         return f"{self._namespace_url}/pods"
 
+    @property
+    def _all_pods_url(self) -> str:
+        return f"{self._api_v1_url}/pods"
+
     def _generate_pod_url(self, pod_id: str) -> str:
         return f"{self._pods_url}/{pod_id}"
+
+    def _generate_pods_url(self, all_namespaces: bool = False) -> str:
+        return self._all_pods_url if all_namespaces else self._pods_url
 
     def _generate_all_network_policies_url(
         self, namespace_name: Optional[str] = None
@@ -1747,9 +1807,34 @@ class KubeClient:
         url = self._generate_pod_url(name)
         return await self._request(method="GET", url=url)
 
-    async def get_raw_pods(self) -> Sequence[dict[str, Any]]:
-        payload = await self._request(method="GET", url=self._pods_url)
-        return payload["items"]
+    async def get_raw_pods(self, all_namespaces: bool = False) -> RawPodListResult:
+        url = self._generate_pods_url(all_namespaces)
+        payload = await self._request(method="GET", url=url)
+        self._check_status_payload(payload)
+        assert payload["kind"] == "PodList"
+        return RawPodListResult.from_primitive(payload)
+
+    async def watch_pods(
+        self, all_namespaces: bool = False, resource_version: Optional[str] = None
+    ) -> AsyncIterator[Union[PodWatchEvent, WatchBookmarkEvent]]:
+        url = self._generate_pods_url(all_namespaces)
+        params = dict(watch="true", allowWatchBookmarks="true")
+        if resource_version:
+            params["resourceVersion"] = resource_version
+        assert self._client
+        async with self._client.get(
+            url, params=params, timeout=aiohttp.ClientTimeout()
+        ) as response:
+            if response.status == 410:
+                raise ResourceGoneException
+            async for line in response.content:
+                payload = json.loads(line)
+                if PodWatchEvent.is_error(payload):
+                    self._check_status_payload(payload["object"])
+                if WatchBookmarkEvent.is_bookmark(payload):
+                    yield WatchBookmarkEvent.from_primitive(payload)
+                else:
+                    yield PodWatchEvent.from_primitive(payload)
 
     async def get_pod_status(self, pod_id: str) -> PodStatus:
         pod = await self.get_pod(pod_id)
@@ -1832,12 +1917,15 @@ class KubeClient:
         self._check_status_payload(payload)
 
     def _check_status_payload(self, payload: dict[str, Any]) -> None:
-        if payload["kind"] == "Status":
+        if payload.get("kind") == "Status":
             if payload["status"] == "Failure":
-                if payload.get("reason") == "AlreadyExists":
+                reason = payload.get("reason")
+                if reason == "AlreadyExists":
                     raise AlreadyExistsException(payload["reason"])
-                if payload.get("reason") == "NotFound":
+                if reason == "NotFound":
                     raise NotFoundException(payload["reason"])
+                if reason == "Gone":
+                    raise ResourceGoneException(payload["reason"])
                 raise StatusException(payload["reason"])
 
     async def add_ingress_rule(self, name: str, rule: IngressRule) -> Ingress:
@@ -2131,3 +2219,72 @@ class KubeClient:
     def _generate_node_stats_summary_url(self, name: str) -> str:
         proxy_url = self._generate_node_proxy_url(name, self._kubelet_port)
         return f"{proxy_url}/stats/summary"
+
+
+class PodEventHandler:
+    @abc.abstractmethod
+    async def init(self, raw_pods: list[dict[str, Any]]) -> None:
+        pass
+
+    @abc.abstractmethod
+    async def handle(self, event: PodWatchEvent) -> None:
+        pass
+
+
+class PodWatcher:
+    def __init__(self, kube_client: KubeClient) -> None:
+        self._kube_client = kube_client
+        self._handlers: list[PodEventHandler] = []
+        self._watcher_task: Optional[asyncio.Task[None]] = None
+        self._ready_event = asyncio.Event()
+
+    def subscribe(self, handler: PodEventHandler) -> None:
+        if self._watcher_task is not None:
+            raise Exception("Subscription is not possible after watcher start")
+        self._handlers.append(handler)
+
+    async def __aenter__(self) -> "PodWatcher":
+        await self.start()
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        await self.stop()
+
+    async def start(self) -> None:
+        self._watcher_task = asyncio.create_task(self._run())
+        await self._ready_event.wait()
+
+    async def stop(self) -> None:
+        if self._watcher_task is None:
+            return
+        self._watcher_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await self._watcher_task
+
+    async def _run(self) -> None:
+        resource_version = await self._init()
+        while True:
+            try:
+                async for event in self._kube_client.watch_pods(
+                    all_namespaces=True, resource_version=resource_version
+                ):
+                    if isinstance(event, WatchBookmarkEvent):
+                        resource_version = event.resource_version
+                        continue
+                    for handler in self._handlers:
+                        await handler.handle(event)
+            except ResourceGoneException as exc:
+                logger.warning("Pods resource gone", exc_info=exc)
+            except aiohttp.ClientError as exc:
+                logger.warning("Watch pods client error", exc_info=exc)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.warning("Unhandled error")
+
+    async def _init(self) -> str:
+        result = await self._kube_client.get_raw_pods(all_namespaces=True)
+        for handler in self._handlers:
+            await handler.init(result.raw_pods)
+        self._ready_event.set()
+        return result.resource_version
