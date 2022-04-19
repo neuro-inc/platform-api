@@ -298,7 +298,7 @@ class Resources:
     tpu_cores: Optional[int] = None
 
     gpu_key: ClassVar[str] = "nvidia.com/gpu"
-    tpu_key_template: ClassVar[str] = "cloud-tpus.google.com/{version}"
+    tpu_key_prefix: ClassVar[str] = "cloud-tpus.google.com/"
 
     def __post_init__(self) -> None:
         if bool(self.tpu_version) ^ bool(self.tpu_cores):
@@ -318,7 +318,8 @@ class Resources:
 
     @property
     def tpu_key(self) -> str:
-        return self.tpu_key_template.format(version=self.tpu_version)
+        assert self.tpu_version
+        return self.tpu_key_prefix + self.tpu_version
 
     def to_primitive(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -334,6 +335,45 @@ class Resources:
         if self.memory_request:
             payload["requests"]["memory"] = self.memory_request_mib
         return payload
+
+    @classmethod
+    def from_primitive(cls, payload: dict[str, Any]) -> "Resources":
+        requests = payload.get("requests", {})
+        gpu = None
+        if cls.gpu_key in requests:
+            gpu = int(requests[cls.gpu_key])
+        tpu_version, tpu_cores = cls._parse_tpu(requests)
+        return cls(
+            cpu=cls._parse_cpu(requests.get("cpu", "0")),
+            memory=cls._parse_memory(requests.get("memory", "0Mi")),
+            gpu=gpu,
+            tpu_version=tpu_version,
+            tpu_cores=tpu_cores,
+        )
+
+    @classmethod
+    def _parse_cpu(cls, cpu: str) -> float:
+        try:
+            return float(cpu)
+        except ValueError:
+            return float(cpu[:-1]) / 1000
+
+    @classmethod
+    def _parse_memory(cls, memory: str) -> int:
+        if memory.endswith("Ki"):
+            return int(memory[:-2]) // 1024
+        elif memory.endswith("Mi"):
+            return int(memory[:-2])
+        elif memory.endswith("Gi"):
+            return int(memory[:-2]) * 1024
+        raise ValueError("Memory format is not supported")
+
+    @classmethod
+    def _parse_tpu(cls, payload: dict[str, Any]) -> tuple[Optional[str], Optional[int]]:
+        for key, value in payload.items():
+            if key.startswith(cls.tpu_key_prefix):
+                return key.split("/")[-1], int(value)
+        return None, None
 
     @classmethod
     def _parse_tpu_resource(cls, tpu: ContainerTPUResource) -> tuple[str, int]:
@@ -1187,6 +1227,7 @@ class PodDescriptor:
                 payload["spec"].get("restartPolicy", str(cls.restart_policy))
             ),
             working_dir=container_payload.get("workingDir"),
+            resources=Resources.from_primitive(container_payload.get("resources", {})),
         )
 
 
