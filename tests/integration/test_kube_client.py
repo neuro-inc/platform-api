@@ -21,11 +21,16 @@ from platform_api.orchestrator.kube_client import (
     Ingress,
     KubeClient,
     PodDescriptor,
+    PodEventHandler,
+    PodWatcher,
+    PodWatchEvent,
     Service,
     StatusException,
 )
 
-from tests.integration.conftest import MyKubeClient
+from .conftest import MyKubeClient
+
+PodFactory = Callable[..., Awaitable[PodDescriptor]]
 
 
 @pytest.fixture
@@ -364,27 +369,43 @@ class TestKubeClient:
 
         assert pod_status.container_status.exit_code != 0
 
+    async def test_get_raw_pods(
+        self, kube_client: KubeClient, create_pod: PodFactory
+    ) -> None:
+        pod = await create_pod()
+        pod_list = await kube_client.get_raw_pods()
+        pods = pod_list.raw_pods
+
+        assert pod.name in [p["metadata"]["name"] for p in pods]
+
+    async def test_get_raw_pods_all_namespaces(
+        self, kube_client: KubeClient, create_pod: PodFactory
+    ) -> None:
+        pod = await create_pod()
+        pod_list = await kube_client.get_raw_pods(all_namespaces=True)
+        pods = pod_list.raw_pods
+
+        assert pod.name in [p["metadata"]["name"] for p in pods]
+        assert any(
+            p["metadata"]["name"].startswith("kube-") for p in pods
+        )  # kube-system pods
+
     @pytest.fixture
     async def create_pod(
-        self,
-        kube_client: KubeClient,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    ) -> Callable[[str], Awaitable[PodDescriptor]]:
-        async def _f(job_id: str) -> PodDescriptor:
-            labels = {"platform.neuromation.io/job": job_id}
-            container = Container(
-                image="ubuntu:20.10",
-                command="true",
-                resources=ContainerResources(cpu=0.1, memory_mb=128),
+        self, pod_factory: Callable[..., Awaitable[PodDescriptor]]
+    ) -> Callable[..., Awaitable[PodDescriptor]]:
+        async def _create(
+            cpu: float = 0.1, memory: int = 128, labels: dict[str, str] | None = None
+        ) -> PodDescriptor:
+            return await pod_factory(
+                image="gcr.io/google_containers/pause:3.1",
+                cpu=cpu,
+                memory=memory,
+                labels=labels,
+                wait=True,
             )
-            pod = PodDescriptor.from_job_request(
-                JobRequest.create(container), labels=labels
-            )
-            await delete_pod_later(pod)
-            await kube_client.create_pod(pod)
-            return pod
 
-        return _f
+        return _create
 
     @pytest.fixture
     async def create_ingress(
@@ -434,3 +455,62 @@ class TestKubeClient:
             return payload
 
         return _f
+
+
+class MyPodEventHandler(PodEventHandler):
+    def __init__(self) -> None:
+        self.pod_names: list[str] = []
+        self._events: dict[str, asyncio.Event] = {}
+
+    async def init(self, raw_pods: list[dict[str, Any]]) -> None:
+        self.pod_names.extend([p["metadata"]["name"] for p in raw_pods])
+
+    async def handle(self, event: PodWatchEvent) -> None:
+        pod_name = event.raw_pod["metadata"]["name"]
+        self.pod_names.append(pod_name)
+        waiter = self._events.get(pod_name)
+        if waiter:
+            del self._events[pod_name]
+            waiter.set()
+
+    async def wait_for_pod(self, name: str) -> None:
+        if name in self.pod_names:
+            return
+        event = asyncio.Event()
+        self._events[name] = event
+        await event.wait()
+
+
+class TestPodWatcher:
+    @pytest.fixture
+    def handler(self) -> MyPodEventHandler:
+        return MyPodEventHandler()
+
+    @pytest.fixture
+    async def pod_watcher(
+        self, kube_client: KubeClient, handler: MyPodEventHandler
+    ) -> AsyncIterator[PodWatcher]:
+        watcher = PodWatcher(kube_client)
+        watcher.subscribe(handler)
+        async with watcher:
+            yield watcher
+
+    @pytest.mark.usefixtures("pod_watcher")
+    async def test_handle(
+        self, handler: MyPodEventHandler, pod_factory: PodFactory
+    ) -> None:
+        assert len(handler.pod_names) > 0
+
+        pod = await pod_factory(image="gcr.io/google_containers/pause:3.1")
+
+        await asyncio.wait_for(handler.wait_for_pod(pod.name), 5)
+
+        assert pod.name in handler.pod_names
+
+    async def test_subscribe_after_start(
+        self, pod_watcher: PodWatcher, handler: MyPodEventHandler
+    ) -> None:
+        with pytest.raises(
+            Exception, match="Subscription is not possible after watcher start"
+        ):
+            pod_watcher.subscribe(handler)

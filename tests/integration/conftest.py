@@ -405,8 +405,10 @@ class MyKubeClient(KubeClient):
                 print("Phase:", raw_pod["status"]["phase"])
                 print("Status conditions:", raw_pod["status"].get("conditions", []))
                 print("Pods:")
-                pods = await self.get_raw_pods()
-                pods = sorted(pods, key=lambda p: p["spec"].get("nodeName", ""))
+                pod_list = await self.get_raw_pods()
+                pods = sorted(
+                    pod_list.raw_pods, key=lambda p: p["spec"].get("nodeName", "")
+                )
                 print(f"  {'Name':40s} {'CPU':5s} {'Memory':10s} {'Phase':9s} Node")
                 for pod in pods:
                     container = pod["spec"]["containers"][0]
@@ -762,6 +764,46 @@ async def delete_pod_later(
             await kube_client.delete_pod(pod.name)
         except Exception:
             pass
+
+
+@pytest.fixture
+async def pod_factory(
+    kube_client: KubeClient,
+    delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+) -> Callable[..., Awaitable[PodDescriptor]]:
+    name_prefix = f"pod-{uuid.uuid4()}"
+    name_index = 1
+
+    async def _create(
+        image: str,
+        command: Optional[list[str]] = None,
+        cpu: float = 0.1,
+        memory: int = 128,
+        labels: Optional[dict[str, str]] = None,
+        wait: bool = True,
+        wait_timeout_s: float = 60,
+        idle: bool = False,
+    ) -> PodDescriptor:
+        nonlocal name_index
+        name = f"{name_prefix}-{name_index}"
+        name_index += 1
+        labels = labels or {}
+        if idle:
+            labels["platform.neuromation.io/idle"] = "true"
+        pod = PodDescriptor(
+            name=name,
+            labels=labels,
+            image=image,
+            command=command or [],
+            resources=Resources(cpu=cpu, memory=memory),
+        )
+        pod = await kube_client.create_pod(pod)
+        await delete_pod_later(pod)
+        if wait:
+            await kube_client.wait_pod_is_running(pod.name, timeout_s=wait_timeout_s)
+        return pod
+
+    return _create
 
 
 @pytest.fixture
