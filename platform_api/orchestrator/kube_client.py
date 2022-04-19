@@ -305,9 +305,8 @@ class Resources:
             raise ValueError("invalid TPU configuration")
 
     @property
-    def cpu_mcores(self) -> str:
-        mcores = int(self.cpu * 1000)
-        return f"{mcores}m"
+    def cpu_mcores(self) -> int:
+        return int(self.cpu * 1000)
 
     @property
     def memory_mib(self) -> str:
@@ -323,8 +322,8 @@ class Resources:
 
     def to_primitive(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "requests": {"cpu": self.cpu_mcores, "memory": self.memory_mib},
-            "limits": {"cpu": self.cpu_mcores, "memory": self.memory_mib},
+            "requests": {"cpu": f"{self.cpu_mcores}m", "memory": self.memory_mib},
+            "limits": {"cpu": f"{self.cpu_mcores}m", "memory": self.memory_mib},
         }
         if self.gpu:
             payload["requests"][self.gpu_key] = self.gpu
@@ -1509,6 +1508,59 @@ class NodeTaint:
 
 
 @dataclass(frozen=True)
+class NodeResources:
+    cpu: float
+    memory: int
+    gpu: int = 0
+
+    gpu_key: ClassVar[str] = "nvidia.com/gpu"
+
+    def __post_init__(self) -> None:
+        if self.cpu < 0:
+            raise ValueError("Invalid cpu")
+        if self.memory < 0:
+            raise ValueError("Invalid memory")
+        if self.gpu < 0:
+            raise ValueError("Invalid gpu")
+
+    @classmethod
+    def from_primitive(cls, payload: dict[str, Any]) -> "NodeResources":
+        return cls(
+            cpu=cls._parse_cpu(payload.get("cpu", "0")),
+            memory=cls._parse_memory(payload.get("memory", "0Mi")),
+            gpu=int(payload.get(cls.gpu_key, 0)),
+        )
+
+    @classmethod
+    def _parse_cpu(cls, cpu: str) -> float:
+        try:
+            return float(cpu)
+        except ValueError:
+            return float(cpu[:-1]) / 1000
+
+    @classmethod
+    def _parse_memory(cls, memory: str) -> int:
+        if memory.endswith("Ki"):
+            return int(memory[:-2]) // 1024
+        elif memory.endswith("Mi"):
+            return int(memory[:-2])
+        elif memory.endswith("Gi"):
+            return int(memory[:-2]) * 1024
+        raise ValueError("Memory format is not supported")
+
+    @property
+    def cpu_mcores(self) -> int:
+        return int(self.cpu * 1000)
+
+    def __add__(self, other: "NodeResources") -> "NodeResources":
+        return self.__class__(
+            cpu=self.cpu + other.cpu,
+            memory=self.memory + other.memory,
+            gpu=self.gpu + other.gpu,
+        )
+
+
+@dataclass(frozen=True)
 class RawPodListResult:
     resource_version: str
     raw_pods: list[dict[str, Any]]
@@ -2334,3 +2386,94 @@ class PodWatcher:
             await handler.init(result.raw_pods)
         self._ready_event.set()
         return result.resource_version
+
+
+# https://github.com/kubernetes/kubernetes/blob/c285e781331a3785a7f436042c65c5641ce8a9e9/pkg/kubelet/preemption/preemption.go
+class KubePreemption:
+    @classmethod
+    def get_pods_to_preempt(
+        cls, resources: NodeResources, pods: list[PodDescriptor]
+    ) -> list[PodDescriptor]:
+        if resources.gpu:
+            pods = [p for p in pods if p.resources and p.resources.gpu]
+        pods_to_preempt: list[PodDescriptor] = []
+        while pods and cls._has_resources(resources):
+            logger.debug("Pods left: %d", len(pods))
+            logger.debug(
+                "Resources left: cpu=%dm, memory=%dMi, gpu=%d",
+                resources.cpu_mcores,
+                resources.memory,
+                resources.gpu or 0,
+            )
+            #  max distance for a single resource is 1, 3 resources total
+            best_dist = 4.0
+            best_resources: Resources = pods[0].resources  # type: ignore
+            best_pod_index = 0
+            for i, pod in enumerate(pods):
+                assert pod.resources
+                dist = cls._distance(resources, pod)
+                # Select min distance. If distances are equal select pod with min
+                # resources.
+                if dist < best_dist or (
+                    dist == best_dist
+                    and cls._has_less_resources(pod.resources, best_resources)
+                ):
+                    logger.debug(
+                        "Chose new best pod: name=%s, dist=%f", pods[i].name, dist
+                    )
+                    best_dist = dist
+                    best_resources = pod.resources
+                    best_pod_index = i
+            resources = cls._subtract_resources(resources, best_resources)
+            pods_to_preempt.append(pods[best_pod_index])
+            del pods[best_pod_index]
+        logger.debug(
+            "Resources left: cpu=%fm, memory=%dMi, gpu=%d",
+            resources.cpu_mcores,
+            resources.memory,
+            resources.gpu or 0,
+        )
+        if cls._has_resources(resources):
+            logger.debug("Pods to preempt: []")
+            return []
+        logger.debug("Pods to preempt: %s", [p.name for p in pods_to_preempt])
+        return pods_to_preempt
+
+    @classmethod
+    def _has_resources(cls, resources: NodeResources) -> bool:
+        return (
+            resources.cpu_mcores > 0 or resources.memory > 0 or (resources.gpu or 0) > 0
+        )
+
+    @classmethod
+    def _subtract_resources(cls, r1: NodeResources, r2: Resources) -> NodeResources:
+        return replace(
+            r1,
+            cpu=max(0, (r1.cpu_mcores - r2.cpu_mcores) / 1000),
+            memory=max(0, r1.memory - r2.memory),
+            gpu=max(0, (r1.gpu or 0) - (r2.gpu or 0)),
+        )
+
+    @classmethod
+    def _distance(cls, resources: NodeResources, pod: PodDescriptor) -> float:
+        def _dist(resource: int, pod_resource: int) -> float:
+            try:
+                return (max(0, resource - pod_resource) / resource) ** 2
+            except ZeroDivisionError:
+                return 0
+
+        assert pod.resources
+        dist = 0.0
+        dist += _dist(resources.cpu_mcores, pod.resources.cpu_mcores)
+        dist += _dist(resources.memory, pod.resources.memory)
+        if resources.gpu:
+            dist += _dist(resources.gpu or 0, pod.resources.gpu or 0)
+        return dist
+
+    @classmethod
+    def _has_less_resources(cls, r1: Resources, r2: Resources) -> bool:
+        return ((r1.gpu or 0), r1.memory, r1.cpu_mcores) < (
+            (r2.gpu or 0),
+            r2.memory,
+            r2.cpu_mcores,
+        )
