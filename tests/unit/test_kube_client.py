@@ -26,6 +26,17 @@ class TestNodeSelectorRequirement:
                 "key", operator=NodeSelectorOperator.EXISTS, values=["value"]
             )
 
+    def test_create_in(self) -> None:
+        req = NodeSelectorRequirement.create_in("testkey", "testvalue")
+        assert req == NodeSelectorRequirement(
+            key="testkey", operator=NodeSelectorOperator.IN, values=["testvalue"]
+        )
+        assert req.to_primitive() == {
+            "key": "testkey",
+            "operator": "In",
+            "values": ["testvalue"],
+        }
+
     def test_create_exists(self) -> None:
         req = NodeSelectorRequirement.create_exists("testkey")
         assert req == NodeSelectorRequirement(
@@ -40,17 +51,93 @@ class TestNodeSelectorRequirement:
         )
         assert req.to_primitive() == {"key": "testkey", "operator": "DoesNotExist"}
 
+    def test_create_gt(self) -> None:
+        req = NodeSelectorRequirement.create_gt("testkey", 1)
+        assert req == NodeSelectorRequirement(
+            key="testkey", operator=NodeSelectorOperator.GT, values=["1"]
+        )
+        assert req.to_primitive() == {
+            "key": "testkey",
+            "operator": "Gt",
+            "values": ["1"],
+        }
+
+    def test_create_lt(self) -> None:
+        req = NodeSelectorRequirement.create_lt("testkey", 1)
+        assert req == NodeSelectorRequirement(
+            key="testkey", operator=NodeSelectorOperator.LT, values=["1"]
+        )
+        assert req.to_primitive() == {
+            "key": "testkey",
+            "operator": "Lt",
+            "values": ["1"],
+        }
+
+    def test_in_requirement_is_satisfied(self) -> None:
+        req = NodeSelectorRequirement.create_in("testkey", "testvalue")
+
+        assert req.is_satisfied({"testkey": "testvalue"}) is True
+        assert req.is_satisfied({"testkey": "testvalue2"}) is False
+
+    def test_exists_requirement_is_satisfied(self) -> None:
+        req = NodeSelectorRequirement.create_exists("testkey")
+
+        assert req.is_satisfied({"testkey": "testvalue"}) is True
+        assert req.is_satisfied({"testkey2": "testvalue"}) is False
+
+    def test_does_not_exist_requirement_is_satisfied(self) -> None:
+        req = NodeSelectorRequirement.create_does_not_exist("testkey2")
+
+        assert req.is_satisfied({"testkey": "testvalue"}) is True
+        assert req.is_satisfied({"testkey2": "testvalue"}) is False
+
+    def test_gt_requirement_is_satisfied(self) -> None:
+        req = NodeSelectorRequirement.create_gt("testkey", 1)
+
+        assert req.is_satisfied({"testkey": "2"}) is True
+        assert req.is_satisfied({"testkey2": "1"}) is False
+
+    def test_lt_requirement_is_satisfied(self) -> None:
+        req = NodeSelectorRequirement.create_lt("testkey", 1)
+
+        assert req.is_satisfied({"testkey": "0"}) is True
+        assert req.is_satisfied({"testkey2": "1"}) is False
+
 
 class TestNodeSelectorTerm:
     def test_empty(self) -> None:
         with pytest.raises(ValueError, match="no expressions"):
             NodeSelectorTerm([])
 
+    def test_is_satisfied(self) -> None:
+        term = NodeSelectorTerm(
+            [
+                NodeSelectorRequirement.create_exists("job"),
+                NodeSelectorRequirement.create_in("zone", "us-east-1a"),
+            ]
+        )
+
+        assert term.is_satisfied({"job": "id", "zone": "us-east-1a"}) is True
+        assert term.is_satisfied({"job": "id", "zone": "us-east-1b"}) is False
+
 
 class TestNodeAffinity:
     def test_empty(self) -> None:
         with pytest.raises(ValueError, match="no terms"):
             NodeAffinity()
+
+    def test_is_satisfied(self) -> None:
+        term1 = NodeSelectorTerm(
+            [NodeSelectorRequirement.create_in("zone", "us-east-1a")]
+        )
+        term2 = NodeSelectorTerm(
+            [NodeSelectorRequirement.create_in("zone", "us-east-1b")]
+        )
+        node_affinity = NodeAffinity(required=[term1, term2])
+
+        assert node_affinity.is_satisfied({"zone": "us-east-1a"}) is True
+        assert node_affinity.is_satisfied({"zone": "us-east-1b"}) is True
+        assert node_affinity.is_satisfied({"zone": "us-east-1c"}) is False
 
     def test_to_primitive(self) -> None:
         node_affinity = NodeAffinity(
