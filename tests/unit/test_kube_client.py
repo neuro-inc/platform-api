@@ -1,17 +1,23 @@
+import uuid
 from datetime import datetime, timezone
+from typing import Callable, Optional
 
 import pytest
 
 from platform_api.orchestrator.kube_client import (
+    KubePreemption,
     KubernetesEvent,
     NodeAffinity,
     NodePreferredSchedulingTerm,
+    NodeResources,
     NodeSelectorOperator,
     NodeSelectorRequirement,
     NodeSelectorTerm,
     PodCondition,
     PodConditionType,
+    PodDescriptor,
     PodStatus,
+    Resources,
 )
 
 
@@ -374,3 +380,201 @@ class TestKubernetesEvent:
             2019, 6, 20, 11, 3, 33, tzinfo=timezone.utc
         )
         assert event.count == 12
+
+
+class TestNodeResources:
+    def test_from_primitive(self) -> None:
+        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4096Mi"})
+
+        assert resources == NodeResources(cpu=1, memory=4096)
+
+    def test_from_primitive_default(self) -> None:
+        resources = NodeResources.from_primitive({})
+
+        assert resources == NodeResources(cpu=0, memory=0)
+
+    def test_from_primitive_cpu(self) -> None:
+        resources = NodeResources.from_primitive({"cpu": "1000m", "memory": "4096Mi"})
+
+        assert resources == NodeResources(cpu=1, memory=4096)
+
+    def test_from_primitive_memory(self) -> None:
+        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4194304Ki"})
+        assert resources == NodeResources(cpu=1, memory=4096)
+
+        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4096Mi"})
+        assert resources == NodeResources(cpu=1, memory=4096)
+
+        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4Gi"})
+        assert resources == NodeResources(cpu=1, memory=4096)
+
+        with pytest.raises(ValueError, match="Memory format is not supported"):
+            NodeResources.from_primitive({"cpu": "1", "memory": "4Ti"})
+
+    def test_from_primitive_with_gpu(self) -> None:
+        resources = NodeResources.from_primitive(
+            {"cpu": "1", "memory": "4096Mi", "nvidia.com/gpu": "1"}
+        )
+
+        assert resources == NodeResources(cpu=1, memory=4096, gpu=1)
+
+    def test_invalid_cpu(self) -> None:
+        with pytest.raises(ValueError, match="Invalid cpu"):
+            NodeResources(cpu=-1, memory=4096, gpu=1)
+
+    def test_invalid_memory(self) -> None:
+        with pytest.raises(ValueError, match="Invalid memory"):
+            NodeResources(cpu=1, memory=-4096, gpu=1)
+
+    def test_invalid_gpu(self) -> None:
+        with pytest.raises(ValueError, match="Invalid gpu"):
+            NodeResources(cpu=1, memory=4096, gpu=-1)
+
+
+PodFactory = Callable[..., PodDescriptor]
+
+
+@pytest.fixture
+async def pod_factory() -> PodFactory:
+    def _create(
+        name: Optional[str] = None,
+        labels: Optional[dict[str, str]] = None,
+        cpu: float = 0.1,
+        memory: int = 128,
+        gpu: int = 1,
+        idle: bool = True,
+    ) -> PodDescriptor:
+        labels = labels or {}
+        if idle:
+            labels["platform.neuromation.io/idle"] = "true"
+        pod = PodDescriptor(
+            name=name or f"pod-{uuid.uuid4()}",
+            labels=labels,
+            image="gcr.io/google_containers/pause:3.1",
+            resources=Resources(cpu=cpu, memory=memory, gpu=gpu),
+        )
+        return pod
+
+    return _create
+
+
+class TestKubePreemption:
+    @pytest.fixture
+    def preemption(self) -> KubePreemption:
+        return KubePreemption()
+
+    def test_single_pod(
+        self, preemption: KubePreemption, pod_factory: PodFactory
+    ) -> None:
+        idle_pod = pod_factory()
+        assert idle_pod.resources
+        resources = NodeResources(
+            cpu=idle_pod.resources.cpu, memory=idle_pod.resources.memory
+        )
+
+        pods = preemption.get_pods_to_preempt(resources, [idle_pod])
+
+        assert pods == [idle_pod]
+
+    async def test_multiple_pods(
+        self, preemption: KubePreemption, pod_factory: PodFactory
+    ) -> None:
+        idle_pod1 = pod_factory()
+        idle_pod2 = pod_factory()
+        assert idle_pod1.resources
+        assert idle_pod2.resources
+        resources = NodeResources(
+            cpu=idle_pod1.resources.cpu + idle_pod2.resources.cpu,
+            memory=idle_pod1.resources.memory + idle_pod2.resources.memory,
+        )
+
+        pods = preemption.get_pods_to_preempt(resources, [idle_pod1, idle_pod2])
+
+        assert pods == [idle_pod1, idle_pod2]
+
+    async def test_cpu_part_of_single_pod(
+        self, preemption: KubePreemption, pod_factory: PodFactory
+    ) -> None:
+        idle_pod = pod_factory()
+        assert idle_pod.resources
+        resources = NodeResources(
+            cpu=idle_pod.resources.cpu / 2, memory=idle_pod.resources.memory
+        )
+
+        pods = preemption.get_pods_to_preempt(resources, [idle_pod])
+
+        assert pods == [idle_pod]
+
+    async def test_memory_part_of_single_pod(
+        self, preemption: KubePreemption, pod_factory: PodFactory
+    ) -> None:
+        idle_pod = pod_factory()
+        assert idle_pod.resources
+        resources = NodeResources(
+            cpu=idle_pod.resources.cpu, memory=idle_pod.resources.memory // 2
+        )
+
+        pods = preemption.get_pods_to_preempt(resources, [idle_pod])
+
+        assert pods == [idle_pod]
+
+    async def test_part_of_multiple_pods(
+        self, preemption: KubePreemption, pod_factory: PodFactory
+    ) -> None:
+        idle_pod1 = pod_factory()
+        idle_pod2 = pod_factory()
+        idle_pod3 = pod_factory()
+        assert idle_pod1.resources
+        assert idle_pod2.resources
+        resources = NodeResources(
+            cpu=idle_pod1.resources.cpu + idle_pod2.resources.cpu / 2,
+            memory=idle_pod1.resources.memory + idle_pod2.resources.memory // 2,
+        )
+
+        pods = preemption.get_pods_to_preempt(
+            resources, [idle_pod1, idle_pod2, idle_pod3]
+        )
+
+        assert pods == [idle_pod1, idle_pod2]
+
+    async def test_pods_ordered_by_distance(
+        self, preemption: KubePreemption, pod_factory: PodFactory
+    ) -> None:
+        idle_pod1 = pod_factory(cpu=0.1, memory=64)
+        idle_pod2 = pod_factory(cpu=0.1, memory=192)
+        assert idle_pod1.resources
+        assert idle_pod2.resources
+        resources = NodeResources(cpu=0.2, memory=256)
+
+        pods = preemption.get_pods_to_preempt(resources, [idle_pod1, idle_pod2])
+
+        assert pods == [idle_pod2, idle_pod1]
+
+    async def test_pod_with_least_resources(
+        self, preemption: KubePreemption, pod_factory: PodFactory
+    ) -> None:
+        idle_pod1 = pod_factory(cpu=0.1)
+        idle_pod2 = pod_factory(cpu=0.2)
+        assert idle_pod1.resources
+        resources = NodeResources(cpu=0.09, memory=idle_pod1.resources.memory)
+
+        pods = preemption.get_pods_to_preempt(resources, [idle_pod1, idle_pod2])
+
+        assert pods == [idle_pod1]
+
+    async def test_no_pods(self, preemption: KubePreemption) -> None:
+        resources = NodeResources(cpu=0.1, memory=128)
+
+        pods = preemption.get_pods_to_preempt(resources, [])
+
+        assert pods == []
+
+    async def test_not_enough_pods(
+        self, preemption: KubePreemption, pod_factory: PodFactory
+    ) -> None:
+        idle_pod = pod_factory(cpu=0.1, memory=128)
+        resources = NodeResources(cpu=0.2, memory=256)
+
+        pods = preemption.get_pods_to_preempt(resources, [idle_pod])
+
+        assert pods == []
