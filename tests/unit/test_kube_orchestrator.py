@@ -1020,6 +1020,64 @@ class TestResources:
         with pytest.raises(ValueError, match=f"invalid TPU type format: '{type_}'"):
             Resources.from_container_resources(container_resources)
 
+    def test_from_primitive(self) -> None:
+        resources = Resources.from_primitive(
+            {"requests": {"cpu": "1", "memory": "4096Mi"}}
+        )
+
+        assert resources == Resources(cpu=1, memory=4096)
+
+    def test_from_primitive_cpu(self) -> None:
+        resources = Resources.from_primitive(
+            {"requests": {"cpu": "1000m", "memory": "4096Mi"}}
+        )
+
+        assert resources == Resources(cpu=1, memory=4096)
+
+    def test_from_primitive_memory(self) -> None:
+        resources = Resources.from_primitive(
+            {"requests": {"cpu": "1", "memory": "4194304Ki"}}
+        )
+        assert resources == Resources(cpu=1, memory=4096)
+
+        resources = Resources.from_primitive(
+            {"requests": {"cpu": "1", "memory": "4096Mi"}}
+        )
+        assert resources == Resources(cpu=1, memory=4096)
+
+        resources = Resources.from_primitive(
+            {"requests": {"cpu": "1", "memory": "4Gi"}}
+        )
+        assert resources == Resources(cpu=1, memory=4096)
+
+        with pytest.raises(ValueError, match="Memory format is not supported"):
+            Resources.from_primitive({"requests": {"cpu": "1", "memory": "4Ti"}})
+
+    def test_from_primitive_gpu(self) -> None:
+        resources = Resources.from_primitive(
+            {"requests": {"cpu": "1", "memory": "4096Mi", "nvidia.com/gpu": "1"}}
+        )
+
+        assert resources == Resources(cpu=1, memory=4096, gpu=1)
+
+    def test_from_primitive_tpu(self) -> None:
+        resources = Resources.from_primitive(
+            {
+                "requests": {
+                    "cpu": "1",
+                    "memory": "4096Mi",
+                    "cloud-tpus.google.com/v2": 8,
+                }
+            }
+        )
+
+        assert resources == Resources(cpu=1, memory=4096, tpu_cores=8, tpu_version="v2")
+
+    def test_from_primitive_default(self) -> None:
+        resources = Resources.from_primitive({})
+
+        assert resources == Resources(cpu=0, memory=0)
+
 
 class TestIngressV1Beta1Rule:
     def test_from_primitive_host(self) -> None:
