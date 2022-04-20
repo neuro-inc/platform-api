@@ -3015,6 +3015,28 @@ class TestIdleJobsPreemption:
             idle_pod.name, timeout_s=60, interval_s=0.1
         )
 
+    async def test_cannot_be_scheduled(
+        self,
+        kube_orchestrator_factory: Callable[..., KubeOrchestrator],
+        kube_config_factory: Callable[..., KubeConfig],
+        kube_client_factory: Callable[..., MyKubeClient],
+        pod_factory: Callable[..., Awaitable[PodDescriptor]],
+        job_factory: Callable[..., Awaitable[Job]],
+        node_resources: NodeResources,
+    ) -> None:
+        kube_config = kube_config_factory(node_label_node_pool="nodepool")
+        async with kube_client_factory(kube_config) as kube_client:
+            kube_orchestrator = kube_orchestrator_factory(
+                kube_config=kube_config, kube_client=kube_client
+            )
+            await pod_factory(cpu=node_resources.cpu / 2)
+            # Node should have less than cpu / 2 left
+            job = await job_factory(cpu=node_resources.cpu / 2)
+            await kube_orchestrator.preempt_idle_jobs([job])
+
+            job_pod = await kube_client.get_pod(job.id)
+            assert job_pod.status and job_pod.status.is_phase_pending
+
     async def test_not_enough_resources(
         self,
         kube_client: MyKubeClient,
@@ -3023,14 +3045,12 @@ class TestIdleJobsPreemption:
         job_factory: Callable[..., Awaitable[Job]],
         node_resources: NodeResources,
     ) -> None:
-        idle_pod = await pod_factory(cpu=node_resources.cpu / 2)
+        await pod_factory(cpu=node_resources.cpu / 2)
         # Node should have less than cpu / 2 left
         job = await job_factory(cpu=node_resources.cpu)
 
         await kube_orchestrator.preempt_idle_jobs([job])
 
-        idle_pod = await kube_client.get_pod(idle_pod.name)
-        assert idle_pod.status and idle_pod.status.is_scheduled
         job_pod = await kube_client.get_pod(job.id)
         assert job_pod.status and job_pod.status.is_phase_pending
 
