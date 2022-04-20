@@ -2313,6 +2313,17 @@ class KubeClient:
                     return
                 await asyncio.sleep(interval_s)
 
+    async def wait_pod_is_deleted(
+        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+    ) -> None:
+        async with timeout(timeout_s):
+            while True:
+                try:
+                    await self.get_pod(pod_name)
+                    await asyncio.sleep(interval_s)
+                except JobNotFoundException:
+                    return
+
     async def create_default_network_policy(
         self,
         name: str,
@@ -2457,9 +2468,11 @@ class PodWatcher:
     async def stop(self) -> None:
         if self._watcher_task is None:
             return
+        self._handlers.clear()
         self._watcher_task.cancel()
         with suppress(asyncio.CancelledError):
             await self._watcher_task
+        self._watcher_task = None
 
     async def _run(self, resource_version: str) -> None:
         while True:

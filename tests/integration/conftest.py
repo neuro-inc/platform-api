@@ -569,7 +569,7 @@ async def kube_orchestrator_factory(
     registry_config: RegistryConfig,
     orchestrator_config: OrchestratorConfig,
     kube_config: KubeConfig,
-    event_loop: Any,
+    kube_client: KubeClient,
 ) -> Callable[..., KubeOrchestrator]:
     def _f(**kwargs: Any) -> KubeOrchestrator:
         defaults = dict(
@@ -578,6 +578,7 @@ async def kube_orchestrator_factory(
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
             kube_config=kube_config,
+            kube_client=kube_client,
         )
         kwargs = {**defaults, **kwargs}
         return KubeOrchestrator(**kwargs)
@@ -599,7 +600,7 @@ async def kube_orchestrator_nfs(
     registry_config: RegistryConfig,
     orchestrator_config: OrchestratorConfig,
     kube_config: KubeConfig,
-    event_loop: Any,
+    kube_client: KubeClient,
 ) -> AsyncIterator[KubeOrchestrator]:
     orchestrator = KubeOrchestrator(
         cluster_name="default",
@@ -607,6 +608,7 @@ async def kube_orchestrator_nfs(
         registry_config=registry_config,
         orchestrator_config=orchestrator_config,
         kube_config=kube_config,
+        kube_client=kube_client,
     )
     async with orchestrator:
         yield orchestrator
@@ -618,7 +620,7 @@ async def kube_orchestrator_pvc(
     registry_config: RegistryConfig,
     orchestrator_config: OrchestratorConfig,
     kube_config: KubeConfig,
-    event_loop: Any,
+    kube_client: KubeClient,
 ) -> AsyncIterator[KubeOrchestrator]:
     orchestrator = KubeOrchestrator(
         cluster_name="default",
@@ -626,6 +628,7 @@ async def kube_orchestrator_pvc(
         registry_config=registry_config,
         orchestrator_config=orchestrator_config,
         kube_config=kube_config,
+        kube_client=kube_client,
     )
     async with orchestrator:
         yield orchestrator
@@ -682,7 +685,6 @@ async def kube_node_gpu(
 
 @pytest.fixture
 async def kube_node_tpu(
-    kube_config: KubeConfig,
     kube_client: MyKubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
 ) -> AsyncIterator[str]:

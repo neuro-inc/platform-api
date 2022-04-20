@@ -44,10 +44,12 @@ from platform_api.orchestrator.kube_client import (
     IngressRule,
     KubeClient,
     NodeAffinity,
+    NodeResources,
     NodeSelectorRequirement,
     NodeSelectorTerm,
     NotFoundException,
     PodDescriptor,
+    PodWatcher,
     SecretRef,
     Service,
     StatusException,
@@ -60,8 +62,8 @@ from platform_api.orchestrator.kube_orchestrator import (
 )
 from platform_api.resource import GKEGPUModels, ResourcePoolType, TPUResource
 
-from .conftest import ApiRunner, MyKubeClient
 from tests.conftest import random_str
+from tests.integration.conftest import ApiRunner, MyKubeClient
 from tests.integration.test_api import ApiConfig
 
 
@@ -2137,6 +2139,7 @@ class TestNodeAffinity:
         registry_config: RegistryConfig,
         orchestrator_config: OrchestratorConfig,
         kube_config: KubeConfig,
+        kube_client: KubeClient,
         kube_job_nodes_factory: Callable[
             [OrchestratorConfig, KubeConfig], Awaitable[None]
         ],
@@ -2201,6 +2204,7 @@ class TestNodeAffinity:
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
             kube_config=kube_config,
+            kube_client=kube_client,
         ) as kube_orchestrator:
             yield kube_orchestrator
 
@@ -2916,3 +2920,160 @@ class TestRestartPolicy:
             ),
             JobStatusItem.create(status=JobStatus.RUNNING),
         )
+
+
+class TestIdleJobsPreemption:
+    @pytest.fixture(autouse=True)
+    async def start_pod_watcher(
+        self, kube_client: MyKubeClient, kube_orchestrator: KubeOrchestrator
+    ) -> AsyncIterator[None]:
+        watcher = PodWatcher(kube_client)
+        kube_orchestrator.register(watcher)
+        async with watcher:
+            yield
+
+    @pytest.fixture
+    async def pod_factory(
+        self, pod_factory: Callable[..., Awaitable[PodDescriptor]]
+    ) -> Callable[..., Awaitable[PodDescriptor]]:
+        async def _create(
+            cpu: float = 0.1,
+            memory: int = 128,
+            wait: bool = True,
+            idle: bool = True,
+        ) -> PodDescriptor:
+            return await pod_factory(
+                image="gcr.io/google_containers/pause:3.1",
+                cpu=cpu,
+                memory=memory,
+                wait=wait,
+                idle=idle,
+            )
+
+        return _create
+
+    @pytest.fixture
+    async def job_factory(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+    ) -> Callable[..., Awaitable[Job]]:
+        name_prefix = f"job-{uuid.uuid4()}"
+        name_index = 1
+
+        async def _create(
+            cpu: float = 0.1,
+            memory: int = 64,
+            wait: bool = False,
+        ) -> Job:
+            nonlocal name_index
+            name = f"{name_prefix}-{name_index}"
+            name_index += 1
+            container = Container(
+                image="gcr.io/google_containers/pause:3.1",
+                resources=ContainerResources(cpu=cpu, memory_mb=memory),
+            )
+            job = MyJob(
+                orchestrator=kube_orchestrator,
+                record=JobRecord.create(
+                    name=name,
+                    owner="owner1",
+                    request=JobRequest.create(container),
+                    cluster_name="test-cluster",
+                ),
+            )
+            await kube_orchestrator.start_job(job)
+            await delete_job_later(job)
+            if wait:
+                await kube_client.wait_pod_is_running(name, timeout_s=10)
+            return job
+
+        return _create
+
+    @pytest.fixture
+    async def node_resources(
+        self, kube_client: KubeClient, kube_node: str
+    ) -> NodeResources:
+        node = await kube_client.get_node(kube_node)
+        return node.allocatable_resources
+
+    async def test_preempt(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        pod_factory: Callable[..., Awaitable[PodDescriptor]],
+        job_factory: Callable[..., Awaitable[Job]],
+        node_resources: NodeResources,
+    ) -> None:
+        idle_pod = await pod_factory(cpu=node_resources.cpu / 2)
+        # Node should have less than cpu / 2 left
+        job = await job_factory(cpu=node_resources.cpu / 2)
+        await kube_orchestrator.preempt_idle_jobs([job])
+
+        await kube_client.wait_pod_is_deleted(
+            idle_pod.name, timeout_s=60, interval_s=0.1
+        )
+
+    async def test_not_enough_resources(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        pod_factory: Callable[..., Awaitable[PodDescriptor]],
+        job_factory: Callable[..., Awaitable[Job]],
+        node_resources: NodeResources,
+    ) -> None:
+        idle_pod = await pod_factory(cpu=node_resources.cpu / 2)
+        # Node should have less than cpu / 2 left
+        job = await job_factory(cpu=node_resources.cpu)
+
+        await kube_orchestrator.preempt_idle_jobs([job])
+
+        idle_pod = await kube_client.get_pod(idle_pod.name)
+        assert idle_pod.status and idle_pod.status.is_scheduled
+        job_pod = await kube_client.get_pod(job.id)
+        assert job_pod.status and job_pod.status.is_phase_pending
+
+    async def test_running_jobs_ignored(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        pod_factory: Callable[..., Awaitable[PodDescriptor]],
+        job_factory: Callable[..., Awaitable[Job]],
+        node_resources: NodeResources,
+    ) -> None:
+        job = await job_factory(cpu=node_resources.cpu / 2)
+        idle_pod = await pod_factory()
+
+        await kube_orchestrator.preempt_idle_jobs([job])
+
+        idle_pod = await kube_client.get_pod(idle_pod.name)
+        assert idle_pod.status and idle_pod.status.is_scheduled
+
+    async def test_no_idle_jobs(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        job_factory: Callable[..., Awaitable[Job]],
+        node_resources: NodeResources,
+    ) -> None:
+        # Should not be scheduled
+        job = await job_factory(cpu=node_resources.cpu)
+
+        await kube_orchestrator.preempt_idle_jobs([job])
+
+        job_pod = await kube_client.get_pod(job.id)
+        assert job_pod.status and job_pod.status.is_phase_pending
+
+    async def test_no_jobs(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        pod_factory: Callable[..., Awaitable[PodDescriptor]],
+    ) -> None:
+        idle_pod = await pod_factory()
+
+        await kube_orchestrator.preempt_idle_jobs([])
+
+        idle_pod = await kube_client.get_pod(idle_pod.name)
+        assert idle_pod.status and idle_pod.status.is_scheduled

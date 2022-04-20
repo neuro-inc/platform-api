@@ -9,8 +9,6 @@ from datetime import datetime, timezone
 from pathlib import PurePath
 from typing import Any, Optional, Union
 
-import aiohttp
-
 from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import RegistryConfig, StorageConfig
 from platform_api.resource import ResourcePoolType
@@ -42,6 +40,7 @@ from .kube_client import (
     PodExec,
     PodRestartPolicy,
     PodStatus,
+    PodWatcher,
     PVCVolume,
     SecretVolume,
     Service,
@@ -50,6 +49,7 @@ from .kube_client import (
     VolumeMount,
 )
 from .kube_config import KubeConfig
+from .kube_orchestrator_preemption import KubeOrchestratorPreemption
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ class KubeOrchestrator(Orchestrator):
         registry_config: RegistryConfig,
         orchestrator_config: OrchestratorConfig,
         kube_config: KubeConfig,
-        trace_configs: Optional[list[aiohttp.TraceConfig]] = None,
+        kube_client: KubeClient,
     ) -> None:
         self._loop = asyncio.get_event_loop()
         self._cluster_name = cluster_name
@@ -130,25 +130,8 @@ class KubeOrchestrator(Orchestrator):
         self._registry_config = registry_config
         self._orchestrator_config = orchestrator_config
         self._kube_config = kube_config
-
-        # TODO (A Danshyn 05/21/18): think of the namespace life-time;
-        # should we ensure it does exist before continuing
-
-        self._client = KubeClient(
-            base_url=kube_config.endpoint_url,
-            cert_authority_data_pem=kube_config.cert_authority_data_pem,
-            cert_authority_path=kube_config.cert_authority_path,
-            auth_type=kube_config.auth_type,
-            auth_cert_path=kube_config.auth_cert_path,
-            auth_cert_key_path=kube_config.auth_cert_key_path,
-            token=kube_config.token,
-            token_path=kube_config.token_path,
-            namespace=kube_config.namespace,
-            conn_timeout_s=kube_config.client_conn_timeout_s,
-            read_timeout_s=kube_config.client_read_timeout_s,
-            conn_pool_size=kube_config.client_conn_pool_size,
-            trace_configs=trace_configs,
-        )
+        self._client = kube_client
+        self._preemption = KubeOrchestratorPreemption(kube_client)
 
         # TODO (A Danshyn 11/16/18): make this configurable at some point
         self._docker_secret_name_prefix = "neurouser-"
@@ -188,6 +171,9 @@ class KubeOrchestrator(Orchestrator):
             if sc.path is not None:
                 result.append(sc)
         return result
+
+    def register(self, pod_watcher: PodWatcher) -> None:
+        self._preemption.register(pod_watcher)
 
     def create_storage_volumes(
         self, container_volume: ContainerVolume
@@ -333,7 +319,7 @@ class KubeOrchestrator(Orchestrator):
         except Exception as e:
             logger.warning(f"Failed to remove network policy {name}: {e}")
 
-    async def _create_pod_descriptor(
+    def _create_pod_descriptor(
         self, job: Job, tolerate_unreachable_node: bool = False
     ) -> PodDescriptor:
         pool_types = self._get_cheapest_pool_types(job)
@@ -541,7 +527,7 @@ class KubeOrchestrator(Orchestrator):
         try:
             await self._create_pod_network_policy(job)
 
-            descriptor = await self._create_pod_descriptor(
+            descriptor = self._create_pod_descriptor(
                 job, tolerate_unreachable_node=tolerate_unreachable_node
             )
             pod = await self._client.create_pod(descriptor)
@@ -744,7 +730,7 @@ class KubeOrchestrator(Orchestrator):
 
         if do_recreate_pod:
             logger.info(f"Recreating preempted pod '{pod_name}'. Job '{job.id}'")
-            descriptor = await self._create_pod_descriptor(job)
+            descriptor = self._create_pod_descriptor(job)
             try:
                 pod = await self._client.create_pod(descriptor)
             except JobError:
@@ -875,3 +861,7 @@ class KubeOrchestrator(Orchestrator):
         await self._client.delete_all_ingresses(labels=labels)
         await self._client.delete_all_services(labels=labels)
         await self._client.delete_all_network_policies(labels=labels)
+
+    async def preempt_idle_jobs(self, jobs: list[Job]) -> None:
+        job_pods = [self._create_pod_descriptor(job) for job in jobs]
+        await self._preemption.preempt_idle_pods(job_pods)
