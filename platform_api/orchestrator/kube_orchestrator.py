@@ -150,6 +150,14 @@ class KubeOrchestrator(Orchestrator):
     def kube_config(self) -> KubeConfig:
         return self._kube_config
 
+    # TODO: remove
+    async def __aenter__(self) -> "KubeOrchestrator":
+        return self
+
+    # TODO: remove
+    async def __aexit__(self, *args: Any) -> None:
+        pass
+
     @property
     def _main_storage_config(self) -> StorageConfig:
         for sc in self._storage_configs:
