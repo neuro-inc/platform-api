@@ -75,7 +75,6 @@ class KubeCluster(Cluster):
         orchestrator.register(pod_watcher)
         await self._exit_stack.enter_async_context(kube_client)
         await self._exit_stack.enter_async_context(pod_watcher)
-        await self._exit_stack.enter_async_context(orchestrator)
         self._orchestrator = orchestrator
 
     async def close(self) -> None:

@@ -589,49 +589,24 @@ async def kube_orchestrator_factory(
 @pytest.fixture
 async def kube_orchestrator(
     kube_orchestrator_factory: Callable[..., KubeOrchestrator],
-) -> AsyncIterator[KubeOrchestrator]:
-    async with kube_orchestrator_factory() as kube_orchestrator:
-        yield kube_orchestrator
+) -> KubeOrchestrator:
+    return kube_orchestrator_factory()
 
 
 @pytest.fixture
 async def kube_orchestrator_nfs(
+    kube_orchestrator_factory: Callable[..., KubeOrchestrator],
     storage_config_nfs: StorageConfig,
-    registry_config: RegistryConfig,
-    orchestrator_config: OrchestratorConfig,
-    kube_config: KubeConfig,
-    kube_client: KubeClient,
-) -> AsyncIterator[KubeOrchestrator]:
-    orchestrator = KubeOrchestrator(
-        cluster_name="default",
-        storage_configs=[storage_config_nfs],
-        registry_config=registry_config,
-        orchestrator_config=orchestrator_config,
-        kube_config=kube_config,
-        kube_client=kube_client,
-    )
-    async with orchestrator:
-        yield orchestrator
+) -> KubeOrchestrator:
+    return kube_orchestrator_factory(storage_configs=[storage_config_nfs])
 
 
 @pytest.fixture
 async def kube_orchestrator_pvc(
+    kube_orchestrator_factory: Callable[..., KubeOrchestrator],
     storage_config_pvc: StorageConfig,
-    registry_config: RegistryConfig,
-    orchestrator_config: OrchestratorConfig,
-    kube_config: KubeConfig,
-    kube_client: KubeClient,
-) -> AsyncIterator[KubeOrchestrator]:
-    orchestrator = KubeOrchestrator(
-        cluster_name="default",
-        storage_configs=[storage_config_pvc],
-        registry_config=registry_config,
-        orchestrator_config=orchestrator_config,
-        kube_config=kube_config,
-        kube_client=kube_client,
-    )
-    async with orchestrator:
-        yield orchestrator
+) -> KubeOrchestrator:
+    return kube_orchestrator_factory(storage_configs=[storage_config_pvc])
 
 
 @pytest.fixture
