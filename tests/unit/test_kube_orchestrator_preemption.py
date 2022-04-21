@@ -88,7 +88,7 @@ class TestNodeResourcesHandler:
         assert handler.is_pod_bound_to_node("job") is False
 
         resources = handler.get_node_free_resources("minikube")
-        assert resources == NodeResources(0.0, 0)
+        assert resources == NodeResources()
 
     async def test_init_scheduled(
         self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
@@ -134,7 +134,7 @@ class TestNodeResourcesHandler:
         assert handler.is_pod_bound_to_node("job") is False
 
         resources = handler.get_node_free_resources("minikube1")
-        assert resources == NodeResources(0.0, 0)
+        assert resources == NodeResources()
 
     async def test_handle_added_pending(
         self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
@@ -150,7 +150,7 @@ class TestNodeResourcesHandler:
         assert handler.is_pod_bound_to_node("job") is False
 
         resources = handler.get_node_free_resources("minikube")
-        assert resources == NodeResources(0.0, 0)
+        assert resources == NodeResources()
 
     async def test_handle_added_running(
         self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
@@ -203,7 +203,7 @@ class TestNodeResourcesHandler:
         assert len(handler.get_nodes()) == 0
 
         resources = handler.get_node_free_resources("minikube")
-        assert resources == NodeResources(0.0, 0)
+        assert resources == NodeResources()
 
     async def test_handle_deleted_not_existing(
         self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
@@ -213,13 +213,13 @@ class TestNodeResourcesHandler:
         assert len(handler.get_nodes()) == 0
 
         resources = handler.get_node_free_resources("minikube")
-        assert resources == NodeResources(0.0, 0)
+        assert resources == NodeResources()
 
     async def test_get_node_free_resources_unknown_node(
         self, handler: NodeResourcesHandler
     ) -> None:
         resources = handler.get_node_free_resources("minikube")
-        assert resources == NodeResources(0.0, 0)
+        assert resources == NodeResources()
 
 
 class TestIdlePodsHandler:

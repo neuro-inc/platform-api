@@ -64,13 +64,26 @@ class _Pod(dict[str, Any]):
     def is_terminating(self) -> bool:
         return bool(self["metadata"].get("deletionTimestamp"))
 
+    @property
+    def resource_requests(self) -> NodeResources:
+        pod_resources = NodeResources()
+        for container in self["spec"]["containers"]:
+            resources = container.get("resources")
+            if not resources:
+                continue
+            requests = resources.get("requests")
+            if not requests:
+                continue
+            pod_resources += NodeResources.from_primitive(requests)
+        return pod_resources
+
 
 class NodeResourcesHandler(PodEventHandler):
     def __init__(self, kube_client: KubeClient) -> None:
         self._kube_client = kube_client
         self._pod_names: set[str] = set()
         self._nodes: dict[str, Node] = {}
-        self._node_resources: dict[str, dict[str, NodeResources]] = defaultdict(dict)
+        self._node_free_resources: dict[str, NodeResources] = {}
 
     async def init(self, raw_pods: list[dict[str, Any]]) -> None:
         for raw_pod in raw_pods:
@@ -95,66 +108,39 @@ class NodeResourcesHandler(PodEventHandler):
         # Ignore error in case node was removed/lost but pod was not yet removed
         with suppress(NotFoundException):
             if node_name not in self._nodes:
-                self._nodes[node_name] = await self._kube_client.get_node(node_name)
+                node = await self._kube_client.get_node(node_name)
+                self._nodes[node_name] = node
+                self._node_free_resources[node_name] = node.allocatable_resources
             self._pod_names.add(pod_name)
-            self._node_resources[node_name][pod_name] = self._get_pod_resources(pod)
+            self._node_free_resources[node_name] -= pod.resource_requests
 
     def _remove_pod(self, pod: _Pod) -> None:
         node_name: str = pod.node_name  # type: ignore
         pod_name = pod.name
-        node_resources = self._node_resources.get(node_name)
-        if node_resources:
-            node_resources.pop(pod_name, None)
-            if not node_resources:
-                self._node_resources.pop(node_name, None)
+        node = self._nodes.get(node_name)
+        if node:
+            node_free_resources = self._node_free_resources[node_name]
+            node_free_resources += pod.resource_requests
+            if node.allocatable_resources == node_free_resources:
+                self._node_free_resources.pop(node_name, None)
                 self._nodes.pop(node_name, None)
+            else:
+                self._node_free_resources[node_name] = node_free_resources
         with suppress(KeyError):
             self._pod_names.remove(pod_name)
-
-    @classmethod
-    def _get_pod_resources(cls, pod: _Pod) -> NodeResources:
-        pod_resources = NodeResources(0, 0)
-        for container in pod["spec"]["containers"]:
-            resources = container.get("resources")
-            if not resources:
-                continue
-            requests = resources.get("requests")
-            if not requests:
-                continue
-            pod_resources += NodeResources.from_primitive(requests)
-        return pod_resources
 
     def get_nodes(self) -> list[Node]:
         return list(self._nodes.values())
 
     def get_node_free_resources(self, node_name: str) -> NodeResources:
-        total = self._get_node_allocatable_resources(node_name)
-        used = self._get_node_requested_resources(node_name)
-        return NodeResources(
-            cpu=total.cpu - used.cpu,
-            memory=total.memory - used.memory,
-            gpu=total.gpu - used.gpu,
-        )
+        return self._node_free_resources.get(node_name) or NodeResources()
 
     def is_pod_bound_to_node(self, pod_name: str) -> bool:
         return pod_name in self._pod_names
 
     def _get_node_allocatable_resources(self, node_name: str) -> NodeResources:
         node = self._nodes.get(node_name)
-        if not node:
-            return NodeResources(0.0, 0)
-        return node.allocatable_resources
-
-    def _get_node_requested_resources(self, node_name: str) -> NodeResources:
-        node_resources = self._node_resources.get(node_name)
-        if not node_resources:
-            return NodeResources(0.0, 0)
-        cpu, memory, gpu = 0.0, 0, 0
-        for resources in self._node_resources[node_name].values():
-            cpu += resources.cpu
-            memory += resources.memory
-            gpu += resources.gpu or 0
-        return NodeResources(cpu=cpu, memory=memory, gpu=gpu)
+        return node.allocatable_resources if node else NodeResources()
 
 
 class IdlePodsHandler(PodEventHandler):
@@ -323,7 +309,7 @@ class KubeOrchestratorPreemption:
         free = self._node_resources_handler.get_node_free_resources(node.name)
         required = pod.resources
         if not required:
-            return NodeResources(0, 0)
+            return NodeResources()
         return NodeResources(
             cpu=max(0, required.cpu - free.cpu),
             memory=max(0, required.memory - free.memory),
