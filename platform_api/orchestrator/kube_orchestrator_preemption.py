@@ -12,6 +12,7 @@ from .kube_client import (
     KubePreemption,
     Node,
     NodeResources,
+    NotFoundException,
     PodDescriptor,
     PodEventHandler,
     PodWatcher,
@@ -22,33 +23,46 @@ from .kube_client import (
 logger = logging.getLogger(__name__)
 
 
-def _is_pod_pending(pod: dict[str, Any]) -> bool:
-    return pod["status"]["phase"] == "Pending"
+class _Pod(dict[str, Any]):
+    @property
+    def name(self) -> str:
+        return self["metadata"]["name"]
 
+    @property
+    def labels(self) -> dict[str, str]:
+        return self["metadata"].get("labels", {})
 
-def _is_pod_not_scheduled(pod: dict[str, Any]) -> bool:
-    return _is_pod_pending(pod) and not bool(pod["spec"].get("nodeName"))
+    @property
+    def is_idle(self) -> bool:
+        return bool(self.labels.get("platform.neuromation.io/idle"))
 
+    @property
+    def node_name(self) -> str | None:
+        return self["spec"].get("nodeName")
 
-def _is_pod_scheduled(pod: dict[str, Any]) -> bool:
-    return _is_pod_pending(pod) and bool(pod["spec"].get("nodeName"))
+    @property
+    def is_pending(self) -> bool:
+        return self["status"]["phase"] == "Pending"
 
+    @property
+    def is_waiting_for_node(self) -> bool:
+        return self.is_pending and not bool(self["spec"].get("nodeName"))
 
-def _is_pod_running(pod: dict[str, Any]) -> bool:
-    return pod["status"]["phase"] == "Running"
+    @property
+    def is_scheduled(self) -> bool:
+        return self.is_pending and bool(self.node_name)
 
+    @property
+    def is_running(self) -> bool:
+        return self["status"]["phase"] == "Running"
 
-def _is_pod_bound_to_node(pod: dict[str, Any]) -> bool:
-    return _is_pod_scheduled(pod) or _is_pod_running(pod)
+    @property
+    def is_bound_to_node(self) -> bool:
+        return self.is_scheduled or self.is_running
 
-
-def _is_pod_terminating(pod: dict[str, Any]) -> bool:
-    return bool(pod["metadata"].get("deletionTimestamp"))
-
-
-def _is_pod_idle(pod: dict[str, Any]) -> bool:
-    pod_labels = pod["metadata"].get("labels", {})
-    return bool(pod_labels.get("platform.neuromation.io/idle"))
+    @property
+    def is_terminating(self) -> bool:
+        return bool(self["metadata"].get("deletionTimestamp"))
 
 
 class NodeResourcesHandler(PodEventHandler):
@@ -59,42 +73,46 @@ class NodeResourcesHandler(PodEventHandler):
         self._node_resources: dict[str, dict[str, NodeResources]] = defaultdict(dict)
 
     async def init(self, raw_pods: list[dict[str, Any]]) -> None:
-        for pod in raw_pods:
-            if _is_pod_bound_to_node(pod):
+        for raw_pod in raw_pods:
+            pod = _Pod(raw_pod)
+            if pod.is_bound_to_node:
                 await self._add_pod(pod)
 
     async def handle(self, event: PodWatchEvent) -> None:
-        pod = event.raw_pod
-        if _is_pod_not_scheduled(pod):
+        pod = _Pod(event.raw_pod)
+        if pod.is_waiting_for_node:
             return
         if event.type == WatchEventType.DELETED:
             self._remove_pod(pod)
-        elif _is_pod_bound_to_node(pod):
+        elif pod.is_bound_to_node:
             await self._add_pod(pod)
         else:
             self._remove_pod(pod)
 
-    async def _add_pod(self, pod: dict[str, Any]) -> None:
-        node_name = pod["spec"]["nodeName"]
-        pod_name = pod["metadata"]["name"]
-        self._pod_names.add(pod_name)
-        self._node_resources[node_name][pod_name] = self._get_pod_resources(pod)
-        if node_name not in self._nodes:
-            self._nodes[node_name] = await self._kube_client.get_node(node_name)
+    async def _add_pod(self, pod: _Pod) -> None:
+        node_name: str = pod.node_name  # type: ignore
+        pod_name = pod.name
+        # Ignore error in case node was removed/lost but pod was not yet removed
+        with suppress(NotFoundException):
+            if node_name not in self._nodes:
+                self._nodes[node_name] = await self._kube_client.get_node(node_name)
+            self._pod_names.add(pod_name)
+            self._node_resources[node_name][pod_name] = self._get_pod_resources(pod)
 
-    def _remove_pod(self, pod: dict[str, Any]) -> None:
-        node_name = pod["spec"]["nodeName"]
-        pod_name = pod["metadata"]["name"]
-        node_resources = self._node_resources[node_name]
-        node_resources.pop(pod_name, None)
-        if not node_resources:
-            self._node_resources.pop(node_name, None)
-            self._nodes.pop(node_name, None)
+    def _remove_pod(self, pod: _Pod) -> None:
+        node_name: str = pod.node_name  # type: ignore
+        pod_name = pod.name
+        node_resources = self._node_resources.get(node_name)
+        if node_resources:
+            node_resources.pop(pod_name, None)
+            if not node_resources:
+                self._node_resources.pop(node_name, None)
+                self._nodes.pop(node_name, None)
         with suppress(KeyError):
             self._pod_names.remove(pod_name)
 
     @classmethod
-    def _get_pod_resources(cls, pod: dict[str, Any]) -> NodeResources:
+    def _get_pod_resources(cls, pod: _Pod) -> NodeResources:
         pod_resources = NodeResources(0, 0)
         for container in pod["spec"]["containers"]:
             resources = container.get("resources")
@@ -147,35 +165,36 @@ class IdlePodsHandler(PodEventHandler):
         self._terminating_pod_events: dict[str, list[asyncio.Event]] = defaultdict(list)
 
     async def init(self, raw_pods: list[dict[str, Any]]) -> None:
-        for pod in raw_pods:
-            if _is_pod_idle(pod) and _is_pod_bound_to_node(pod):
+        for raw_pod in raw_pods:
+            pod = _Pod(raw_pod)
+            if pod.is_idle and pod.is_bound_to_node:
                 self._add_pod(pod)
 
     async def handle(self, event: PodWatchEvent) -> None:
-        pod = event.raw_pod
-        if not _is_pod_idle(pod) or _is_pod_not_scheduled(pod):
+        pod = _Pod(event.raw_pod)
+        if not pod.is_idle or pod.is_waiting_for_node:
             return
         if event.type == WatchEventType.DELETED:
             self._notify_pod_terminating(pod)  # in case it's force delete
             self._remove_pod(pod)
-        elif _is_pod_bound_to_node(pod):
+        elif pod.is_bound_to_node:
             self._add_pod(pod)
-            if _is_pod_terminating(pod):
+            if pod.is_terminating:
                 self._notify_pod_terminating(pod)
         else:
             self._remove_pod(pod)
 
-    def _add_pod(self, pod: dict[str, Any]) -> None:
-        node_name = pod["spec"]["nodeName"]
-        pod_name = pod["metadata"]["name"]
+    def _add_pod(self, pod: _Pod) -> None:
+        node_name: str = pod.node_name  # type: ignore
+        pod_name = pod.name
         # there is an issue in k8s, elements in items don't have kind and version
         pod["kind"] = "Pod"
         self._pod_names.add(pod_name)
         self._pods[node_name][pod_name] = PodDescriptor.from_primitive(pod)
 
-    def _remove_pod(self, pod: dict[str, Any]) -> None:
-        node_name = pod["spec"]["nodeName"]
-        pod_name = pod["metadata"]["name"]
+    def _remove_pod(self, pod: _Pod) -> None:
+        node_name: str = pod.node_name  # type: ignore
+        pod_name = pod.name
         pods = self._pods[node_name]
         pods.pop(pod_name, None)
         if not pods:
@@ -185,8 +204,8 @@ class IdlePodsHandler(PodEventHandler):
         with suppress(KeyError):
             self._terminating_pod_names.remove(pod_name)
 
-    def _notify_pod_terminating(self, pod: dict[str, Any]) -> None:
-        pod_name = pod["metadata"]["name"]
+    def _notify_pod_terminating(self, pod: _Pod) -> None:
+        pod_name = pod.name
         self._terminating_pod_names.add(pod_name)
         events = self._terminating_pod_events.get(pod_name)
         if events is None:
