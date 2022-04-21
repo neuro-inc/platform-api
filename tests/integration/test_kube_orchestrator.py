@@ -2938,7 +2938,7 @@ class TestIdleJobsPreemption:
     ) -> Callable[..., Awaitable[PodDescriptor]]:
         async def _create(
             cpu: float = 0.1,
-            memory: int = 128,
+            memory: int = 64,
             wait: bool = True,
             idle: bool = True,
         ) -> PodDescriptor:
@@ -3060,9 +3060,8 @@ class TestIdleJobsPreemption:
         kube_orchestrator: KubeOrchestrator,
         pod_factory: Callable[..., Awaitable[PodDescriptor]],
         job_factory: Callable[..., Awaitable[Job]],
-        node_resources: NodeResources,
     ) -> None:
-        job = await job_factory(cpu=node_resources.cpu / 2)
+        job = await job_factory()
         idle_pod = await pod_factory()
 
         await kube_orchestrator.preempt_idle_jobs([job])

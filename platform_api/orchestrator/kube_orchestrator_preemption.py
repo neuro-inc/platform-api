@@ -239,7 +239,6 @@ class KubeOrchestratorPreemption:
             if node:
                 nodes_to_preempt.add(node)
                 pods_to_preempt.extend(pods)
-
         await self._delete_idle_pods(pods_to_preempt)
 
     def _get_pods_to_preempt(
