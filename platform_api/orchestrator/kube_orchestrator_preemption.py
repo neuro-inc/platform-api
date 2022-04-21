@@ -26,15 +26,27 @@ def _is_pod_pending(pod: dict[str, Any]) -> bool:
     return pod["status"]["phase"] == "Pending"
 
 
+def _is_pod_not_scheduled(pod: dict[str, Any]) -> bool:
+    return _is_pod_pending(pod) and not bool(pod["spec"].get("nodeName"))
+
+
+def _is_pod_scheduled(pod: dict[str, Any]) -> bool:
+    return _is_pod_pending(pod) and bool(pod["spec"].get("nodeName"))
+
+
 def _is_pod_running(pod: dict[str, Any]) -> bool:
     return pod["status"]["phase"] == "Running"
+
+
+def _is_pod_bound_to_node(pod: dict[str, Any]) -> bool:
+    return _is_pod_scheduled(pod) or _is_pod_running(pod)
 
 
 def _is_pod_terminating(pod: dict[str, Any]) -> bool:
     return bool(pod["metadata"].get("deletionTimestamp"))
 
 
-def _is_idle_pod(pod: dict[str, Any]) -> bool:
+def _is_pod_idle(pod: dict[str, Any]) -> bool:
     pod_labels = pod["metadata"].get("labels", {})
     return bool(pod_labels.get("platform.neuromation.io/idle"))
 
@@ -48,16 +60,16 @@ class NodeResourcesHandler(PodEventHandler):
 
     async def init(self, raw_pods: list[dict[str, Any]]) -> None:
         for pod in raw_pods:
-            if _is_pod_running(pod):
+            if _is_pod_bound_to_node(pod):
                 await self._add_pod(pod)
 
     async def handle(self, event: PodWatchEvent) -> None:
         pod = event.raw_pod
-        if _is_pod_pending(pod):
+        if _is_pod_not_scheduled(pod):
             return
         if event.type == WatchEventType.DELETED:
             self._remove_pod(pod)
-        elif _is_pod_running(pod):
+        elif _is_pod_bound_to_node(pod):
             await self._add_pod(pod)
         else:
             self._remove_pod(pod)
@@ -106,7 +118,7 @@ class NodeResourcesHandler(PodEventHandler):
             gpu=total.gpu - used.gpu,
         )
 
-    def is_pod_running(self, pod_name: str) -> bool:
+    def is_pod_bound_to_node(self, pod_name: str) -> bool:
         return pod_name in self._pod_names
 
     def _get_node_allocatable_resources(self, node_name: str) -> NodeResources:
@@ -136,17 +148,17 @@ class IdlePodsHandler(PodEventHandler):
 
     async def init(self, raw_pods: list[dict[str, Any]]) -> None:
         for pod in raw_pods:
-            if _is_idle_pod(pod) and _is_pod_running(pod):
+            if _is_pod_idle(pod) and _is_pod_bound_to_node(pod):
                 self._add_pod(pod)
 
     async def handle(self, event: PodWatchEvent) -> None:
         pod = event.raw_pod
-        if not _is_idle_pod(pod) or _is_pod_pending(pod):
+        if not _is_pod_idle(pod) or _is_pod_not_scheduled(pod):
             return
         if event.type == WatchEventType.DELETED:
             self._notify_pod_terminating(pod)  # in case it's force delete
             self._remove_pod(pod)
-        elif _is_pod_running(pod):
+        elif _is_pod_bound_to_node(pod):
             self._add_pod(pod)
             if _is_pod_terminating(pod):
                 self._notify_pod_terminating(pod)
@@ -217,30 +229,26 @@ class KubeOrchestratorPreemption:
         pod_watcher.subscribe(self._idle_pods_handler)
 
     async def preempt_idle_pods(self, job_pods: list[PodDescriptor]) -> None:
-        job_pods = job_pods.copy()
+        nodes_to_preempt: set[Node] = set()
+        pods_to_preempt: list[PodDescriptor] = []
+        for job_pod in self._get_jobs_for_preemption(job_pods):
+            # Handle one node per api poller iteration.
+            # Exclude nodes preempted in previous steps
+            # to avoid node resources tracking complexity.
+            node, pods = self._get_pods_to_preempt(job_pod, nodes_to_preempt)
+            if node:
+                nodes_to_preempt.add(node)
+                pods_to_preempt.extend(pods)
 
-        # Try to preempt pods for small jobs first
-        self._sort_pods_for_preemption(job_pods)
+        await self._delete_idle_pods(pods_to_preempt)
 
-        pod_names_to_preempt: list[str] = []
-        for job_pod in job_pods:
-            # Exclude pods from previous steps in following iterations
-            pod_names_to_preempt.extend(
-                self._get_pod_names_to_preempt(job_pod, pod_names_to_preempt)
-            )
-
-        await self._delete_idle_pods(pod_names_to_preempt)
-
-    def _get_pod_names_to_preempt(
-        self, job_pod: PodDescriptor, exclude: list[str]
-    ) -> list[str]:
-        if self._node_resources_handler.is_pod_running(job_pod.name):
-            return []
-        for node in self._node_resources_handler.get_nodes():
+    def _get_pods_to_preempt(
+        self, job_pod: PodDescriptor, exclude_nodes: Iterable[Node]
+    ) -> tuple[Node | None, list[PodDescriptor]]:
+        for node in self._get_nodes_for_preemption(exclude_nodes):
             if not job_pod.can_be_scheduled(node.labels):
                 continue
             idle_pods = self._idle_pods_handler.get_pods(node.name)
-            idle_pods = [p for p in idle_pods if p.name not in exclude]
             if not idle_pods:
                 logger.debug("Node %r doesn't have idle pods", node.name)
                 continue
@@ -251,28 +259,45 @@ class KubeOrchestratorPreemption:
                 resources, idle_pods
             )
             if pods_to_preempt:
-                pod_names = [p.name for p in pods_to_preempt]
                 logger.info(
                     "Pods to preempt on node %r for pod %r: %r",
                     node.name,
                     job_pod.name,
-                    pod_names,
+                    [p.name for p in pods_to_preempt],
                 )
-                return pod_names
+                return node, pods_to_preempt
             logger.debug(
                 "Not enough resources on node %r for pod %r", node.name, job_pod.name
             )
-        return []
+        return None, []
 
-    @classmethod
-    def _sort_pods_for_preemption(self, pods: list[PodDescriptor]) -> None:
+    def _get_jobs_for_preemption(
+        self, job_pods: Iterable[PodDescriptor]
+    ) -> list[PodDescriptor]:
         def _create_key(pod: PodDescriptor) -> tuple[int, int, float]:
             r = pod.resources
             if not r:
                 return (0, 0, 0.0)
             return (r.gpu or 0, r.memory, r.cpu)
 
-        pods.sort(key=lambda n: _create_key(n))
+        pods = []
+        for pod in job_pods:
+            if not self._node_resources_handler.is_pod_bound_to_node(pod.name):
+                pods.append(pod)
+        pods.sort(key=_create_key)  # Try to preempt pods for small jobs first
+        return pods
+
+    def _get_nodes_for_preemption(self, exclude: Iterable[Node]) -> list[Node]:
+        def _create_key(node: Node) -> tuple[int, int, float]:
+            r = self._node_resources_handler.get_node_free_resources(node.name)
+            if not r:
+                return (0, 0, 0.0)
+            return (r.gpu or 0, r.memory, r.cpu)
+
+        nodes = self._node_resources_handler.get_nodes()
+        nodes = [n for n in nodes if n not in exclude]
+        nodes.sort(key=_create_key)  # Try to preempt nodes with less resources first
+        return nodes
 
     def _get_resources_to_preempt(
         self, pod: PodDescriptor, node: Node
@@ -287,8 +312,16 @@ class KubeOrchestratorPreemption:
             gpu=max(0, (required.gpu or 0) - free.gpu),
         )
 
-    async def _delete_idle_pods(self, pod_names: Iterable[str]) -> None:
-        tasks = [asyncio.create_task(self._delete_idle_pod(name)) for name in pod_names]
+    def _get_idle_pods(
+        self, node_name: str, exclude: Iterable[PodDescriptor]
+    ) -> list[PodDescriptor]:
+        exclude_names = {pod.name for pod in exclude}
+        idle_pods = self._idle_pods_handler.get_pods(node_name)
+        idle_pods = [p for p in idle_pods if p.name not in exclude_names]
+        return idle_pods
+
+    async def _delete_idle_pods(self, pods: Iterable[PodDescriptor]) -> None:
+        tasks = [asyncio.create_task(self._delete_idle_pod(pod.name)) for pod in pods]
         if tasks:
             await asyncio.wait(tasks)
 
