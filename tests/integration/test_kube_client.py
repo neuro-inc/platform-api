@@ -369,6 +369,16 @@ class TestKubeClient:
 
         assert pod_status.container_status.exit_code != 0
 
+    async def test_get_node(self, kube_client: KubeClient, kube_node: str) -> None:
+        node = await kube_client.get_node(kube_node)
+
+        assert node
+
+    async def test_get_nodes(self, kube_client: KubeClient, kube_node: str) -> None:
+        nodes = await kube_client.get_nodes()
+
+        assert kube_node in [n.name for n in nodes]
+
     async def test_get_raw_pods(
         self, kube_client: KubeClient, create_pod: PodFactory
     ) -> None:

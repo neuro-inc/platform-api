@@ -7,6 +7,7 @@ import pytest
 from platform_api.orchestrator.kube_client import (
     KubePreemption,
     KubernetesEvent,
+    Node,
     NodeAffinity,
     NodePreferredSchedulingTerm,
     NodeResources,
@@ -399,6 +400,9 @@ class TestNodeResources:
         assert resources == NodeResources(cpu=1, memory=4096)
 
     def test_from_primitive_memory(self) -> None:
+        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4294967296"})
+        assert resources == NodeResources(cpu=1, memory=4096)
+
         resources = NodeResources.from_primitive({"cpu": "1", "memory": "4194304Ki"})
         assert resources == NodeResources(cpu=1, memory=4096)
 
@@ -429,6 +433,35 @@ class TestNodeResources:
     def test_invalid_gpu(self) -> None:
         with pytest.raises(ValueError, match="Invalid gpu"):
             NodeResources(cpu=1, memory=4096, gpu=-1)
+
+
+class TestNode:
+    def test_from_primitive(self) -> None:
+        node = Node.from_primitive(
+            {
+                "metadata": {"name": "minikube"},
+                "status": {"allocatable": {"cpu": "1", "memory": "4096Mi"}},
+            }
+        )
+
+        assert node == Node(
+            name="minikube",
+            allocatable_resources=NodeResources(cpu=1, memory=4096),
+        )
+
+    def test_from_primitive_with_labels(self) -> None:
+        node = Node.from_primitive(
+            {
+                "metadata": {"name": "minikube", "labels": {"job": "true"}},
+                "status": {"allocatable": {"cpu": "1", "memory": "4096Mi"}},
+            }
+        )
+
+        assert node == Node(
+            name="minikube",
+            labels={"job": "true"},
+            allocatable_resources=NodeResources(cpu=1, memory=4096),
+        )
 
 
 PodFactory = Callable[..., PodDescriptor]

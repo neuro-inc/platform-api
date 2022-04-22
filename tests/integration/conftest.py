@@ -440,19 +440,6 @@ class MyKubeClient(KubeClient):
         except asyncio.TimeoutError:
             pytest.fail("Pod still exists")
 
-    async def wait_pod_is_terminated(
-        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
-    ) -> None:
-        try:
-            async with timeout(timeout_s):
-                while True:
-                    pod_status = await self.get_pod_status(pod_name)
-                    if pod_status.container_status.is_terminated:
-                        return
-                    await asyncio.sleep(interval_s)
-        except asyncio.TimeoutError:
-            pytest.fail("Pod has not terminated yet")
-
     async def create_triggered_scaleup_event(self, pod_id: str) -> None:
         url = f"{self._namespace_url}/events"
         now = datetime.now(timezone.utc)
@@ -663,8 +650,9 @@ async def delete_node_later(
 
 
 @pytest.fixture
-def kube_node() -> str:
-    return "minikube"
+async def kube_node(kube_client: KubeClient) -> str:
+    nodes = await kube_client.get_nodes()
+    return nodes[0].name
 
 
 @pytest.fixture
