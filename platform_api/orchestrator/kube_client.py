@@ -1372,13 +1372,13 @@ class KubernetesEvent:
 class PodStatus:
     def __init__(self, payload: dict[str, Any]) -> None:
         self._payload = payload
-        self._container_status = self._init_container_status()
+        self._container_statuses = self._create_container_status()
 
-    def _init_container_status(self) -> ContainerStatus:
-        payload = None
-        if "containerStatuses" in self._payload:
-            payload = self._payload["containerStatuses"][0]
-        return ContainerStatus(payload=payload)
+    def _create_container_status(self) -> Sequence[ContainerStatus]:
+        container_statuses = self._payload.get("containerStatuses")
+        if not container_statuses:
+            return (ContainerStatus(),)
+        return tuple(ContainerStatus(p) for p in container_statuses)
 
     @property
     def phase(self) -> str:
@@ -1401,6 +1401,14 @@ class PodStatus:
         return False
 
     @property
+    def is_waiting(self) -> bool:
+        return any(status.is_waiting for status in self._container_statuses)
+
+    @property
+    def is_terminated(self) -> bool:
+        return all(status.is_terminated for status in self._container_statuses)
+
+    @property
     def reason(self) -> Optional[str]:
         """
 
@@ -1408,23 +1416,19 @@ class PodStatus:
         the "Evicted" reason.
         https://github.com/kubernetes/kubernetes/blob/a3ccea9d8743f2ff82e41b6c2af6dc2c41dc7b10/pkg/kubelet/eviction/eviction_manager.go#L543-L566
         If a node the pod scheduled on fails, node lifecycle controller sets
-        the "NodeList" reason.
+        the "NodeLost" reason.
         https://github.com/kubernetes/kubernetes/blob/a3ccea9d8743f2ff82e41b6c2af6dc2c41dc7b10/pkg/controller/util/node/controller_utils.go#L109-L126
         """
         # the pod status reason has a greater priority
-        return self._payload.get("reason") or self._container_status.reason
-
-    @property
-    def message(self) -> Optional[str]:
-        return self._payload.get("message") or self._container_status.message
+        return self._payload.get("reason") or self.container_status.reason
 
     @property
     def container_status(self) -> ContainerStatus:
-        return self._container_status
+        return self._container_statuses[0]
 
     @property
-    def is_container_creating(self) -> bool:
-        return self._container_status.is_creating
+    def container_statuses(self) -> Sequence[ContainerStatus]:
+        return self._container_statuses
 
     @property
     def is_node_lost(self) -> bool:
@@ -2232,7 +2236,7 @@ class KubeClient:
         async with timeout(timeout_s):
             while True:
                 pod_status = await self.get_pod_status(pod_name)
-                if not pod_status.container_status.is_waiting:
+                if not pod_status.is_waiting:
                     return
                 await asyncio.sleep(interval_s)
 
@@ -2247,7 +2251,7 @@ class KubeClient:
         async with timeout(timeout_s):
             while True:
                 pod_status = await self.get_pod_status(pod_name)
-                if pod_status.container_status.is_terminated:
+                if pod_status.is_terminated:
                     return
                 await asyncio.sleep(interval_s)
 

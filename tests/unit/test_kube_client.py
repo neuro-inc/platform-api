@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 import pytest
 
@@ -313,6 +313,50 @@ class TestPodStatus:
 
         status = PodStatus.from_primitive(payload)
         assert not status.is_scheduled
+
+    def test_is_waiting_true(self) -> None:
+        payload: dict[str, Any] = {
+            "containerStatuses": [
+                {"state": {"waiting": {}}},
+                {"state": {"running": {}}},
+            ]
+        }
+
+        status = PodStatus.from_primitive(payload)
+        assert status.is_waiting
+
+    def test_is_waiting_false(self) -> None:
+        payload: dict[str, Any] = {
+            "containerStatuses": [
+                {"state": {"running": {}}},
+                {"state": {"running": {}}},
+            ]
+        }
+
+        status = PodStatus.from_primitive(payload)
+        assert status.is_waiting is False
+
+    def test_is_terminated_true(self) -> None:
+        payload: dict[str, Any] = {
+            "containerStatuses": [
+                {"state": {"terminated": {}}},
+                {"state": {"terminated": {}}},
+            ]
+        }
+
+        status = PodStatus.from_primitive(payload)
+        assert status.is_terminated
+
+    def test_is_terminated_false(self) -> None:
+        payload: dict[str, Any] = {
+            "containerStatuses": [
+                {"state": {"running": {}}},
+                {"state": {"terminated": {}}},
+            ]
+        }
+
+        status = PodStatus.from_primitive(payload)
+        assert status.is_terminated is False
 
 
 class TestPodCondition:
