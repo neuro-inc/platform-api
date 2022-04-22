@@ -650,8 +650,9 @@ async def delete_node_later(
 
 
 @pytest.fixture
-def kube_node() -> str:
-    return "minikube"
+async def kube_node(kube_client: KubeClient) -> str:
+    nodes = await kube_client.get_nodes()
+    return nodes[0].name
 
 
 @pytest.fixture
