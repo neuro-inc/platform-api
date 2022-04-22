@@ -164,11 +164,24 @@ class TestNodeResourcesHandler:
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(cpu=0.9, memory=896)
 
-    async def test_handle_modified_succeeded(
+    async def test_handle_added_multiple(
         self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
     ) -> None:
         await handler.handle(PodWatchEvent.create_added(pod_factory(name="job")))
+        await handler.handle(PodWatchEvent.create_added(pod_factory(name="job")))
+
+        assert len(handler.get_nodes()) == 1
+
+        assert handler.is_pod_bound_to_node("job") is True
+
+        resources = handler.get_node_free_resources("minikube")
+        assert resources == NodeResources(cpu=0.9, memory=896)
+
+    async def test_handle_modified_succeeded(
+        self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
+    ) -> None:
         await handler.handle(PodWatchEvent.create_added(pod_factory(gpu=0)))
+        await handler.handle(PodWatchEvent.create_added(pod_factory(name="job")))
         await handler.handle(
             PodWatchEvent.create_modified(pod_factory(name="job", phase="Succeeded"))
         )
@@ -183,8 +196,23 @@ class TestNodeResourcesHandler:
     async def test_handle_deleted(
         self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
     ) -> None:
-        await handler.handle(PodWatchEvent.create_added(pod_factory(name="job")))
         await handler.handle(PodWatchEvent.create_added(pod_factory(gpu=0)))
+        await handler.handle(PodWatchEvent.create_added(pod_factory(name="job")))
+        await handler.handle(PodWatchEvent.create_deleted(pod_factory(name="job")))
+
+        assert len(handler.get_nodes()) == 1
+
+        assert handler.is_pod_bound_to_node("job") is False
+
+        resources = handler.get_node_free_resources("minikube")
+        assert resources == NodeResources(cpu=0.9, memory=896, gpu=1)
+
+    async def test_handle_deleted_multiple_times(
+        self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
+    ) -> None:
+        await handler.handle(PodWatchEvent.create_added(pod_factory(gpu=0)))
+        await handler.handle(PodWatchEvent.create_added(pod_factory(name="job")))
+        await handler.handle(PodWatchEvent.create_deleted(pod_factory(name="job")))
         await handler.handle(PodWatchEvent.create_deleted(pod_factory(name="job")))
 
         assert len(handler.get_nodes()) == 1

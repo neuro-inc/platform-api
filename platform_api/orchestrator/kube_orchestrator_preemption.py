@@ -103,8 +103,10 @@ class NodeResourcesHandler(PodEventHandler):
             self._remove_pod(pod)
 
     async def _add_pod(self, pod: _Pod) -> None:
-        node_name: str = pod.node_name  # type: ignore
         pod_name = pod.name
+        if pod_name in self._pod_names:
+            return
+        node_name: str = pod.node_name  # type: ignore
         # Ignore error in case node was removed/lost but pod was not yet removed
         with suppress(NotFoundException):
             if node_name not in self._nodes:
@@ -115,8 +117,10 @@ class NodeResourcesHandler(PodEventHandler):
             self._node_free_resources[node_name] -= pod.resource_requests
 
     def _remove_pod(self, pod: _Pod) -> None:
-        node_name: str = pod.node_name  # type: ignore
         pod_name = pod.name
+        if pod_name not in self._pod_names:
+            return
+        node_name: str = pod.node_name  # type: ignore
         node = self._nodes.get(node_name)
         if node:
             node_free_resources = self._node_free_resources[node_name]
@@ -171,8 +175,8 @@ class IdlePodsHandler(PodEventHandler):
             self._remove_pod(pod)
 
     def _add_pod(self, pod: _Pod) -> None:
-        node_name: str = pod.node_name  # type: ignore
         pod_name = pod.name
+        node_name: str = pod.node_name  # type: ignore
         # there is an issue in k8s, elements in items don't have kind and version
         pod["kind"] = "Pod"
         self._pod_names.add(pod_name)
