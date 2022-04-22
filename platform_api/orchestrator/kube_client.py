@@ -1550,8 +1550,8 @@ class NodeTaint:
 
 @dataclass(frozen=True)
 class NodeResources:
-    cpu: float
-    memory: int
+    cpu: float = 0
+    memory: int = 0
     gpu: int = 0
 
     gpu_key: ClassVar[str] = "nvidia.com/gpu"
@@ -1581,6 +1581,10 @@ class NodeResources:
 
     @classmethod
     def _parse_memory(cls, memory: str) -> int:
+        try:
+            return int(memory) // 1024 // 1024
+        except ValueError:
+            pass
         if memory.endswith("Ki"):
             return int(memory[:-2]) // 1024
         elif memory.endswith("Mi"):
@@ -1598,6 +1602,33 @@ class NodeResources:
             cpu=self.cpu + other.cpu,
             memory=self.memory + other.memory,
             gpu=self.gpu + other.gpu,
+        )
+
+    def __sub__(self, other: "NodeResources") -> "NodeResources":
+        return self.__class__(
+            cpu=self.cpu - other.cpu,
+            memory=self.memory - other.memory,
+            gpu=self.gpu - other.gpu,
+        )
+
+    def __str__(self) -> str:
+        return f"cpu={self.cpu_mcores}m, memory={self.memory}Mi, gpu={self.gpu}"
+
+
+@dataclass(frozen=True)
+class Node:
+    name: str
+    allocatable_resources: NodeResources = field(compare=False)
+    labels: dict[str, str] = field(default_factory=dict, compare=False)
+
+    @classmethod
+    def from_primitive(cls, payload: dict[str, Any]) -> "Node":
+        metadata = payload["metadata"]
+        status = payload["status"]
+        return cls(
+            name=metadata["name"],
+            labels=metadata.get("labels", {}),
+            allocatable_resources=NodeResources.from_primitive(status["allocatable"]),
         )
 
 
@@ -1648,6 +1679,18 @@ class PodWatchEvent:
     @classmethod
     def is_error(cls, payload: dict[str, Any]) -> bool:
         return WatchEventType.ERROR == payload["type"].upper()
+
+    @classmethod
+    def create_added(cls, pod: PodDescriptor) -> "PodWatchEvent":
+        return cls(type=WatchEventType.ADDED, pod=pod)
+
+    @classmethod
+    def create_modified(cls, pod: PodDescriptor) -> "PodWatchEvent":
+        return cls(type=WatchEventType.MODIFIED, pod=pod)
+
+    @classmethod
+    def create_deleted(cls, pod: PodDescriptor) -> "PodWatchEvent":
+        return cls(type=WatchEventType.DELETED, pod=pod)
 
 
 class KubeClient:
@@ -1923,6 +1966,21 @@ class KubeClient:
     async def delete_node(self, name: str) -> None:
         url = self._generate_node_url(name)
         await self._delete_resource_url(url)
+
+    async def get_nodes(self) -> Sequence[Node]:
+        payload = await self._request(method="GET", url=self._nodes_url)
+        self._check_status_payload(payload)
+        assert payload["kind"] == "NodeList"
+        pods = []
+        for item in payload["items"]:
+            pods.append(Node.from_primitive(item))
+        return pods
+
+    async def get_node(self, name: str) -> Node:
+        payload = await self._request(method="GET", url=self._generate_node_url(name))
+        self._check_status_payload(payload)
+        assert payload["kind"] == "Node"
+        return Node.from_primitive(payload)
 
     async def create_pod(self, descriptor: PodDescriptor) -> PodDescriptor:
         payload = await self._request(
@@ -2375,7 +2433,6 @@ class PodWatcher:
         self._kube_client = kube_client
         self._handlers: list[PodEventHandler] = []
         self._watcher_task: Optional[asyncio.Task[None]] = None
-        self._ready_event = asyncio.Event()
 
     def subscribe(self, handler: PodEventHandler) -> None:
         if self._watcher_task is not None:
@@ -2390,8 +2447,8 @@ class PodWatcher:
         await self.stop()
 
     async def start(self) -> None:
-        self._watcher_task = asyncio.create_task(self._run())
-        await self._ready_event.wait()
+        resource_version = await self._init()
+        self._watcher_task = asyncio.create_task(self._run(resource_version))
 
     async def stop(self) -> None:
         if self._watcher_task is None:
@@ -2400,8 +2457,7 @@ class PodWatcher:
         with suppress(asyncio.CancelledError):
             await self._watcher_task
 
-    async def _run(self) -> None:
-        resource_version = await self._init()
+    async def _run(self, resource_version: str) -> None:
         while True:
             try:
                 async for event in self._kube_client.watch_pods(
@@ -2418,8 +2474,8 @@ class PodWatcher:
                 logger.warning("Watch pods client error", exc_info=exc)
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                logger.warning("Unhandled error")
+            except Exception as exc:
+                logger.warning("Unhandled error", exc_info=exc)
 
     async def _init(self) -> str:
         result = await self._kube_client.get_raw_pods(all_namespaces=True)
@@ -2440,12 +2496,7 @@ class KubePreemption:
         pods_to_preempt: list[PodDescriptor] = []
         while pods and cls._has_resources(resources):
             logger.debug("Pods left: %d", len(pods))
-            logger.debug(
-                "Resources left: cpu=%dm, memory=%dMi, gpu=%d",
-                resources.cpu_mcores,
-                resources.memory,
-                resources.gpu or 0,
-            )
+            logger.debug("Resources left: %s", resources)
             #  max distance for a single resource is 1, 3 resources total
             best_dist = 4.0
             best_resources: Resources = pods[0].resources  # type: ignore
