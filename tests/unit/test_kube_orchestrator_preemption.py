@@ -21,36 +21,61 @@ from platform_api.orchestrator.kube_orchestrator_preemption import (
     NodeResourcesHandler,
 )
 
-RawPodFactory = Callable[..., dict[str, Any]]
+PodFactory = Callable[..., dict[str, Any]]
 
 
 @pytest.fixture
-async def pod_factory() -> RawPodFactory:
+def create_pod() -> PodFactory:
     def _create(
         name: str | None = None,
-        node_name: str | None = "minikube",
+        *,
         cpu: float = 0.1,
         memory: int = 128,
         gpu: int = 1,
-        phase: str = "Running",
+        labels: dict[str, str] | None = None,
+        node_name: str | None = "minikube",
+        is_scheduled: bool = False,
+        is_running: bool = False,
         is_terminating: bool = False,
-        is_idle: bool = False,
+        is_terminated: bool = False,
     ) -> dict[str, Any]:
-        labels = {}
-        if is_idle:
-            labels["platform.neuromation.io/idle"] = "true"
         pod = PodDescriptor(
-            name=name or f"pod-{uuid.uuid4()}",
-            labels=labels,
+            name or f"pod-{uuid.uuid4()}",
+            labels=labels or {},
             image="gcr.io/google_containers/pause:3.1",
             resources=Resources(cpu=cpu, memory=memory, gpu=gpu),
         )
         raw_pod = pod.to_primitive()
         raw_pod["metadata"]["creationTimestamp"] = datetime.now().isoformat()
-        raw_pod["status"] = {"phase": phase}
+        raw_pod["status"] = {"phase": "Pending"}
+        scheduled_condition = {
+            "lastProbeTime": None,
+            "lastTransitionTime": datetime.now().isoformat(),
+            "status": "True",
+            "type": "PodScheduled",
+        }
+        if is_scheduled:
+            raw_pod["status"] = {
+                "phase": "Pending",
+                "containerStatuses": [{"state": {"waiting": {}}}],
+                "conditions": [scheduled_condition],
+            }
+            raw_pod["spec"]["nodeName"] = node_name
+        if is_running or is_terminating:
+            raw_pod["status"] = {
+                "phase": "Running",
+                "containerStatuses": [{"state": {"running": {}}}],
+                "conditions": [scheduled_condition],
+            }
+            raw_pod["spec"]["nodeName"] = node_name
         if is_terminating:
             raw_pod["metadata"]["deletionTimestamp"] = datetime.now().isoformat()
-        if node_name:
+        if is_terminated:
+            raw_pod["status"] = {
+                "phase": "Succeeded",
+                "containerStatuses": [{"state": {"terminated": {}}}],
+                "conditions": [scheduled_condition],
+            }
             raw_pod["spec"]["nodeName"] = node_name
         return raw_pod
 
@@ -63,11 +88,11 @@ class TestNodeResourcesHandler:
         kube_client = mock.AsyncMock(spec=KubeClient)
         kube_client.get_node.side_effect = [
             Node(
-                name="minikube1",
+                "minikube1",
                 allocatable_resources=NodeResources(cpu=1, memory=1024, gpu=1),
             ),
             Node(
-                name="minikube2",
+                "minikube2",
                 allocatable_resources=NodeResources(cpu=2, memory=4096, gpu=2),
             ),
         ]
@@ -78,168 +103,171 @@ class TestNodeResourcesHandler:
         return NodeResourcesHandler(kube_client)
 
     async def test_init_pending(
-        self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
+        self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        pods = [pod_factory(name="job", phase="Pending", node_name=None)]
+        pods = [create_pod("job")]
         await handler.init(pods)
 
         assert len(handler.get_nodes()) == 0
-
         assert handler.is_pod_bound_to_node("job") is False
-
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources()
 
     async def test_init_scheduled(
-        self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
+        self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        pods = [pod_factory(name="job", phase="Pending")]
+        pods = [create_pod("job", is_scheduled=True)]
         await handler.init(pods)
 
         assert len(handler.get_nodes()) == 1
-
         assert handler.is_pod_bound_to_node("job") is True
-
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(0.9, 896)
 
     async def test_init_running(
-        self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
+        self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
         pods = [
-            pod_factory(name="job", node_name="minikube1", gpu=0),
-            pod_factory(node_name="minikube1"),
-            pod_factory(node_name="minikube2"),
+            create_pod("job", gpu=0, is_running=True),
+            create_pod(is_running=True),
+            create_pod(node_name="minikube2", is_running=True),
         ]
         await handler.init(pods)
 
         assert len(handler.get_nodes()) == 2
-
         assert handler.is_pod_bound_to_node("job") is True
-
-        resources = handler.get_node_free_resources("minikube1")
+        resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(cpu=0.8, memory=768)
-
         resources = handler.get_node_free_resources("minikube2")
         assert resources == NodeResources(cpu=1.9, memory=3968, gpu=1)
 
     async def test_init_succeeded(
-        self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
+        self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        pods = [pod_factory(name="job", phase="Succeeded")]
+        pods = [create_pod("job", is_terminated=True)]
         await handler.init(pods)
 
         assert len(handler.get_nodes()) == 0
-
         assert handler.is_pod_bound_to_node("job") is False
-
         resources = handler.get_node_free_resources("minikube1")
         assert resources == NodeResources()
 
     async def test_handle_added_pending(
-        self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
+        self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        await handler.handle(
-            PodWatchEvent.create_added(
-                pod_factory(name="job", phase="Pending", node_name=None)
-            )
-        )
+        await handler.handle(PodWatchEvent.create_added(create_pod("job")))
 
         assert len(handler.get_nodes()) == 0
-
         assert handler.is_pod_bound_to_node("job") is False
-
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources()
 
     async def test_handle_added_running(
-        self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
+        self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        await handler.handle(PodWatchEvent.create_added(pod_factory(name="job")))
+        await handler.handle(
+            PodWatchEvent.create_added(create_pod("job", is_running=True))
+        )
 
         assert len(handler.get_nodes()) == 1
-
         assert handler.is_pod_bound_to_node("job") is True
-
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(cpu=0.9, memory=896)
 
-    async def test_handle_added_multiple(
-        self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
+    async def test_handle_added_running_multiple_times(
+        self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        await handler.handle(PodWatchEvent.create_added(pod_factory(name="job")))
-        await handler.handle(PodWatchEvent.create_added(pod_factory(name="job")))
+        await handler.handle(
+            PodWatchEvent.create_added(create_pod("job", is_running=True))
+        )
+        await handler.handle(
+            PodWatchEvent.create_added(create_pod("job", is_running=True))
+        )
 
         assert len(handler.get_nodes()) == 1
-
         assert handler.is_pod_bound_to_node("job") is True
-
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(cpu=0.9, memory=896)
 
     async def test_handle_modified_succeeded(
-        self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
+        self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        await handler.handle(PodWatchEvent.create_added(pod_factory(gpu=0)))
-        await handler.handle(PodWatchEvent.create_added(pod_factory(name="job")))
         await handler.handle(
-            PodWatchEvent.create_modified(pod_factory(name="job", phase="Succeeded"))
+            PodWatchEvent.create_added(create_pod(gpu=0, is_running=True))
+        )
+        await handler.handle(
+            PodWatchEvent.create_added(create_pod("job", is_running=True))
+        )
+        await handler.handle(
+            PodWatchEvent.create_modified(create_pod("job", is_terminated=True))
         )
 
         assert len(handler.get_nodes()) == 1
-
         assert handler.is_pod_bound_to_node("job") is False
-
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(cpu=0.9, memory=896, gpu=1)
 
     async def test_handle_deleted(
-        self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
+        self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        await handler.handle(PodWatchEvent.create_added(pod_factory(gpu=0)))
-        await handler.handle(PodWatchEvent.create_added(pod_factory(name="job")))
-        await handler.handle(PodWatchEvent.create_deleted(pod_factory(name="job")))
+        await handler.handle(
+            PodWatchEvent.create_added(create_pod(gpu=0, is_running=True))
+        )
+        await handler.handle(
+            PodWatchEvent.create_added(create_pod("job", is_running=True))
+        )
+        await handler.handle(
+            PodWatchEvent.create_deleted(create_pod("job", is_terminated=True))
+        )
 
         assert len(handler.get_nodes()) == 1
-
         assert handler.is_pod_bound_to_node("job") is False
-
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(cpu=0.9, memory=896, gpu=1)
 
     async def test_handle_deleted_multiple_times(
-        self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
+        self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        await handler.handle(PodWatchEvent.create_added(pod_factory(gpu=0)))
-        await handler.handle(PodWatchEvent.create_added(pod_factory(name="job")))
-        await handler.handle(PodWatchEvent.create_deleted(pod_factory(name="job")))
-        await handler.handle(PodWatchEvent.create_deleted(pod_factory(name="job")))
+        await handler.handle(
+            PodWatchEvent.create_added(create_pod(gpu=0, is_running=True))
+        )
+        await handler.handle(
+            PodWatchEvent.create_added(create_pod("job", is_running=True))
+        )
+        await handler.handle(
+            PodWatchEvent.create_deleted(create_pod("job", is_terminated=True))
+        )
+        await handler.handle(
+            PodWatchEvent.create_deleted(create_pod("job", is_terminated=True))
+        )
 
         assert len(handler.get_nodes()) == 1
-
         assert handler.is_pod_bound_to_node("job") is False
-
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(cpu=0.9, memory=896, gpu=1)
 
     async def test_handle_deleted_last(
-        self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
+        self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        await handler.handle(PodWatchEvent.create_added(pod_factory(name="job")))
-        await handler.handle(PodWatchEvent.create_deleted(pod_factory(name="job")))
+        await handler.handle(
+            PodWatchEvent.create_added(create_pod("job", is_running=True))
+        )
+        await handler.handle(
+            PodWatchEvent.create_deleted(create_pod("job", is_terminated=True))
+        )
 
         assert len(handler.get_nodes()) == 0
-
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources()
 
     async def test_handle_deleted_not_existing(
-        self, handler: NodeResourcesHandler, pod_factory: RawPodFactory
+        self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        await handler.handle(PodWatchEvent.create_deleted(pod_factory()))
+        await handler.handle(
+            PodWatchEvent.create_deleted(create_pod(is_terminated=True))
+        )
 
         assert len(handler.get_nodes()) == 0
-
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources()
 
@@ -252,114 +280,110 @@ class TestNodeResourcesHandler:
 
 class TestIdlePodsHandler:
     @pytest.fixture
+    def create_pod(self, create_pod: PodFactory) -> PodFactory:
+        def _create(*args: Any, is_idle: bool = True, **kwargs: Any) -> dict[str, Any]:
+            if is_idle:
+                kwargs["labels"] = {"platform.neuromation.io/idle": "true"}
+            return create_pod(*args, **kwargs)
+
+        return _create
+
+    @pytest.fixture
     def handler(self) -> IdlePodsHandler:
         return IdlePodsHandler()
 
     async def test_init_non_idle(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        pods = [pod_factory()]
+        pods = [create_pod(is_idle=False)]
         await handler.init(pods)
 
         idle_pods = handler.get_pods("minikube")
-
         assert len(idle_pods) == 0
 
     async def test_init_pending(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        pods = [pod_factory(is_idle=True, phase="Pending", node_name=None)]
+        pods = [create_pod()]
         await handler.init(pods)
 
         idle_pods = handler.get_pods("minikube")
-
         assert len(idle_pods) == 0
 
     async def test_init_scheduled(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        pods = [pod_factory(is_idle=True, phase="Pending")]
+        pods = [create_pod(is_scheduled=True)]
         await handler.init(pods)
 
         idle_pods = handler.get_pods("minikube")
-
         assert len(idle_pods) == 1
 
     async def test_init_running(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        pods = [pod_factory(is_idle=True)]
+        pods = [create_pod(is_running=True)]
         await handler.init(pods)
 
         idle_pods = handler.get_pods("minikube")
-
         assert len(idle_pods) == 1
 
     async def test_init_succeeded(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        pods = [pod_factory(is_idle=True, phase="Succeeded")]
+        pods = [create_pod(is_terminated=True)]
         await handler.init(pods)
 
         idle_pods = handler.get_pods("minikube")
-
         assert len(idle_pods) == 0
 
     async def test_handle_added_non_idle(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        event = PodWatchEvent.create_added(pod_factory())
+        event = PodWatchEvent.create_added(create_pod(is_idle=False, is_running=True))
         await handler.handle(event)
 
         pods = handler.get_pods("minikube")
-
         assert len(pods) == 0
 
     async def test_handle_added_pending(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        event = PodWatchEvent.create_added(
-            pod_factory(is_idle=True, phase="Pending", node_name=None)
-        )
+        event = PodWatchEvent.create_added(create_pod())
         await handler.handle(event)
 
         pods = handler.get_pods("minikube")
-
         assert len(pods) == 0
 
     async def test_handle_added_scheduled(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        event = PodWatchEvent.create_added(pod_factory(is_idle=True, phase="Pending"))
+        event = PodWatchEvent.create_added(create_pod(is_scheduled=True))
         await handler.handle(event)
 
         pods = handler.get_pods("minikube")
-
         assert len(pods) == 1
 
     async def test_handle_added_running(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        event = PodWatchEvent.create_added(pod_factory(is_idle=True))
+        event = PodWatchEvent.create_added(create_pod(is_running=True))
         await handler.handle(event)
 
         pods = handler.get_pods("minikube")
-
         assert len(pods) == 1
 
     async def test_handle_modified_succeeded(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        event = PodWatchEvent.create_added(
-            pod_factory(name="idle-job", is_idle=True),
-        )
+        event = PodWatchEvent.create_added(create_pod("idle-job", is_running=True))
         await handler.handle(event)
 
         pods = handler.get_pods("minikube")
         assert len(pods) == 1
 
         event = PodWatchEvent.create_modified(
-            pod_factory(name="idle-job", is_idle=True, phase="Succeeded"),
+            create_pod("idle-job", is_terminated=True)
         )
         await handler.handle(event)
 
@@ -367,30 +391,24 @@ class TestIdlePodsHandler:
         assert len(pods) == 0
 
     async def test_handle_deleted(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        event = PodWatchEvent.create_added(
-            pod_factory(name="idle-job", is_idle=True),
-        )
+        event = PodWatchEvent.create_added(create_pod("idle-job", is_running=True))
         await handler.handle(event)
 
         pods = handler.get_pods("minikube")
         assert len(pods) == 1
 
-        event = PodWatchEvent.create_deleted(
-            pod_factory(name="idle-job", is_idle=True),
-        )
+        event = PodWatchEvent.create_deleted(create_pod("idle-job", is_terminated=True))
         await handler.handle(event)
 
         pods = handler.get_pods("minikube")
         assert len(pods) == 0
 
     async def test_handle_deleted_not_existing(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        event = PodWatchEvent.create_deleted(
-            pod_factory(is_idle=True),
-        )
+        event = PodWatchEvent.create_deleted(create_pod(is_terminated=True))
         await handler.handle(event)
 
         pods = handler.get_pods("minikube")
@@ -402,17 +420,15 @@ class TestIdlePodsHandler:
         assert len(idle_pods) == 0
 
     async def test_wait_for_pod_terminating(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        event = PodWatchEvent.create_added(
-            pod_factory(name="idle-job", is_idle=True),
-        )
+        event = PodWatchEvent.create_added(create_pod("idle-job", is_running=True))
         await handler.handle(event)
 
         async def _handle_modified() -> None:
             await asyncio.sleep(0.1)
             event = PodWatchEvent.create_modified(
-                pod_factory(name="idle-job", is_idle=True, is_terminating=True),
+                create_pod("idle-job", is_terminating=True)
             )
             await handler.handle(event)
 
@@ -421,17 +437,15 @@ class TestIdlePodsHandler:
         await handler.wait_for_pod_terminating("idle-job", 1)
 
     async def test_wait_for_pod_terminating_deleted(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        event = PodWatchEvent.create_added(
-            pod_factory(name="idle-job", is_idle=True),
-        )
+        event = PodWatchEvent.create_added(create_pod("idle-job", is_running=True))
         await handler.handle(event)
 
         async def _handle_deleted() -> None:
             await asyncio.sleep(0.1)
             event = PodWatchEvent.create_deleted(
-                pod_factory(name="idle-job", is_idle=True, is_terminating=True),
+                create_pod("idle-job", is_terminating=True)
             )
             await handler.handle(event)
 
@@ -440,26 +454,22 @@ class TestIdlePodsHandler:
         await handler.wait_for_pod_terminating("idle-job", 1)
 
     async def test_wait_for_pod_terminating_already(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        event = PodWatchEvent.create_added(
-            pod_factory(name="idle-job", is_idle=True),
-        )
+        event = PodWatchEvent.create_added(create_pod("idle-job", is_running=True))
         await handler.handle(event)
 
         event = PodWatchEvent.create_modified(
-            pod_factory(name="idle-job", is_idle=True, is_terminating=True),
+            create_pod("idle-job", is_terminating=True)
         )
         await handler.handle(event)
 
         await handler.wait_for_pod_terminating("idle-job", 1)
 
     async def test_wait_for_pod_terminating_fail(
-        self, handler: IdlePodsHandler, pod_factory: RawPodFactory
+        self, handler: IdlePodsHandler, create_pod: PodFactory
     ) -> None:
-        event = PodWatchEvent.create_added(
-            pod_factory(name="idle-job", is_idle=True),
-        )
+        event = PodWatchEvent.create_added(create_pod("idle-job", is_running=True))
         await handler.handle(event)
 
         with pytest.raises(asyncio.TimeoutError):
