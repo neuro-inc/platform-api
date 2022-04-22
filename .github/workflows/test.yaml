@@ -1,0 +1,148 @@
+on:
+  workflow_call: {}
+
+jobs:
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout commit
+      uses: actions/checkout@v3
+    - name: Install python
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.9"
+    - name: Cache packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: py-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('setup.cfg') }}
+    - name: Install dependencies
+      run: make setup
+    - name: Lint
+      run: |
+        echo "::add-matcher::.github/actionlint-matcher.json"
+        make lint
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout commit
+      uses: actions/checkout@v3
+    - name: Install python
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.9"
+    - name: Cache packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: py-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('setup.cfg') }}
+    - name: Install dependencies
+      run: make setup
+    - name: Run unit tests
+      run: make test_unit
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: .coverage-unit.xml
+        flags: unit
+        name: unit
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    env:
+      MINIKUBE_DRIVER: none
+    steps:
+    - name: Checkout commit
+      uses: actions/checkout@v3
+    - name: Install python
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.9"
+    - name: Cache packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: py-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('setup.cfg') }}
+    - name: Install dependencies
+      run: make setup
+    - name: Login to ghcr.io
+      uses: docker/login-action@v1.14.1
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    - name: Install NFS
+      run: |
+        sudo apt-get -q update
+        sudo apt-get -q install -y nfs-common
+        sudo modprobe nfs
+        sudo modprobe nfsd
+    - name: Install Conntrack
+      run: sudo apt-get -q install -y conntrack
+    - name: Start minikube
+      run: |
+        make install_k8s
+        make start_k8s
+    - name: Pull test images
+      run: make docker_pull_test_images
+    - name: Run integration tests
+      run: make test_integration
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: .coverage-integration.xml
+        flags: integration
+        name: integration
+
+  image-upload:
+    name: Upload image artifact
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout commit
+      uses: actions/checkout@v3
+    - name: Install python
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.9"
+    - name: Cache packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: py-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('setup.cfg') }}
+    - name: Install dependencies
+      run: make setup
+    - name: Login to ghcr.io
+      uses: docker/login-action@v1.14.1
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    - name: Build Docker image
+      run: make docker_build
+    - name: Upload image artifact
+      uses: neuro-inc/upload-image-action@v21.9.2
+      with:
+        image: platformapi
+        token: ${{ github.token }}
+
+  check:
+    name: Check
+    needs:
+    - lint
+    - unit
+    - integration
+    - image-upload
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Decide whether the needed jobs succeeded or failed
+      uses: re-actors/alls-green@release/v1
+      with:
+        jobs: ${{ toJSON(needs) }}

@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches: [master]
-    tags: [v*.*, v*.*.*]
+    tags: ['v*']
   pull_request:
     branches: [master]
   pull_request_target:
@@ -13,94 +13,43 @@ on:
 
 jobs:
   test:
-    name: Run tests
-    runs-on: ubuntu-latest
     if: |
-      (github.event_name != 'pull_request_target' && github.actor != 'dependabot[bot]') ||
-      (github.event_name == 'pull_request_target' && github.actor == 'dependabot[bot]')
-    env:
-      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-      AWS_REGION: us-east-1
+      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+      (github.event_name != 'pull_request_target' && !endsWith(github.actor, '[bot]')) ||
+      (github.event_name == 'pull_request_target' && endsWith(github.actor, '[bot]'))
+    name: All checks are passed
+    uses: ./.github/workflows/test.yaml
+
+  approve:
+    name: Approve bot PR
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request_target'
+    needs: test
     steps:
-    - name: Checkout commit
+    - name: Checkout
       uses: actions/checkout@v3
+    - id: generate_token
+      uses: tibdex/github-app-token@v1
       with:
-        ref: ${{ github.event.pull_request.head.sha }}
-        fetch-depth: 0
-    - name: Install python
-      uses: actions/setup-python@v3
+        app_id: ${{ secrets.BOT_APP_ID }}
+        private_key: ${{ secrets.BOT_PRIVATE_KEY }}
+    - name: metadata
+      id: metadata
+      if: github.actor == 'dependabot[bot]'
+      uses: dependabot/fetch-metadata@v1.3.0
       with:
-        python-version: 3.9.9
-    - name: Cache packages
-      uses: actions/cache@v3.0.2
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-py-3.9.9-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('setup.cfg') }}
-    - name: Install dependencies
-      run: make setup
-    - name: Lint
-      run: |
-        echo "::add-matcher::.github/actionlint-matcher.json"
-        make lint
-    - name: Run unit tests
-      run: make test_unit
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: .coverage-unit.xml
-        flags: unit
-        name: codecov-unit
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-    - name: Login to ghcr.io
-      uses: docker/login-action@v1.14.1
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ github.token }}
-    - name: Install NFS
-      run: |
-        sudo apt-get -q update
-        sudo apt-get -q install -y nfs-common
-        sudo modprobe nfs
-        sudo modprobe nfsd
-    - name: Install Conntrack
-      run: sudo apt-get -q install -y conntrack
-    - name: Start minikube
-      run: |
-        make install_k8s
-        make start_k8s
-    - name: Pull test images
-      run: make docker_pull_test_images
-    - name: Run integration tests
-      run: make test_integration
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: .coverage-integration.xml
-        flags: integration
-        name: codecov-integration
-    - name: Build Docker image
-      run: make docker_build
+        github-token: ${{ steps.generate_token.outputs.token }}
+    - name: Enable auto-merge for bot PRs
+      run: gh pr merge --auto --squash --delete-branch "$PR_URL"
       env:
-        IMAGE_TAG: latest
-    - name: Upload image artifact
-      uses: neuro-inc/upload-image-action@v21.9.2
-      with:
-        image: platformapi
-        token: ${{ secrets.GITHUB_TOKEN }}
+        PR_URL: ${{ github.event.pull_request.html_url }}
+        GH_TOKEN: ${{ steps.generate_token.outputs.token }}
 
   release:
     name: Create release
     needs: test
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    uses: neuro-inc/reuse/.github/workflows/release-service.yaml@v0.0.24
+    uses: neuro-inc/reuse/.github/workflows/release-service.yaml@v0.0.27
     with:
       image: platformapi
       helm_charts: platform-api platform-api-poller
@@ -108,7 +57,7 @@ jobs:
   deploy_dev:
     name: Deploy on dev
     needs: release
-    uses: neuro-inc/reuse/.github/workflows/deploy-dev.yaml@v0.0.24
+    uses: neuro-inc/reuse/.github/workflows/deploy-dev.yaml@v0.0.27
     with:
       helm_charts: platform-api platform-api-poller
       version: ${{ needs.release.outputs.version }}
