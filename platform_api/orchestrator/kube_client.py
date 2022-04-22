@@ -1681,15 +1681,15 @@ class PodWatchEvent:
         return WatchEventType.ERROR == payload["type"].upper()
 
     @classmethod
-    def create_added(cls, pod: PodDescriptor) -> "PodWatchEvent":
+    def create_added(cls, pod: dict[str, Any]) -> "PodWatchEvent":
         return cls(type=WatchEventType.ADDED, raw_pod=pod)
 
     @classmethod
-    def create_modified(cls, pod: PodDescriptor) -> "PodWatchEvent":
+    def create_modified(cls, pod: dict[str, Any]) -> "PodWatchEvent":
         return cls(type=WatchEventType.MODIFIED, raw_pod=pod)
 
     @classmethod
-    def create_deleted(cls, pod: PodDescriptor) -> "PodWatchEvent":
+    def create_deleted(cls, pod: dict[str, Any]) -> "PodWatchEvent":
         return cls(type=WatchEventType.DELETED, raw_pod=pod)
 
 
