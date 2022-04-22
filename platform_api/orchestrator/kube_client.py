@@ -1682,15 +1682,15 @@ class PodWatchEvent:
 
     @classmethod
     def create_added(cls, pod: PodDescriptor) -> "PodWatchEvent":
-        return cls(type=WatchEventType.ADDED, pod=pod)
+        return cls(type=WatchEventType.ADDED, raw_pod=pod)
 
     @classmethod
     def create_modified(cls, pod: PodDescriptor) -> "PodWatchEvent":
-        return cls(type=WatchEventType.MODIFIED, pod=pod)
+        return cls(type=WatchEventType.MODIFIED, raw_pod=pod)
 
     @classmethod
     def create_deleted(cls, pod: PodDescriptor) -> "PodWatchEvent":
-        return cls(type=WatchEventType.DELETED, pod=pod)
+        return cls(type=WatchEventType.DELETED, raw_pod=pod)
 
 
 class KubeClient:
@@ -2481,7 +2481,6 @@ class PodWatcher:
         result = await self._kube_client.get_raw_pods(all_namespaces=True)
         for handler in self._handlers:
             await handler.init(result.raw_pods)
-        self._ready_event.set()
         return result.resource_version
 
 
