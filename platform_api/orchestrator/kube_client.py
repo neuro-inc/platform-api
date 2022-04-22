@@ -1681,16 +1681,16 @@ class PodWatchEvent:
         return WatchEventType.ERROR == payload["type"].upper()
 
     @classmethod
-    def create_added(cls, pod: dict[str, Any]) -> "PodWatchEvent":
-        return cls(type=WatchEventType.ADDED, raw_pod=pod)
+    def create_added(cls, raw_pod: dict[str, Any]) -> "PodWatchEvent":
+        return cls(type=WatchEventType.ADDED, raw_pod=raw_pod)
 
     @classmethod
-    def create_modified(cls, pod: dict[str, Any]) -> "PodWatchEvent":
-        return cls(type=WatchEventType.MODIFIED, raw_pod=pod)
+    def create_modified(cls, raw_pod: dict[str, Any]) -> "PodWatchEvent":
+        return cls(type=WatchEventType.MODIFIED, raw_pod=raw_pod)
 
     @classmethod
-    def create_deleted(cls, pod: dict[str, Any]) -> "PodWatchEvent":
-        return cls(type=WatchEventType.DELETED, raw_pod=pod)
+    def create_deleted(cls, raw_pod: dict[str, Any]) -> "PodWatchEvent":
+        return cls(type=WatchEventType.DELETED, raw_pod=raw_pod)
 
 
 class KubeClient:
