@@ -309,14 +309,6 @@ class KubeOrchestratorPreemption:
             gpu=max(0, (required.gpu or 0) - free.gpu),
         )
 
-    def _get_idle_pods(
-        self, node_name: str, exclude: Iterable[PodDescriptor]
-    ) -> list[PodDescriptor]:
-        exclude_names = {pod.name for pod in exclude}
-        idle_pods = self._idle_pods_handler.get_pods(node_name)
-        idle_pods = [p for p in idle_pods if p.name not in exclude_names]
-        return idle_pods
-
     async def _delete_idle_pods(self, pods: Iterable[PodDescriptor]) -> None:
         tasks = [asyncio.create_task(self._delete_idle_pod(pod.name)) for pod in pods]
         if tasks:
