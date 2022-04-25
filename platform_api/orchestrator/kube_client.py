@@ -2472,11 +2472,11 @@ class PodWatcher:
     async def stop(self) -> None:
         if self._watcher_task is None:
             return
-        self._handlers.clear()
         self._watcher_task.cancel()
         with suppress(asyncio.CancelledError):
             await self._watcher_task
         self._watcher_task = None
+        self._handlers.clear()
 
     async def _run(self, resource_version: str) -> None:
         while True:
