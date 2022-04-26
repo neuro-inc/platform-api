@@ -140,10 +140,7 @@ class NodeResourcesHandler(PodEventHandler):
 
 class IdlePodsHandler(PodEventHandler):
     def __init__(self) -> None:
-        self._pod_names: set[str] = set()
         self._pods: dict[str, dict[str, PodDescriptor]] = defaultdict(dict)
-        self._terminating_pod_names: set[str] = set()
-        self._terminating_pod_events: dict[str, list[asyncio.Event]] = defaultdict(list)
 
     async def init(self, raw_pods: list[dict[str, Any]]) -> None:
         for raw_pod in raw_pods:
@@ -156,19 +153,15 @@ class IdlePodsHandler(PodEventHandler):
         if not pod.is_idle or not pod.status.is_scheduled:
             return
         if event.type == WatchEventType.DELETED or pod.status.is_terminated:
-            self._notify_pod_terminating(pod)  # in case it's force delete
             self._remove_pod(pod)
         else:
             self._add_pod(pod)
-            if pod.is_terminating:
-                self._notify_pod_terminating(pod)
 
     def _add_pod(self, pod: _Pod) -> None:
         pod_name = pod.name
         node_name = pod.node_name
         # there is an issue in k8s, elements in items don't have kind and version
         pod.payload["kind"] = "Pod"
-        self._pod_names.add(pod_name)
         self._pods[node_name][pod_name] = PodDescriptor.from_primitive(pod.payload)
 
     def _remove_pod(self, pod: _Pod) -> None:
@@ -178,41 +171,10 @@ class IdlePodsHandler(PodEventHandler):
         pods.pop(pod_name, None)
         if not pods:
             self._pods.pop(node_name, None)
-        with suppress(KeyError):
-            self._pod_names.remove(pod_name)
-        with suppress(KeyError):
-            self._terminating_pod_names.remove(pod_name)
-
-    def _notify_pod_terminating(self, pod: _Pod) -> None:
-        pod_name = pod.name
-        self._terminating_pod_names.add(pod_name)
-        events = self._terminating_pod_events.get(pod_name)
-        if events is None:
-            return
-        for event in events:
-            event.set()
-        self._terminating_pod_events.pop(pod_name, None)
 
     def get_pods(self, node_name: str) -> list[PodDescriptor]:
         pods = self._pods.get(node_name)
         return list(pods.values()) if pods else []
-
-    async def wait_for_pod_terminating(
-        self, pod_name: str, timeous_s: float = 60
-    ) -> None:
-        if pod_name not in self._pod_names or pod_name in self._terminating_pod_names:
-            return
-        event = asyncio.Event()
-        events = self._terminating_pod_events[pod_name]
-        events.append(event)
-        try:
-            await asyncio.wait_for(event.wait(), timeous_s)
-        except asyncio.TimeoutError:
-            if len(events) > 1:
-                events.remove(event)
-            else:
-                self._terminating_pod_events.pop(pod_name, None)
-            raise
 
 
 class KubeOrchestratorPreemption:
@@ -237,7 +199,7 @@ class KubeOrchestratorPreemption:
             if node:
                 nodes_to_preempt.add(node)
                 pods_to_preempt.extend(pods)
-        await self._delete_idle_pods(pods_to_preempt)
+        await self._delete_pods(pods_to_preempt)
 
     def _get_pods_to_preempt(
         self, job_pod: PodDescriptor, exclude_nodes: Iterable[Node]
@@ -309,11 +271,9 @@ class KubeOrchestratorPreemption:
             gpu=max(0, (required.gpu or 0) - free.gpu),
         )
 
-    async def _delete_idle_pods(self, pods: Iterable[PodDescriptor]) -> None:
-        tasks = [asyncio.create_task(self._delete_idle_pod(pod.name)) for pod in pods]
+    async def _delete_pods(self, pods: Iterable[PodDescriptor]) -> None:
+        tasks = [
+            asyncio.create_task(self._kube_client.delete_pod(pod.name)) for pod in pods
+        ]
         if tasks:
             await asyncio.wait(tasks)
-
-    async def _delete_idle_pod(self, pod_name: str) -> None:
-        await self._kube_client.delete_pod(pod_name)
-        await self._idle_pods_handler.wait_for_pod_terminating(pod_name, timeous_s=15)

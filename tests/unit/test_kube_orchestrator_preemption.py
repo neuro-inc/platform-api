@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import uuid
 from datetime import datetime
 from typing import Any, Callable
@@ -418,59 +417,3 @@ class TestIdlePodsHandler:
         idle_pods = handler.get_pods("minikube")
 
         assert len(idle_pods) == 0
-
-    async def test_wait_for_pod_terminating(
-        self, handler: IdlePodsHandler, create_pod: PodFactory
-    ) -> None:
-        event = PodWatchEvent.create_added(create_pod("idle-job", is_running=True))
-        await handler.handle(event)
-
-        async def _handle_modified() -> None:
-            await asyncio.sleep(0.1)
-            event = PodWatchEvent.create_modified(
-                create_pod("idle-job", is_terminating=True)
-            )
-            await handler.handle(event)
-
-        asyncio.create_task(_handle_modified())
-
-        await handler.wait_for_pod_terminating("idle-job", 1)
-
-    async def test_wait_for_pod_terminating_deleted(
-        self, handler: IdlePodsHandler, create_pod: PodFactory
-    ) -> None:
-        event = PodWatchEvent.create_added(create_pod("idle-job", is_running=True))
-        await handler.handle(event)
-
-        async def _handle_deleted() -> None:
-            await asyncio.sleep(0.1)
-            event = PodWatchEvent.create_deleted(
-                create_pod("idle-job", is_terminating=True)
-            )
-            await handler.handle(event)
-
-        asyncio.create_task(_handle_deleted())
-
-        await handler.wait_for_pod_terminating("idle-job", 1)
-
-    async def test_wait_for_pod_terminating_already(
-        self, handler: IdlePodsHandler, create_pod: PodFactory
-    ) -> None:
-        event = PodWatchEvent.create_added(create_pod("idle-job", is_running=True))
-        await handler.handle(event)
-
-        event = PodWatchEvent.create_modified(
-            create_pod("idle-job", is_terminating=True)
-        )
-        await handler.handle(event)
-
-        await handler.wait_for_pod_terminating("idle-job", 1)
-
-    async def test_wait_for_pod_terminating_fail(
-        self, handler: IdlePodsHandler, create_pod: PodFactory
-    ) -> None:
-        event = PodWatchEvent.create_added(create_pod("idle-job", is_running=True))
-        await handler.handle(event)
-
-        with pytest.raises(asyncio.TimeoutError):
-            await handler.wait_for_pod_terminating("idle-job", 1)
