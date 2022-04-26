@@ -2922,7 +2922,7 @@ class TestRestartPolicy:
         )
 
 
-class TestIdleJobsPreemption:
+class TestJobsPreemption:
     @pytest.fixture(autouse=True)
     async def start_pod_watcher(
         self, kube_client: MyKubeClient, kube_orchestrator: KubeOrchestrator
@@ -2959,17 +2959,11 @@ class TestIdleJobsPreemption:
         kube_orchestrator: KubeOrchestrator,
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> Callable[..., Awaitable[Job]]:
-        name_prefix = f"job-{uuid.uuid4()}"
-        name_index = 1
-
         async def _create(
             cpu: float = 0.1,
             memory: int = 64,
             wait: bool = False,
         ) -> Job:
-            nonlocal name_index
-            name = f"{name_prefix}-{name_index}"
-            name_index += 1
             container = Container(
                 image="gcr.io/google_containers/pause:3.1",
                 resources=ContainerResources(cpu=cpu, memory_mb=memory),
@@ -2977,7 +2971,6 @@ class TestIdleJobsPreemption:
             job = MyJob(
                 orchestrator=kube_orchestrator,
                 record=JobRecord.create(
-                    name=name,
                     owner="owner1",
                     request=JobRequest.create(container),
                     cluster_name="test-cluster",
@@ -2986,7 +2979,7 @@ class TestIdleJobsPreemption:
             await kube_orchestrator.start_job(job)
             await delete_job_later(job)
             if wait:
-                await kube_client.wait_pod_is_running(name, timeout_s=10)
+                await kube_client.wait_pod_is_running(job.id, timeout_s=10)
             return job
 
         return _create
@@ -2998,7 +2991,25 @@ class TestIdleJobsPreemption:
         node = await kube_client.get_node(kube_node)
         return node.allocatable_resources
 
-    async def test_preempt(
+    async def test_preempt_jobs(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        job_factory: Callable[..., Awaitable[Job]],
+        node_resources: NodeResources,
+    ) -> None:
+        preemptible_job = await job_factory(cpu=node_resources.cpu / 2, wait=True)
+        # Node should have less than cpu / 2 left
+        job = await job_factory(cpu=node_resources.cpu / 2)
+        await kube_orchestrator.preempt_jobs(
+            jobs_to_schedule=[job], preemptible_jobs=[preemptible_job]
+        )
+
+        await kube_client.wait_pod_is_deleted(
+            preemptible_job.id, timeout_s=60, interval_s=0.1
+        )
+
+    async def test_preempt_idle_jobs(
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,

@@ -108,7 +108,7 @@ class TestNodeResourcesHandler:
         await handler.init(pods)
 
         assert len(handler.get_nodes()) == 0
-        assert handler.is_pod_bound_to_node("job") is False
+        assert handler.get_pod_node_name("job") is None
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources()
 
@@ -119,7 +119,7 @@ class TestNodeResourcesHandler:
         await handler.init(pods)
 
         assert len(handler.get_nodes()) == 1
-        assert handler.is_pod_bound_to_node("job") is True
+        assert handler.get_pod_node_name("job") == "minikube"
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(0.9, 896)
 
@@ -134,7 +134,7 @@ class TestNodeResourcesHandler:
         await handler.init(pods)
 
         assert len(handler.get_nodes()) == 2
-        assert handler.is_pod_bound_to_node("job") is True
+        assert handler.get_pod_node_name("job") == "minikube"
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(cpu=0.8, memory=768)
         resources = handler.get_node_free_resources("minikube2")
@@ -147,7 +147,7 @@ class TestNodeResourcesHandler:
         await handler.init(pods)
 
         assert len(handler.get_nodes()) == 0
-        assert handler.is_pod_bound_to_node("job") is False
+        assert handler.get_pod_node_name("job") is None
         resources = handler.get_node_free_resources("minikube1")
         assert resources == NodeResources()
 
@@ -157,7 +157,7 @@ class TestNodeResourcesHandler:
         await handler.handle(PodWatchEvent.create_added(create_pod("job")))
 
         assert len(handler.get_nodes()) == 0
-        assert handler.is_pod_bound_to_node("job") is False
+        assert handler.get_pod_node_name("job") is None
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources()
 
@@ -169,7 +169,7 @@ class TestNodeResourcesHandler:
         )
 
         assert len(handler.get_nodes()) == 1
-        assert handler.is_pod_bound_to_node("job") is True
+        assert handler.get_pod_node_name("job") == "minikube"
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(cpu=0.9, memory=896)
 
@@ -184,7 +184,7 @@ class TestNodeResourcesHandler:
         )
 
         assert len(handler.get_nodes()) == 1
-        assert handler.is_pod_bound_to_node("job") is True
+        assert handler.get_pod_node_name("job") == "minikube"
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(cpu=0.9, memory=896)
 
@@ -202,7 +202,7 @@ class TestNodeResourcesHandler:
         )
 
         assert len(handler.get_nodes()) == 1
-        assert handler.is_pod_bound_to_node("job") is False
+        assert handler.get_pod_node_name("job") is None
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(cpu=0.9, memory=896, gpu=1)
 
@@ -220,7 +220,7 @@ class TestNodeResourcesHandler:
         )
 
         assert len(handler.get_nodes()) == 1
-        assert handler.is_pod_bound_to_node("job") is False
+        assert handler.get_pod_node_name("job") is None
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(cpu=0.9, memory=896, gpu=1)
 
@@ -241,7 +241,7 @@ class TestNodeResourcesHandler:
         )
 
         assert len(handler.get_nodes()) == 1
-        assert handler.is_pod_bound_to_node("job") is False
+        assert handler.get_pod_node_name("job") is None
         resources = handler.get_node_free_resources("minikube")
         assert resources == NodeResources(cpu=0.9, memory=896, gpu=1)
 
