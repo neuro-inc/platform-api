@@ -80,6 +80,7 @@ class MockOrchestrator(Orchestrator):
         )
         self._successfully_deleted_jobs: list[Job] = []
         self._idle_jobs: list[Job] = []
+        self._preempted_jobs: list[Job] = []
 
     @property
     def config(self) -> OrchestratorConfig:
@@ -168,7 +169,16 @@ class MockOrchestrator(Orchestrator):
     def get_idle_jobs(self) -> list[Job]:
         return list(self._idle_jobs)
 
-    async def preempt_idle_jobs(self, jobs: list[Job]) -> None:
+    def get_preempted_jobs(self) -> list[Job]:
+        return list(self._preempted_jobs)
+
+    async def preempt_jobs(
+        self, jobs_to_schedule: list[Job], preemptible_jobs: list[Job]
+    ) -> None:
+        self._preempted_jobs.extend(preemptible_jobs)
+
+    async def preempt_idle_jobs(self, jobs_to_schedule: list[Job]) -> None:
+        self._preempted_jobs.extend(self._idle_jobs)
         self._idle_jobs.clear()
 
 

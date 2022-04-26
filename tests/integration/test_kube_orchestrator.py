@@ -2961,8 +2961,9 @@ class TestJobsPreemption:
     ) -> Callable[..., Awaitable[Job]]:
         async def _create(
             cpu: float = 0.1,
-            memory: int = 64,
+            memory: int = 128,
             wait: bool = False,
+            wait_timeout_s: float = 60,
         ) -> Job:
             container = Container(
                 image="gcr.io/google_containers/pause:3.1",
@@ -2979,7 +2980,7 @@ class TestJobsPreemption:
             await kube_orchestrator.start_job(job)
             await delete_job_later(job)
             if wait:
-                await kube_client.wait_pod_is_running(job.id, timeout_s=10)
+                await kube_client.wait_pod_is_running(job.id, timeout_s=wait_timeout_s)
             return job
 
         return _create
