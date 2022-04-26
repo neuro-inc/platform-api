@@ -863,6 +863,6 @@ class KubeOrchestrator(Orchestrator):
         await self._client.delete_all_services(labels=labels)
         await self._client.delete_all_network_policies(labels=labels)
 
-    async def preempt_idle_jobs(self, jobs: list[Job]) -> None:
-        job_pods = [self._create_pod_descriptor(job) for job in jobs]
+    async def preempt_idle_jobs(self, jobs_to_schedule: list[Job]) -> None:
+        job_pods = [self._create_pod_descriptor(job) for job in jobs_to_schedule]
         await self._preemption.preempt_idle_pods(job_pods)

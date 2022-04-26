@@ -188,50 +188,21 @@ class KubeOrchestratorPreemption:
         pod_watcher.subscribe(self._node_resources_handler)
         pod_watcher.subscribe(self._idle_pods_handler)
 
-    async def preempt_idle_pods(self, job_pods: list[PodDescriptor]) -> None:
+    async def preempt_idle_pods(self, pods_to_schedule: list[PodDescriptor]) -> None:
         nodes_to_preempt: set[Node] = set()
         pods_to_preempt: list[PodDescriptor] = []
-        for job_pod in self._get_jobs_for_preemption(job_pods):
+        for pod in self._get_pods_to_schedule(pods_to_schedule):
             # Handle one node per api poller iteration.
             # Exclude nodes preempted in previous steps
             # to avoid node resources tracking complexity.
-            node, pods = self._get_pods_to_preempt(job_pod, nodes_to_preempt)
+            node, pods = self._get_pods_to_preempt(pod, nodes_to_preempt)
             if node:
                 nodes_to_preempt.add(node)
                 pods_to_preempt.extend(pods)
         await self._delete_pods(pods_to_preempt)
 
-    def _get_pods_to_preempt(
-        self, job_pod: PodDescriptor, exclude_nodes: Iterable[Node]
-    ) -> tuple[Node | None, list[PodDescriptor]]:
-        for node in self._get_nodes_for_preemption(exclude_nodes):
-            if not job_pod.can_be_scheduled(node.labels):
-                continue
-            idle_pods = self._idle_pods_handler.get_pods(node.name)
-            if not idle_pods:
-                logger.debug("Node %r doesn't have idle pods", node.name)
-                continue
-            logger.debug("Find pods to preempt on node %r", node.name)
-            resources = self._get_resources_to_preempt(job_pod, node)
-            logger.debug("Resources to preempt on node %r: %s", node.name, resources)
-            pods_to_preempt = self._kube_preemption.get_pods_to_preempt(
-                resources, idle_pods
-            )
-            if pods_to_preempt:
-                logger.info(
-                    "Pods to preempt on node %r for pod %r: %r",
-                    node.name,
-                    job_pod.name,
-                    [p.name for p in pods_to_preempt],
-                )
-                return node, pods_to_preempt
-            logger.debug(
-                "Not enough resources on node %r for pod %r", node.name, job_pod.name
-            )
-        return None, []
-
-    def _get_jobs_for_preemption(
-        self, job_pods: Iterable[PodDescriptor]
+    def _get_pods_to_schedule(
+        self, pods: Iterable[PodDescriptor]
     ) -> list[PodDescriptor]:
         def _create_key(pod: PodDescriptor) -> tuple[int, int, float]:
             r = pod.resources
@@ -240,13 +211,44 @@ class KubeOrchestratorPreemption:
             return (r.gpu or 0, r.memory, r.cpu)
 
         pods = []
-        for pod in job_pods:
+        for pod in pods:
             if not self._node_resources_handler.is_pod_bound_to_node(pod.name):
                 pods.append(pod)
-        pods.sort(key=_create_key)  # Try to preempt pods for small jobs first
+        pods.sort(key=_create_key)  # Try to preempt pods for small pods first
         return pods
 
-    def _get_nodes_for_preemption(self, exclude: Iterable[Node]) -> list[Node]:
+    def _get_pods_to_preempt(
+        self, pod_to_schedule: PodDescriptor, exclude_nodes: Iterable[Node]
+    ) -> tuple[Node | None, list[PodDescriptor]]:
+        for node in self._get_nodes_to_preempt(exclude_nodes):
+            if not pod_to_schedule.can_be_scheduled(node.labels):
+                continue
+            idle_pods = self._idle_pods_handler.get_pods(node.name)
+            if not idle_pods:
+                logger.debug("Node %r doesn't have idle pods", node.name)
+                continue
+            logger.debug("Find pods to preempt on node %r", node.name)
+            resources = self._get_resources_to_preempt(pod_to_schedule, node)
+            logger.debug("Resources to preempt on node %r: %s", node.name, resources)
+            pods_to_preempt = self._kube_preemption.get_pods_to_preempt(
+                resources, idle_pods
+            )
+            if pods_to_preempt:
+                logger.info(
+                    "Pods to preempt on node %r for pod %r: %r",
+                    node.name,
+                    pod_to_schedule.name,
+                    [p.name for p in pods_to_preempt],
+                )
+                return node, pods_to_preempt
+            logger.debug(
+                "Not enough resources on node %r for pod %r",
+                node.name,
+                pod_to_schedule.name,
+            )
+        return None, []
+
+    def _get_nodes_to_preempt(self, exclude: Iterable[Node]) -> list[Node]:
         def _create_key(node: Node) -> tuple[int, int, float]:
             r = self._node_resources_handler.get_node_free_resources(node.name)
             if not r:
@@ -259,10 +261,10 @@ class KubeOrchestratorPreemption:
         return nodes
 
     def _get_resources_to_preempt(
-        self, pod: PodDescriptor, node: Node
+        self, pod_to_schedule: PodDescriptor, node: Node
     ) -> NodeResources:
         free = self._node_resources_handler.get_node_free_resources(node.name)
-        required = pod.resources
+        required = pod_to_schedule.resources
         if not required:
             return NodeResources()
         return NodeResources(

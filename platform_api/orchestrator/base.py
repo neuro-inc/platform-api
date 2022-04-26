@@ -18,7 +18,7 @@ class Orchestrator(ABC):
         pass
 
     @abstractmethod
-    async def preempt_idle_jobs(self, jobs: list[Job]) -> None:
+    async def preempt_idle_jobs(self, jobs_to_schedule: list[Job]) -> None:
         pass
 
     @abstractmethod
