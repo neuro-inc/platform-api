@@ -46,10 +46,6 @@ class _Pod:
         return bool(self.labels.get("platform.neuromation.io/idle"))
 
     @property
-    def is_terminating(self) -> bool:
-        return bool(self._payload["metadata"].get("deletionTimestamp"))
-
-    @property
     def status(self) -> PodStatus:
         return self._status
 
