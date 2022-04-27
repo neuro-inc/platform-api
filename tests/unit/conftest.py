@@ -174,12 +174,14 @@ class MockOrchestrator(Orchestrator):
 
     async def preempt_jobs(
         self, jobs_to_schedule: list[Job], preemptible_jobs: list[Job]
-    ) -> None:
+    ) -> list[Job]:
         self._preempted_jobs.extend(preemptible_jobs)
+        return preemptible_jobs
 
-    async def preempt_idle_jobs(self, jobs_to_schedule: list[Job]) -> None:
+    async def preempt_idle_jobs(self, jobs_to_schedule: list[Job]) -> bool:
         self._preempted_jobs.extend(self._idle_jobs)
         self._idle_jobs.clear()
+        return True
 
 
 class MockJobsStorage(InMemoryJobsStorage):
