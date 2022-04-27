@@ -1353,16 +1353,43 @@ class KubernetesEvent:
         return self._payload.get("message", None)
 
     @property
-    def first_timestamp(self) -> datetime:
-        return iso8601.parse_date(self._payload["firstTimestamp"])
+    def first_timestamp(self) -> Optional[datetime]:
+        event_time = self._payload.get("firstTimestamp") or self._payload.get(
+            "deprecatedFirstTimestamp"
+        )
+        if event_time:
+            return iso8601.parse_date(event_time)
+        return None
 
     @property
-    def last_timestamp(self) -> datetime:
-        # Fallback to firstTimestamp if lastTimestamp is None.
-        ts = self._payload["lastTimestamp"]
-        if not ts:
-            return self.first_timestamp
-        return iso8601.parse_date(ts)
+    def event_time(self) -> Optional[datetime]:
+        event_time = self._payload.get("eventTime")
+        if event_time:
+            return iso8601.parse_date(event_time)
+        return None
+
+    @property
+    def last_timestamp(self) -> Optional[datetime]:
+        event_time = self._payload.get("lastTimestamp") or self._payload.get(
+            "deprecatedLastTimestamp"
+        )
+        if event_time:
+            return iso8601.parse_date(event_time)
+        return None
+
+    @property
+    def creation_timestamp(self) -> datetime:
+        event_time = self._payload["metadata"]["lastTimestamp"]
+        return iso8601.parse_date(event_time)
+
+    @property
+    def timestamp(self) -> datetime:
+        return (
+            self.last_timestamp
+            or self.event_time
+            or self.first_timestamp
+            or self.creation_timestamp
+        )
 
     @property
     def count(self) -> int:
