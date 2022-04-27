@@ -35,7 +35,6 @@ def create_pod() -> PodFactory:
         node_name: str | None = "minikube",
         is_scheduled: bool = False,
         is_running: bool = False,
-        is_terminating: bool = False,
         is_terminated: bool = False,
     ) -> dict[str, Any]:
         pod = PodDescriptor(
@@ -60,15 +59,13 @@ def create_pod() -> PodFactory:
                 "conditions": [scheduled_condition],
             }
             raw_pod["spec"]["nodeName"] = node_name
-        if is_running or is_terminating:
+        if is_running:
             raw_pod["status"] = {
                 "phase": "Running",
                 "containerStatuses": [{"state": {"running": {}}}],
                 "conditions": [scheduled_condition],
             }
             raw_pod["spec"]["nodeName"] = node_name
-        if is_terminating:
-            raw_pod["metadata"]["deletionTimestamp"] = datetime.now().isoformat()
         if is_terminated:
             raw_pod["status"] = {
                 "phase": "Succeeded",
