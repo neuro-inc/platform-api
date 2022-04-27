@@ -3002,9 +3002,11 @@ class TestJobsPreemption:
         preemptible_job = await job_factory(cpu=node_resources.cpu / 2, wait=True)
         # Node should have less than cpu / 2 left
         job = await job_factory(cpu=node_resources.cpu / 2)
-        await kube_orchestrator.preempt_jobs(
+        preempted_jobs = await kube_orchestrator.preempt_jobs(
             jobs_to_schedule=[job], preemptible_jobs=[preemptible_job]
         )
+
+        assert preempted_jobs == [preemptible_job]
 
         await kube_client.wait_pod_is_deleted(
             preemptible_job.id, timeout_s=60, interval_s=0.1
@@ -3021,7 +3023,9 @@ class TestJobsPreemption:
         idle_pod = await pod_factory(cpu=node_resources.cpu / 2)
         # Node should have less than cpu / 2 left
         job = await job_factory(cpu=node_resources.cpu / 2)
-        await kube_orchestrator.preempt_idle_jobs([job])
+        preempted = await kube_orchestrator.preempt_idle_jobs([job])
+
+        assert preempted is True
 
         await kube_client.wait_pod_is_deleted(
             idle_pod.name, timeout_s=60, interval_s=0.1
@@ -3044,7 +3048,9 @@ class TestJobsPreemption:
             await pod_factory(cpu=node_resources.cpu / 2)
             # Node should have less than cpu / 2 left
             job = await job_factory(cpu=node_resources.cpu / 2)
-            await kube_orchestrator.preempt_idle_jobs([job])
+            preempted = await kube_orchestrator.preempt_idle_jobs([job])
+
+            assert preempted is False
 
             job_pod = await kube_client.get_pod(job.id)
             assert job_pod.status and job_pod.status.is_phase_pending
@@ -3060,8 +3066,9 @@ class TestJobsPreemption:
         await pod_factory(cpu=node_resources.cpu / 2)
         # Node should have less than cpu / 2 left
         job = await job_factory(cpu=node_resources.cpu)
+        preempted = await kube_orchestrator.preempt_idle_jobs([job])
 
-        await kube_orchestrator.preempt_idle_jobs([job])
+        assert preempted is False
 
         job_pod = await kube_client.get_pod(job.id)
         assert job_pod.status and job_pod.status.is_phase_pending
@@ -3075,8 +3082,9 @@ class TestJobsPreemption:
     ) -> None:
         job = await job_factory()
         idle_pod = await pod_factory()
+        preempted = await kube_orchestrator.preempt_idle_jobs([job])
 
-        await kube_orchestrator.preempt_idle_jobs([job])
+        assert preempted is False
 
         idle_pod = await kube_client.get_pod(idle_pod.name)
         assert idle_pod.status and idle_pod.status.is_scheduled
@@ -3090,8 +3098,9 @@ class TestJobsPreemption:
     ) -> None:
         # Should not be scheduled
         job = await job_factory(cpu=node_resources.cpu)
+        preempted = await kube_orchestrator.preempt_idle_jobs([job])
 
-        await kube_orchestrator.preempt_idle_jobs([job])
+        assert preempted is False
 
         job_pod = await kube_client.get_pod(job.id)
         assert job_pod.status and job_pod.status.is_phase_pending
@@ -3103,8 +3112,9 @@ class TestJobsPreemption:
         pod_factory: Callable[..., Awaitable[PodDescriptor]],
     ) -> None:
         idle_pod = await pod_factory()
+        preempted = await kube_orchestrator.preempt_idle_jobs([])
 
-        await kube_orchestrator.preempt_idle_jobs([])
+        assert preempted is False
 
         idle_pod = await kube_client.get_pod(idle_pod.name)
         assert idle_pod.status and idle_pod.status.is_scheduled

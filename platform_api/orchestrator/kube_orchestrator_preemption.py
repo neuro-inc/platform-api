@@ -191,26 +191,30 @@ class KubeOrchestratorPreemption:
         self,
         pods_to_schedule: list[PodDescriptor],
         preemptible_pods: list[PodDescriptor],
-    ) -> None:
+    ) -> list[PodDescriptor]:
         preemptible_pods_by_node = defaultdict(list)
         for pod in preemptible_pods:
             node_name = self._node_resources_handler.get_pod_node_name(pod.name)
             if node_name:
                 preemptible_pods_by_node[node_name].append(pod)
-        await self._preempt_pods(
+        preempted_pods = await self._preempt_pods(
             pods_to_schedule, get_preemptible_pods=preemptible_pods_by_node.__getitem__
         )
+        return preempted_pods
 
-    async def preempt_idle_pods(self, pods_to_schedule: list[PodDescriptor]) -> None:
-        await self._preempt_pods(
+    async def preempt_idle_pods(
+        self, pods_to_schedule: list[PodDescriptor]
+    ) -> list[PodDescriptor]:
+        preempted_pods = await self._preempt_pods(
             pods_to_schedule, get_preemptible_pods=self._idle_pods_handler.get_pods
         )
+        return preempted_pods
 
     async def _preempt_pods(
         self,
         pods_to_schedule: list[PodDescriptor],
         get_preemptible_pods: Callable[[str], list[PodDescriptor]],
-    ) -> None:
+    ) -> list[PodDescriptor]:
         nodes_to_preempt: set[Node] = set()
         pods_to_preempt: list[PodDescriptor] = []
         for pod in self._get_pods_to_schedule(pods_to_schedule):
@@ -226,6 +230,7 @@ class KubeOrchestratorPreemption:
                 nodes_to_preempt.add(node)
                 pods_to_preempt.extend(pods)
         await self._delete_pods(pods_to_preempt)
+        return pods_to_preempt
 
     def _get_pods_to_schedule(
         self, pods: Iterable[PodDescriptor]

@@ -865,15 +865,20 @@ class KubeOrchestrator(Orchestrator):
 
     async def preempt_jobs(
         self, jobs_to_schedule: list[Job], preemptible_jobs: list[Job]
-    ) -> None:
+    ) -> list[Job]:
         job_pods_to_schedule = [
             self._create_pod_descriptor(job) for job in jobs_to_schedule
         ]
         preemptible_job_pods = [
             self._create_pod_descriptor(job) for job in preemptible_jobs
         ]
-        await self._preemption.preempt_pods(job_pods_to_schedule, preemptible_job_pods)
+        preempted_pods = await self._preemption.preempt_pods(
+            job_pods_to_schedule, preemptible_job_pods
+        )
+        preempted_pod_names = {pod.name for pod in preempted_pods}
+        return [job for job in preemptible_jobs if job.id in preempted_pod_names]
 
-    async def preempt_idle_jobs(self, jobs_to_schedule: list[Job]) -> None:
+    async def preempt_idle_jobs(self, jobs_to_schedule: list[Job]) -> bool:
         job_pods = [self._create_pod_descriptor(job) for job in jobs_to_schedule]
-        await self._preemption.preempt_idle_pods(job_pods)
+        preempted_pods = await self._preemption.preempt_idle_pods(job_pods)
+        return len(preempted_pods) > 0

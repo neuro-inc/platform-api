@@ -20,11 +20,11 @@ class Orchestrator(ABC):
     @abstractmethod
     async def preempt_jobs(
         self, jobs_to_schedule: list[Job], preemptible_jobs: list[Job]
-    ) -> None:
+    ) -> list[Job]:
         pass
 
     @abstractmethod
-    async def preempt_idle_jobs(self, jobs_to_schedule: list[Job]) -> None:
+    async def preempt_idle_jobs(self, jobs_to_schedule: list[Job]) -> bool:
         pass
 
     @abstractmethod
