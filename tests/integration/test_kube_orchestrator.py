@@ -370,35 +370,35 @@ class TestKubeOrchestrator:
                 )
             ]
         )
-        async with kube_orchestrator_factory(
+        kube_orchestrator = kube_orchestrator_factory(
             orchestrator_config=orchestrator_config
-        ) as kube_orchestrator:
-            container = Container(
-                image="ubuntu:20.10",
-                command="true",
-                resources=ContainerResources(cpu=0.1, memory_mb=1025),
-            )
-            job = MyJob(
-                orchestrator=kube_orchestrator,
-                record=JobRecord.create(
-                    name=f"job-{uuid.uuid4().hex[:6]}",
-                    owner="owner1",
-                    request=JobRequest.create(container),
-                    cluster_name="test-cluster",
-                ),
-            )
+        )
+        container = Container(
+            image="ubuntu:20.10",
+            command="true",
+            resources=ContainerResources(cpu=0.1, memory_mb=1025),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                name=f"job-{uuid.uuid4().hex[:6]}",
+                owner="owner1",
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+            ),
+        )
 
-            await delete_job_later(job)
-            await job.start()
+        await delete_job_later(job)
+        await job.start()
 
-            await kube_client.wait_pod_scheduled(job.id)
-            job_pod = await kube_client.get_raw_pod(job.id)
+        await kube_client.wait_pod_scheduled(job.id)
+        job_pod = await kube_client.get_raw_pod(job.id)
 
-            assert job_pod["spec"]["containers"]
-            assert job_pod["spec"]["containers"][0]["resources"] == {
-                "requests": {"cpu": "100m", "memory": "1Gi"},
-                "limits": {"cpu": "100m", "memory": "1025Mi"},
-            }
+        assert job_pod["spec"]["containers"]
+        assert job_pod["spec"]["containers"][0]["resources"] == {
+            "requests": {"cpu": "100m", "memory": "1Gi"},
+            "limits": {"cpu": "100m", "memory": "1025Mi"},
+        }
 
     async def test_job_bunch_of_cpu(self, kube_orchestrator: KubeOrchestrator) -> None:
         command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
@@ -1391,31 +1391,31 @@ class TestKubeOrchestrator:
         kube_client_factory: Callable[..., MyKubeClient],
     ) -> None:
         kube_config = kube_config_factory(jobs_ingress_class="nginx")
-        async with kube_orchestrator_factory(kube_config=kube_config) as orchestrator:
-            async with kube_client_factory(kube_config) as kube_client:
-                container = Container(
-                    image="ubuntu:20.10",
-                    command="sleep 1h",
-                    resources=ContainerResources(cpu=0.1, memory_mb=32),
-                    http_server=ContainerHTTPServer(port=80),
-                )
-                job = MyJob(
-                    orchestrator,
-                    record=JobRecord.create(
-                        request=JobRequest.create(container),
-                        cluster_name="test-cluster",
-                    ),
-                )
-                try:
-                    await job.start()
-                    pod_name = job.id
-                    await kube_client.wait_pod_is_running(
-                        pod_name=pod_name, timeout_s=60.0
-                    )
-                    ingress = await kube_client.get_ingress(pod_name)
-                    assert ingress.ingress_class == "nginx"
-                finally:
-                    await orchestrator.delete_job(job)
+        async with kube_client_factory(kube_config) as kube_client:
+            orchestrator = kube_orchestrator_factory(
+                kube_config=kube_config, kube_client=kube_client
+            )
+            container = Container(
+                image="ubuntu:20.10",
+                command="sleep 1h",
+                resources=ContainerResources(cpu=0.1, memory_mb=32),
+                http_server=ContainerHTTPServer(port=80),
+            )
+            job = MyJob(
+                orchestrator,
+                record=JobRecord.create(
+                    request=JobRequest.create(container),
+                    cluster_name="test-cluster",
+                ),
+            )
+            try:
+                await job.start()
+                pod_name = job.id
+                await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+                ingress = await kube_client.get_ingress(pod_name)
+                assert ingress.ingress_class == "nginx"
+            finally:
+                await orchestrator.delete_job(job)
 
     async def test_job_check_ingress_annotations_jobs_ingress_class_traefik_no_auth(
         self,
@@ -1424,36 +1424,36 @@ class TestKubeOrchestrator:
         kube_client_factory: Callable[..., MyKubeClient],
     ) -> None:
         kube_config = kube_config_factory(jobs_ingress_class="traefik")
-        async with kube_orchestrator_factory(kube_config=kube_config) as orchestrator:
-            async with kube_client_factory(kube_config) as kube_client:
-                container = Container(
-                    image="ubuntu:20.10",
-                    command="sleep 1h",
-                    resources=ContainerResources(cpu=0.1, memory_mb=32),
-                    http_server=ContainerHTTPServer(port=80),
-                )
-                job = MyJob(
-                    orchestrator,
-                    record=JobRecord.create(
-                        request=JobRequest.create(container),
-                        cluster_name="test-cluster",
+        async with kube_client_factory(kube_config) as kube_client:
+            orchestrator = kube_orchestrator_factory(
+                kube_config=kube_config, kube_client=kube_client
+            )
+            container = Container(
+                image="ubuntu:20.10",
+                command="sleep 1h",
+                resources=ContainerResources(cpu=0.1, memory_mb=32),
+                http_server=ContainerHTTPServer(port=80),
+            )
+            job = MyJob(
+                orchestrator,
+                record=JobRecord.create(
+                    request=JobRequest.create(container),
+                    cluster_name="test-cluster",
+                ),
+            )
+            try:
+                await job.start()
+                pod_name = job.id
+                await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+                ingress = await kube_client.get_ingress(pod_name)
+                assert ingress.ingress_class == "traefik"
+                assert ingress.annotations == {
+                    "traefik.ingress.kubernetes.io/router.middlewares": (
+                        "error-page@kubernetescrd"
                     ),
-                )
-                try:
-                    await job.start()
-                    pod_name = job.id
-                    await kube_client.wait_pod_is_running(
-                        pod_name=pod_name, timeout_s=60.0
-                    )
-                    ingress = await kube_client.get_ingress(pod_name)
-                    assert ingress.ingress_class == "traefik"
-                    assert ingress.annotations == {
-                        "traefik.ingress.kubernetes.io/router.middlewares": (
-                            "error-page@kubernetescrd"
-                        ),
-                    }
-                finally:
-                    await orchestrator.delete_job(job)
+                }
+            finally:
+                await orchestrator.delete_job(job)
 
     async def test_job_check_ingress_annotations_jobs_ingress_class_traefik_with_auth(
         self,
@@ -1462,36 +1462,36 @@ class TestKubeOrchestrator:
         kube_client_factory: Callable[..., MyKubeClient],
     ) -> None:
         kube_config = kube_config_factory(jobs_ingress_class="traefik")
-        async with kube_orchestrator_factory(kube_config=kube_config) as orchestrator:
-            async with kube_client_factory(kube_config) as kube_client:
-                container = Container(
-                    image="ubuntu:20.10",
-                    command="sleep 1h",
-                    resources=ContainerResources(cpu=0.1, memory_mb=32),
-                    http_server=ContainerHTTPServer(port=80, requires_auth=True),
-                )
-                job = MyJob(
-                    orchestrator,
-                    record=JobRecord.create(
-                        request=JobRequest.create(container),
-                        cluster_name="test-cluster",
+        async with kube_client_factory(kube_config) as kube_client:
+            orchestrator = kube_orchestrator_factory(
+                kube_config=kube_config, kube_client=kube_client
+            )
+            container = Container(
+                image="ubuntu:20.10",
+                command="sleep 1h",
+                resources=ContainerResources(cpu=0.1, memory_mb=32),
+                http_server=ContainerHTTPServer(port=80, requires_auth=True),
+            )
+            job = MyJob(
+                orchestrator,
+                record=JobRecord.create(
+                    request=JobRequest.create(container),
+                    cluster_name="test-cluster",
+                ),
+            )
+            try:
+                await job.start()
+                pod_name = job.id
+                await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+                ingress = await kube_client.get_ingress(pod_name)
+                assert ingress.ingress_class == "traefik"
+                assert ingress.annotations == {
+                    "traefik.ingress.kubernetes.io/router.middlewares": (
+                        "error-page@kubernetescrd,ingress-auth@kubernetescrd"
                     ),
-                )
-                try:
-                    await job.start()
-                    pod_name = job.id
-                    await kube_client.wait_pod_is_running(
-                        pod_name=pod_name, timeout_s=60.0
-                    )
-                    ingress = await kube_client.get_ingress(pod_name)
-                    assert ingress.ingress_class == "traefik"
-                    assert ingress.annotations == {
-                        "traefik.ingress.kubernetes.io/router.middlewares": (
-                            "error-page@kubernetescrd,ingress-auth@kubernetescrd"
-                        ),
-                    }
-                finally:
-                    await orchestrator.delete_job(job)
+                }
+            finally:
+                await orchestrator.delete_job(job)
 
     async def test_job_pod_tolerations(
         self,
@@ -1538,22 +1538,22 @@ class TestKubeOrchestrator:
         cluster_name: str,
     ) -> None:
         user_name = self._create_username()
-
         kube_config = kube_config_factory(jobs_ingress_class="traefik")
-        async with kube_orchestrator_factory(kube_config=kube_config) as orchestrator:
-            async with kube_client_factory(kube_config) as kube_client:
+        async with kube_client_factory(kube_config) as kube_client:
+            orchestrator = kube_orchestrator_factory(
+                kube_config=kube_config, kube_client=kube_client
+            )
+            secret = Secret("key2", user_name, cluster_name)
+            await kube_client.update_or_create_secret(  # type: ignore
+                secret.k8s_secret_name,
+                kube_config.namespace,
+                data={secret.secret_key: "vvvv"},
+            )
 
-                secret = Secret("key2", user_name, cluster_name)
-                await kube_client.update_or_create_secret(  # type: ignore
-                    secret.k8s_secret_name,
-                    kube_config.namespace,
-                    data={secret.secret_key: "vvvv"},
-                )
-
-                missing = await orchestrator.get_missing_secrets(
-                    user_name, secret_names=["key3", "key2", "key1"]
-                )
-                assert missing == ["key1", "key3"]
+            missing = await orchestrator.get_missing_secrets(
+                user_name, secret_names=["key3", "key2", "key1"]
+            )
+            assert missing == ["key1", "key3"]
 
     async def test_get_missing_disks(
         self,
@@ -1563,45 +1563,45 @@ class TestKubeOrchestrator:
         cluster_name: str,
     ) -> None:
         kube_config = kube_config_factory(jobs_ingress_class="traefik")
-        async with kube_orchestrator_factory(kube_config=kube_config) as orchestrator:
-            async with kube_client_factory(kube_config) as kube_client:
-                await kube_client.create_pvc(  # type: ignore
-                    "disk-1",
-                    kube_config.namespace,
-                    labels={
-                        "platform.neuromation.io/user": "user",
-                    },
-                )
-                await kube_client.create_pvc(  # type: ignore
-                    "disk-2",
-                    kube_config.namespace,
-                    labels={
-                        "platform.neuromation.io/user": "another_user",
-                    },
-                )
+        async with kube_client_factory(kube_config) as kube_client:
+            orchestrator = kube_orchestrator_factory(
+                kube_config=kube_config, kube_client=kube_client
+            )
+            await kube_client.create_pvc(  # type: ignore
+                "disk-1",
+                kube_config.namespace,
+                labels={
+                    "platform.neuromation.io/user": "user",
+                },
+            )
+            await kube_client.create_pvc(  # type: ignore
+                "disk-2",
+                kube_config.namespace,
+                labels={
+                    "platform.neuromation.io/user": "another_user",
+                },
+            )
 
-                disk1, disk2, disk3 = [
-                    Disk(
-                        cluster_name=cluster_name,
-                        path="user",
-                        disk_id="disk-1",
-                    ),
-                    Disk(
-                        cluster_name=cluster_name,
-                        path="user",  # Wrong username
-                        disk_id="disk-2",
-                    ),
-                    Disk(
-                        cluster_name=cluster_name,
-                        path="user",
-                        disk_id="disk-3",  # Not existing id
-                    ),
-                ]
+            disk1, disk2, disk3 = [
+                Disk(
+                    cluster_name=cluster_name,
+                    path="user",
+                    disk_id="disk-1",
+                ),
+                Disk(
+                    cluster_name=cluster_name,
+                    path="user",  # Wrong username
+                    disk_id="disk-2",
+                ),
+                Disk(
+                    cluster_name=cluster_name,
+                    path="user",
+                    disk_id="disk-3",  # Not existing id
+                ),
+            ]
 
-                missing = await orchestrator.get_missing_disks(
-                    disks=[disk1, disk2, disk3]
-                )
-                assert missing == [disk2, disk3]
+            missing = await orchestrator.get_missing_disks(disks=[disk1, disk2, disk3])
+            assert missing == [disk2, disk3]
 
     async def test_job_pod_with_disk_volume_simple_ok(
         self,
@@ -2143,7 +2143,7 @@ class TestNodeAffinity:
         kube_job_nodes_factory: Callable[
             [OrchestratorConfig, KubeConfig], Awaitable[None]
         ],
-    ) -> AsyncIterator[KubeOrchestrator]:
+    ) -> KubeOrchestrator:
         kube_config = replace(
             kube_config,
             node_label_job="job",
@@ -2198,15 +2198,14 @@ class TestNodeAffinity:
             ],
         )
         await kube_job_nodes_factory(orchestrator_config, kube_config)
-        async with KubeOrchestrator(
+        return KubeOrchestrator(
             cluster_name="default",
             storage_configs=[storage_config_host],
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
             kube_config=kube_config,
             kube_client=kube_client,
-        ) as kube_orchestrator:
-            yield kube_orchestrator
+        )
 
     @pytest.fixture
     async def start_job(
@@ -2540,11 +2539,8 @@ class TestPreemption:
         self,
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
         kube_config_node_preemptible: KubeConfig,
-    ) -> AsyncIterator[KubeOrchestrator]:
-        async with kube_orchestrator_factory(
-            kube_config=kube_config_node_preemptible
-        ) as kube_orchestrator:
-            yield kube_orchestrator
+    ) -> KubeOrchestrator:
+        return kube_orchestrator_factory(kube_config=kube_config_node_preemptible)
 
     async def test_non_preemptible_job(
         self,
