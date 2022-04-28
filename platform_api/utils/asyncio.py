@@ -2,13 +2,13 @@ import asyncio
 import functools
 import logging
 import sys
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Callable, Coroutine, Iterable
 from contextlib import AbstractAsyncContextManager
 from types import TracebackType
 from typing import Any, Optional, TypeVar
 
 
-async def run_and_log_exceptions(coros: Iterable[Awaitable[Any]]) -> None:
+async def run_and_log_exceptions(coros: Iterable[Coroutine[Any, Any, Any]]) -> None:
     tasks = [asyncio.create_task(coro) for coro in coros]
     await asyncio.gather(*tasks, return_exceptions=True)
     for task in tasks:
