@@ -1,6 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import PurePath
+from unittest import mock
 
 import pytest
 from yarl import URL
@@ -15,7 +16,7 @@ from platform_api.config import (
 )
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.job_request import ContainerVolume
-from platform_api.orchestrator.kube_client import SecretVolume
+from platform_api.orchestrator.kube_client import KubeClient, SecretVolume
 from platform_api.orchestrator.kube_config import KubeClientAuthType
 from platform_api.orchestrator.kube_orchestrator import (
     HostVolume,
@@ -25,6 +26,11 @@ from platform_api.orchestrator.kube_orchestrator import (
     PVCVolume,
 )
 from platform_api.resource import ResourcePoolType
+
+
+@pytest.fixture
+def kube_client() -> KubeClient:
+    return mock.AsyncMock(spec=KubeClient)
 
 
 class TestStorageConfig:
@@ -60,7 +66,9 @@ class TestStorageConfig:
 
 
 class TestStorageVolume:
-    def test_create_storage_volume_nfs(self, registry_config: RegistryConfig) -> None:
+    def test_create_storage_volume_nfs(
+        self, kube_client: KubeClient, registry_config: RegistryConfig
+    ) -> None:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"),
             type=StorageType.NFS,
@@ -80,6 +88,7 @@ class TestStorageVolume:
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
             kube_config=kube_config,
+            kube_client=kube_client,
         )
         container_volume = ContainerVolume.create(
             "storage://neuromation/public",
@@ -96,7 +105,9 @@ class TestStorageVolume:
             )
         ]
 
-    def test_create_storage_volume_host(self, registry_config: RegistryConfig) -> None:
+    def test_create_storage_volume_host(
+        self, kube_client: KubeClient, registry_config: RegistryConfig
+    ) -> None:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"), type=StorageType.HOST
         )
@@ -113,6 +124,7 @@ class TestStorageVolume:
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
             kube_config=kube_config,
+            kube_client=kube_client,
         )
         container_volume = ContainerVolume.create(
             "storage://neuromation/public",
@@ -124,7 +136,9 @@ class TestStorageVolume:
             HostVolume(name="storage", path=None, host_path=PurePath("/tmp"))
         ]
 
-    def test_create_storage_volume_pvc(self, registry_config: RegistryConfig) -> None:
+    def test_create_storage_volume_pvc(
+        self, kube_client: KubeClient, registry_config: RegistryConfig
+    ) -> None:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"), type=StorageType.PVC, pvc_name="testclaim"
         )
@@ -141,6 +155,7 @@ class TestStorageVolume:
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
             kube_config=kube_config,
+            kube_client=kube_client,
         )
         container_volume = ContainerVolume.create(
             "storage://neuromation/public",
@@ -150,7 +165,9 @@ class TestStorageVolume:
         volumes = kube_orchestrator.create_storage_volumes(container_volume)
         assert volumes == [PVCVolume(name="storage", path=None, claim_name="testclaim")]
 
-    def test_create_main_storage_volume(self, registry_config: RegistryConfig) -> None:
+    def test_create_main_storage_volume(
+        self, kube_client: KubeClient, registry_config: RegistryConfig
+    ) -> None:
         main_storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"),
             type=StorageType.PVC,
@@ -175,6 +192,7 @@ class TestStorageVolume:
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
             kube_config=kube_config,
+            kube_client=kube_client,
         )
         container_volume = ContainerVolume.create(
             "storage://cluster/user",
@@ -186,7 +204,9 @@ class TestStorageVolume:
             PVCVolume(name="storage", path=None, claim_name="main-claim")
         ]
 
-    def test_create_extra_storage_volume(self, registry_config: RegistryConfig) -> None:
+    def test_create_extra_storage_volume(
+        self, kube_client: KubeClient, registry_config: RegistryConfig
+    ) -> None:
         main_storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"),
             type=StorageType.PVC,
@@ -211,6 +231,7 @@ class TestStorageVolume:
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
             kube_config=kube_config,
+            kube_client=kube_client,
         )
         container_volume = ContainerVolume.create(
             "storage://cluster/isolated/dir",
@@ -226,7 +247,9 @@ class TestStorageVolume:
             )
         ]
 
-    def test_create_all_storage_volumes(self, registry_config: RegistryConfig) -> None:
+    def test_create_all_storage_volumes(
+        self, kube_client: KubeClient, registry_config: RegistryConfig
+    ) -> None:
         main_storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"),
             type=StorageType.PVC,
@@ -251,6 +274,7 @@ class TestStorageVolume:
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
             kube_config=kube_config,
+            kube_client=kube_client,
         )
         container_volume = ContainerVolume.create(
             "storage://cluster",
@@ -269,7 +293,9 @@ class TestStorageVolume:
 
 
 class TestSecretVolume:
-    def test_create_secret_volume(self, registry_config: RegistryConfig) -> None:
+    def test_create_secret_volume(
+        self, kube_client: KubeClient, registry_config: RegistryConfig
+    ) -> None:
         storage_config = StorageConfig(
             host_mount_path=PurePath("/tmp"), type=StorageType.PVC, pvc_name="testclaim"
         )
@@ -286,6 +312,7 @@ class TestSecretVolume:
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
             kube_config=kube_config,
+            kube_client=kube_client,
         )
         user_name = "test-user"
         volume = kube_orchestrator.create_secret_volume(user_name)

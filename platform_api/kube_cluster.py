@@ -8,6 +8,7 @@ import aiohttp
 from .cluster import Cluster
 from .cluster_config import ClusterConfig
 from .config import RegistryConfig, StorageConfig
+from .orchestrator.kube_client import KubeClient, PodWatcher
 from .orchestrator.kube_config import KubeConfig
 from .orchestrator.kube_orchestrator import KubeOrchestrator, Orchestrator
 
@@ -47,15 +48,33 @@ class KubeCluster(Cluster):
 
     async def _init_orchestrator(self) -> None:
         logger.info(f"Cluster '{self.name}': initializing Orchestrator")
+        kube_client = KubeClient(
+            base_url=self._kube_config.endpoint_url,
+            cert_authority_data_pem=self._kube_config.cert_authority_data_pem,
+            cert_authority_path=self._kube_config.cert_authority_path,
+            auth_type=self._kube_config.auth_type,
+            auth_cert_path=self._kube_config.auth_cert_path,
+            auth_cert_key_path=self._kube_config.auth_cert_key_path,
+            token=self._kube_config.token,
+            token_path=self._kube_config.token_path,
+            namespace=self._kube_config.namespace,
+            conn_timeout_s=self._kube_config.client_conn_timeout_s,
+            read_timeout_s=self._kube_config.client_read_timeout_s,
+            conn_pool_size=self._kube_config.client_conn_pool_size,
+            trace_configs=self._trace_configs,
+        )
+        pod_watcher = PodWatcher(kube_client)
         orchestrator = KubeOrchestrator(
             cluster_name=self.name,
             storage_configs=self._storage_configs,
             registry_config=self._registry_config,
             orchestrator_config=self._cluster_config.orchestrator,
             kube_config=self._kube_config,
-            trace_configs=self._trace_configs,
+            kube_client=kube_client,
         )
-        await self._exit_stack.enter_async_context(orchestrator)
+        orchestrator.register(pod_watcher)
+        await self._exit_stack.enter_async_context(kube_client)
+        await self._exit_stack.enter_async_context(pod_watcher)
         self._orchestrator = orchestrator
 
     async def close(self) -> None:

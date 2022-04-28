@@ -1625,6 +1625,10 @@ class NodeResources:
         raise ValueError("Memory format is not supported")
 
     @property
+    def any(self) -> bool:
+        return self.cpu_mcores > 0 or self.memory > 0 or self.gpu > 0
+
+    @property
     def cpu_mcores(self) -> int:
         return int(self.cpu * 1000)
 
@@ -2340,6 +2344,17 @@ class KubeClient:
                     return
                 await asyncio.sleep(interval_s)
 
+    async def wait_pod_is_deleted(
+        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+    ) -> None:
+        async with timeout(timeout_s):
+            while True:
+                try:
+                    await self.get_pod(pod_name)
+                    await asyncio.sleep(interval_s)
+                except JobNotFoundException:
+                    return
+
     async def create_default_network_policy(
         self,
         name: str,
@@ -2487,6 +2502,8 @@ class PodWatcher:
         self._watcher_task.cancel()
         with suppress(asyncio.CancelledError):
             await self._watcher_task
+        self._watcher_task = None
+        self._handlers.clear()
 
     async def _run(self, resource_version: str) -> None:
         while True:
@@ -2524,7 +2541,7 @@ class KubePreemption:
         if resources.gpu:
             pods = [p for p in pods if p.resources and p.resources.gpu]
         pods_to_preempt: list[PodDescriptor] = []
-        while pods and cls._has_resources(resources):
+        while pods and resources.any:
             logger.debug("Pods left: %d", len(pods))
             logger.debug("Resources left: %s", resources)
             #  max distance for a single resource is 1, 3 resources total
@@ -2555,17 +2572,11 @@ class KubePreemption:
             resources.memory,
             resources.gpu or 0,
         )
-        if cls._has_resources(resources):
+        if resources.any:
             logger.debug("Pods to preempt: []")
             return []
         logger.debug("Pods to preempt: %s", [p.name for p in pods_to_preempt])
         return pods_to_preempt
-
-    @classmethod
-    def _has_resources(cls, resources: NodeResources) -> bool:
-        return (
-            resources.cpu_mcores > 0 or resources.memory > 0 or (resources.gpu or 0) > 0
-        )
 
     @classmethod
     def _subtract_resources(cls, r1: NodeResources, r2: Resources) -> NodeResources:

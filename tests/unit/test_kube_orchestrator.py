@@ -25,6 +25,7 @@ from platform_api.orchestrator.kube_client import (
     AlreadyExistsException,
     ContainerStatus,
     Ingress,
+    KubeClient,
     PathVolume,
     Resources,
     SecretEnvVar,
@@ -1757,6 +1758,7 @@ class TestContainerStatus:
 class TestKubeOrchestrator:
     @pytest.fixture
     def orchestrator(self) -> KubeOrchestrator:
+        kube_client = mock.AsyncMock(spec=KubeClient)
         return KubeOrchestrator(
             cluster_name="default",
             storage_configs=[
@@ -1780,6 +1782,7 @@ class TestKubeOrchestrator:
                 presets=[],
             ),
             kube_config=KubeConfig(endpoint_url="https://kuberrnetes.svc"),
+            kube_client=kube_client,
         )
 
     def test_create_main_storage_volumes(self, orchestrator: KubeOrchestrator) -> None:
