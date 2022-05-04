@@ -3,7 +3,7 @@ import itertools
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from dataclasses import replace
 from pathlib import PurePath
 from typing import Any, Optional
@@ -47,6 +47,7 @@ from platform_api.orchestrator.kube_client import (
     NodeResources,
     NodeSelectorRequirement,
     NodeSelectorTerm,
+    NodeWatcher,
     NotFoundException,
     PodDescriptor,
     PodWatcher,
@@ -2923,30 +2924,14 @@ class TestJobsPreemption:
     async def start_pod_watcher(
         self, kube_client: MyKubeClient, kube_orchestrator: KubeOrchestrator
     ) -> AsyncIterator[None]:
-        watcher = PodWatcher(kube_client)
-        kube_orchestrator.register(watcher)
-        async with watcher:
+        node_watcher = NodeWatcher(kube_client)
+        pod_watcher = PodWatcher(kube_client)
+        kube_orchestrator.register(node_watcher, pod_watcher)
+        exit_stack = AsyncExitStack()
+        await exit_stack.enter_async_context(node_watcher)
+        await exit_stack.enter_async_context(pod_watcher)
+        async with exit_stack:
             yield
-
-    @pytest.fixture
-    async def pod_factory(
-        self, pod_factory: Callable[..., Awaitable[PodDescriptor]]
-    ) -> Callable[..., Awaitable[PodDescriptor]]:
-        async def _create(
-            cpu: float = 0.1,
-            memory: int = 64,
-            wait: bool = True,
-            idle: bool = True,
-        ) -> PodDescriptor:
-            return await pod_factory(
-                image="gcr.io/google_containers/pause:3.1",
-                cpu=cpu,
-                memory=memory,
-                wait=wait,
-                idle=idle,
-            )
-
-        return _create
 
     @pytest.fixture
     async def job_factory(
@@ -2986,7 +2971,7 @@ class TestJobsPreemption:
         self, kube_client: KubeClient, kube_node: str
     ) -> NodeResources:
         node = await kube_client.get_node(kube_node)
-        return node.allocatable_resources
+        return node.status.allocatable_resources
 
     async def test_preempt_jobs(
         self,
@@ -2998,9 +2983,7 @@ class TestJobsPreemption:
         preemptible_job = await job_factory(cpu=node_resources.cpu / 2, wait=True)
         # Node should have less than cpu / 2 left
         job = await job_factory(cpu=node_resources.cpu / 2)
-        preempted_jobs = await kube_orchestrator.preempt_jobs(
-            jobs_to_schedule=[job], preemptible_jobs=[preemptible_job]
-        )
+        preempted_jobs = await kube_orchestrator.preempt_jobs([job], [preemptible_job])
 
         assert preempted_jobs == [preemptible_job]
 
@@ -3008,31 +2991,11 @@ class TestJobsPreemption:
             preemptible_job.id, timeout_s=60, interval_s=0.1
         )
 
-    async def test_preempt_idle_jobs(
-        self,
-        kube_client: MyKubeClient,
-        kube_orchestrator: KubeOrchestrator,
-        pod_factory: Callable[..., Awaitable[PodDescriptor]],
-        job_factory: Callable[..., Awaitable[Job]],
-        node_resources: NodeResources,
-    ) -> None:
-        idle_pod = await pod_factory(cpu=node_resources.cpu / 2)
-        # Node should have less than cpu / 2 left
-        job = await job_factory(cpu=node_resources.cpu / 2)
-        preempted = await kube_orchestrator.preempt_idle_jobs([job])
-
-        assert preempted is True
-
-        await kube_client.wait_pod_is_deleted(
-            idle_pod.name, timeout_s=60, interval_s=0.1
-        )
-
     async def test_cannot_be_scheduled(
         self,
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
         kube_config_factory: Callable[..., KubeConfig],
         kube_client_factory: Callable[..., MyKubeClient],
-        pod_factory: Callable[..., Awaitable[PodDescriptor]],
         job_factory: Callable[..., Awaitable[Job]],
         node_resources: NodeResources,
     ) -> None:
@@ -3041,12 +3004,12 @@ class TestJobsPreemption:
             kube_orchestrator = kube_orchestrator_factory(
                 kube_config=kube_config, kube_client=kube_client
             )
-            await pod_factory(cpu=node_resources.cpu / 2)
+            preemptible_job = await job_factory(cpu=node_resources.cpu / 2, wait=True)
             # Node should have less than cpu / 2 left
             job = await job_factory(cpu=node_resources.cpu / 2)
-            preempted = await kube_orchestrator.preempt_idle_jobs([job])
+            preempted = await kube_orchestrator.preempt_jobs([job], [preemptible_job])
 
-            assert preempted is False
+            assert preempted == []
 
             job_pod = await kube_client.get_pod(job.id)
             assert job_pod.status and job_pod.status.is_phase_pending
@@ -3055,16 +3018,15 @@ class TestJobsPreemption:
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
-        pod_factory: Callable[..., Awaitable[PodDescriptor]],
         job_factory: Callable[..., Awaitable[Job]],
         node_resources: NodeResources,
     ) -> None:
-        await pod_factory(cpu=node_resources.cpu / 2)
+        preemptible_job = await job_factory(cpu=node_resources.cpu / 2, wait=True)
         # Node should have less than cpu / 2 left
         job = await job_factory(cpu=node_resources.cpu)
-        preempted = await kube_orchestrator.preempt_idle_jobs([job])
+        preempted = await kube_orchestrator.preempt_jobs([job], [preemptible_job])
 
-        assert preempted is False
+        assert preempted == []
 
         job_pod = await kube_client.get_pod(job.id)
         assert job_pod.status and job_pod.status.is_phase_pending
@@ -3073,19 +3035,18 @@ class TestJobsPreemption:
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
-        pod_factory: Callable[..., Awaitable[PodDescriptor]],
         job_factory: Callable[..., Awaitable[Job]],
     ) -> None:
         job = await job_factory()
-        idle_pod = await pod_factory()
-        preempted = await kube_orchestrator.preempt_idle_jobs([job])
+        preemptible_job = await job_factory(wait=True)
+        preempted = await kube_orchestrator.preempt_jobs([job], [preemptible_job])
 
-        assert preempted is False
+        assert preempted == []
 
-        idle_pod = await kube_client.get_pod(idle_pod.name)
-        assert idle_pod.status and idle_pod.status.is_scheduled
+        preemptible_pod = await kube_client.get_pod(preemptible_job.id)
+        assert preemptible_pod.status and preemptible_pod.status.is_scheduled
 
-    async def test_no_idle_jobs(
+    async def test_no_preemptible_jobs(
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
@@ -3094,9 +3055,9 @@ class TestJobsPreemption:
     ) -> None:
         # Should not be scheduled
         job = await job_factory(cpu=node_resources.cpu)
-        preempted = await kube_orchestrator.preempt_idle_jobs([job])
+        preempted = await kube_orchestrator.preempt_jobs([job], [])
 
-        assert preempted is False
+        assert preempted == []
 
         job_pod = await kube_client.get_pod(job.id)
         assert job_pod.status and job_pod.status.is_phase_pending
@@ -3105,12 +3066,12 @@ class TestJobsPreemption:
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
-        pod_factory: Callable[..., Awaitable[PodDescriptor]],
+        job_factory: Callable[..., Awaitable[Job]],
     ) -> None:
-        idle_pod = await pod_factory()
-        preempted = await kube_orchestrator.preempt_idle_jobs([])
+        preemptible_job = await job_factory(wait=True)
+        preempted = await kube_orchestrator.preempt_jobs([], [preemptible_job])
 
-        assert preempted is False
+        assert preempted == []
 
-        idle_pod = await kube_client.get_pod(idle_pod.name)
-        assert idle_pod.status and idle_pod.status.is_scheduled
+        preemptible_pod = await kube_client.get_pod(preemptible_job.id)
+        assert preemptible_pod.status and preemptible_pod.status.is_scheduled

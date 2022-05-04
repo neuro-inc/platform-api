@@ -34,6 +34,7 @@ from .kube_client import (
     NodePreferredSchedulingTerm,
     NodeSelectorRequirement,
     NodeSelectorTerm,
+    NodeWatcher,
     NotFoundException,
     PathVolume,
     PodDescriptor,
@@ -49,7 +50,11 @@ from .kube_client import (
     VolumeMount,
 )
 from .kube_config import KubeConfig
-from .kube_orchestrator_preemption import KubeOrchestratorPreemption
+from .kube_orchestrator_preemption import (
+    KubeOrchestratorPreemption,
+    NodeResourcesHandler,
+    NodesHandler,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +136,12 @@ class KubeOrchestrator(Orchestrator):
         self._orchestrator_config = orchestrator_config
         self._kube_config = kube_config
         self._client = kube_client
-        self._preemption = KubeOrchestratorPreemption(kube_client)
+
+        self._nodes_handler = NodesHandler()
+        self._node_resources_handler = NodeResourcesHandler()
+        self._preemption = KubeOrchestratorPreemption(
+            kube_client, self._nodes_handler, self._node_resources_handler
+        )
 
         # TODO (A Danshyn 11/16/18): make this configurable at some point
         self._docker_secret_name_prefix = "neurouser-"
@@ -165,8 +175,9 @@ class KubeOrchestrator(Orchestrator):
                 result.append(sc)
         return result
 
-    def register(self, pod_watcher: PodWatcher) -> None:
-        self._preemption.register(pod_watcher)
+    def register(self, node_watcher: NodeWatcher, pod_watcher: PodWatcher) -> None:
+        node_watcher.subscribe(self._nodes_handler)
+        pod_watcher.subscribe(self._node_resources_handler)
 
     def create_storage_volumes(
         self, container_volume: ContainerVolume
@@ -869,8 +880,3 @@ class KubeOrchestrator(Orchestrator):
         )
         preempted_pod_names = {pod.name for pod in preempted_pods}
         return [job for job in preemptible_jobs if job.id in preempted_pod_names]
-
-    async def preempt_idle_jobs(self, jobs_to_schedule: list[Job]) -> bool:
-        job_pods = [self._create_pod_descriptor(job) for job in jobs_to_schedule]
-        preempted_pods = await self._preemption.preempt_idle_pods(job_pods)
-        return len(preempted_pods) > 0

@@ -235,7 +235,26 @@ class TestPodDescriptor:
     def test_can_be_scheduled(self) -> None:
         pod = PodDescriptor(name="testname", image="testimage")
 
-        assert pod.can_be_scheduled({"node-pool": "cpu"}) is True
+        assert pod.can_be_scheduled("minikube", {"node-pool": "cpu"}) is True
+
+    def test_can_be_scheduled_with_node_name(self) -> None:
+        pod = PodDescriptor(
+            name="testname",
+            image="testimage",
+            node_name="minikube",
+            node_selector={"job": "true"},
+            node_affinity=NodeAffinity(
+                required=[
+                    NodeSelectorTerm(
+                        [NodeSelectorRequirement.create_in("node-pool", "cpu")]
+                    )
+                ]
+            ),
+        )
+
+        assert pod.can_be_scheduled("minikube", {}) is True
+        assert pod.can_be_scheduled("minikube2", {"job": "true"}) is False
+        assert pod.can_be_scheduled("minikube2", {"node-pool": "cpu"}) is False
 
     def test_can_be_scheduled_with_node_affinity(self) -> None:
         pod = PodDescriptor(
@@ -250,8 +269,8 @@ class TestPodDescriptor:
             ),
         )
 
-        assert pod.can_be_scheduled({"node-pool": "cpu"}) is True
-        assert pod.can_be_scheduled({"node-pool": "gpu"}) is False
+        assert pod.can_be_scheduled("minikube", {"node-pool": "cpu"}) is True
+        assert pod.can_be_scheduled("minikube", {"node-pool": "gpu"}) is False
 
     def test_can_be_scheduled_with_node_selector(self) -> None:
         pod = PodDescriptor(
@@ -260,9 +279,12 @@ class TestPodDescriptor:
             node_selector={"job": "true", "node-pool": "cpu"},
         )
 
-        assert pod.can_be_scheduled({"job": "true", "node-pool": "cpu"}) is True
-        assert pod.can_be_scheduled({"node-pool": "cpu"}) is False
-        assert pod.can_be_scheduled({"job": "true"}) is False
+        assert (
+            pod.can_be_scheduled("minikube", {"job": "true", "node-pool": "cpu"})
+            is True
+        )
+        assert pod.can_be_scheduled("minikube", {"node-pool": "cpu"}) is False
+        assert pod.can_be_scheduled("minikube", {"job": "true"}) is False
 
     def test_can_be_scheduled_with_node_affinity_and_selector(self) -> None:
         pod = PodDescriptor(
@@ -278,9 +300,12 @@ class TestPodDescriptor:
             ),
         )
 
-        assert pod.can_be_scheduled({"job": "true", "node-pool": "cpu"}) is True
-        assert pod.can_be_scheduled({"node-pool": "cpu"}) is False
-        assert pod.can_be_scheduled({"job": "true"}) is False
+        assert (
+            pod.can_be_scheduled("minikube", {"job": "true", "node-pool": "cpu"})
+            is True
+        )
+        assert pod.can_be_scheduled("minikube", {"node-pool": "cpu"}) is False
+        assert pod.can_be_scheduled("minikube", {"job": "true"}) is False
 
     def test_to_primitive_defaults(self) -> None:
         pod = PodDescriptor(name="testname", image="testimage")
