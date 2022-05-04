@@ -229,7 +229,7 @@ class KubeOrchestratorPreemption:
         exclude_nodes: Iterable[Node],
     ) -> tuple[Node | None, list[PodDescriptor]]:
         for node in self._get_nodes(exclude_nodes):
-            if not pod_to_schedule.can_be_scheduled(node.name, node.labels):
+            if not pod_to_schedule.can_be_scheduled(node.labels):
                 continue
             preemptible_pods = get_preemptible_pods(node.name)
             if not preemptible_pods:

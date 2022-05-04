@@ -1069,10 +1069,8 @@ class PodDescriptor:
     def env_list(self) -> list[dict[str, str]]:
         return [dict(name=name, value=value) for name, value in self.env.items()]
 
-    def can_be_scheduled(self, node_name: str, node_labels: dict[str, str]) -> bool:
+    def can_be_scheduled(self, node_labels: dict[str, str]) -> bool:
         affinities: list[NodeAffinity] = []
-        if self.node_name:
-            return self.node_name == node_name
         if self.node_selector:
             requirements = [
                 NodeSelectorRequirement.create_in(k, v)
