@@ -24,10 +24,6 @@ class Orchestrator(ABC):
         pass
 
     @abstractmethod
-    async def preempt_idle_jobs(self, jobs_to_schedule: list[Job]) -> bool:
-        pass
-
-    @abstractmethod
     async def get_missing_secrets(
         self, secret_path: str, secret_names: list[str]
     ) -> list[str]:

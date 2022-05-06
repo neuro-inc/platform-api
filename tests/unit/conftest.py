@@ -79,7 +79,6 @@ class MockOrchestrator(Orchestrator):
             datetime.now, timezone.utc
         )
         self._successfully_deleted_jobs: list[Job] = []
-        self._idle_jobs: list[Job] = []
         self._preempted_jobs: list[Job] = []
 
     @property
@@ -163,12 +162,6 @@ class MockOrchestrator(Orchestrator):
     async def get_missing_disks(self, disks: list[Disk]) -> list[Disk]:
         pass
 
-    def start_idle_job(self, job: Job) -> None:
-        self._idle_jobs.append(job)
-
-    def get_idle_jobs(self) -> list[Job]:
-        return list(self._idle_jobs)
-
     def get_preempted_jobs(self) -> list[Job]:
         return list(self._preempted_jobs)
 
@@ -177,11 +170,6 @@ class MockOrchestrator(Orchestrator):
     ) -> list[Job]:
         self._preempted_jobs.extend(preemptible_jobs)
         return preemptible_jobs
-
-    async def preempt_idle_jobs(self, jobs_to_schedule: list[Job]) -> bool:
-        self._preempted_jobs.extend(self._idle_jobs)
-        self._idle_jobs.clear()
-        return True
 
 
 class MockJobsStorage(InMemoryJobsStorage):

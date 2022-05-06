@@ -8,7 +8,7 @@ import aiohttp
 from .cluster import Cluster
 from .cluster_config import ClusterConfig
 from .config import RegistryConfig, StorageConfig
-from .orchestrator.kube_client import KubeClient, PodWatcher
+from .orchestrator.kube_client import KubeClient, NodeWatcher, PodWatcher
 from .orchestrator.kube_config import KubeConfig
 from .orchestrator.kube_orchestrator import KubeOrchestrator, Orchestrator
 
@@ -63,6 +63,7 @@ class KubeCluster(Cluster):
             conn_pool_size=self._kube_config.client_conn_pool_size,
             trace_configs=self._trace_configs,
         )
+        node_watcher = NodeWatcher(kube_client)
         pod_watcher = PodWatcher(kube_client)
         orchestrator = KubeOrchestrator(
             cluster_name=self.name,
@@ -72,8 +73,9 @@ class KubeCluster(Cluster):
             kube_config=self._kube_config,
             kube_client=kube_client,
         )
-        orchestrator.register(pod_watcher)
+        orchestrator.register(node_watcher, pod_watcher)
         await self._exit_stack.enter_async_context(kube_client)
+        await self._exit_stack.enter_async_context(node_watcher)
         await self._exit_stack.enter_async_context(pod_watcher)
         self._orchestrator = orchestrator
 

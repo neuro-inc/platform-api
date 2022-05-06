@@ -407,7 +407,7 @@ class MyKubeClient(KubeClient):
                 print("Pods:")
                 pod_list = await self.get_raw_pods()
                 pods = sorted(
-                    pod_list.raw_pods, key=lambda p: p["spec"].get("nodeName", "")
+                    pod_list.items, key=lambda p: p["spec"].get("nodeName", "")
                 )
                 print(f"  {'Name':40s} {'CPU':5s} {'Memory':10s} {'Phase':9s} Node")
                 for pod in pods:

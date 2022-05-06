@@ -18,14 +18,15 @@ from platform_api.orchestrator.job_request import (
 from platform_api.orchestrator.kube_client import (
     AlreadyExistsException,
     DockerRegistrySecret,
+    EventHandler,
     Ingress,
     KubeClient,
+    NodeWatcher,
     PodDescriptor,
-    PodEventHandler,
     PodWatcher,
-    PodWatchEvent,
     Service,
     StatusException,
+    WatchEvent,
 )
 
 from .conftest import MyKubeClient
@@ -379,12 +380,17 @@ class TestKubeClient:
 
         assert kube_node in [n.name for n in nodes]
 
+    async def test_get_raw_nodes(self, kube_client: KubeClient, kube_node: str) -> None:
+        result = await kube_client.get_raw_nodes()
+
+        assert kube_node in [n["metadata"]["name"] for n in result.items]
+
     async def test_get_raw_pods(
         self, kube_client: KubeClient, create_pod: PodFactory
     ) -> None:
         pod = await create_pod()
         pod_list = await kube_client.get_raw_pods()
-        pods = pod_list.raw_pods
+        pods = pod_list.items
 
         assert pod.name in [p["metadata"]["name"] for p in pods]
 
@@ -393,7 +399,7 @@ class TestKubeClient:
     ) -> None:
         pod = await create_pod()
         pod_list = await kube_client.get_raw_pods(all_namespaces=True)
-        pods = pod_list.raw_pods
+        pods = pod_list.items
 
         assert pod.name in [p["metadata"]["name"] for p in pods]
         assert any(
@@ -467,7 +473,73 @@ class TestKubeClient:
         return _f
 
 
-class MyPodEventHandler(PodEventHandler):
+class MyNodeEventHandler(EventHandler):
+    def __init__(self) -> None:
+        self.node_names: list[str] = []
+        self._events: dict[str, asyncio.Event] = {}
+
+    async def init(self, raw_nodes: list[dict[str, Any]]) -> None:
+        self.node_names.extend([p["metadata"]["name"] for p in raw_nodes])
+
+    async def handle(self, event: WatchEvent) -> None:
+        pod_name = event.resource["metadata"]["name"]
+        self.node_names.append(pod_name)
+        waiter = self._events.get(pod_name)
+        if waiter:
+            del self._events[pod_name]
+            waiter.set()
+
+    async def wait_for_node(self, name: str) -> None:
+        if name in self.node_names:
+            return
+        event = asyncio.Event()
+        self._events[name] = event
+        await event.wait()
+
+
+class TestNodeWatcher:
+    @pytest.fixture
+    def handler(self) -> MyNodeEventHandler:
+        return MyNodeEventHandler()
+
+    @pytest.fixture
+    async def node_watcher(
+        self, kube_client: KubeClient, handler: MyNodeEventHandler
+    ) -> AsyncIterator[NodeWatcher]:
+        watcher = NodeWatcher(kube_client)
+        watcher.subscribe(handler)
+        async with watcher:
+            yield watcher
+
+    @pytest.mark.usefixtures("node_watcher")
+    async def test_handle(
+        self, kube_client: KubeClient, handler: MyNodeEventHandler
+    ) -> None:
+        assert len(handler.node_names) > 0
+
+        node_name = str(uuid.uuid4())
+        try:
+            await kube_client.create_node(
+                node_name,
+                {"pods": "110", "cpu": 1, "memory": "1024Mi"},
+            )
+
+            await asyncio.wait_for(handler.wait_for_node(node_name), 5)
+
+            assert node_name in handler.node_names
+        finally:
+            await kube_client.delete_node(node_name)
+
+    async def test_subscribe_after_start(
+        self, node_watcher: NodeWatcher, handler: MyNodeEventHandler
+    ) -> None:
+        with pytest.raises(
+            Exception, match="Subscription is not possible after watcher start"
+        ):
+            node_watcher.subscribe(handler)
+
+
+class MyPodEventHandler(EventHandler):
     def __init__(self) -> None:
         self.pod_names: list[str] = []
         self._events: dict[str, asyncio.Event] = {}
@@ -475,8 +547,8 @@ class MyPodEventHandler(PodEventHandler):
     async def init(self, raw_pods: list[dict[str, Any]]) -> None:
         self.pod_names.extend([p["metadata"]["name"] for p in raw_pods])
 
-    async def handle(self, event: PodWatchEvent) -> None:
-        pod_name = event.raw_pod["metadata"]["name"]
+    async def handle(self, event: WatchEvent) -> None:
+        pod_name = event.resource["metadata"]["name"]
         self.pod_names.append(pod_name)
         waiter = self._events.get(pod_name)
         if waiter:

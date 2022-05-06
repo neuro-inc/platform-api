@@ -9,11 +9,14 @@ from platform_api.orchestrator.kube_client import (
     KubernetesEvent,
     Node,
     NodeAffinity,
+    NodeCondition,
+    NodeConditionType,
     NodePreferredSchedulingTerm,
     NodeResources,
     NodeSelectorOperator,
     NodeSelectorRequirement,
     NodeSelectorTerm,
+    NodeStatus,
     PodCondition,
     PodConditionType,
     PodDescriptor,
@@ -427,6 +430,128 @@ class TestKubernetesEvent:
         assert event.count == 12
 
 
+class TestNodeCondition:
+    def test_from_primitive_status_true(self) -> None:
+        now = datetime.now(timezone.utc)
+        condition = NodeCondition.from_primitive(
+            {
+                "type": "Ready",
+                "status": "True",
+                "lastTransitionTime": now.isoformat(),
+            }
+        )
+
+        assert condition == NodeCondition(
+            type=NodeConditionType.READY, status=True, transition_time=now
+        )
+
+    def test_from_primitive_status_false(self) -> None:
+        now = datetime.now(timezone.utc)
+        condition = NodeCondition.from_primitive(
+            {
+                "type": "Ready",
+                "status": "False",
+                "lastTransitionTime": now.isoformat(),
+            }
+        )
+
+        assert condition == NodeCondition(
+            type=NodeConditionType.READY, status=False, transition_time=now
+        )
+
+    def test_from_primitive_status_unknown(self) -> None:
+        now = datetime.now(timezone.utc)
+        condition = NodeCondition.from_primitive(
+            {
+                "type": "Ready",
+                "status": "Unknown",
+                "lastTransitionTime": now.isoformat(),
+            }
+        )
+
+        assert condition == NodeCondition(
+            type=NodeConditionType.READY, status=None, transition_time=now
+        )
+
+    def test_from_primitive_status_invalid(self) -> None:
+        with pytest.raises(ValueError, match="Invalid status 'Invalid'"):
+            NodeCondition.from_primitive(
+                {
+                    "type": "Ready",
+                    "status": "Invalid",
+                    "lastTransitionTime": datetime.now().isoformat(),
+                }
+            )
+
+
+class TestNodeStatus:
+    def test_from_primitive(self) -> None:
+        now = datetime.now(timezone.utc)
+        status = NodeStatus.from_primitive(
+            {
+                "allocatable": {},
+                "conditions": [
+                    {
+                        "type": "Ready",
+                        "status": "True",
+                        "lastTransitionTime": now.isoformat(),
+                    }
+                ],
+            }
+        )
+
+        assert status == NodeStatus(
+            allocatable_resources=NodeResources(),
+            conditions=[
+                NodeCondition(
+                    type=NodeConditionType.READY, status=True, transition_time=now
+                )
+            ],
+        )
+
+    def test_is_ready_true(self) -> None:
+        status = NodeStatus(
+            allocatable_resources=NodeResources(1, 4096),
+            conditions=[
+                NodeCondition(
+                    type=NodeConditionType.READY,
+                    status=True,
+                    transition_time=datetime.now(),
+                )
+            ],
+        )
+
+        assert status.is_ready is True
+
+    def test_is_ready_false(self) -> None:
+        status = NodeStatus(
+            allocatable_resources=NodeResources(1, 4096),
+            conditions=[
+                NodeCondition(
+                    type=NodeConditionType.READY,
+                    status=False,
+                    transition_time=datetime.now(),
+                )
+            ],
+        )
+
+        assert status.is_ready is False
+
+    def test_is_ready_unknown(self) -> None:
+        status = NodeStatus(
+            allocatable_resources=NodeResources(1, 4096),
+            conditions=[
+                NodeCondition(
+                    type=NodeConditionType.READY,
+                    status=None,
+                    transition_time=datetime.now(),
+                )
+            ],
+        )
+
+        assert status.is_ready is False
+
+
 class TestNodeResources:
     def test_from_primitive(self) -> None:
         resources = NodeResources.from_primitive({"cpu": "1", "memory": "4096Mi"})
@@ -478,6 +603,37 @@ class TestNodeResources:
         with pytest.raises(ValueError, match="Invalid gpu"):
             NodeResources(cpu=1, memory=4096, gpu=-1)
 
+    def test_are_sufficient(self) -> None:
+        r = NodeResources(cpu=1, memory=4096, gpu=1)
+
+        pod = PodDescriptor(name="job", image="job")
+        assert r.are_sufficient(pod) is True
+
+        pod = PodDescriptor(
+            name="job", image="job", resources=Resources(cpu=1, memory=4096, gpu=1)
+        )
+        assert r.are_sufficient(pod) is True
+
+        pod = PodDescriptor(
+            name="job", image="job", resources=Resources(cpu=0.1, memory=128)
+        )
+        assert r.are_sufficient(pod) is True
+
+        pod = PodDescriptor(
+            name="job", image="job", resources=Resources(cpu=1.1, memory=128)
+        )
+        assert r.are_sufficient(pod) is False
+
+        pod = PodDescriptor(
+            name="job", image="job", resources=Resources(cpu=0.1, memory=4097)
+        )
+        assert r.are_sufficient(pod) is False
+
+        pod = PodDescriptor(
+            name="job", image="job", resources=Resources(cpu=0.1, memory=128, gpu=2)
+        )
+        assert r.are_sufficient(pod) is False
+
 
 class TestNode:
     def test_from_primitive(self) -> None:
@@ -490,7 +646,7 @@ class TestNode:
 
         assert node == Node(
             name="minikube",
-            allocatable_resources=NodeResources(cpu=1, memory=4096),
+            status=NodeStatus(allocatable_resources=NodeResources(cpu=1, memory=4096)),
         )
 
     def test_from_primitive_with_labels(self) -> None:
@@ -504,8 +660,31 @@ class TestNode:
         assert node == Node(
             name="minikube",
             labels={"job": "true"},
-            allocatable_resources=NodeResources(cpu=1, memory=4096),
+            status=NodeStatus(allocatable_resources=NodeResources(cpu=1, memory=4096)),
         )
+
+    def test_get_free_resources(self) -> None:
+        node = Node(
+            name="minikube",
+            status=NodeStatus(
+                allocatable_resources=NodeResources(cpu=1, memory=1024, gpu=1)
+            ),
+        )
+
+        free = node.get_free_resources(NodeResources(cpu=0.1, memory=128))
+
+        assert free == NodeResources(cpu=0.9, memory=896, gpu=1)
+
+    def test_get_free_resources_error(self) -> None:
+        node = Node(
+            name="minikube",
+            status=NodeStatus(
+                allocatable_resources=NodeResources(cpu=1, memory=1024, gpu=1)
+            ),
+        )
+
+        with pytest.raises(ValueError, match="Invalid cpu"):
+            node.get_free_resources(NodeResources(cpu=1.1, memory=128))
 
 
 PodFactory = Callable[..., PodDescriptor]

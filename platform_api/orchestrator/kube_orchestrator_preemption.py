@@ -2,22 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable
-from contextlib import suppress
 from typing import Any
 
+from platform_api.orchestrator.job_request import JobNotFoundException
+
 from .kube_client import (
+    EventHandler,
     KubeClient,
     KubePreemption,
     Node,
     NodeResources,
-    NotFoundException,
     PodDescriptor,
-    PodEventHandler,
     PodStatus,
-    PodWatcher,
-    PodWatchEvent,
+    WatchEvent,
     WatchEventType,
 )
 
@@ -67,89 +66,52 @@ class _Pod:
         return pod_resources
 
 
-class NodeResourcesHandler(PodEventHandler):
-    def __init__(self, kube_client: KubeClient) -> None:
-        self._kube_client = kube_client
+class NodesHandler(EventHandler):
+    def __init__(self) -> None:
         self._nodes: dict[str, Node] = {}
-        self._node_free_resources: dict[str, NodeResources] = {}
+
+    async def init(self, raw_nodes: list[dict[str, Any]]) -> None:
+        for raw_node in raw_nodes:
+            node = Node.from_primitive(raw_node)
+            if node.status.is_ready:
+                self._add_node(node)
+
+    async def handle(self, event: WatchEvent) -> None:
+        node = Node.from_primitive(event.resource)
+        if event.type == WatchEventType.DELETED or not node.status.is_ready:
+            self._remove_node(node)
+        else:
+            self._add_node(node)
+
+    def _add_node(self, node: Node) -> None:
+        self._nodes[node.name] = node
+
+    def _remove_node(self, node: Node) -> None:
+        self._nodes.pop(node.name, None)
+
+    def get_nodes(self) -> Iterable[Node]:
+        return self._nodes.values()
+
+
+class NodeResourcesHandler(EventHandler):
+    def __init__(self) -> None:
+        self._resource_requests: dict[str, NodeResources] = defaultdict(NodeResources)
+        self._pod_counts: Counter[str] = Counter()
         self._pod_node_names: dict[str, str] = {}
 
     async def init(self, raw_pods: list[dict[str, Any]]) -> None:
         for raw_pod in raw_pods:
             pod = _Pod(raw_pod)
-            if pod.status.is_scheduled and not pod.status.is_terminated:
-                await self._add_pod(pod)
-
-    async def handle(self, event: PodWatchEvent) -> None:
-        pod = _Pod(event.raw_pod)
-        if not pod.status.is_scheduled:
-            return
-        if event.type == WatchEventType.DELETED or pod.status.is_terminated:
-            self._remove_pod(pod)
-        else:
-            await self._add_pod(pod)
-
-    async def _add_pod(self, pod: _Pod) -> None:
-        pod_name = pod.name
-        if pod_name in self._pod_node_names:
-            return
-        node_name = pod.node_name
-        # Ignore error in case node was removed/lost but pod was not yet removed
-        with suppress(NotFoundException):
-            if node_name not in self._nodes:
-                node = await self._kube_client.get_node(node_name)
-                self._nodes[node_name] = node
-                self._node_free_resources[node_name] = node.allocatable_resources
-            self._pod_node_names[pod_name] = node_name
-            self._node_free_resources[node_name] -= pod.resource_requests
-
-    def _remove_pod(self, pod: _Pod) -> None:
-        pod_name = pod.name
-        if pod_name not in self._pod_node_names:
-            return
-        node_name = pod.node_name
-        node = self._nodes.get(node_name)
-        if node:
-            node_free_resources = self._node_free_resources[node_name]
-            node_free_resources += pod.resource_requests
-            if node.allocatable_resources == node_free_resources:
-                self._node_free_resources.pop(node_name, None)
-                self._nodes.pop(node_name, None)
-            else:
-                self._node_free_resources[node_name] = node_free_resources
-        self._pod_node_names.pop(pod_name, None)
-
-    def get_nodes(self) -> list[Node]:
-        return list(self._nodes.values())
-
-    def get_node_free_resources(self, node_name: str) -> NodeResources:
-        return self._node_free_resources.get(node_name) or NodeResources()
-
-    def get_pod_node_name(self, pod_name: str) -> str | None:
-        """
-        Get name of the node which runs pod.
-        Return None if pod is not in a Running state.
-        """
-        return self._pod_node_names.get(pod_name)
-
-    def _get_node_allocatable_resources(self, node_name: str) -> NodeResources:
-        node = self._nodes.get(node_name)
-        return node.allocatable_resources if node else NodeResources()
-
-
-class IdlePodsHandler(PodEventHandler):
-    def __init__(self) -> None:
-        self._pods: dict[str, dict[str, PodDescriptor]] = defaultdict(dict)
-
-    async def init(self, raw_pods: list[dict[str, Any]]) -> None:
-        for raw_pod in raw_pods:
-            pod = _Pod(raw_pod)
-            if pod.is_idle and pod.status.is_scheduled and not pod.status.is_terminated:
+            if (
+                not pod.is_idle
+                and pod.status.is_scheduled
+                and not pod.status.is_terminated
+            ):
                 self._add_pod(pod)
 
-    async def handle(self, event: PodWatchEvent) -> None:
-        pod = _Pod(event.raw_pod)
-        if not pod.is_idle or not pod.status.is_scheduled:
+    async def handle(self, event: WatchEvent) -> None:
+        pod = _Pod(event.resource)
+        if pod.is_idle or not pod.status.is_scheduled:
             return
         if event.type == WatchEventType.DELETED or pod.status.is_terminated:
             self._remove_pod(pod)
@@ -158,34 +120,52 @@ class IdlePodsHandler(PodEventHandler):
 
     def _add_pod(self, pod: _Pod) -> None:
         pod_name = pod.name
+        if pod_name in self._pod_node_names:
+            return
         node_name = pod.node_name
-        # there is an issue in k8s, elements in items don't have kind and version
-        pod.payload["kind"] = "Pod"
-        self._pods[node_name][pod_name] = PodDescriptor.from_primitive(pod.payload)
+        self._resource_requests[node_name] += pod.resource_requests
+        self._pod_counts[node_name] += 1
+        self._pod_node_names[pod_name] = node_name
 
     def _remove_pod(self, pod: _Pod) -> None:
-        node_name = pod.node_name
         pod_name = pod.name
-        pods = self._pods[node_name]
-        pods.pop(pod_name, None)
-        if not pods:
-            self._pods.pop(node_name, None)
+        if pod_name not in self._pod_node_names:
+            return
+        node_name = pod.node_name
+        resource_requests = self._resource_requests[node_name]
+        resource_requests -= pod.resource_requests
+        pod_counts = self._pod_counts[node_name]
+        pod_counts -= 1
+        if pod_counts == 0:
+            self._resource_requests.pop(node_name, None)
+            self._pod_counts.pop(node_name, None)
+        else:
+            self._resource_requests[node_name] = resource_requests
+            self._pod_counts[node_name] = pod_counts
+        self._pod_node_names.pop(pod_name, None)
 
-    def get_pods(self, node_name: str) -> list[PodDescriptor]:
-        pods = self._pods.get(node_name)
-        return list(pods.values()) if pods else []
+    def get_resource_requests(self, node_name: str) -> NodeResources:
+        return self._resource_requests.get(node_name) or NodeResources()
+
+    def get_pod_node_name(self, pod_name: str) -> str | None:
+        """
+        Get name of the node which runs pod.
+        Return None if pod is not in a Running state.
+        """
+        return self._pod_node_names.get(pod_name)
 
 
 class KubeOrchestratorPreemption:
-    def __init__(self, kube_client: KubeClient) -> None:
+    def __init__(
+        self,
+        kube_client: KubeClient,
+        nodes_handler: NodesHandler,
+        node_resources_handler: NodeResourcesHandler,
+    ) -> None:
         self._kube_client = kube_client
         self._kube_preemption = KubePreemption()
-        self._node_resources_handler = NodeResourcesHandler(kube_client)
-        self._idle_pods_handler = IdlePodsHandler()
-
-    def register(self, pod_watcher: PodWatcher) -> None:
-        pod_watcher.subscribe(self._node_resources_handler)
-        pod_watcher.subscribe(self._idle_pods_handler)
+        self._nodes_handler = nodes_handler
+        self._node_resources_handler = node_resources_handler
 
     async def preempt_pods(
         self,
@@ -199,14 +179,6 @@ class KubeOrchestratorPreemption:
                 preemptible_pods_by_node[node_name].append(pod)
         preempted_pods = await self._preempt_pods(
             pods_to_schedule, get_preemptible_pods=preemptible_pods_by_node.__getitem__
-        )
-        return preempted_pods
-
-    async def preempt_idle_pods(
-        self, pods_to_schedule: list[PodDescriptor]
-    ) -> list[PodDescriptor]:
-        preempted_pods = await self._preempt_pods(
-            pods_to_schedule, get_preemptible_pods=self._idle_pods_handler.get_pods
         )
         return preempted_pods
 
@@ -286,12 +258,13 @@ class KubeOrchestratorPreemption:
 
     def _get_nodes(self, exclude: Iterable[Node]) -> list[Node]:
         def _create_key(node: Node) -> tuple[int, int, float]:
-            r = self._node_resources_handler.get_node_free_resources(node.name)
-            if not r:
+            requested = self._node_resources_handler.get_resource_requests(node.name)
+            free = node.get_free_resources(requested)
+            if not free:
                 return (0, 0, 0.0)
-            return (r.gpu or 0, r.memory, r.cpu)
+            return (free.gpu or 0, free.memory, free.cpu)
 
-        nodes = self._node_resources_handler.get_nodes()
+        nodes = self._nodes_handler.get_nodes()
         nodes = [n for n in nodes if n not in exclude]
         nodes.sort(key=_create_key)  # Try to preempt nodes with less resources first
         return nodes
@@ -299,7 +272,8 @@ class KubeOrchestratorPreemption:
     def _get_resources_to_preempt(
         self, pod_to_schedule: PodDescriptor, node: Node
     ) -> NodeResources:
-        free = self._node_resources_handler.get_node_free_resources(node.name)
+        requested = self._node_resources_handler.get_resource_requests(node.name)
+        free = node.get_free_resources(requested)
         required = pod_to_schedule.resources
         if not required:
             return NodeResources()
@@ -310,8 +284,12 @@ class KubeOrchestratorPreemption:
         )
 
     async def _delete_pods(self, pods: Iterable[PodDescriptor]) -> None:
-        tasks = [
-            asyncio.create_task(self._kube_client.delete_pod(pod.name)) for pod in pods
-        ]
+        tasks = [asyncio.create_task(self._delete_pod(pod.name)) for pod in pods]
         if tasks:
             await asyncio.wait(tasks)
+
+    async def _delete_pod(self, pod_name: str) -> None:
+        try:
+            await self._kube_client.delete_pod(pod_name)
+        except JobNotFoundException:
+            pass
