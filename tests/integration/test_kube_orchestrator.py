@@ -2139,7 +2139,7 @@ class TestKubeOrchestrator:
         return node.status.allocatable_resources
 
     @pytest.fixture
-    async def start_pod_watcher(
+    async def start_watchers(
         self, kube_client: MyKubeClient, kube_orchestrator: KubeOrchestrator
     ) -> AsyncIterator[None]:
         node_watcher = NodeWatcher(kube_client)
@@ -2151,14 +2151,14 @@ class TestKubeOrchestrator:
         async with exit_stack:
             yield
 
-    @pytest.mark.usefixtures("start_pod_watcher")
+    @pytest.mark.usefixtures("start_watchers")
     async def test_get_schedulable_jobs(
         self, kube_orchestrator: KubeOrchestrator, node_resources: NodeResources
     ) -> None:
         # Schedulable
         container = Container(
             image="ubuntu:20.10",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=0),
         )
         job1 = MyJob(
             orchestrator=kube_orchestrator,
@@ -2172,7 +2172,7 @@ class TestKubeOrchestrator:
         # Not schedulable
         container = Container(
             image="ubuntu:20.10",
-            resources=ContainerResources(cpu=node_resources.cpu, memory_mb=128),
+            resources=ContainerResources(cpu=node_resources.cpu, memory_mb=128, gpu=0),
         )
         job2 = MyJob(
             orchestrator=kube_orchestrator,
@@ -2977,7 +2977,7 @@ class TestRestartPolicy:
 
 class TestJobsPreemption:
     @pytest.fixture(autouse=True)
-    async def start_pod_watcher(
+    async def start_watchers(
         self, kube_client: MyKubeClient, kube_orchestrator: KubeOrchestrator
     ) -> AsyncIterator[None]:
         node_watcher = NodeWatcher(kube_client)
