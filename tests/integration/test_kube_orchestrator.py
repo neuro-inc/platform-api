@@ -2131,6 +2131,58 @@ class TestKubeOrchestrator:
         await kube_client.get_ingress(job2.id)
         await kube_client.get_ingress(job3.id)
 
+    @pytest.fixture
+    async def node_resources(
+        self, kube_client: KubeClient, kube_node: str
+    ) -> NodeResources:
+        node = await kube_client.get_node(kube_node)
+        return node.status.allocatable_resources
+
+    @pytest.fixture
+    async def start_pod_watcher(
+        self, kube_client: MyKubeClient, kube_orchestrator: KubeOrchestrator
+    ) -> AsyncIterator[None]:
+        node_watcher = NodeWatcher(kube_client)
+        pod_watcher = PodWatcher(kube_client)
+        kube_orchestrator.register(node_watcher, pod_watcher)
+        exit_stack = AsyncExitStack()
+        await exit_stack.enter_async_context(node_watcher)
+        await exit_stack.enter_async_context(pod_watcher)
+        async with exit_stack:
+            yield
+
+    @pytest.mark.usefixtures("start_pod_watcher")
+    async def test_get_schedulable_jobs(
+        self, kube_orchestrator: KubeOrchestrator, node_resources: NodeResources
+    ) -> None:
+        container = Container(
+            image="ubuntu:20.10",
+            resources=ContainerResources(cpu=node_resources.cpu / 2, memory_mb=128),
+        )
+        # First job requests half of node cpu, less than half is left
+        job1 = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                name=f"job-{uuid.uuid4().hex[:6]}",
+                owner="owner1",
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+            ),
+        )
+        # Second job should not be scheduled, not enough cpu left
+        job2 = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                name=f"job-{uuid.uuid4().hex[:6]}",
+                owner="owner1",
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+            ),
+        )
+        jobs = await kube_orchestrator.get_schedulable_jobs([job1, job2])
+
+        assert jobs == [job1]
+
 
 class TestNodeAffinity:
     @pytest.fixture

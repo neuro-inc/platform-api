@@ -24,6 +24,14 @@ class Orchestrator(ABC):
         pass
 
     @abstractmethod
+    async def get_schedulable_jobs(self, jobs: list[Job]) -> list[Job]:
+        pass
+
+    @abstractmethod
+    async def is_job_scheduled(self, job: Job) -> bool:
+        pass
+
+    @abstractmethod
     async def get_missing_secrets(
         self, secret_path: str, secret_names: list[str]
     ) -> list[str]:

@@ -13,7 +13,8 @@ from platform_api.orchestrator.kube_client import (
     Resources,
     WatchEvent,
 )
-from platform_api.orchestrator.kube_orchestrator_preemption import (
+from platform_api.orchestrator.kube_orchestrator_scheduler import (
+    KubeOrchestratorScheduler,
     NodeResourcesHandler,
     NodesHandler,
 )
@@ -23,11 +24,17 @@ NodeFactory = Callable[..., dict[str, Any]]
 
 @pytest.fixture
 def create_node() -> NodeFactory:
-    def _create(ready: bool = True) -> dict[str, Any]:
+    def _create(
+        cpu: float = 1, memory: int = 1024, gpu: int = 1, ready: bool = True
+    ) -> dict[str, Any]:
         return {
             "metadata": {"name": "minikube"},
             "status": {
-                "allocatable": {},
+                "allocatable": {
+                    "cpu": cpu,
+                    "memory": f"{memory}Mi",
+                    "nvidia.com/gpu": gpu,
+                },
                 "conditions": [
                     {
                         "type": "Ready",
@@ -329,7 +336,7 @@ class TestNodeResourcesHandler:
         resources = handler.get_resource_requests("minikube")
         assert resources == NodeResources()
 
-    async def test_handle_deleted_not_existing(
+    async def test_handle_deleted_unknown(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
         await handler.handle(
@@ -344,3 +351,115 @@ class TestNodeResourcesHandler:
     ) -> None:
         resources = handler.get_resource_requests("minikube")
         assert resources == NodeResources()
+
+
+class TestKubeOrchestratorScheduler:
+    @pytest.fixture
+    async def nodes_handler(self, create_node: NodeFactory) -> NodesHandler:
+        handler = NodesHandler()
+        await handler.init([create_node()])
+        return handler
+
+    @pytest.fixture
+    def node_resources_handler(self) -> NodeResourcesHandler:
+        return NodeResourcesHandler()
+
+    @pytest.fixture
+    def scheduler(
+        self, nodes_handler: NodesHandler, node_resources_handler: NodeResourcesHandler
+    ) -> KubeOrchestratorScheduler:
+        return KubeOrchestratorScheduler(nodes_handler, node_resources_handler)
+
+    async def test_is_pod_scheduled(
+        self,
+        scheduler: KubeOrchestratorScheduler,
+        node_resources_handler: NodeResourcesHandler,
+        create_pod: PodFactory,
+    ) -> None:
+        await node_resources_handler.handle(WatchEvent.create_added(create_pod("job")))
+
+        assert scheduler.is_pod_scheduled("job") is False
+
+        await node_resources_handler.handle(
+            WatchEvent.create_modified(create_pod("job", is_running=True))
+        )
+
+        assert scheduler.is_pod_scheduled("job") is True
+
+        await node_resources_handler.handle(
+            WatchEvent.create_deleted(create_pod("job", is_running=True))
+        )
+
+        assert scheduler.is_pod_scheduled("job") is False
+
+    def test_is_pod_scheduled_unknown(
+        self, scheduler: KubeOrchestratorScheduler
+    ) -> None:
+        assert scheduler.is_pod_scheduled("unknown") is False
+
+    async def test_get_schedulable_pods(
+        self,
+        scheduler: KubeOrchestratorScheduler,
+        node_resources_handler: NodeResourcesHandler,
+        create_pod: PodFactory,
+    ) -> None:
+        pod = PodDescriptor.from_primitive(create_pod())
+
+        assert scheduler.get_schedulable_pods([pod]) == [pod]
+
+        await node_resources_handler.handle(
+            WatchEvent.create_added(create_pod(cpu=1, is_running=True))
+        )
+
+        assert scheduler.get_schedulable_pods([pod]) == []
+
+    async def test_get_schedulable_pods_already_scheduled(
+        self,
+        scheduler: KubeOrchestratorScheduler,
+        node_resources_handler: NodeResourcesHandler,
+        create_pod: PodFactory,
+    ) -> None:
+        pod1 = PodDescriptor.from_primitive(create_pod(name="job", cpu=0.1))
+        pod2 = PodDescriptor.from_primitive(create_pod(cpu=0.9, gpu=0))
+        pod3 = PodDescriptor.from_primitive(create_pod(cpu=0.1, gpu=0))
+
+        await node_resources_handler.handle(
+            WatchEvent.create_added(create_pod(name="job", cpu=0.1, is_running=True))
+        )
+
+        assert scheduler.get_schedulable_pods([pod1, pod2, pod3]) == [pod1, pod2]
+
+    async def test_get_schedulable_pods_without_resources(
+        self,
+        scheduler: KubeOrchestratorScheduler,
+        node_resources_handler: NodeResourcesHandler,
+        create_pod: PodFactory,
+    ) -> None:
+        await node_resources_handler.handle(
+            WatchEvent.create_added(create_pod(name="job", cpu=1, is_running=True))
+        )
+
+        pod = PodDescriptor(name="job", image="job")
+        assert scheduler.get_schedulable_pods([pod]) == [pod]
+
+    def test_get_schedulable_pods_cannot_schedule_on_node(
+        self, scheduler: KubeOrchestratorScheduler
+    ) -> None:
+        pod = PodDescriptor(
+            name="job", image="job", node_selector={"unknown": "unknown"}
+        )
+        assert scheduler.get_schedulable_pods([pod]) == []
+
+    async def test_get_schedulable_pods_node_not_ready(
+        self,
+        scheduler: KubeOrchestratorScheduler,
+        nodes_handler: NodesHandler,
+        create_node: NodeFactory,
+        create_pod: PodFactory,
+    ) -> None:
+        pod = PodDescriptor.from_primitive(create_pod(is_running=True))
+        assert scheduler.get_schedulable_pods([pod]) == [pod]
+
+        await nodes_handler.handle(WatchEvent.create_modified(create_node(ready=False)))
+
+        assert scheduler.get_schedulable_pods([pod]) == []
