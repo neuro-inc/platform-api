@@ -2158,7 +2158,7 @@ class TestKubeOrchestrator:
         # Schedulable
         container = Container(
             image="ubuntu:20.10",
-            resources=ContainerResources(cpu=node_resources.cpu / 2, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory_mb=128),
         )
         job1 = MyJob(
             orchestrator=kube_orchestrator,
