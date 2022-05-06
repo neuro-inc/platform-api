@@ -168,11 +168,16 @@ class KubeOrchestratorScheduler:
         schedulable_pods: list[PodDescriptor] = []
         scheduled: dict[str, NodeResources] = defaultdict(NodeResources)
         for pod in pods:
+            logger.debug("Check pod %r can be scheduled", pod.name)
             if self.is_pod_scheduled(pod.name):
+                logger.debug("Pod %r has already been scheduled", pod.name)
                 schedulable_pods.append(pod)
                 continue
             for node in self._nodes_handler.get_nodes():
                 if not pod.can_be_scheduled(node.labels):
+                    logger.debug(
+                        "Pod %r cannot be scheduled onto node %r", pod.name, node.name
+                    )
                     continue
                 requested = self._node_resources_handler.get_resource_requests(
                     node.name
@@ -180,6 +185,9 @@ class KubeOrchestratorScheduler:
                 requested += scheduled[node.name]
                 free = node.get_free_resources(requested)
                 if free.are_sufficient(pod):
+                    logger.debug(
+                        "Pod %r can be scheduled onto node %r", node.name, pod.name
+                    )
                     schedulable_pods.append(pod)
                     if pod.resources:
                         scheduled[node.name] += NodeResources(
@@ -188,6 +196,11 @@ class KubeOrchestratorScheduler:
                             gpu=pod.resources.gpu or 0,
                         )
                     break
+                logger.debug(
+                    "Node %r doesn't have enough resources for pod %r",
+                    node.name,
+                    pod.name,
+                )
         return schedulable_pods
 
 
