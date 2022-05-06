@@ -895,6 +895,3 @@ class KubeOrchestrator(Orchestrator):
         schedulable_pods = self._scheduler.get_schedulable_pods(job_pods)
         schedulable_pod_names = {pod.name for pod in schedulable_pods}
         return [job for job in jobs if job.id in schedulable_pod_names]
-
-    async def is_job_scheduled(self, job: Job) -> bool:
-        return self._scheduler.is_pod_scheduled(job.id)

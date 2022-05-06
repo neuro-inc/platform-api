@@ -174,9 +174,6 @@ class MockOrchestrator(Orchestrator):
     async def get_schedulable_jobs(self, jobs: list[Job]) -> list[Job]:
         return jobs
 
-    async def is_job_scheduled(self, job: Job) -> bool:
-        return True
-
 
 class MockJobsStorage(InMemoryJobsStorage):
     def __init__(self) -> None:
