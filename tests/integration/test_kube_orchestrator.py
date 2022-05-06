@@ -2155,11 +2155,11 @@ class TestKubeOrchestrator:
     async def test_get_schedulable_jobs(
         self, kube_orchestrator: KubeOrchestrator, node_resources: NodeResources
     ) -> None:
+        # Schedulable
         container = Container(
             image="ubuntu:20.10",
             resources=ContainerResources(cpu=node_resources.cpu / 2, memory_mb=128),
         )
-        # First job requests half of node cpu, less than half is left
         job1 = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
@@ -2169,7 +2169,11 @@ class TestKubeOrchestrator:
                 cluster_name="test-cluster",
             ),
         )
-        # Second job should not be scheduled, not enough cpu left
+        # Not schedulable
+        container = Container(
+            image="ubuntu:20.10",
+            resources=ContainerResources(cpu=node_resources.cpu, memory_mb=128),
+        )
         job2 = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
