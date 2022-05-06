@@ -197,9 +197,10 @@ class KubeOrchestratorScheduler:
                         )
                     break
                 logger.debug(
-                    "Node %r doesn't have enough resources for pod %r",
+                    "Node %r has not enough resources for pod %r. Resources left: %s",
                     node.name,
                     pod.name,
+                    free,
                 )
         return schedulable_pods
 
