@@ -1,9 +1,10 @@
 import abc
+import itertools
 import logging
 from collections import defaultdict
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from contextlib import AsyncExitStack, asynccontextmanager
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Optional, Union
@@ -39,8 +40,9 @@ logger = logging.getLogger(__file__)
 
 @dataclass(frozen=True)
 class SchedulingResult:
-    jobs_to_update: list[JobRecord]
-    jobs_to_suspend: list[JobRecord]
+    jobs_to_start: list[JobRecord] = field(default_factory=list)
+    jobs_to_update: list[JobRecord] = field(default_factory=list)
+    jobs_to_suspend: list[JobRecord] = field(default_factory=list)
 
 
 current_datetime_factory = partial(datetime.now, timezone.utc)
@@ -91,15 +93,18 @@ class JobsScheduler:
             return org_cluster.quota.total_running_jobs
 
     async def _enforce_running_job_quota(
-        self, raw_result: SchedulingResult
-    ) -> SchedulingResult:
+        self, unfinished: list[JobRecord]
+    ) -> list[JobRecord]:
+        if not unfinished:
+            return unfinished
+
         jobs_to_update: list[JobRecord] = []
 
         # Grouping by (username, cluster_name, org_name):
         grouped_jobs: dict[
             tuple[str, str, Optional[str]], list[JobRecord]
         ] = defaultdict(list)
-        for record in raw_result.jobs_to_update:
+        for record in unfinished:
             grouped_jobs[(record.owner, record.cluster_name, record.org_name)].append(
                 record
             )
@@ -139,67 +144,61 @@ class JobsScheduler:
             quota = await self._get_org_running_jobs_quota(cluster, org_name)
             jobs_to_update.extend(_filter_our_for_quota(quota, jobs))
 
-        return SchedulingResult(
-            jobs_to_update=jobs_to_update,
-            jobs_to_suspend=raw_result.jobs_to_suspend,
-        )
+        return jobs_to_update
 
     async def schedule(self, unfinished: list[JobRecord]) -> SchedulingResult:
+        unfinished = await self._enforce_running_job_quota(unfinished)
+
+        if not unfinished:
+            return SchedulingResult()
+
+        jobs_to_start: list[JobRecord] = []
         jobs_to_update: list[JobRecord] = []
         jobs_to_suspend: list[JobRecord] = []
         now = self._current_datetime_factory()
 
-        # Always start/update not scheduled jobs
-        jobs_to_update.extend(job for job in unfinished if not job.scheduler_enabled)
+        # Process pending jobs
+        for job in unfinished:
+            if job.status.is_pending:
+                jobs_to_start.append(job)
 
-        scheduled = [job for job in unfinished if job.scheduler_enabled]
-
-        not_materialized = sorted(
-            (job for job in scheduled if not job.materialized),
-            key=lambda job: job.status_history.current.transition_time,
-        )
-        materialized_not_running = [
-            job
-            for job in scheduled
-            if job.status != JobStatus.RUNNING and job.materialized
-        ]
-        running = [job for job in scheduled if job.status == JobStatus.RUNNING]
-
-        waiting_exists = any(
-            now - job.status_history.current.transition_time
-            >= self._config.is_waiting_min_time
-            for job in materialized_not_running
-        )
-
-        # not_materialized processing
-
-        for job in not_materialized:
-            suspended_at = job.status_history.current.transition_time
-            if (
-                not waiting_exists
-                or now - suspended_at >= self._config.max_suspended_time
-            ):
-                jobs_to_update.append(job)
-
-        # materialized_not_running processing
-
-        jobs_to_update.extend(materialized_not_running)
-
-        # running processing
-
-        for job in running:
-            continued_at = job.status_history.continued_at
-            assert continued_at, "Running job should have continued_at"
-            if now - continued_at >= self._config.run_quantum and waiting_exists:
-                jobs_to_suspend.append(job)
+        # Process running jobs
+        for job in unfinished:
+            if not job.status.is_running:
+                continue
+            if job.scheduler_enabled:
+                continued_at = job.status_history.continued_at
+                assert continued_at, "Running job should have continued_at"
+                if now - continued_at < self._config.run_quantum:
+                    jobs_to_update.append(job)
+                else:
+                    jobs_to_suspend.append(job)
             else:
                 jobs_to_update.append(job)
 
-        result = SchedulingResult(
+        # Process suspended jobs
+        for job in unfinished:
+            if not job.status.is_suspended:
+                continue
+            suspended_at = job.status_history.current.transition_time
+            if (
+                not jobs_to_start
+                or now - suspended_at >= self._config.max_suspended_time
+            ):
+                jobs_to_start.append(job)
+
+        jobs_to_start.sort(
+            key=lambda job: (
+                job.priority,
+                now - job.status_history.current.transition_time,
+            )
+        )
+
+        return SchedulingResult(
+            jobs_to_start=jobs_to_start,
             jobs_to_update=jobs_to_update,
             jobs_to_suspend=jobs_to_suspend,
         )
-        return await self._enforce_running_job_quota(result)
 
 
 class JobsPollerApi(abc.ABC):
@@ -286,18 +285,16 @@ class JobsPollerService:
             assert cluster.name == name, "Poller tried to access different cluster"
             yield cluster
 
-    async def update_jobs_statuses(
-        self,
-    ) -> None:
+    async def update_jobs_statuses(self) -> None:
         unfinished = await self._api.get_unfinished_jobs()
         result = await self._scheduler.schedule(unfinished)
 
         await run_and_log_exceptions(
-            self._update_job_status_wrapper(record) for record in result.jobs_to_update
+            self._start_jobs_wrapper(result.jobs_to_start, result.jobs_to_suspend)
         )
 
         await run_and_log_exceptions(
-            self._suspend_job_wrapper(record) for record in result.jobs_to_suspend
+            self._update_job_status_wrapper(record) for record in result.jobs_to_update
         )
 
         await run_and_log_exceptions(
@@ -318,6 +315,112 @@ class JobsPollerService:
             image_pull_error_delay=self._jobs_config.image_pull_error_delay,
         )
 
+    async def _start_jobs_wrapper(
+        self, records_to_start: list[JobRecord], records_to_suspend: list[JobRecord]
+    ) -> None:
+        try:
+            async with AsyncExitStack() as stack:
+                for record in itertools.chain(records_to_start, records_to_suspend):
+                    await stack.enter_async_context(self._update_job(record))
+
+                try:
+                    async with self._cluster_holder.get() as cluster:
+                        await self._start_jobs(
+                            cluster, records_to_start, records_to_suspend
+                        )
+                except ClusterNotFound as cluster_err:
+                    for record in itertools.chain(records_to_start, records_to_suspend):
+                        # marking PENDING/RUNNING job as FAILED
+                        logger.warning(
+                            "Failed to get job '%s' status. Reason: %s",
+                            record.id,
+                            cluster_err,
+                        )
+                        record.status_history.current = JobStatusItem.create(
+                            JobStatus.FAILED,
+                            reason=JobStatusReason.CLUSTER_NOT_FOUND,
+                            description=str(cluster_err),
+                        )
+                        record.materialized = False
+                        await self._revoke_pass_config(record)
+                except ClusterNotAvailable:
+                    # skipping job status update
+                    pass
+        except JobStorageTransactionError:
+            # intentionally ignoring any transaction failures here because
+            # the job may have been changed and a retry is needed.
+            pass
+
+    async def _start_jobs(
+        self,
+        cluster: Cluster,
+        records_to_start: list[JobRecord],
+        records_to_suspend: list[JobRecord],
+    ) -> None:
+        try:
+            if not records_to_start:
+                return
+
+            if not cluster.config.orchestrator.has_scheduler_enabled_presets:
+                # Clusters without job scheduler_enabled presets
+                # and priorities. We can start all jobs at once.
+                for record in records_to_start:
+                    job = self._make_job(record, cluster)
+                    await self._update_job_status(cluster.orchestrator, job)
+                return
+
+            jobs_to_start = [self._make_job(r, cluster) for r in records_to_suspend]
+            jobs_to_suspend = [self._make_job(r, cluster) for r in records_to_suspend]
+            schedulable_jobs = await cluster.orchestrator.get_schedulable_jobs(
+                jobs_to_start
+            )
+            schedulable_job_ids = {r.id for r in schedulable_jobs}
+            for job in jobs_to_start:
+                if job.id in schedulable_job_ids:
+                    await self._update_job_status(cluster.orchestrator, job)
+                    # If there are enough resources in cluster proceed to the next
+                    # job to start multiple jobs in parallel. It can speed up
+                    # jobs start time if cluster needs to preempt idle jobs
+                    continue
+                suspended_jobs = await self._suspend_jobs(
+                    cluster.orchestrator, job, jobs_to_suspend
+                )
+                if suspended_jobs:
+                    # Do not proceed to other jobs until job is scheduled
+                    break
+                # For some reason there are no resources for the job, it can
+                # be skipped until other jobs finish and free some resources.
+
+                # Job could be materialized because we expected that there are
+                # enough resources.
+                if job.materialized:
+                    await cluster.orchestrator.delete_job(job)
+                    await self._revoke_pass_config(job)
+                    job.materialized = False
+            for job in jobs_to_suspend:
+                if job.status != JobStatus.SUSPENDED:
+                    await self._update_job_status(cluster.orchestrator, job)
+        except JobException as exc:
+            # if the job is missing, we still want to mark
+            # the job as deleted. suppressing.
+            logger.warning("Could not start jobs. Reason: '%s'", exc)
+
+    async def _suspend_jobs(
+        self,
+        orchestrator: Orchestrator,
+        job_to_start: Job,
+        jobs_to_suspend: list[Job],
+    ) -> None:
+        jobs_to_suspend = [
+            job for job in jobs_to_suspend if job_to_start.priority >= job.priority
+        ]
+        suspended_jobs = await orchestrator.preempt_jobs(
+            [job_to_start], jobs_to_suspend
+        )
+        for job in suspended_jobs:
+            job.status = JobStatus.SUSPENDED
+            job.materialized = False
+
     async def _update_job_status_wrapper(self, job_record: JobRecord) -> None:
         try:
             async with self._update_job(job_record) as record:
@@ -325,7 +428,6 @@ class JobsPollerService:
                     async with self._get_cluster(record.cluster_name) as cluster:
                         job = self._make_job(record, cluster)
                         await self._update_job_status(cluster.orchestrator, job)
-                        job.collect_if_needed()
                 except ClusterNotFound as cluster_err:
                     # marking PENDING/RUNNING job as FAILED
                     logger.warning(
@@ -343,18 +445,6 @@ class JobsPollerService:
                 except ClusterNotAvailable:
                     # skipping job status update
                     pass
-        except JobStorageTransactionError:
-            # intentionally ignoring any transaction failures here because
-            # the job may have been changed and a retry is needed.
-            pass
-
-    async def _suspend_job_wrapper(self, job_record: JobRecord) -> None:
-        try:
-            async with self._update_job(job_record) as record:
-                await self._delete_cluster_job(record)
-
-                record.status = JobStatus.SUSPENDED
-                record.materialized = False
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
@@ -419,6 +509,8 @@ class JobsPollerService:
                 old_status_item.status.name,
                 status_item.status.name,
             )
+
+        job.collect_if_needed()
 
     async def _delete_job_wrapper(self, job_record: JobRecord) -> None:
         try:

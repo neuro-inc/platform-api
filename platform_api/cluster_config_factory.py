@@ -85,8 +85,10 @@ class ClusterConfigFactory:
                 OrchestratorConfig.job_schedule_scaleup_timeout,
             ),
             allow_privileged_mode=orchestrator.get(
-                "allow_privileged_mode",
-                OrchestratorConfig.allow_privileged_mode,
+                "allow_privileged_mode", OrchestratorConfig.allow_privileged_mode
+            ),
+            allow_job_priority=orchestrator.get(
+                "allow_job_priority", OrchestratorConfig.allow_job_priority
             ),
         )
 

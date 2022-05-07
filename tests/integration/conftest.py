@@ -218,6 +218,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
             ],
             job_schedule_scaleup_timeout=5,
             allow_privileged_mode=True,
+            allow_job_priority=True,
         )
         kwargs = {**defaults, **kwargs}
         return OrchestratorConfig(**kwargs)
@@ -252,6 +253,9 @@ def kube_config_factory(
             auth_cert_key_path=user["client-key"],
             node_label_gpu="gpu",
             namespace="platformapi-tests",
+            jobs_pod_low_priority_class_name="job-low",
+            jobs_pod_normal_priority_class_name="job-normal",
+            jobs_pod_high_priority_class_name="job-high",
         )
         kwargs = {**defaults, **kwargs}
         return KubeConfig(**kwargs)

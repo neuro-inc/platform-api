@@ -1694,6 +1694,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "logs_removed": False,
         "total_price_credits": "0",
         "price_credits_per_hour": "10",
+        "priority": "normal",
     }
 
 
@@ -1802,6 +1803,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "logs_removed": False,
         "price_credits_per_hour": "10",
         "total_price_credits": "0",
+        "priority": "normal",
     }
 
 
@@ -1871,6 +1873,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "logs_removed": False,
         "price_credits_per_hour": "10",
         "total_price_credits": "0",
+        "priority": "normal",
     }
 
 

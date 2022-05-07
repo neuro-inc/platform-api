@@ -53,6 +53,8 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
                 "job_internal_hostname_template": "{job_id}.default",
                 "job_schedule_timeout_s": 60,
                 "job_schedule_scale_up_timeout_s": 120,
+                "is_http_ingress_secure": True,
+                "allow_job_priority": True,
                 "resource_presets": [
                     {
                         "name": "cpu-small",
@@ -174,7 +176,6 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
                         "gpu_model": "nvidia-tesla-v100",
                     },
                 ],
-                "is_http_ingress_secure": True,
             },
             "monitoring": {"url": "https://dev.neu.ro/api/v1/jobs"},
             "secrets": {"url": "https://dev.neu.ro/api/v1/secrets"},
@@ -237,6 +238,7 @@ class TestClusterConfigFactory:
         )
         assert orchestrator.job_schedule_timeout == 60
         assert orchestrator.job_schedule_scaleup_timeout == 120
+        assert orchestrator.allow_job_priority
 
         assert len(orchestrator.resource_pool_types) == 5
         assert orchestrator.resource_pool_types[0].name == "n1-highmem-8"
@@ -297,25 +299,32 @@ class TestClusterConfigFactory:
         )
         assert orchestrator.tpu_ipv4_cidr_block == "1.1.1.1/32"
 
-    def test_orchestrator_resource_presets(
+    def test_orchestrator_resource_presets_default(
         self, clusters_payload: Sequence[dict[str, Any]]
     ) -> None:
         factory = ClusterConfigFactory()
         clusters_payload[0]["orchestrator"]["resource_presets"] = [
             {
-                "name": "cpu-small",
+                "name": "cpu",
                 "credits_per_hour": "10",
                 "cpu": 1,
                 "memory_mb": 2048,
-            },
+            }
+        ]
+        clusters = factory.create_cluster_configs(clusters_payload)
+
+        assert clusters[0].orchestrator.presets == [
+            Preset(name="cpu", credits_per_hour=Decimal("10"), cpu=1, memory_mb=2048)
+        ]
+        assert clusters[0].orchestrator.has_scheduler_enabled_presets is False
+
+    def test_orchestrator_resource_presets_custom(
+        self, clusters_payload: Sequence[dict[str, Any]]
+    ) -> None:
+        factory = ClusterConfigFactory()
+        clusters_payload[0]["orchestrator"]["resource_presets"] = [
             {
-                "name": "cpu-large",
-                "credits_per_hour": "10",
-                "cpu": 7,
-                "memory_mb": 49152,
-            },
-            {
-                "name": "cpu-large-p",
+                "name": "cpu-p",
                 "credits_per_hour": "10",
                 "cpu": 7,
                 "memory_mb": 49152,
@@ -327,13 +336,7 @@ class TestClusterConfigFactory:
 
         assert clusters[0].orchestrator.presets == [
             Preset(
-                name="cpu-small", credits_per_hour=Decimal("10"), cpu=1, memory_mb=2048
-            ),
-            Preset(
-                name="cpu-large", credits_per_hour=Decimal("10"), cpu=7, memory_mb=49152
-            ),
-            Preset(
-                name="cpu-large-p",
+                name="cpu-p",
                 credits_per_hour=Decimal("10"),
                 cpu=7,
                 memory_mb=49152,
@@ -341,6 +344,7 @@ class TestClusterConfigFactory:
                 preemptible_node=True,
             ),
         ]
+        assert clusters[0].orchestrator.has_scheduler_enabled_presets is True
 
     def test_orchestrator_job_schedule_settings_default(
         self, clusters_payload: Sequence[dict[str, Any]]

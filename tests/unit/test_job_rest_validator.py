@@ -273,6 +273,7 @@ class TestJobResponseValidator:
             "logs_removed": False,
             "price_credits_per_hour": "10",
             "total_price_credits": "10",
+            "priority": "normal",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -317,6 +318,7 @@ class TestJobResponseValidator:
             "logs_removed": False,
             "price_credits_per_hour": "10",
             "total_price_credits": "10",
+            "priority": "normal",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -359,6 +361,7 @@ class TestJobResponseValidator:
             "logs_removed": False,
             "price_credits_per_hour": "10",
             "total_price_credits": "10",
+            "priority": "normal",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -405,6 +408,7 @@ class TestJobResponseValidator:
             "logs_removed": False,
             "price_credits_per_hour": "10",
             "total_price_credits": "10",
+            "priority": "normal",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -449,6 +453,7 @@ class TestJobResponseValidator:
             "logs_removed": False,
             "price_credits_per_hour": "0",
             "total_price_credits": "0",
+            "priority": "normal",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -490,6 +495,7 @@ class TestJobResponseValidator:
             "restart_policy": "never",
             "price_credits_per_hour": "10",
             "total_price_credits": "10",
+            "priority": "normal",
         }
         validator = create_job_response_validator()
         with pytest.raises(t.DataError):
@@ -537,6 +543,7 @@ class TestJobResponseValidator:
             "logs_removed": False,
             "price_credits_per_hour": "10",
             "total_price_credits": "10",
+            "priority": "normal",
         }
         validator = create_job_response_validator()
         assert validator.check(response)
@@ -579,6 +586,7 @@ class TestJobResponseValidator:
             "restart_policy": "never",
             "price_credits_per_hour": "10",
             "total_price_credits": "10",
+            "priority": "normal",
         }
         validator = create_job_response_validator()
         with pytest.raises(t.DataError, match="value is less than 0"):
@@ -622,6 +630,7 @@ class TestJobResponseValidator:
             "restart_policy": "never",
             "price_credits_per_hour": "10",
             "total_price_credits": "10",
+            "priority": "normal",
         }
         validator = create_job_response_validator()
         with pytest.raises(t.DataError, match="value is less than 0"):
@@ -666,6 +675,7 @@ class TestJobResponseValidator:
             "being_dropped": False,
             "logs_removed": False,
             "total_price_credits": "10",
+            "priority": "normal",
         }
         validator = create_job_response_validator()
         with pytest.raises(t.DataError, match="price_credits_per_hour"):
@@ -709,6 +719,7 @@ class TestJobResponseValidator:
             "being_dropped": False,
             "logs_removed": False,
             "price_credits_per_hour": "10",
+            "priority": "normal",
         }
         validator = create_job_response_validator()
         with pytest.raises(t.DataError, match="total_price_credits"):

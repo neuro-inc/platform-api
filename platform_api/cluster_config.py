@@ -21,6 +21,7 @@ class OrchestratorConfig:
     job_schedule_scaleup_timeout: float = 15 * 60
 
     allow_privileged_mode: bool = False
+    allow_job_priority: bool = False
 
     @property
     def tpu_resources(self) -> Sequence[TPUResource]:
@@ -34,6 +35,13 @@ class OrchestratorConfig:
         if not tpus:
             return None
         return tpus[0].ipv4_cidr_block
+
+    @property
+    def has_scheduler_enabled_presets(self) -> bool:
+        for preset in self.presets:
+            if preset.scheduler_enabled:
+                return True
+        return False
 
 
 @dataclass(frozen=True)

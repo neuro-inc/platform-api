@@ -168,7 +168,7 @@ class MockOrchestrator(Orchestrator):
     async def preempt_jobs(
         self, jobs_to_schedule: list[Job], preemptible_jobs: list[Job]
     ) -> list[Job]:
-        self._preempted_jobs.extend(preemptible_jobs)
+        self._preempted_jobs = preemptible_jobs.copy()
         return preemptible_jobs
 
     async def get_schedulable_jobs(self, jobs: list[Job]) -> list[Job]:

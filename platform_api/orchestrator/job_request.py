@@ -524,6 +524,10 @@ class JobStatus(str, enum.Enum):
         return self == self.RUNNING
 
     @property
+    def is_suspended(self) -> bool:
+        return self == self.SUSPENDED
+
+    @property
     def is_finished(self) -> bool:
         return self in (self.SUCCEEDED, self.FAILED, self.CANCELLED)
 

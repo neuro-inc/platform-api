@@ -26,6 +26,7 @@ from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
 from .job import (
     Job,
+    JobPriority,
     JobRecord,
     JobRestartPolicy,
     JobStatusHistory,
@@ -232,6 +233,7 @@ class JobsService:
         schedule_timeout: Optional[float] = None,
         max_run_time_minutes: Optional[int] = None,
         restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
+        priority: JobPriority = JobPriority.NORMAL,
     ) -> tuple[Job, Status]:
         base_name = user.name.split("/", 1)[
             0
@@ -295,6 +297,7 @@ class JobsService:
             max_run_time_minutes=max_run_time_minutes,
             restart_policy=restart_policy,
             privileged=privileged,
+            priority=priority,
         )
         job_id = job_request.job_id
 
@@ -307,6 +310,14 @@ class JobsService:
             ):
                 raise JobsServiceException(
                     f"Cluster {cluster_name} does not allow privileged jobs"
+                )
+
+            if (
+                record.priority != JobPriority.NORMAL
+                and not cluster_config.orchestrator.allow_job_priority
+            ):
+                raise JobsServiceException(
+                    f"Cluster {cluster_name} does not allow specifying job priority"
                 )
 
             async with self._create_job_in_storage(record) as record:
