@@ -171,6 +171,9 @@ class MockOrchestrator(Orchestrator):
         self._preempted_jobs.extend(preemptible_jobs)
         return preemptible_jobs
 
+    async def get_schedulable_jobs(self, jobs: list[Job]) -> list[Job]:
+        return jobs
+
 
 class MockJobsStorage(InMemoryJobsStorage):
     def __init__(self) -> None:

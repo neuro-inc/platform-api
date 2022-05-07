@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable
 from typing import Any
-
-from platform_api.orchestrator.job_request import JobNotFoundException
 
 from .kube_client import (
     EventHandler,
@@ -150,9 +147,62 @@ class NodeResourcesHandler(EventHandler):
     def get_pod_node_name(self, pod_name: str) -> str | None:
         """
         Get name of the node which runs pod.
-        Return None if pod is not in a Running state.
+        Return None if pod is not scheduled.
         """
         return self._pod_node_names.get(pod_name)
+
+
+class KubeOrchestratorScheduler:
+    def __init__(
+        self, nodes_handler: NodesHandler, node_resources_handler: NodeResourcesHandler
+    ) -> None:
+        self._nodes_handler = nodes_handler
+        self._node_resources_handler = node_resources_handler
+
+    def is_pod_scheduled(self, pod_name: str) -> bool:
+        return bool(self._node_resources_handler.get_pod_node_name(pod_name))
+
+    def get_schedulable_pods(
+        self, pods: Iterable[PodDescriptor]
+    ) -> list[PodDescriptor]:
+        schedulable_pods: list[PodDescriptor] = []
+        scheduled: dict[str, NodeResources] = defaultdict(NodeResources)
+        for pod in pods:
+            logger.debug("Check pod %r can be scheduled", pod.name)
+            if self.is_pod_scheduled(pod.name):
+                logger.debug("Pod %r has already been scheduled", pod.name)
+                schedulable_pods.append(pod)
+                continue
+            for node in self._nodes_handler.get_nodes():
+                if not pod.can_be_scheduled(node.labels):
+                    logger.debug(
+                        "Pod %r cannot be scheduled onto node %r", pod.name, node.name
+                    )
+                    continue
+                requested = self._node_resources_handler.get_resource_requests(
+                    node.name
+                )
+                requested += scheduled[node.name]
+                free = node.get_free_resources(requested)
+                if free.are_sufficient(pod):
+                    logger.debug(
+                        "Pod %r can be scheduled onto node %r", node.name, pod.name
+                    )
+                    schedulable_pods.append(pod)
+                    if pod.resources:
+                        scheduled[node.name] += NodeResources(
+                            cpu=pod.resources.cpu,
+                            memory=pod.resources.memory,
+                            gpu=pod.resources.gpu or 0,
+                        )
+                    break
+                logger.debug(
+                    "Node %r has not enough resources for pod %r. Resources left: %s",
+                    node.name,
+                    pod.name,
+                    free,
+                )
+        return schedulable_pods
 
 
 class KubeOrchestratorPreemption:
@@ -167,7 +217,7 @@ class KubeOrchestratorPreemption:
         self._nodes_handler = nodes_handler
         self._node_resources_handler = node_resources_handler
 
-    async def preempt_pods(
+    def get_pods_to_preempt(
         self,
         pods_to_schedule: list[PodDescriptor],
         preemptible_pods: list[PodDescriptor],
@@ -177,12 +227,11 @@ class KubeOrchestratorPreemption:
             node_name = self._node_resources_handler.get_pod_node_name(pod.name)
             if node_name:
                 preemptible_pods_by_node[node_name].append(pod)
-        preempted_pods = await self._preempt_pods(
-            pods_to_schedule, get_preemptible_pods=preemptible_pods_by_node.__getitem__
+        return self._get_pods_to_preempt(
+            pods_to_schedule, preemptible_pods_by_node.__getitem__
         )
-        return preempted_pods
 
-    async def _preempt_pods(
+    def _get_pods_to_preempt(
         self,
         pods_to_schedule: list[PodDescriptor],
         get_preemptible_pods: Callable[[str], list[PodDescriptor]],
@@ -193,7 +242,7 @@ class KubeOrchestratorPreemption:
             # Handle one node per api poller iteration.
             # Exclude nodes preempted in previous steps
             # to avoid node resources tracking complexity.
-            node, pods = self._get_pods_to_preempt(
+            node, pods = self._get_pods_to_preempt_for_pod(
                 pod,
                 get_preemptible_pods=get_preemptible_pods,
                 exclude_nodes=nodes_to_preempt,
@@ -201,7 +250,6 @@ class KubeOrchestratorPreemption:
             if node:
                 nodes_to_preempt.add(node)
                 pods_to_preempt.extend(pods)
-        await self._delete_pods(pods_to_preempt)
         return pods_to_preempt
 
     def _get_pods_to_schedule(
@@ -222,7 +270,7 @@ class KubeOrchestratorPreemption:
         )  # Try to preempt pods for small pods first
         return pods_to_schedule
 
-    def _get_pods_to_preempt(
+    def _get_pods_to_preempt_for_pod(
         self,
         pod_to_schedule: PodDescriptor,
         get_preemptible_pods: Callable[[str], list[PodDescriptor]],
@@ -282,14 +330,3 @@ class KubeOrchestratorPreemption:
             memory=max(0, required.memory - free.memory),
             gpu=max(0, (required.gpu or 0) - free.gpu),
         )
-
-    async def _delete_pods(self, pods: Iterable[PodDescriptor]) -> None:
-        tasks = [asyncio.create_task(self._delete_pod(pod.name)) for pod in pods]
-        if tasks:
-            await asyncio.wait(tasks)
-
-    async def _delete_pod(self, pod_name: str) -> None:
-        try:
-            await self._kube_client.delete_pod(pod_name)
-        except JobNotFoundException:
-            pass

@@ -50,8 +50,9 @@ from .kube_client import (
     VolumeMount,
 )
 from .kube_config import KubeConfig
-from .kube_orchestrator_preemption import (
+from .kube_orchestrator_scheduler import (
     KubeOrchestratorPreemption,
+    KubeOrchestratorScheduler,
     NodeResourcesHandler,
     NodesHandler,
 )
@@ -139,6 +140,9 @@ class KubeOrchestrator(Orchestrator):
 
         self._nodes_handler = NodesHandler()
         self._node_resources_handler = NodeResourcesHandler()
+        self._scheduler = KubeOrchestratorScheduler(
+            self._nodes_handler, self._node_resources_handler
+        )
         self._preemption = KubeOrchestratorPreemption(
             kube_client, self._nodes_handler, self._node_resources_handler
         )
@@ -875,8 +879,19 @@ class KubeOrchestrator(Orchestrator):
         preemptible_job_pods = [
             self._create_pod_descriptor(job) for job in preemptible_jobs
         ]
-        preempted_pods = await self._preemption.preempt_pods(
+        pods_to_preempt = self._preemption.get_pods_to_preempt(
             job_pods_to_schedule, preemptible_job_pods
         )
-        preempted_pod_names = {pod.name for pod in preempted_pods}
-        return [job for job in preemptible_jobs if job.id in preempted_pod_names]
+        pod_names_to_preempt = {pod.name for pod in pods_to_preempt}
+        preempted_jobs = [
+            job for job in preemptible_jobs if job.id in pod_names_to_preempt
+        ]
+        for job in preempted_jobs:
+            await self.delete_job(job)
+        return preempted_jobs
+
+    async def get_schedulable_jobs(self, jobs: list[Job]) -> list[Job]:
+        job_pods = [self._create_pod_descriptor(job) for job in jobs]
+        schedulable_pods = self._scheduler.get_schedulable_pods(job_pods)
+        schedulable_pod_names = {pod.name for pod in schedulable_pods}
+        return [job for job in jobs if job.id in schedulable_pod_names]
