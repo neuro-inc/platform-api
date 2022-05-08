@@ -162,8 +162,8 @@ class MockOrchestrator(Orchestrator):
     async def get_missing_disks(self, disks: list[Disk]) -> list[Disk]:
         pass
 
-    def get_preempted_jobs(self) -> list[Job]:
-        return list(self._preempted_jobs)
+    def get_preempted_job_ids(self) -> list[str]:
+        return [job.id for job in self._preempted_jobs]
 
     async def preempt_jobs(
         self, jobs_to_schedule: list[Job], preemptible_jobs: list[Job]

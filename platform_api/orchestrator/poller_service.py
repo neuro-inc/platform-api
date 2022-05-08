@@ -369,7 +369,7 @@ class JobsPollerService:
                     await self._update_job_status(cluster.orchestrator, job)
                 return
 
-            jobs_to_start = [self._make_job(r, cluster) for r in records_to_suspend]
+            jobs_to_start = [self._make_job(r, cluster) for r in records_to_start]
             jobs_to_suspend = [self._make_job(r, cluster) for r in records_to_suspend]
             schedulable_jobs = await cluster.orchestrator.get_schedulable_jobs(
                 jobs_to_start
