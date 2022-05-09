@@ -323,35 +323,33 @@ class JobsPollerService:
         self, records_to_start: list[JobRecord], records_to_suspend: list[JobRecord]
     ) -> None:
         try:
-            try:
-                async with self._cluster_holder.get() as cluster:
-                    async with AsyncExitStack() as stack:
-                        for record in itertools.chain(
-                            records_to_start, records_to_suspend
-                        ):
-                            await stack.enter_async_context(self._update_job(record))
+            async with AsyncExitStack() as stack:
+                for record in itertools.chain(records_to_start, records_to_suspend):
+                    await stack.enter_async_context(self._update_job(record))
 
+                try:
+                    async with self._cluster_holder.get() as cluster:
                         await self._start_jobs(
                             cluster, records_to_start, records_to_suspend
                         )
-            except ClusterNotFound as cluster_err:
-                for record in itertools.chain(records_to_start, records_to_suspend):
-                    # marking PENDING/RUNNING job as FAILED
-                    logger.warning(
-                        "Failed to get job '%s' status. Reason: %s",
-                        record.id,
-                        cluster_err,
-                    )
-                    record.status_history.current = JobStatusItem.create(
-                        JobStatus.FAILED,
-                        reason=JobStatusReason.CLUSTER_NOT_FOUND,
-                        description=str(cluster_err),
-                    )
-                    record.materialized = False
-                    await self._revoke_pass_config(record)
-            except ClusterNotAvailable:
-                # skipping job status update
-                pass
+                except ClusterNotFound as cluster_err:
+                    for record in itertools.chain(records_to_start, records_to_suspend):
+                        # marking PENDING/RUNNING job as FAILED
+                        logger.warning(
+                            "Failed to get job '%s' status. Reason: %s",
+                            record.id,
+                            cluster_err,
+                        )
+                        record.status_history.current = JobStatusItem.create(
+                            JobStatus.FAILED,
+                            reason=JobStatusReason.CLUSTER_NOT_FOUND,
+                            description=str(cluster_err),
+                        )
+                        record.materialized = False
+                        await self._revoke_pass_config(record)
+                except ClusterNotAvailable:
+                    # skipping job status update
+                    pass
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
