@@ -2152,6 +2152,33 @@ class TestKubeOrchestrator:
             yield
 
     @pytest.mark.usefixtures("start_watchers")
+    async def test_get_scheduled_jobs(
+        self, kube_client: MyKubeClient, kube_orchestrator: KubeOrchestrator
+    ) -> None:
+        container = Container(
+            image="ubuntu:20.10",
+            resources=ContainerResources(cpu=0.1, memory_mb=64),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                name=f"job-{uuid.uuid4().hex[:6]}",
+                owner="owner1",
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+            ),
+        )
+
+        scheduled = await kube_orchestrator.get_scheduled_jobs([job])
+        assert scheduled == []
+
+        await kube_orchestrator.start_job(job)
+        await kube_client.wait_pod_is_running(pod_name=job.id, timeout_s=60.0)
+
+        scheduled = await kube_orchestrator.get_scheduled_jobs([job])
+        assert scheduled == [job]
+
+    @pytest.mark.usefixtures("start_watchers")
     async def test_get_schedulable_jobs(
         self, kube_orchestrator: KubeOrchestrator, node_resources: NodeResources
     ) -> None:

@@ -24,6 +24,13 @@ class OrchestratorConfig:
     allow_job_priority: bool = False
 
     @property
+    def allow_scheduler_enabled_job(self) -> bool:
+        for preset in self.presets:
+            if preset.scheduler_enabled:
+                return True
+        return False
+
+    @property
     def tpu_resources(self) -> Sequence[TPUResource]:
         return tuple(
             resource.tpu for resource in self.resource_pool_types if resource.tpu
@@ -35,13 +42,6 @@ class OrchestratorConfig:
         if not tpus:
             return None
         return tpus[0].ipv4_cidr_block
-
-    @property
-    def has_scheduler_enabled_presets(self) -> bool:
-        for preset in self.presets:
-            if preset.scheduler_enabled:
-                return True
-        return False
 
 
 @dataclass(frozen=True)

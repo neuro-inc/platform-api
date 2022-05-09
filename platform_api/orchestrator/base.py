@@ -24,6 +24,10 @@ class Orchestrator(ABC):
         pass
 
     @abstractmethod
+    async def get_scheduled_jobs(self, jobs: list[Job]) -> list[Job]:
+        pass
+
+    @abstractmethod
     async def get_schedulable_jobs(self, jobs: list[Job]) -> list[Job]:
         pass
 

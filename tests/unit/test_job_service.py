@@ -43,6 +43,7 @@ from platform_api.orchestrator.jobs_service import (
 )
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.orchestrator.poller_service import JobsPollerService, JobsScheduler
+from platform_api.resource import Preset
 
 from .conftest import (
     MockAuthClient,
@@ -64,8 +65,8 @@ class MockJobsScheduler(JobsScheduler):
         super().__init__(
             JobsSchedulerConfig(
                 is_waiting_min_time_sec=1,
-                run_quantum_sec=100,
-                max_suspended_time_sec=10,
+                run_quantum_sec=10,
+                max_suspended_time_sec=100,
             ),
             admin_client,
             self.current_datetime_factory,
@@ -84,65 +85,64 @@ class MockJobsScheduler(JobsScheduler):
         self._now += self._config.max_suspended_time
 
 
+@pytest.fixture
+def test_scheduler(mock_admin_client: AdminClient) -> MockJobsScheduler:
+    return MockJobsScheduler(mock_admin_client)
+
+
+@pytest.fixture
+def jobs_service_factory(
+    cluster_config_registry: ClusterConfigRegistry,
+    mock_jobs_storage: MockJobsStorage,
+    mock_notifications_client: NotificationsClient,
+    mock_auth_client: AuthClient,
+    mock_admin_client: AdminClient,
+    mock_api_base: URL,
+) -> Callable[..., JobsService]:
+    def _factory(
+        deletion_delay_s: int = 0, image_pull_error_delay_s: int = 0
+    ) -> JobsService:
+        return JobsService(
+            cluster_config_registry=cluster_config_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=JobsConfig(
+                deletion_delay_s=deletion_delay_s,
+                image_pull_error_delay_s=image_pull_error_delay_s,
+            ),
+            notifications_client=mock_notifications_client,
+            auth_client=mock_auth_client,
+            api_base_url=mock_api_base,
+            admin_client=mock_admin_client,
+        )
+
+    return _factory
+
+
+@pytest.fixture
+def poller_service_factory(
+    cluster_holder: ClusterHolder,
+    test_scheduler: MockJobsScheduler,
+    mock_auth_client: AuthClient,
+    mock_poller_api: MockJobsPollerApi,
+) -> Callable[..., JobsPollerService]:
+    def _factory(
+        deletion_delay_s: int = 0, image_pull_error_delay_s: int = 0
+    ) -> JobsPollerService:
+        return JobsPollerService(
+            cluster_holder=cluster_holder,
+            jobs_config=JobsConfig(
+                deletion_delay_s=deletion_delay_s,
+                image_pull_error_delay_s=image_pull_error_delay_s,
+            ),
+            scheduler=test_scheduler,
+            auth_client=mock_auth_client,
+            api=mock_poller_api,
+        )
+
+    return _factory
+
+
 class TestJobsService:
-    @pytest.fixture
-    def test_scheduler(self, mock_admin_client: AdminClient) -> MockJobsScheduler:
-        return MockJobsScheduler(mock_admin_client)
-
-    @pytest.fixture
-    def jobs_service_factory(
-        self,
-        cluster_config_registry: ClusterConfigRegistry,
-        mock_jobs_storage: MockJobsStorage,
-        mock_notifications_client: NotificationsClient,
-        test_scheduler: MockJobsScheduler,
-        mock_auth_client: AuthClient,
-        mock_admin_client: AdminClient,
-        mock_api_base: URL,
-    ) -> Callable[..., JobsService]:
-        def _factory(
-            deletion_delay_s: int = 0, image_pull_error_delay_s: int = 0
-        ) -> JobsService:
-            return JobsService(
-                cluster_config_registry=cluster_config_registry,
-                jobs_storage=mock_jobs_storage,
-                jobs_config=JobsConfig(
-                    deletion_delay_s=deletion_delay_s,
-                    image_pull_error_delay_s=image_pull_error_delay_s,
-                ),
-                notifications_client=mock_notifications_client,
-                auth_client=mock_auth_client,
-                api_base_url=mock_api_base,
-                admin_client=mock_admin_client,
-            )
-
-        return _factory
-
-    @pytest.fixture
-    def poller_service_factory(
-        self,
-        cluster_holder: ClusterHolder,
-        mock_jobs_storage: MockJobsStorage,
-        test_scheduler: MockJobsScheduler,
-        mock_auth_client: AuthClient,
-        mock_poller_api: MockJobsPollerApi,
-    ) -> Callable[..., JobsPollerService]:
-        def _factory(
-            deletion_delay_s: int = 0, image_pull_error_delay_s: int = 0
-        ) -> JobsPollerService:
-            return JobsPollerService(
-                cluster_holder=cluster_holder,
-                jobs_config=JobsConfig(
-                    deletion_delay_s=deletion_delay_s,
-                    image_pull_error_delay_s=image_pull_error_delay_s,
-                ),
-                scheduler=test_scheduler,
-                auth_client=mock_auth_client,
-                api=mock_poller_api,
-            )
-
-        return _factory
-
     @pytest.fixture
     def jobs_service(
         self, jobs_service_factory: Callable[..., JobsService]
@@ -1427,469 +1427,6 @@ class TestJobsService:
             job = await jobs_service.get_job(job.id)
             assert job.status == JobStatus.SUCCEEDED
 
-    async def test_update_jobs_scheduled_additional_when_no_pending(
-        self,
-        jobs_service_factory: Callable[..., JobsService],
-        jobs_poller_service: JobsPollerService,
-        mock_orchestrator: MockOrchestrator,
-        job_request_factory: Callable[[], JobRequest],
-        test_scheduler: MockJobsScheduler,
-        test_user: AuthUser,
-        test_cluster: str,
-    ) -> None:
-        jobs_service = jobs_service_factory(deletion_delay_s=60)
-
-        jobs = []
-
-        # Synchronize time
-        mock_orchestrator.current_datetime_factory = (
-            test_scheduler.current_datetime_factory
-        )
-
-        # Start initial bunch of jobs
-        for _ in range(10):
-            job, _ = await jobs_service.create_job(
-                job_request=job_request_factory(),
-                user=test_user,
-                cluster_name=test_cluster,
-                scheduler_enabled=True,
-            )
-            assert job.status == JobStatus.PENDING
-            jobs.append(job)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        for job in jobs:
-            job = await jobs_service.get_job(job.id)
-            assert job.status == JobStatus.PENDING
-            assert job.materialized
-
-        for job in jobs:
-            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        for job in jobs:
-            job = await jobs_service.get_job(job.id)
-            assert job.status == JobStatus.RUNNING
-
-        test_scheduler.tick_min_waiting()
-
-        additional_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(),
-            user=test_user,
-            cluster_name=test_cluster,
-            scheduler_enabled=True,
-        )
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        # Should try to start new job because there is no waiting jobs
-        job = await jobs_service.get_job(additional_job.id)
-        assert job.status == JobStatus.PENDING
-        assert job.materialized
-
-    async def test_update_jobs_scheduled_additional_when_has_pending(
-        self,
-        jobs_service_factory: Callable[..., JobsService],
-        jobs_poller_service: JobsPollerService,
-        mock_orchestrator: MockOrchestrator,
-        job_request_factory: Callable[[], JobRequest],
-        test_scheduler: MockJobsScheduler,
-        test_user: AuthUser,
-        test_cluster: str,
-    ) -> None:
-        jobs_service = jobs_service_factory(deletion_delay_s=60)
-
-        jobs = []
-
-        # Synchronize time
-        mock_orchestrator.current_datetime_factory = (
-            test_scheduler.current_datetime_factory
-        )
-
-        # Start initial bunch of jobs
-        for _ in range(10):
-            job, _ = await jobs_service.create_job(
-                job_request=job_request_factory(),
-                user=test_user,
-                cluster_name=test_cluster,
-                scheduler_enabled=True,
-            )
-            assert job.status == JobStatus.PENDING
-            jobs.append(job)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        for job in jobs:
-            job = await jobs_service.get_job(job.id)
-            assert job.status == JobStatus.PENDING
-            assert job.materialized
-
-        for job in jobs[:3]:
-            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        for job in jobs[:3]:
-            job = await jobs_service.get_job(job.id)
-            assert job.status == JobStatus.RUNNING
-
-        for job in jobs[3:]:
-            job = await jobs_service.get_job(job.id)
-            assert job.status == JobStatus.PENDING
-
-        additional_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(),
-            user=test_user,
-            cluster_name=test_cluster,
-            scheduler_enabled=True,
-        )
-
-        additional_scheduled_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(),
-            user=test_user,
-            cluster_name=test_cluster,
-            scheduler_enabled=True,
-        )
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        # Should start new job. K8s will schedule job in case there is a node
-        # with enough free resources.
-        job = await jobs_service.get_job(additional_job.id)
-        assert job.status == JobStatus.PENDING
-        assert job.materialized
-
-        job = await jobs_service.get_job(additional_scheduled_job.id)
-        assert job.status == JobStatus.PENDING
-        assert job.materialized
-
-    async def test_update_jobs_scheduled_cycling(
-        self,
-        jobs_service_factory: Callable[..., JobsService],
-        jobs_poller_service: JobsPollerService,
-        mock_orchestrator: MockOrchestrator,
-        job_request_factory: Callable[[], JobRequest],
-        test_scheduler: MockJobsScheduler,
-        test_user: AuthUser,
-        test_cluster: str,
-    ) -> None:
-        jobs_service = jobs_service_factory(deletion_delay_s=60)
-
-        jobs = []
-
-        # Synchronize time
-        mock_orchestrator.current_datetime_factory = (
-            test_scheduler.current_datetime_factory
-        )
-
-        # Start initial bunch of jobs
-        for _ in range(9):
-            job, _ = await jobs_service.create_job(
-                job_request=job_request_factory(),
-                user=test_user,
-                cluster_name=test_cluster,
-                scheduler_enabled=True,
-            )
-            assert job.status == JobStatus.PENDING
-            jobs.append(job)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        for job in jobs:
-            job = await jobs_service.get_job(job.id)
-            assert job.status == JobStatus.PENDING
-            assert job.materialized
-
-        for job in jobs[:3]:
-            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        for job in jobs[:3]:
-            job = await jobs_service.get_job(job.id)
-            assert job.status == JobStatus.RUNNING
-
-        for job in jobs[3:]:
-            job = await jobs_service.get_job(job.id)
-            assert job.status == JobStatus.PENDING
-
-        test_scheduler.tick_quantum()
-        for job in jobs[3:6]:
-            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        assert mock_orchestrator.get_preempted_job_ids() == [job.id for job in jobs[:3]]
-
-        for job in jobs[:3]:
-            job = await jobs_service.get_job(job.id)
-            assert job.status == JobStatus.SUSPENDED
-            assert not job.materialized
-
-        for job in jobs[3:6]:
-            job = await jobs_service.get_job(job.id)
-            assert job.status == JobStatus.RUNNING
-
-        for job in jobs[6:]:
-            job = await jobs_service.get_job(job.id)
-            assert job.status == JobStatus.PENDING
-
-        test_scheduler.tick_quantum()
-
-        for job in jobs[:3]:
-            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.PENDING)
-
-        for job in jobs[6:]:
-            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        assert mock_orchestrator.get_preempted_job_ids() == [
-            job.id for job in jobs[3:6]
-        ]
-
-        # After suspended time passed service should materialize
-        # suspended jobs
-        for job in jobs[:3]:
-            job = await jobs_service.get_job(job.id)
-            assert job.status == JobStatus.PENDING
-            assert job.materialized
-
-        for job in jobs[3:6]:
-            job = await jobs_service.get_job(job.id)
-            assert job.status == JobStatus.SUSPENDED
-            assert not job.materialized
-
-        for job in jobs[6:]:
-            job = await jobs_service.get_job(job.id)
-            assert job.status == JobStatus.RUNNING
-
-    async def test_update_jobs_scheduled_max_suspended_time(
-        self,
-        jobs_service_factory: Callable[..., JobsService],
-        jobs_poller_service: JobsPollerService,
-        mock_orchestrator: MockOrchestrator,
-        job_request_factory: Callable[[], JobRequest],
-        test_scheduler: MockJobsScheduler,
-        test_user: AuthUser,
-        test_cluster: str,
-    ) -> None:
-        jobs_service = jobs_service_factory(deletion_delay_s=60)
-
-        # Synchronize time
-        mock_orchestrator.current_datetime_factory = (
-            test_scheduler.current_datetime_factory
-        )
-
-        job1, _ = await jobs_service.create_job(
-            job_request=job_request_factory(),
-            user=test_user,
-            cluster_name=test_cluster,
-            scheduler_enabled=True,
-        )
-        job2, _ = await jobs_service.create_job(
-            job_request=job_request_factory(),
-            user=test_user,
-            cluster_name=test_cluster,
-            scheduler_enabled=True,
-        )
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        job1 = await jobs_service.get_job(job1.id)
-        assert job1.status == JobStatus.PENDING
-        assert job1.materialized
-
-        job2 = await jobs_service.get_job(job2.id)
-        assert job2.status == JobStatus.PENDING
-        assert job2.materialized
-
-        mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.RUNNING)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        job1 = await jobs_service.get_job(job1.id)
-        assert job1.status == JobStatus.RUNNING
-
-        test_scheduler.tick_quantum()
-
-        mock_orchestrator.update_status_to_return_single(job2.id, JobStatus.RUNNING)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        assert mock_orchestrator.get_preempted_job_ids() == [job1.id]
-
-        job1 = await jobs_service.get_job(job1.id)
-        assert job1.status == JobStatus.SUSPENDED
-        assert not job1.materialized
-
-        job2 = await jobs_service.get_job(job2.id)
-        assert job2.status == JobStatus.RUNNING
-
-        test_scheduler.tick_max_suspended()
-
-        mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.PENDING)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        # After suspended time passed service should materialize
-        # suspended jobs
-        job1 = await jobs_service.get_job(job1.id)
-        assert job1.status == JobStatus.PENDING
-        assert job1.materialized
-
-        job2 = await jobs_service.get_job(job2.id)
-        assert job2.status == JobStatus.RUNNING
-
-    async def test_update_jobs_not_scheduled_can_suspend_scheduled_jobs(
-        self,
-        jobs_service: JobsService,
-        jobs_poller_service: JobsPollerService,
-        job_request_factory: Callable[[], JobRequest],
-        mock_orchestrator: MockOrchestrator,
-        test_scheduler: MockJobsScheduler,
-        test_user: AuthUser,
-        test_cluster: str,
-    ) -> None:
-        # Synchronize time
-        mock_orchestrator.current_datetime_factory = (
-            test_scheduler.current_datetime_factory
-        )
-
-        job1, _ = await jobs_service.create_job(
-            job_request=job_request_factory(),
-            user=test_user,
-            cluster_name=test_cluster,
-            scheduler_enabled=True,
-        )
-        assert job1.status == JobStatus.PENDING
-
-        job2, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
-        )
-        assert job2.status == JobStatus.PENDING
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        job1 = await jobs_service.get_job(job1.id)
-        assert job1.status == JobStatus.PENDING
-        assert job1.materialized
-
-        job2 = await jobs_service.get_job(job2.id)
-        assert job2.status == JobStatus.PENDING
-        assert job2.materialized
-
-        mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.RUNNING)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        job1 = await jobs_service.get_job(job1.id)
-        assert job1.status == JobStatus.RUNNING
-
-        job2 = await jobs_service.get_job(job2.id)
-        assert job2.status == JobStatus.PENDING
-
-        test_scheduler.tick_quantum()
-
-        mock_orchestrator.update_status_to_return_single(job2.id, JobStatus.RUNNING)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        # If there are no idle jobs service can suspend running jobs
-        job1 = await jobs_service.get_job(job1.id)
-        assert job1.status == JobStatus.SUSPENDED
-        assert not job1.materialized
-
-        job2 = await jobs_service.get_job(job2.id)
-        assert job2.status == JobStatus.RUNNING
-
-    async def test_update_jobs_not_materialized_created_after_suspended(
-        self,
-        jobs_service: JobsService,
-        jobs_poller_service: JobsPollerService,
-        job_request_factory: Callable[[], JobRequest],
-        mock_orchestrator: MockOrchestrator,
-        test_scheduler: MockJobsScheduler,
-        test_user: AuthUser,
-        test_cluster: str,
-    ) -> None:
-        # Synchronize time
-        mock_orchestrator.current_datetime_factory = (
-            test_scheduler.current_datetime_factory
-        )
-
-        job1, _ = await jobs_service.create_job(
-            job_request=job_request_factory(),
-            user=test_user,
-            cluster_name=test_cluster,
-            scheduler_enabled=True,
-        )
-        assert job1.status == JobStatus.PENDING
-
-        job2, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
-        )
-        assert job2.status == JobStatus.PENDING
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        job1 = await jobs_service.get_job(job1.id)
-        assert job1.status == JobStatus.PENDING
-        assert job1.materialized
-
-        job2 = await jobs_service.get_job(job2.id)
-        assert job2.status == JobStatus.PENDING
-        assert job2.materialized
-
-        mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.RUNNING)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        job1 = await jobs_service.get_job(job1.id)
-        assert job1.status == JobStatus.RUNNING
-
-        test_scheduler.tick_quantum()
-
-        job3, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
-        )
-        assert job3.status == JobStatus.PENDING
-
-        mock_orchestrator.update_status_to_return_single(job2.id, JobStatus.RUNNING)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        job1 = await jobs_service.get_job(job1.id)
-        assert job1.status == JobStatus.SUSPENDED
-        assert not job1.materialized
-
-        job2 = await jobs_service.get_job(job2.id)
-        assert job2.status == JobStatus.RUNNING
-
-        # Job is not materialized when there are jobs to suspend
-        job3 = await jobs_service.get_job(job3.id)
-        assert job3.status == JobStatus.PENDING
-        assert not job3.materialized
-
-        test_scheduler.tick_min_waiting()
-
-        mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.PENDING)
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        # Job is not materialized when there are suspended jobs
-        job3 = await jobs_service.get_job(job3.id)
-        assert job3.status == JobStatus.PENDING
-        assert not job3.materialized
-
-        await jobs_poller_service.update_jobs_statuses()
-
-        job3 = await jobs_service.get_job(job3.id)
-        assert job3.status == JobStatus.PENDING
-        assert job3.materialized
-
     async def test_cancel_running(
         self,
         jobs_service: JobsService,
@@ -2854,3 +2391,504 @@ class TestJobServiceNotification:
             str(cm.value)
             == "Failed to create job: job name cannot start with 'job-' prefix."
         )
+
+
+class TestScheduledJobsService:
+    @pytest.fixture
+    def cluster_config(self, cluster_config: ClusterConfig) -> ClusterConfig:
+        cluster_config = replace(
+            cluster_config,
+            orchestrator=replace(
+                cluster_config.orchestrator,
+                allow_job_priority=True,
+                presets=[
+                    Preset(
+                        name="cpu-small",
+                        credits_per_hour=Decimal("10"),
+                        cpu=2,
+                        memory_mb=2 * 1024,
+                        scheduler_enabled=True,
+                    ),
+                ],
+            ),
+        )
+        return cluster_config
+
+    @pytest.fixture
+    def mock_orchestrator(
+        self,
+        mock_orchestrator: MockOrchestrator,
+        test_scheduler: MockJobsScheduler,
+    ) -> MockOrchestrator:
+        # Synchronize time
+        mock_orchestrator.current_datetime_factory = (
+            test_scheduler.current_datetime_factory
+        )
+        return mock_orchestrator
+
+    @pytest.fixture
+    def jobs_service(
+        self, jobs_service_factory: Callable[..., JobsService]
+    ) -> JobsService:
+        return jobs_service_factory(deletion_delay_s=60)
+
+    @pytest.fixture
+    def jobs_poller_service(
+        self, poller_service_factory: Callable[..., JobsPollerService]
+    ) -> JobsPollerService:
+        return poller_service_factory()
+
+    async def test_update_jobs_cycling(
+        self,
+        jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        test_scheduler: MockJobsScheduler,
+        test_user: AuthUser,
+        test_cluster: str,
+    ) -> None:
+        jobs = []
+
+        # Start initial bunch of jobs
+        for _ in range(9):
+            job, _ = await jobs_service.create_job(
+                job_request=job_request_factory(),
+                user=test_user,
+                cluster_name=test_cluster,
+                scheduler_enabled=True,
+            )
+            assert job.status == JobStatus.PENDING
+            jobs.append(job)
+
+        mock_orchestrator.update_schedulable_jobs(jobs[:3])
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        for job in jobs[:1]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert job.materialized
+
+        for job in jobs[1:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert not job.materialized
+
+        mock_orchestrator.update_scheduled_jobs(jobs[0:1])
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        mock_orchestrator.update_scheduled_jobs(jobs[0:2])
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        mock_orchestrator.update_scheduled_jobs(jobs[0:3])
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        for job in jobs[:3]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert job.materialized
+
+        for job in jobs[3:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert not job.materialized
+
+        for job in jobs[:3]:
+            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        for job in jobs[:3]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.RUNNING
+
+        for job in jobs[3:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+
+        test_scheduler.tick_quantum()
+
+        for job in jobs[3:6]:
+            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
+
+        mock_orchestrator.update_preemptible_jobs(jobs[0])
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        for job in jobs[0:1]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.SUSPENDED
+            assert not job.materialized
+
+        for job in jobs[3:4]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.RUNNING
+            assert job.materialized
+
+        for job in jobs[4:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert not job.materialized
+
+        mock_orchestrator.update_preemptible_jobs(jobs[1])
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        for job in jobs[0:2]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.SUSPENDED
+            assert not job.materialized
+
+        for job in jobs[3:5]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.RUNNING
+            assert job.materialized
+
+        for job in jobs[5:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert not job.materialized
+
+        mock_orchestrator.update_preemptible_jobs(jobs[2])
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        for job in jobs[0:3]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.SUSPENDED
+            assert not job.materialized
+
+        for job in jobs[3:6]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.RUNNING
+            assert job.materialized
+
+        for job in jobs[6:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert not job.materialized
+
+        test_scheduler.tick_quantum()
+
+        for job in jobs[6:]:
+            mock_orchestrator.update_status_to_return_single(job.id, JobStatus.RUNNING)
+
+        mock_orchestrator.update_preemptible_jobs(jobs[3])
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        for job in jobs[3:4]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.SUSPENDED
+            assert not job.materialized
+
+        for job in jobs[6:7]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.RUNNING
+            assert job.materialized
+
+        for job in jobs[7:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert not job.materialized
+
+        mock_orchestrator.update_preemptible_jobs(jobs[4])
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        for job in jobs[3:5]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.SUSPENDED
+            assert not job.materialized
+
+        for job in jobs[6:8]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.RUNNING
+            assert job.materialized
+
+        for job in jobs[8:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.PENDING
+            assert not job.materialized
+
+        mock_orchestrator.update_preemptible_jobs(jobs[5])
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        for job in jobs[3:6]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.SUSPENDED
+            assert not job.materialized
+
+        for job in jobs[6:]:
+            job = await jobs_service.get_job(job.id)
+            assert job.status == JobStatus.RUNNING
+            assert job.materialized
+
+    async def test_update_jobs_max_suspended_time(
+        self,
+        jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        test_scheduler: MockJobsScheduler,
+        test_user: AuthUser,
+        test_cluster: str,
+    ) -> None:
+        job1, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user,
+            cluster_name=test_cluster,
+            scheduler_enabled=True,
+        )
+        job2, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user,
+            cluster_name=test_cluster,
+            scheduler_enabled=True,
+        )
+        job3, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user,
+            cluster_name=test_cluster,
+            scheduler_enabled=True,
+        )
+
+        mock_orchestrator.update_schedulable_jobs(job1)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.PENDING
+        assert job1.materialized
+
+        job2 = await jobs_service.get_job(job2.id)
+        assert job2.status == JobStatus.PENDING
+        assert not job2.materialized
+
+        job3 = await jobs_service.get_job(job3.id)
+        assert job3.status == JobStatus.PENDING
+        assert not job3.materialized
+
+        mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.RUNNING)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.RUNNING
+
+        test_scheduler.tick_quantum()
+
+        mock_orchestrator.update_preemptible_jobs(job1)
+        mock_orchestrator.update_status_to_return_single(job2.id, JobStatus.RUNNING)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.SUSPENDED
+        assert not job1.materialized
+
+        job2 = await jobs_service.get_job(job2.id)
+        assert job2.status == JobStatus.RUNNING
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        # While there are other jobs waiting service should not materialize
+        # suspended jobs
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.SUSPENDED
+        assert not job1.materialized
+
+        test_scheduler.tick_max_suspended()
+
+        mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.PENDING)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        # After suspended time passed service should materialize
+        # suspended jobs
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.PENDING
+        assert job1.materialized
+
+        job2 = await jobs_service.get_job(job2.id)
+        assert job2.status == JobStatus.RUNNING
+
+    async def test_update_jobs_less_than_max_suspended_time(
+        self,
+        jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        test_scheduler: MockJobsScheduler,
+        test_user: AuthUser,
+        test_cluster: str,
+    ) -> None:
+        job1, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user,
+            cluster_name=test_cluster,
+            scheduler_enabled=True,
+        )
+        job2, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user,
+            cluster_name=test_cluster,
+            scheduler_enabled=True,
+        )
+
+        mock_orchestrator.update_schedulable_jobs(job1)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.PENDING
+        assert job1.materialized
+
+        job2 = await jobs_service.get_job(job2.id)
+        assert job2.status == JobStatus.PENDING
+        assert not job2.materialized
+
+        mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.RUNNING)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.RUNNING
+
+        test_scheduler.tick_quantum()
+
+        mock_orchestrator.update_preemptible_jobs(job1)
+        mock_orchestrator.update_status_to_return_single(job2.id, JobStatus.RUNNING)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.SUSPENDED
+        assert not job1.materialized
+
+        job2 = await jobs_service.get_job(job2.id)
+        assert job2.status == JobStatus.RUNNING
+
+        mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.PENDING)
+
+        mock_orchestrator.update_schedulable_jobs(job1)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        # If there no other jobs to start service should materialize
+        # suspended job if there are resources
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.PENDING
+        assert job1.materialized
+
+        job2 = await jobs_service.get_job(job2.id)
+        assert job2.status == JobStatus.RUNNING
+
+    async def test_update_jobs_materialized_no_free_resources(
+        self,
+        jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        test_user: AuthUser,
+        test_cluster: str,
+    ) -> None:
+        job, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user,
+            cluster_name=test_cluster,
+            scheduler_enabled=True,
+        )
+
+        mock_orchestrator.update_schedulable_jobs(job)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        job1 = await jobs_service.get_job(job.id)
+        assert job1.status == JobStatus.PENDING
+        assert job1.materialized
+
+        mock_orchestrator.update_schedulable_jobs()
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        assert mock_orchestrator.get_deleted_job_ids() == [job.id]
+
+    async def test_update_jobs_ordered_by_priority(
+        self,
+        jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        test_scheduler: MockJobsScheduler,
+        test_user: AuthUser,
+        test_cluster: str,
+    ) -> None:
+        job1, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user,
+            cluster_name=test_cluster,
+            scheduler_enabled=True,
+            priority=JobPriority.LOW,
+        )
+
+        test_scheduler.tick_min_waiting()
+
+        job2, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user,
+            cluster_name=test_cluster,
+            scheduler_enabled=True,
+            priority=JobPriority.NORMAL,
+        )
+
+        test_scheduler.tick_min_waiting()
+
+        job3, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user,
+            cluster_name=test_cluster,
+            scheduler_enabled=True,
+            priority=JobPriority.HIGH,
+        )
+
+        mock_orchestrator.update_schedulable_jobs(job1, job2, job3)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        job3 = await jobs_service.get_job(job3.id)
+        assert job3.status == JobStatus.PENDING
+        assert job3.materialized
+
+        job2 = await jobs_service.get_job(job2.id)
+        assert job2.status == JobStatus.PENDING
+        assert not job2.materialized
+
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.PENDING
+        assert not job1.materialized
+
+        mock_orchestrator.update_scheduled_jobs(job3)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        job2 = await jobs_service.get_job(job2.id)
+        assert job2.status == JobStatus.PENDING
+        assert job2.materialized
+
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.PENDING
+        assert not job1.materialized
+
+        mock_orchestrator.update_scheduled_jobs(job3, job2)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.PENDING
+        assert job1.materialized

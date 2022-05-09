@@ -187,11 +187,15 @@ class JobsScheduler:
             ):
                 jobs_to_start.append(job)
 
+        # Always give priority to materialized jobs
+        # as they are already created in orchestrator
         jobs_to_start.sort(
             key=lambda job: (
+                job.materialized,
                 job.priority,
-                now - job.status_history.current.transition_time,
-            )
+                now - job.status_history.created_at,
+            ),
+            reverse=True,
         )
 
         return SchedulingResult(
@@ -319,33 +323,35 @@ class JobsPollerService:
         self, records_to_start: list[JobRecord], records_to_suspend: list[JobRecord]
     ) -> None:
         try:
-            async with AsyncExitStack() as stack:
-                for record in itertools.chain(records_to_start, records_to_suspend):
-                    await stack.enter_async_context(self._update_job(record))
+            try:
+                async with self._cluster_holder.get() as cluster:
+                    async with AsyncExitStack() as stack:
+                        for record in itertools.chain(
+                            records_to_start, records_to_suspend
+                        ):
+                            await stack.enter_async_context(self._update_job(record))
 
-                try:
-                    async with self._cluster_holder.get() as cluster:
                         await self._start_jobs(
                             cluster, records_to_start, records_to_suspend
                         )
-                except ClusterNotFound as cluster_err:
-                    for record in itertools.chain(records_to_start, records_to_suspend):
-                        # marking PENDING/RUNNING job as FAILED
-                        logger.warning(
-                            "Failed to get job '%s' status. Reason: %s",
-                            record.id,
-                            cluster_err,
-                        )
-                        record.status_history.current = JobStatusItem.create(
-                            JobStatus.FAILED,
-                            reason=JobStatusReason.CLUSTER_NOT_FOUND,
-                            description=str(cluster_err),
-                        )
-                        record.materialized = False
-                        await self._revoke_pass_config(record)
-                except ClusterNotAvailable:
-                    # skipping job status update
-                    pass
+            except ClusterNotFound as cluster_err:
+                for record in itertools.chain(records_to_start, records_to_suspend):
+                    # marking PENDING/RUNNING job as FAILED
+                    logger.warning(
+                        "Failed to get job '%s' status. Reason: %s",
+                        record.id,
+                        cluster_err,
+                    )
+                    record.status_history.current = JobStatusItem.create(
+                        JobStatus.FAILED,
+                        reason=JobStatusReason.CLUSTER_NOT_FOUND,
+                        description=str(cluster_err),
+                    )
+                    record.materialized = False
+                    await self._revoke_pass_config(record)
+            except ClusterNotAvailable:
+                # skipping job status update
+                pass
         except JobStorageTransactionError:
             # intentionally ignoring any transaction failures here because
             # the job may have been changed and a retry is needed.
@@ -361,7 +367,10 @@ class JobsPollerService:
             if not records_to_start:
                 return
 
-            if not cluster.config.orchestrator.has_scheduler_enabled_presets:
+            if (
+                not cluster.config.orchestrator.allow_scheduler_enabled_job
+                and not cluster.config.orchestrator.allow_job_priority
+            ):
                 # Clusters without job scheduler_enabled presets
                 # and priorities. We can start all jobs at once.
                 for record in records_to_start:
@@ -371,32 +380,47 @@ class JobsPollerService:
 
             jobs_to_start = [self._make_job(r, cluster) for r in records_to_start]
             jobs_to_suspend = [self._make_job(r, cluster) for r in records_to_suspend]
+            scheduled_jobs = await cluster.orchestrator.get_scheduled_jobs(
+                jobs_to_start
+            )
+            scheduled_job_ids = {r.id for r in scheduled_jobs}
             schedulable_jobs = await cluster.orchestrator.get_schedulable_jobs(
                 jobs_to_start
             )
             schedulable_job_ids = {r.id for r in schedulable_jobs}
+            stop_materializing = False
+
             for job in jobs_to_start:
+                if job.materialized:
+                    if job.id in scheduled_job_ids:
+                        await self._update_job_status(cluster.orchestrator, job)
+                        continue
+                elif stop_materializing:
+                    break
                 if job.id in schedulable_job_ids:
                     await self._update_job_status(cluster.orchestrator, job)
-                    # If there are enough resources in cluster proceed to the next
-                    # job to start multiple jobs in parallel. It can speed up
-                    # jobs start time if cluster needs to preempt idle jobs
+                    # Do not materialize next jobs until job is scheduled
+                    stop_materializing = True
                     continue
                 suspended_jobs = await self._suspend_jobs(
                     cluster.orchestrator, job, jobs_to_suspend
                 )
                 if suspended_jobs:
-                    # Do not proceed to other jobs until job is scheduled
-                    break
+                    await self._update_job_status(cluster.orchestrator, job)
+                    # Do not materialize next jobs until job is scheduled
+                    stop_materializing = True
+                    continue
                 # For some reason there are no resources for the job, it can
                 # be skipped until other jobs finish and free some resources.
 
-                # Job could be materialized because we expected that there are
+                # Even if there are no free resources job could be materialized
+                # during previous poller cycles because we expected that there are
                 # enough resources.
                 if job.materialized:
                     await cluster.orchestrator.delete_job(job)
                     await self._revoke_pass_config(job)
                     job.materialized = False
+
             for job in jobs_to_suspend:
                 if job.status != JobStatus.SUSPENDED:
                     await self._update_job_status(cluster.orchestrator, job)
@@ -410,7 +434,7 @@ class JobsPollerService:
         orchestrator: Orchestrator,
         job_to_start: Job,
         jobs_to_suspend: list[Job],
-    ) -> None:
+    ) -> list[Job]:
         jobs_to_suspend = [
             job for job in jobs_to_suspend if job_to_start.priority >= job.priority
         ]
@@ -420,6 +444,7 @@ class JobsPollerService:
         for job in suspended_jobs:
             job.status = JobStatus.SUSPENDED
             job.materialized = False
+        return suspended_jobs
 
     async def _update_job_status_wrapper(self, job_record: JobRecord) -> None:
         try:

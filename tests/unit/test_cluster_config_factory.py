@@ -316,7 +316,7 @@ class TestClusterConfigFactory:
         assert clusters[0].orchestrator.presets == [
             Preset(name="cpu", credits_per_hour=Decimal("10"), cpu=1, memory_mb=2048)
         ]
-        assert clusters[0].orchestrator.has_scheduler_enabled_presets is False
+        assert clusters[0].orchestrator.allow_scheduler_enabled_job is False
 
     def test_orchestrator_resource_presets_custom(
         self, clusters_payload: Sequence[dict[str, Any]]
@@ -344,7 +344,7 @@ class TestClusterConfigFactory:
                 preemptible_node=True,
             ),
         ]
-        assert clusters[0].orchestrator.has_scheduler_enabled_presets is True
+        assert clusters[0].orchestrator.allow_scheduler_enabled_job is True
 
     def test_orchestrator_job_schedule_settings_default(
         self, clusters_payload: Sequence[dict[str, Any]]
