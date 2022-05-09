@@ -193,7 +193,7 @@ class JobsScheduler:
             key=lambda job: (
                 job.materialized,
                 job.priority,
-                now - job.status_history.created_at,
+                now - job.status_history.current.transition_time,
             ),
             reverse=True,
         )
