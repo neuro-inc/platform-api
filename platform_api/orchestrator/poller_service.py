@@ -389,11 +389,10 @@ class JobsPollerService:
             stop_materializing = False
 
             for job in jobs_to_start:
-                if job.materialized:
-                    if job.id in scheduled_job_ids:
-                        await self._update_job_status(cluster.orchestrator, job)
-                        continue
-                elif stop_materializing:
+                if job.materialized and job.id in scheduled_job_ids:
+                    await self._update_job_status(cluster.orchestrator, job)
+                    continue
+                if not job.materialized and stop_materializing:
                     break
                 if job.id in schedulable_job_ids:
                     await self._update_job_status(cluster.orchestrator, job)
