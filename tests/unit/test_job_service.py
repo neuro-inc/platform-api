@@ -2909,7 +2909,6 @@ class TestScheduledJobsService:
             scheduler_enabled=True,
             priority=JobPriority.HIGH,
         )
-
         job2, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
             user=test_user,
@@ -2917,7 +2916,6 @@ class TestScheduledJobsService:
             scheduler_enabled=True,
             priority=JobPriority.HIGH,
         )
-
         job3, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
             user=test_user,
