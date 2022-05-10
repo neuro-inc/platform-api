@@ -162,6 +162,9 @@ class JobsScheduler:
             if job.status.is_pending:
                 jobs_to_start.append(job)
 
+        if jobs_to_start:
+            max_job_to_start_priority = max(job.priority for job in jobs_to_start)
+
         # Process running jobs
         for job in unfinished:
             if not job.status.is_running:
@@ -183,12 +186,13 @@ class JobsScheduler:
             suspended_at = job.status_history.current.transition_time
             if (
                 not jobs_to_start
+                or job.priority > max_job_to_start_priority
                 or now - suspended_at >= self._config.max_suspended_time
             ):
                 jobs_to_start.append(job)
 
         # Always give priority to materialized jobs
-        # as they are already created in orchestrator
+        # as they have already been created in orchestrator
         jobs_to_start.sort(
             key=lambda job: (
                 job.materialized,

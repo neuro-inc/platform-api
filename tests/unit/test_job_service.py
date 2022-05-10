@@ -2775,7 +2775,6 @@ class TestScheduledJobsService:
         assert job2.status == JobStatus.RUNNING
 
         mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.PENDING)
-
         mock_orchestrator.update_schedulable_jobs(job1)
 
         await jobs_poller_service.update_jobs_statuses()
@@ -2892,3 +2891,90 @@ class TestScheduledJobsService:
         job1 = await jobs_service.get_job(job1.id)
         assert job1.status == JobStatus.PENDING
         assert job1.materialized
+
+    async def test_update_jobs_suspended_priority(
+        self,
+        jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        test_scheduler: MockJobsScheduler,
+        test_user: AuthUser,
+        test_cluster: str,
+    ) -> None:
+        job1, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user,
+            cluster_name=test_cluster,
+            scheduler_enabled=True,
+            priority=JobPriority.HIGH,
+        )
+
+        job2, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user,
+            cluster_name=test_cluster,
+            scheduler_enabled=True,
+            priority=JobPriority.HIGH,
+        )
+
+        job3, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user,
+            cluster_name=test_cluster,
+            scheduler_enabled=True,
+            priority=JobPriority.NORMAL,
+        )
+
+        mock_orchestrator.update_schedulable_jobs(job1)
+        mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.RUNNING)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.RUNNING
+        assert job1.materialized
+
+        job2 = await jobs_service.get_job(job2.id)
+        assert job2.status == JobStatus.PENDING
+        assert not job2.materialized
+
+        job3 = await jobs_service.get_job(job3.id)
+        assert job3.status == JobStatus.PENDING
+        assert not job3.materialized
+
+        test_scheduler.tick_quantum()
+
+        mock_orchestrator.update_preemptible_jobs(job1)
+        mock_orchestrator.update_status_to_return_single(job2.id, JobStatus.RUNNING)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.SUSPENDED
+        assert not job1.materialized
+
+        job2 = await jobs_service.get_job(job2.id)
+        assert job2.status == JobStatus.RUNNING
+        assert job2.materialized
+
+        job3 = await jobs_service.get_job(job3.id)
+        assert job3.status == JobStatus.PENDING
+        assert not job3.materialized
+
+        mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.PENDING)
+
+        await jobs_service.cancel_job(job2.id)
+        await jobs_poller_service.update_jobs_statuses()
+
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.PENDING
+        assert job1.materialized
+
+        job2 = await jobs_service.get_job(job2.id)
+        assert job2.status == JobStatus.CANCELLED
+        assert not job2.materialized
+
+        job3 = await jobs_service.get_job(job3.id)
+        assert job3.status == JobStatus.PENDING
+        assert not job3.materialized
