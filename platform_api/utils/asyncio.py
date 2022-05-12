@@ -5,11 +5,18 @@ import sys
 from collections.abc import Callable, Coroutine, Iterable
 from contextlib import AbstractAsyncContextManager
 from types import TracebackType
-from typing import Any, Optional, TypeVar
+from typing import Any, Optional, TypeVar, Union
 
 
-async def run_and_log_exceptions(coros: Iterable[Coroutine[Any, Any, Any]]) -> None:
-    tasks = [asyncio.create_task(coro) for coro in coros]
+async def run_and_log_exceptions(
+    coros: Union[Coroutine[Any, Any, Any], Iterable[Coroutine[Any, Any, Any]]]
+) -> None:
+    try:
+        # Check is iterable
+        iter(coros)  # type: ignore
+        tasks = [asyncio.create_task(coro) for coro in coros]  # type: ignore
+    except TypeError:
+        tasks = [asyncio.create_task(coros)]  # type: ignore
     await asyncio.gather(*tasks, return_exceptions=True)
     for task in tasks:
         exc = task.exception()

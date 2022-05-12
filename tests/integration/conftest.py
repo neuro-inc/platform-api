@@ -218,6 +218,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
             ],
             job_schedule_scaleup_timeout=5,
             allow_privileged_mode=True,
+            allow_job_priority=True,
         )
         kwargs = {**defaults, **kwargs}
         return OrchestratorConfig(**kwargs)

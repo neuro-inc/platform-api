@@ -29,11 +29,11 @@ from platform_api.cluster_config import ClusterConfig
 from platform_api.config import Config
 from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
 
-from .api import ApiConfig, AuthApiConfig, JobsClient
-from .auth import AuthClient, ServiceAccountFactory, UserFactory, _User
-from .conftest import MyKubeClient
-from .diskapi import DiskAPIClient
 from tests.conftest import random_str
+from tests.integration.api import ApiConfig, AuthApiConfig, JobsClient
+from tests.integration.auth import AuthClient, ServiceAccountFactory, UserFactory, _User
+from tests.integration.conftest import MyKubeClient
+from tests.integration.diskapi import DiskAPIClient
 from tests.integration.secrets import SecretsClient
 from tests.integration.test_config_client import create_config_api
 
@@ -760,6 +760,28 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, await response.text()
             result = await response.json()
             assert result["status"] in ["pending"]
+            job_id = result["id"]
+
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
+    async def test_create_job_with_priority(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        job_submit["priority"] = "high"
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            assert result["priority"] == "high"
             job_id = result["id"]
 
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
@@ -4780,6 +4802,7 @@ class TestJobs:
                 "logs_removed": False,
                 "total_price_credits": "0",
                 "price_credits_per_hour": "10",
+                "priority": "normal",
             }
 
         response_payload = await jobs_client.long_polling_by_job_id(
@@ -4831,6 +4854,7 @@ class TestJobs:
             "logs_removed": False,
             "total_price_credits": "0",
             "price_credits_per_hour": "10",
+            "priority": "normal",
         }
 
     async def test_job_failed(
@@ -4927,6 +4951,7 @@ class TestJobs:
             "logs_removed": False,
             "total_price_credits": "0",
             "price_credits_per_hour": "10",
+            "priority": "normal",
         }
 
     async def test_job_create_unknown_gpu_model(
@@ -5037,6 +5062,7 @@ class TestJobs:
                 "logs_removed": False,
                 "total_price_credits": "0",
                 "price_credits_per_hour": "10",
+                "priority": "normal",
             }
 
     async def test_create_unknown_tpu_model(
@@ -5140,6 +5166,7 @@ class TestJobs:
                 "logs_removed": False,
                 "total_price_credits": "0",
                 "price_credits_per_hour": "10",
+                "priority": "normal",
             }
 
 

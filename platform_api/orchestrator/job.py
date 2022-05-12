@@ -84,6 +84,10 @@ class JobStatusItem:
         return self.status.is_running
 
     @property
+    def is_suspended(self) -> bool:
+        return self.status.is_suspended
+
+    @property
     def is_finished(self) -> bool:
         return self.status.is_finished
 
@@ -217,6 +221,10 @@ class JobStatusHistory:
         return self.last.is_running
 
     @property
+    def is_suspended(self) -> bool:
+        return self.last.is_suspended
+
+    @property
     def is_finished(self) -> bool:
         return self.last.is_finished
 
@@ -258,6 +266,20 @@ class JobRestartPolicy(str, enum.Enum):
         return self.__str__().__repr__()
 
 
+@enum.unique
+class JobPriority(enum.IntEnum):
+    LOW = -1
+    NORMAL = 0
+    HIGH = 1
+
+    def to_name(self) -> str:
+        return self.name.lower()
+
+    @classmethod
+    def from_name(cls, name: str) -> "JobPriority":
+        return cls[name.upper()]
+
+
 @dataclass
 class JobRecord:
     request: JobRequest
@@ -278,6 +300,7 @@ class JobRecord:
     internal_hostname_named: Optional[str] = None
     schedule_timeout: Optional[float] = None
     restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER
+    priority: JobPriority = JobPriority.NORMAL
 
     # Billing in credits
     fully_billed: bool = False  # True if job has final price
@@ -453,6 +476,7 @@ class JobRecord:
             "restart_policy": str(self.restart_policy),
             "fully_billed": self.fully_billed,
             "total_price_credits": str(self.total_price_credits),
+            "priority": int(self.priority),
         }
         if self.schedule_timeout:
             result["schedule_timeout"] = self.schedule_timeout
@@ -511,6 +535,7 @@ class JobRecord:
             restart_policy=JobRestartPolicy(
                 payload.get("restart_policy", str(cls.restart_policy))
             ),
+            priority=JobPriority(payload.get("priority", int(cls.priority))),
             fully_billed=payload.get("fully_billed", True),  # Default for old jobs
             total_price_credits=Decimal(payload.get("total_price_credits", "0")),
             last_billed=datetime.fromisoformat(payload["last_billed"])
@@ -877,6 +902,10 @@ class Job:
     @property
     def org_name(self) -> Optional[str]:
         return self._record.org_name
+
+    @property
+    def priority(self) -> JobPriority:
+        return self._record.priority
 
     def to_primitive(self) -> dict[str, Any]:
         return self._record.to_primitive()

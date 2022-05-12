@@ -78,8 +78,10 @@ class MockOrchestrator(Orchestrator):
         self.current_datetime_factory: Callable[[], datetime] = partial(
             datetime.now, timezone.utc
         )
-        self._successfully_deleted_jobs: list[Job] = []
-        self._preempted_jobs: list[Job] = []
+        self._deleted_job_ids: list[str] = []
+        self._preemptible_job_ids: list[str] = []
+        self._scheduled_job_ids: list[str] = []
+        self._schedulable_job_ids: list[str] = []
 
     @property
     def config(self) -> OrchestratorConfig:
@@ -121,10 +123,13 @@ class MockOrchestrator(Orchestrator):
     def _create_delete_job_exc(self, job: Job) -> Exception:
         return JobError()
 
+    def get_deleted_job_ids(self) -> list[str]:
+        return self._deleted_job_ids
+
     async def delete_job(self, job: Job) -> JobStatus:
         if self.raise_on_delete:
             raise self.delete_job_exc_factory(job)
-        self._successfully_deleted_jobs.append(job)
+        self._deleted_job_ids.append(job.id)
         return JobStatus.SUCCEEDED
 
     def update_status_to_return(self, new_status: JobStatus) -> None:
@@ -151,9 +156,6 @@ class MockOrchestrator(Orchestrator):
     ) -> None:
         self._mock_exit_codes[job_id] = new_exit_code
 
-    def get_successfully_deleted_jobs(self) -> list[Job]:
-        return self._successfully_deleted_jobs
-
     async def get_missing_secrets(
         self, user_name: str, secret_names: list[str]
     ) -> list[str]:
@@ -162,17 +164,40 @@ class MockOrchestrator(Orchestrator):
     async def get_missing_disks(self, disks: list[Disk]) -> list[Disk]:
         pass
 
-    def get_preempted_jobs(self) -> list[Job]:
-        return list(self._preempted_jobs)
+    def update_preemptible_jobs(self, *jobs: Union[Job, list[Job]]) -> None:
+        self._preemptible_job_ids = []
+        for job in jobs:
+            if isinstance(job, Job):
+                self._preemptible_job_ids.append(job.id)
+            else:
+                self._preemptible_job_ids.extend([job.id for job in job])
 
     async def preempt_jobs(
         self, jobs_to_schedule: list[Job], preemptible_jobs: list[Job]
     ) -> list[Job]:
-        self._preempted_jobs.extend(preemptible_jobs)
-        return preemptible_jobs
+        return [job for job in preemptible_jobs if job.id in self._preemptible_job_ids]
+
+    def update_scheduled_jobs(self, *jobs: Union[Job, list[Job]]) -> None:
+        self._scheduled_job_ids = []
+        for job in jobs:
+            if isinstance(job, Job):
+                self._scheduled_job_ids.append(job.id)
+            else:
+                self._scheduled_job_ids.extend([job.id for job in job])
+
+    async def get_scheduled_jobs(self, jobs: list[Job]) -> list[Job]:
+        return [job for job in jobs if job.id in self._scheduled_job_ids]
+
+    def update_schedulable_jobs(self, *jobs: Union[Job, list[Job]]) -> None:
+        self._schedulable_job_ids = []
+        for job in jobs:
+            if isinstance(job, Job):
+                self._schedulable_job_ids.append(job.id)
+            else:
+                self._schedulable_job_ids.extend([job.id for job in job])
 
     async def get_schedulable_jobs(self, jobs: list[Job]) -> list[Job]:
-        return jobs
+        return [job for job in jobs if job.id in self._schedulable_job_ids]
 
 
 class MockJobsStorage(InMemoryJobsStorage):
@@ -489,7 +514,6 @@ def jobs_service(
     mock_jobs_storage: MockJobsStorage,
     jobs_config: JobsConfig,
     mock_notifications_client: NotificationsClient,
-    scheduler_config: JobsSchedulerConfig,
     mock_auth_client: AuthClient,
     mock_admin_client: AdminClient,
     mock_api_base: URL,

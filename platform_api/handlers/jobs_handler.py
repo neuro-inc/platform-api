@@ -27,6 +27,7 @@ from platform_api.log import log_debug_time
 from platform_api.orchestrator.job import (
     JOB_USER_NAMES_SEPARATOR,
     Job,
+    JobPriority,
     JobRestartPolicy,
     JobStatusItem,
     JobStatusReason,
@@ -121,6 +122,10 @@ def create_job_request_validator(
             t.Key("pass_config", optional=True, default=False): t.Bool,
             t.Key("wait_for_jobs_quota", optional=True, default=False): t.Bool,
             t.Key("privileged", optional=True, default=False): t.Bool,
+            t.Key(
+                "priority", optional=True, default=JobPriority.NORMAL.to_name()
+            ): t.Enum(*(p.to_name() for p in JobPriority))
+            >> JobPriority.from_name,
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=1),
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
@@ -275,6 +280,7 @@ def create_job_response_validator() -> t.Trafaret:
             t.Key("max_run_time_minutes", optional=True): t.Int,
             "restart_policy": t.String,
             "privileged": t.Bool,
+            "priority": t.String,
         }
     )
 
@@ -442,6 +448,7 @@ def convert_job_to_job_response(job: Job) -> dict[str, Any]:
         "logs_removed": job.logs_removed,
         "total_price_credits": str(job.total_price_credits),
         "price_credits_per_hour": str(job.price_credits_per_hour),
+        "priority": job.priority.to_name(),
     }
     if job.name:
         response_payload["name"] = job.name
@@ -671,6 +678,7 @@ class JobsHandler:
         schedule_timeout = request_payload.get("schedule_timeout")
         max_run_time_minutes = request_payload.get("max_run_time_minutes")
         wait_for_jobs_quota = request_payload.get("wait_for_jobs_quota")
+        priority = request_payload["priority"]
         job_request = JobRequest.create(container, description)
         job, _ = await self._jobs_service.create_job(
             job_request,
@@ -688,6 +696,7 @@ class JobsHandler:
             schedule_timeout=schedule_timeout,
             max_run_time_minutes=max_run_time_minutes,
             restart_policy=request_payload["restart_policy"],
+            priority=priority,
         )
         response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)

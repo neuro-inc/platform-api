@@ -890,6 +890,13 @@ class KubeOrchestrator(Orchestrator):
             await self.delete_job(job)
         return preempted_jobs
 
+    async def get_scheduled_jobs(self, jobs: list[Job]) -> list[Job]:
+        scheduled = []
+        for job in jobs:
+            if self._scheduler.is_pod_scheduled(job.id):
+                scheduled.append(job)
+        return scheduled
+
     async def get_schedulable_jobs(self, jobs: list[Job]) -> list[Job]:
         job_pods = [self._create_pod_descriptor(job) for job in jobs]
         schedulable_pods = self._scheduler.get_schedulable_pods(job_pods)

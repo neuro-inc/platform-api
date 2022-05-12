@@ -11,6 +11,7 @@ from yarl import URL
 from platform_api.handlers.job_request_builder import create_container_from_payload
 from platform_api.orchestrator.job import (
     Job,
+    JobPriority,
     JobRecord,
     JobRestartPolicy,
     JobStatusHistory,
@@ -894,6 +895,7 @@ class TestJob:
             "restart_policy": "never",
             "privileged": False,
             "total_price_credits": "0",
+            "priority": 0,
         }
 
     def test_to_primitive_with_max_run_time(
@@ -931,6 +933,7 @@ class TestJob:
             "restart_policy": "never",
             "privileged": False,
             "total_price_credits": "0",
+            "priority": 0,
         }
 
     def test_to_primitive_with_tags(
@@ -972,6 +975,20 @@ class TestJob:
         )
         primitive = job.to_primitive()
         assert primitive["org_name"] == "10250zxvgew"
+
+    def test_to_primitive_with_priority(
+        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
+    ) -> None:
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                priority=JobPriority.HIGH,
+            ),
+        )
+
+        assert job.priority == JobPriority.HIGH
 
     def test_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
@@ -1216,6 +1233,21 @@ class TestJob:
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.org_name == "some-random-213-tenant-id"
 
+    def test_from_primitive_with_priority(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
+    ) -> None:
+        payload = {
+            "id": "testjob",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "materialized": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "priority": 1,
+        }
+        job = Job.from_primitive(mock_orchestrator.config, payload)
+        assert job.priority == JobPriority.HIGH
+
     def test_to_uri(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
@@ -1285,6 +1317,7 @@ class TestJob:
             "restart_policy": str(JobRestartPolicy.ALWAYS),
             "privileged": False,
             "total_price_credits": "0",
+            "priority": 0,
         }
         actual = Job.to_primitive(
             Job.from_primitive(mock_orchestrator.config, expected)
@@ -1619,6 +1652,7 @@ class TestJobStatusHistory:
         assert history.created_at_timestamp == first_item.transition_time.timestamp()
         assert not history.started_at
         assert not history.started_at_str
+        assert not history.is_suspended
         assert not history.is_finished
         assert not history.finished_at
         assert not history.finished_at_str
@@ -1633,6 +1667,8 @@ class TestJobStatusHistory:
         assert history.created_at == first_item.transition_time
         assert history.started_at == first_item.transition_time
         assert history.is_finished
+        assert not history.is_running
+        assert not history.is_suspended
         assert history.finished_at == first_item.transition_time
 
     def test_full_cycle(self) -> None:
@@ -1650,8 +1686,26 @@ class TestJobStatusHistory:
         assert history.started_at_str == running_item.transition_time.isoformat()
         assert history.is_finished
         assert not history.is_running
+        assert not history.is_suspended
         assert history.finished_at == finished_item.transition_time
         assert history.finished_at_str == finished_item.transition_time.isoformat()
+
+    def test_suspended(self) -> None:
+        pending_item = JobStatusItem.create(JobStatus.PENDING)
+        running_item = JobStatusItem.create(JobStatus.RUNNING)
+        suspended_item = JobStatusItem.create(JobStatus.SUSPENDED)
+        items = [pending_item, running_item, suspended_item]
+        history = JobStatusHistory(items=items)
+        assert history.first == pending_item
+        assert history.last == suspended_item
+        assert history.current == suspended_item
+        assert history.created_at == pending_item.transition_time
+        assert history.created_at_str == pending_item.transition_time.isoformat()
+        assert history.started_at == running_item.transition_time
+        assert history.started_at_str == running_item.transition_time.isoformat()
+        assert history.is_suspended
+        assert not history.is_running
+        assert not history.is_finished
 
     def test_resurraction(self) -> None:
         pending_item = JobStatusItem.create(JobStatus.PENDING)
@@ -1667,6 +1721,7 @@ class TestJobStatusHistory:
         assert history.started_at == running_item.transition_time
         assert history.started_at_str == running_item.transition_time.isoformat()
         assert not history.is_finished
+        assert not history.is_suspended
         assert history.is_running
         assert not history.finished_at
         assert not history.finished_at_str

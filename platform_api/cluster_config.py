@@ -21,6 +21,14 @@ class OrchestratorConfig:
     job_schedule_scaleup_timeout: float = 15 * 60
 
     allow_privileged_mode: bool = False
+    allow_job_priority: bool = False
+
+    @property
+    def allow_scheduler_enabled_job(self) -> bool:
+        for preset in self.presets:
+            if preset.scheduler_enabled:
+                return True
+        return False
 
     @property
     def tpu_resources(self) -> Sequence[TPUResource]:
