@@ -1051,7 +1051,20 @@ class TestResources:
         )
         assert resources == Resources(cpu=1, memory=4096)
 
-        with pytest.raises(ValueError, match="Memory format is not supported"):
+        resources = Resources.from_primitive(
+            {"requests": {"cpu": "1", "memory": "4000000K"}}
+        )
+        assert resources == Resources(cpu=1, memory=3814)
+
+        resources = Resources.from_primitive(
+            {"requests": {"cpu": "1", "memory": "4000M"}}
+        )
+        assert resources == Resources(cpu=1, memory=3814)
+
+        resources = Resources.from_primitive({"requests": {"cpu": "1", "memory": "4G"}})
+        assert resources == Resources(cpu=1, memory=3814)
+
+        with pytest.raises(ValueError, match="'4Ti' memory format is not supported"):
             Resources.from_primitive({"requests": {"cpu": "1", "memory": "4Ti"}})
 
     def test_from_primitive_gpu(self) -> None:
