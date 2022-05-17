@@ -19,15 +19,10 @@ oauth:
   successRedirectUrl: https://dev.neu.ro/oauth/login
   headlessCallbackUrl: https://dev.neu.ro/oauth/show-code
 
+
 cors:
   origins:
-  - https://neu.ro
-  - https://master--neuro-web.netlify.app
-  - https://localhost
-  - http://localhost:8000
-  - https://master--mts-web.netlify.app
-  - https://master--megafon-web.netlify.app
-  - https://master--minzdav-web.netlify.app
+  - *
 
 postgres:
   dsn:
