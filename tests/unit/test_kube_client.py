@@ -582,13 +582,13 @@ class TestNodeResources:
         assert resources == NodeResources(cpu=1, memory=4096)
 
         resources = NodeResources.from_primitive({"cpu": "1", "memory": "4000000K"})
-        assert resources == NodeResources(cpu=1, memory=3814)
+        assert resources == NodeResources(cpu=1, memory=3815)
 
         resources = NodeResources.from_primitive({"cpu": "1", "memory": "4000M"})
-        assert resources == NodeResources(cpu=1, memory=3814)
+        assert resources == NodeResources(cpu=1, memory=3815)
 
         resources = NodeResources.from_primitive({"cpu": "1", "memory": "4G"})
-        assert resources == NodeResources(cpu=1, memory=3814)
+        assert resources == NodeResources(cpu=1, memory=3815)
 
         with pytest.raises(ValueError, match="'4Ti' memory format is not supported"):
             NodeResources.from_primitive({"cpu": "1", "memory": "4Ti"})

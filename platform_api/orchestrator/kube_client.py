@@ -12,6 +12,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
+from math import ceil
 from pathlib import Path, PurePath
 from types import TracebackType
 from typing import Any, ClassVar, NoReturn, Optional, Union
@@ -377,7 +378,7 @@ class Resources:
                 memory_b = int(memory[:-1]) * 1000**3
             else:
                 raise ValueError(f"{memory!r} memory format is not supported")
-        return memory_b // 1024**2
+        return ceil(memory_b / 1024**2)
 
     @classmethod
     def _parse_tpu(cls, payload: dict[str, Any]) -> tuple[Optional[str], Optional[int]]:

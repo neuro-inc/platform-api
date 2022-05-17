@@ -1054,15 +1054,15 @@ class TestResources:
         resources = Resources.from_primitive(
             {"requests": {"cpu": "1", "memory": "4000000K"}}
         )
-        assert resources == Resources(cpu=1, memory=3814)
+        assert resources == Resources(cpu=1, memory=3815)
 
         resources = Resources.from_primitive(
             {"requests": {"cpu": "1", "memory": "4000M"}}
         )
-        assert resources == Resources(cpu=1, memory=3814)
+        assert resources == Resources(cpu=1, memory=3815)
 
         resources = Resources.from_primitive({"requests": {"cpu": "1", "memory": "4G"}})
-        assert resources == Resources(cpu=1, memory=3814)
+        assert resources == Resources(cpu=1, memory=3815)
 
         with pytest.raises(ValueError, match="'4Ti' memory format is not supported"):
             Resources.from_primitive({"requests": {"cpu": "1", "memory": "4Ti"}})
