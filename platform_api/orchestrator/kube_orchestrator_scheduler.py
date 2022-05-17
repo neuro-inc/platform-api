@@ -86,7 +86,7 @@ class NodesHandler(EventHandler):
     def _remove_node(self, node: Node) -> None:
         self._nodes.pop(node.name, None)
 
-    def get_nodes(self) -> Iterable[Node]:
+    def get_ready_nodes(self) -> Iterable[Node]:
         return self._nodes.values()
 
 
@@ -173,7 +173,7 @@ class KubeOrchestratorScheduler:
                 logger.debug("Pod %r has already been scheduled", pod.name)
                 schedulable_pods.append(pod)
                 continue
-            for node in self._nodes_handler.get_nodes():
+            for node in self._nodes_handler.get_ready_nodes():
                 if not pod.can_be_scheduled(node.labels):
                     logger.debug(
                         "Pod %r cannot be scheduled onto node %r", pod.name, node.name
@@ -312,7 +312,7 @@ class KubeOrchestratorPreemption:
                 return (0, 0, 0.0)
             return (free.gpu or 0, free.memory, free.cpu)
 
-        nodes = self._nodes_handler.get_nodes()
+        nodes = self._nodes_handler.get_ready_nodes()
         nodes = [n for n in nodes if n not in exclude]
         nodes.sort(key=_create_key)  # Try to preempt nodes with less resources first
         return nodes

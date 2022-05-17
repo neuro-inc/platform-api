@@ -1266,6 +1266,39 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/user": job.owner
         }
 
+    async def test_job_org_pod_labels(
+        self,
+        kube_config: KubeConfig,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="ubuntu:20.10",
+            command="sleep infinity",
+            resources=ContainerResources(cpu=0.1, memory_mb=32),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                org_name="test-org",
+            ),
+        )
+        await delete_job_later(job)
+        await job.start()
+
+        pod_name = job.id
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+        raw_pod = await kube_client.get_raw_pod(pod_name)
+
+        assert raw_pod["metadata"]["labels"] == {
+            "platform.neuromation.io/job": job.id,
+            "platform.neuromation.io/user": job.owner,
+            "platform.neuromation.io/org": job.org_name,
+        }
+
     async def test_gpu_job_pod_labels(
         self,
         kube_config: KubeConfig,

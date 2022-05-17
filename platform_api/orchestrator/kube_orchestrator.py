@@ -457,6 +457,11 @@ class KubeOrchestrator(Orchestrator):
     def _get_user_pod_labels(self, job: Job) -> dict[str, str]:
         return {"platform.neuromation.io/user": job.owner.replace("/", "--")}
 
+    def _get_org_pod_labels(self, job: Job) -> dict[str, str]:
+        if not job.org_name:
+            return {}
+        return {"platform.neuromation.io/org": job.org_name}
+
     def _get_job_labels(self, job: Job) -> dict[str, str]:
         return {"platform.neuromation.io/job": job.id}
 
@@ -473,6 +478,7 @@ class KubeOrchestrator(Orchestrator):
     def _get_pod_labels(self, job: Job) -> dict[str, str]:
         labels = self._get_job_labels(job)
         labels.update(self._get_user_pod_labels(job))
+        labels.update(self._get_org_pod_labels(job))
         labels.update(self._get_gpu_labels(job))
         labels.update(self._get_preset_labels(job))
         return labels

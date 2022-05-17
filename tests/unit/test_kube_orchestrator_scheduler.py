@@ -118,7 +118,7 @@ class TestNodesHandler:
         node = Node.from_primitive(raw_node)
         await handler.init([raw_node])
 
-        nodes = list(handler.get_nodes())
+        nodes = list(handler.get_ready_nodes())
         assert nodes == [node]
 
     async def test_init_not_ready(
@@ -127,7 +127,7 @@ class TestNodesHandler:
         raw_node = create_node(ready=False)
         await handler.init([raw_node])
 
-        nodes = list(handler.get_nodes())
+        nodes = list(handler.get_ready_nodes())
         assert nodes == []
 
     async def test_added_ready(
@@ -137,7 +137,7 @@ class TestNodesHandler:
         node = Node.from_primitive(raw_node)
         await handler.handle(WatchEvent.create_added(raw_node))
 
-        nodes = list(handler.get_nodes())
+        nodes = list(handler.get_ready_nodes())
         assert nodes == [node]
 
     async def test_added_not_ready(
@@ -146,7 +146,7 @@ class TestNodesHandler:
         raw_node = create_node(ready=False)
         await handler.handle(WatchEvent.create_added(raw_node))
 
-        nodes = list(handler.get_nodes())
+        nodes = list(handler.get_ready_nodes())
         assert nodes == []
 
 
