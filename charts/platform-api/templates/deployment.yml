@@ -90,7 +90,7 @@ spec:
           value: {{ .Values.enforcerRetentionDelayDays | quote }}
         {{- if .Values.cors.origins }}
         - name: NP_CORS_ORIGINS
-          value: {{ .Values.cors.origins | join "," }}
+          value: {{ .Values.cors.origins | join "," | quote}}
         {{- end }}
         - name: NP_DB_POSTGRES_DSN
 {{- if .Values.postgres.dsn }}

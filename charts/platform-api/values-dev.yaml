@@ -22,7 +22,7 @@ oauth:
 
 cors:
   origins:
-  - *
+  - '*'
 
 postgres:
   dsn:
