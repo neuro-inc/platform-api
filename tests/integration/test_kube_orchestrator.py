@@ -1258,6 +1258,7 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/preset": job.preset_name,
             "platform.neuromation.io/user": job.owner,
+            "platform.neuromation.io/org": "<no-org>",
         }
 
         policy_name = "neurouser-" + job.owner
@@ -1334,6 +1335,7 @@ class TestKubeOrchestrator:
         assert raw_pod["metadata"]["labels"] == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
+            "platform.neuromation.io/org": "<no-org>",
             "platform.neuromation.io/gpu-model": job.gpu_model_id,
         }
 
