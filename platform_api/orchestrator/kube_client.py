@@ -12,6 +12,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
+from math import ceil
 from pathlib import Path, PurePath
 from types import TracebackType
 from typing import Any, ClassVar, NoReturn, Optional, Union
@@ -344,29 +345,40 @@ class Resources:
             gpu = int(requests[cls.gpu_key])
         tpu_version, tpu_cores = cls._parse_tpu(requests)
         return cls(
-            cpu=cls._parse_cpu(requests.get("cpu", "0")),
-            memory=cls._parse_memory(requests.get("memory", "0Mi")),
+            cpu=cls.parse_cpu(requests.get("cpu", "0")),
+            memory=cls.parse_memory(requests.get("memory", "0Mi")),
             gpu=gpu,
             tpu_version=tpu_version,
             tpu_cores=tpu_cores,
         )
 
     @classmethod
-    def _parse_cpu(cls, cpu: str) -> float:
+    def parse_cpu(cls, cpu: str) -> float:
         try:
             return float(cpu)
         except ValueError:
             return float(cpu[:-1]) / 1000
 
     @classmethod
-    def _parse_memory(cls, memory: str) -> int:
-        if memory.endswith("Ki"):
-            return int(memory[:-2]) // 1024
-        elif memory.endswith("Mi"):
-            return int(memory[:-2])
-        elif memory.endswith("Gi"):
-            return int(memory[:-2]) * 1024
-        raise ValueError("Memory format is not supported")
+    def parse_memory(cls, memory: str) -> int:
+        try:
+            memory_b = int(memory)
+        except ValueError:
+            if memory.endswith("Ki"):
+                memory_b = int(memory[:-2]) * 1024
+            elif memory.endswith("K"):
+                memory_b = int(memory[:-1]) * 1000
+            elif memory.endswith("Mi"):
+                return int(memory[:-2])
+            elif memory.endswith("M"):
+                memory_b = int(memory[:-1]) * 1000**2
+            elif memory.endswith("Gi"):
+                memory_b = int(memory[:-2]) * 1024**3
+            elif memory.endswith("G"):
+                memory_b = int(memory[:-1]) * 1000**3
+            else:
+                raise ValueError(f"{memory!r} memory format is not supported")
+        return ceil(memory_b / 1024**2)
 
     @classmethod
     def _parse_tpu(cls, payload: dict[str, Any]) -> tuple[Optional[str], Optional[int]]:
@@ -1598,31 +1610,10 @@ class NodeResources:
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "NodeResources":
         return cls(
-            cpu=cls._parse_cpu(payload.get("cpu", "0")),
-            memory=cls._parse_memory(payload.get("memory", "0Mi")),
+            cpu=Resources.parse_cpu(payload.get("cpu", "0")),
+            memory=Resources.parse_memory(payload.get("memory", "0Mi")),
             gpu=int(payload.get(cls.gpu_key, 0)),
         )
-
-    @classmethod
-    def _parse_cpu(cls, cpu: str) -> float:
-        try:
-            return float(cpu)
-        except ValueError:
-            return float(cpu[:-1]) / 1000
-
-    @classmethod
-    def _parse_memory(cls, memory: str) -> int:
-        try:
-            return int(memory) // 1024 // 1024
-        except ValueError:
-            pass
-        if memory.endswith("Ki"):
-            return int(memory[:-2]) // 1024
-        elif memory.endswith("Mi"):
-            return int(memory[:-2])
-        elif memory.endswith("Gi"):
-            return int(memory[:-2]) * 1024
-        raise ValueError("Memory format is not supported")
 
     @property
     def any(self) -> bool:
