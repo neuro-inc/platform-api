@@ -1,13 +1,14 @@
 import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Any
 
 import aiodocker
 import aiohttp.web
 import pytest
 from aiohttp import ClientError, ClientResponseError
-from aiohttp.web_exceptions import HTTPCreated, HTTPNoContent
+from aiohttp.web_exceptions import HTTPCreated, HTTPNoContent, HTTPNotFound
 from async_timeout import timeout
 from neuro_admin_client import AdminClient
 from yarl import URL
@@ -24,22 +25,38 @@ async def fake_config_app() -> AsyncIterator[URL]:
 
     async def add_cluster(request: aiohttp.web.Request) -> aiohttp.web.Response:
         payload = await request.json()
+        payload["status"] = "blank"
+        payload["created_at"] = datetime.now().isoformat()
         clusters.append(payload)
         return aiohttp.web.json_response(payload)
 
     async def list_clusters(request: aiohttp.web.Request) -> aiohttp.web.Response:
         return aiohttp.web.json_response(clusters)
 
-    async def add_storage(request: aiohttp.web.Request) -> aiohttp.web.Response:
-        return aiohttp.web.Response(status=HTTPCreated.status_code)
+    async def get_cluster(request: aiohttp.web.Request) -> aiohttp.web.Response:
+        cluster_name = request.match_info["cluster_name"]
+        for cluster in clusters:
+            if cluster["name"] == cluster_name:
+                return aiohttp.web.json_response(
+                    cluster, status=HTTPCreated.status_code
+                )
+        return aiohttp.web.Response(status=HTTPNotFound.status_code)
 
-    async def delete_storage(
-        request: aiohttp.web.Request,
-    ) -> aiohttp.web.Response:
+    async def add_storage(request: aiohttp.web.Request) -> aiohttp.web.Response:
+        cluster_name = request.match_info["cluster_name"]
+        for cluster in clusters:
+            if cluster["name"] == cluster_name:
+                return aiohttp.web.json_response(
+                    cluster, status=HTTPCreated.status_code
+                )
+        return aiohttp.web.Response(status=HTTPNotFound.status_code)
+
+    async def delete_storage(request: aiohttp.web.Request) -> aiohttp.web.Response:
         return aiohttp.web.Response(status=HTTPNoContent.status_code)
 
     app.add_routes((aiohttp.web.post("/api/v1/clusters", add_cluster),))
     app.add_routes((aiohttp.web.get("/api/v1/clusters", list_clusters),))
+    app.add_routes((aiohttp.web.get("/api/v1/clusters/{cluster_name}", get_cluster),))
     app.add_routes(
         (
             aiohttp.web.post(
