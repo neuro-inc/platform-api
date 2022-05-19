@@ -1369,6 +1369,7 @@ class TestKubeOrchestrator:
         assert service.labels == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
+            "platform.neuromation.io/org": "",
         }
 
         ingress_name = job.id
@@ -1376,6 +1377,7 @@ class TestKubeOrchestrator:
         assert ingress.labels == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
+            "platform.neuromation.io/org": "",
         }
 
     async def test_named_job_resource_labels(
@@ -1410,6 +1412,7 @@ class TestKubeOrchestrator:
         assert service.labels == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
+            "platform.neuromation.io/org": "",
         }
 
         ingress_name = job.id
@@ -1417,6 +1420,7 @@ class TestKubeOrchestrator:
         assert ingress.labels == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
+            "platform.neuromation.io/org": "",
             "platform.neuromation.io/job-name": job.name,
         }
 
