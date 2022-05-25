@@ -1265,6 +1265,35 @@ class TestBulkJobFilterBuilder:
             shared_ids_filter=None,
         )
 
+    def test_user_access_mixed_jobs_and_clusters(self) -> None:
+        query_filter = JobFilter(orgs={None})
+        tree = make_access_tree(
+            {
+                "test-cluster/testuser/foo": "read",
+                "test-cluster/anotheruser/foo": "read",
+                "anothercluster": "read",
+            }
+        )
+        bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
+        assert bulk_filter == BulkJobFilter(
+            bulk_filter=JobFilter(
+                clusters={
+                    "test-cluster": {
+                        None: {
+                            "testuser/foo": set(),
+                            "testuser": {"foo"},
+                            "anotheruser/foo": set(),
+                            "anotheruser": {"foo"},
+                        },
+                    },
+                    "anothercluster": {},
+                },
+                orgs={None},
+            ),
+            shared_ids=set(),
+            shared_ids_filter=None,
+        )
+
     def test_mixed_cluster_user_access(self) -> None:
         query_filter = JobFilter()
         tree = make_access_tree(

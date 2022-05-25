@@ -1231,7 +1231,11 @@ class BulkJobFilterBuilder:
         # if `self._owners_shared_any` is empty and no org share full
         # access, we still want to try to limit the scope to the owners
         # passed in the query, otherwise pull all.
-        if not self._has_orgs_shared_all and self._owners_shared_any:
+        if (
+            not self._has_clusters_shared_all
+            and not self._has_orgs_shared_all
+            and self._owners_shared_any
+        ):
             bulk_filter = replace(bulk_filter, owners=self._owners_shared_any)
         # `self._clusters_shared_any` is already filtered against
         # `self._query_filter.clusters`.
