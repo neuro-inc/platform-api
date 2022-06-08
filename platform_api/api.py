@@ -108,11 +108,13 @@ class ConfigApiHandler:
 
         try:
             user = await authorized_user(request)
+            data["authorized"] = True
             cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
             data["clusters"] = [
                 self._convert_cluster_config_to_payload(c) for c in cluster_configs
             ]
 
+            # TODO: Remove after client release
             if len(data["clusters"]) == 0:
                 error_payload = {
                     "error": "Current user doesn't have access to any cluster."
@@ -121,14 +123,14 @@ class ConfigApiHandler:
                     error_payload, status=aiohttp.web.HTTPBadRequest.status_code
                 )
 
-            # NOTE: adding the cluster payload to the root document for
-            # backward compatibility
+            # TODO: adding the cluster payload to the root document for
+            # backward compatibility. Remove after client release
             data.update(data["clusters"][0])
 
             if self._config.admin_public_url:
                 data["admin_url"] = str(self._config.admin_public_url)
         except HTTPUnauthorized:
-            pass
+            data["authorized"] = False
 
         if self._config.oauth:
             data["auth_url"] = str(self._config.oauth.auth_url)
