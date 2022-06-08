@@ -199,15 +199,19 @@ class TestApi:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user_factory: UserFactory,
+        admin_url: URL,
     ) -> None:
         url = api.config_url
-        regular_user = await regular_user_factory(
-            clusters=[],
-        )
+        regular_user = await regular_user_factory(clusters=[])
         async with client.get(url, headers=regular_user.headers) as resp:
-            assert resp.status == HTTPBadRequest.status_code, await resp.text()
-            error = await resp.json()
-            assert error["error"] == "Current user doesn't have access to any cluster."
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            expected_payload: dict[str, Any] = {
+                "authorized": True,
+                "admin_url": f"{admin_url}",
+                "clusters": [],
+            }
+            assert result == expected_payload
 
     async def test_config(
         self,
@@ -324,7 +328,6 @@ class TestApi:
                     expected_cluster_payload,
                     {**expected_cluster_payload, **{"name": "testcluster2"}},
                 ],
-                **expected_cluster_payload,
             }
             assert result == expected_payload
 
@@ -440,10 +443,7 @@ class TestApi:
             expected_payload: dict[str, Any] = {
                 "authorized": True,
                 "admin_url": f"{admin_url}",
-                "clusters": [
-                    expected_cluster_payload,
-                ],
-                **expected_cluster_payload,
+                "clusters": [expected_cluster_payload],
             }
             assert result == expected_payload
 
@@ -565,7 +565,6 @@ class TestApi:
                 ],
                 "admin_url": f"{admin_url}",
                 "clusters": [expected_cluster_payload],
-                **expected_cluster_payload,
             }
             assert result == expected_payload
 

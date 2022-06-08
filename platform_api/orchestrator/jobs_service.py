@@ -465,12 +465,7 @@ class JobsService:
             for user_cluster in user_clusters:
                 cluster_to_orgs[user_cluster.cluster_name].append(user_cluster.org_name)
         except ClientResponseError as e:
-            if e.status == 404:
-                # TODO: Fallback to old logic with AuthUser clusters
-                # Remove after client release
-                for auth_cluster in user.clusters:
-                    cluster_to_orgs[auth_cluster.name].append(None)
-            else:
+            if e.status != 404:
                 raise
         for cluster_name, orgs in cluster_to_orgs.items():
             try:
