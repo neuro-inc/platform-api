@@ -156,7 +156,7 @@ class TestApi:
         async with client.get(url) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
-            assert result == {}
+            assert result == {"authorized": False}
 
     async def test_clusters_sync(
         self,
@@ -199,7 +199,6 @@ class TestApi:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user_factory: UserFactory,
-        admin_url: URL,
     ) -> None:
         url = api.config_url
         regular_user = await regular_user_factory(
@@ -319,6 +318,7 @@ class TestApi:
                 ],
             }
             expected_payload: dict[str, Any] = {
+                "authorized": True,
                 "admin_url": f"{admin_url}",
                 "clusters": [
                     expected_cluster_payload,
@@ -438,6 +438,7 @@ class TestApi:
                 ],
             }
             expected_payload: dict[str, Any] = {
+                "authorized": True,
                 "admin_url": f"{admin_url}",
                 "clusters": [
                     expected_cluster_payload,
@@ -549,6 +550,7 @@ class TestApi:
                 ],
             }
             expected_payload: dict[str, Any] = {
+                "authorized": True,
                 "auth_url": "https://platform-auth0-url/auth",
                 "token_url": "https://platform-auth0-url/token",
                 "logout_url": "https://platform-auth0-url/logout",
