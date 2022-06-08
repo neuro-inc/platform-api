@@ -114,19 +114,6 @@ class ConfigApiHandler:
                 self._convert_cluster_config_to_payload(c) for c in cluster_configs
             ]
 
-            # TODO: Remove after client release
-            if len(data["clusters"]) == 0:
-                error_payload = {
-                    "error": "Current user doesn't have access to any cluster."
-                }
-                return aiohttp.web.json_response(
-                    error_payload, status=aiohttp.web.HTTPBadRequest.status_code
-                )
-
-            # TODO: adding the cluster payload to the root document for
-            # backward compatibility. Remove after client release
-            data.update(data["clusters"][0])
-
             if self._config.admin_public_url:
                 data["admin_url"] = str(self._config.admin_public_url)
         except HTTPUnauthorized:
