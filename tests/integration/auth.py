@@ -258,7 +258,7 @@ async def service_account_factory(
     ) -> _User:
         if not name:
             name = random_str()
-        user = AuthUser(name=f"{owner.name}/service-accounts/{name}", clusters=[])
+        user = AuthUser(name=f"{owner.name}/service-accounts/{name}")
         await auth_client.add_user(user, token=admin_token)
         permissions = []
         # Fake grant access to SA staff
