@@ -72,6 +72,7 @@ class MockOrchestrator(Orchestrator):
         self._mock_exit_codes: dict[str, Optional[int]] = {}
         self.raise_on_get_job_status = False
         self.raise_on_start_job_status = False
+        self.raise_on_preempt_jobs = False
         self.get_job_status_exc_factory = self._create_get_job_status_exc
         self.raise_on_delete = False
         self.delete_job_exc_factory = self._create_delete_job_exc
@@ -175,6 +176,8 @@ class MockOrchestrator(Orchestrator):
     async def preempt_jobs(
         self, jobs_to_schedule: list[Job], preemptible_jobs: list[Job]
     ) -> list[Job]:
+        if self.raise_on_preempt_jobs:
+            raise JobError("Failed to suspend jobs")
         return [job for job in preemptible_jobs if job.id in self._preemptible_job_ids]
 
     def update_scheduled_jobs(self, *jobs: Union[Job, list[Job]]) -> None:
@@ -367,8 +370,10 @@ class MockJobsPollerApi(JobsPollerApi):
 
 @pytest.fixture
 def job_request_factory() -> Callable[[], JobRequest]:
-    def factory(with_gpu: bool = False) -> JobRequest:
-        cont_kwargs: dict[str, Any] = {"cpu": 1, "memory_mb": 128}
+    def factory(
+        cpu: float = 1, memory: int = 128, with_gpu: bool = False
+    ) -> JobRequest:
+        cont_kwargs: dict[str, Any] = {"cpu": cpu, "memory_mb": memory}
         if with_gpu:
             cont_kwargs["gpu"] = 1
             cont_kwargs["gpu_model_id"] = "nvidia-tesla-k80"
