@@ -6,7 +6,7 @@ from typing import Optional, Protocol, Union, cast
 
 import aiodocker
 import pytest
-from aiohttp import ClientError, ClientResponseError
+from aiohttp import ClientError
 from aiohttp.hdrs import AUTHORIZATION
 from async_timeout import timeout
 from jose import jwt
@@ -188,6 +188,10 @@ async def regular_user_factory(
             name = random_str()
         if clusters is None:
             clusters = [(test_cluster_name, Balance(), Quota())]
+        clusters_created: set[str] = set()
+        orgs_created: set[str] = set()
+        org_memberships: set[str] = set()
+        org_clusters_created: set[tuple[str, str]] = set()
         await admin_client.create_user(name=name, email=f"{name}@email.com")
         for entry in clusters:
             org_name: Optional[str] = None
@@ -197,27 +201,26 @@ async def regular_user_factory(
                 cluster, org_name, balance, quota = cast(
                     tuple[str, str, Balance, Quota], entry
                 )
-            try:
+            if cluster not in clusters_created:
                 await admin_client.create_cluster(cluster)
-            except ClientResponseError:
-                pass
+                clusters_created.add(cluster)
             if org_name is not None:
-                try:
+                if org_name not in orgs_created:
                     await admin_client.create_org(org_name)
-                except ClientResponseError:
-                    pass
-                await admin_client.create_org_user(
-                    org_name=org_name,
-                    user_name=name,
-                    role=OrgUserRoleType.USER,
-                )
-                try:
+                    orgs_created.add(org_name)
+                if org_name not in org_memberships:
+                    await admin_client.create_org_user(
+                        org_name=org_name,
+                        user_name=name,
+                        role=OrgUserRoleType.USER,
+                    )
+                    org_memberships.add(org_name)
+                if (cluster, org_name) not in org_clusters_created:
                     await admin_client.create_org_cluster(
                         cluster_name=cluster,
                         org_name=org_name,
                     )
-                except ClientResponseError:
-                    pass
+                    org_clusters_created.add((cluster, org_name))
             await admin_client.create_cluster_user(
                 cluster_name=cluster,
                 org_name=org_name,

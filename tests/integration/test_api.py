@@ -699,6 +699,47 @@ class TestJobs:
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
+    async def test_create_job_use_default_org(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: dict[str, Any],
+        service_account_factory: ServiceAccountFactory,
+        regular_user_factory: UserFactory,
+        jobs_client_factory: Callable[[_User], JobsClient],
+    ) -> None:
+        org_user = await regular_user_factory(
+            clusters=[
+                ("testcluster2", "org", Balance(), Quota()),
+                ("test-cluster", "org2", Balance(), Quota()),
+                ("test-cluster", None, Balance(), Quota()),
+            ],
+        )
+        url = api.jobs_base_url
+        job_submit["cluster_name"] = "test-cluster"
+
+        async with client.post(
+            url, headers=org_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            job_id = result["id"]
+            assert result.get("org_name") is None
+
+        url = api.jobs_base_url
+
+        async with client.get(url, headers=org_user.headers) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            assert response.headers["Content-Type"] == "application/json; charset=utf-8"
+            result = await response.json()
+
+        assert job_id in {job["id"] for job in result["jobs"]}
+
+        jobs_client = jobs_client_factory(org_user)
+        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.delete_job(job_id=job_id)
+
     async def test_create_job_with_pass_config(
         self,
         api: ApiConfig,
