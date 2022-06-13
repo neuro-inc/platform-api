@@ -626,11 +626,22 @@ class JobsHandler:
         cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
         self._check_user_can_submit_jobs(cluster_configs)
         default_cluster_name = cluster_configs[0].config.name
-        default_org_name = cluster_configs[0].orgs[0]
-        if None in cluster_configs[0].orgs:
-            # Always use NO_ORG as default if
-            # use has direct access to cluster
-            default_org_name = None
+        cluster_for_default_org = (
+            orig_payload.get("cluster_name") or default_cluster_name
+        )
+        cluster_config_for_default_org = next(
+            cluster_config
+            for cluster_config in cluster_configs
+            if cluster_config.config.name == cluster_for_default_org
+        )
+        # Always use NO_ORG as default if use has direct access to cluster
+        # if cluster_config_for_default_org is None validator below will raise an error
+        default_org_name = None
+        if (
+            cluster_config_for_default_org is not None
+            and None not in cluster_config_for_default_org.orgs
+        ):
+            default_org_name = cluster_config_for_default_org.orgs[0]
 
         job_cluster_org_name_validator = create_job_cluster_org_name_validator(
             default_cluster_name, default_org_name
