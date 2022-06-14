@@ -712,7 +712,7 @@ class TestJobs:
             clusters=[
                 ("testcluster2", "org", Balance(), Quota()),
                 ("test-cluster", "org2", Balance(), Quota()),
-                ("test-cluster", None, Balance(), Quota()),
+                ("test-cluster", Balance(), Quota()),
             ],
         )
         url = api.jobs_base_url
