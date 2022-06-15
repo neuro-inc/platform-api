@@ -2251,7 +2251,21 @@ class TestKubeOrchestrator:
                 cluster_name="test-cluster",
             ),
         )
-        jobs = await kube_orchestrator.get_schedulable_jobs([job1, job2])
+        # Won't fit into cluster
+        container = Container(
+            image="ubuntu:20.10",
+            resources=ContainerResources(cpu=0.1, memory_mb=10**10),
+        )
+        job3 = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                name=f"job-{uuid.uuid4().hex[:6]}",
+                owner="owner1",
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+            ),
+        )
+        jobs = await kube_orchestrator.get_schedulable_jobs([job1, job2, job3])
 
         assert jobs == [job1]
 

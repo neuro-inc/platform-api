@@ -882,9 +882,16 @@ class KubeOrchestrator(Orchestrator):
         job_pods_to_schedule = [
             self._create_pod_descriptor(job) for job in jobs_to_schedule
         ]
-        preemptible_job_pods = [
-            self._create_pod_descriptor(job) for job in preemptible_jobs
-        ]
+        preemptible_job_pods = []
+        for job in preemptible_jobs:
+            try:
+                preemptible_job_pods.append(self._create_pod_descriptor(job))
+            except JobError as exc:
+                logger.warning(
+                    "Failed to create pod from preemptible job %r. Reason: ",
+                    job.id,
+                    exc,
+                )
         pods_to_preempt = self._preemption.get_pods_to_preempt(
             job_pods_to_schedule, preemptible_job_pods
         )
@@ -904,7 +911,12 @@ class KubeOrchestrator(Orchestrator):
         return scheduled
 
     async def get_schedulable_jobs(self, jobs: list[Job]) -> list[Job]:
-        job_pods = [self._create_pod_descriptor(job) for job in jobs]
+        job_pods = []
+        for job in jobs:
+            try:
+                job_pods.append(self._create_pod_descriptor(job))
+            except JobError as exc:
+                logger.debug("Job %r cannot be scheduled. Reason: %s", job.id, exc)
         schedulable_pods = self._scheduler.get_schedulable_pods(job_pods)
         schedulable_pod_names = {pod.name for pod in schedulable_pods}
         return [job for job in jobs if job.id in schedulable_pod_names]
