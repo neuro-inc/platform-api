@@ -630,9 +630,12 @@ class JobsHandler:
             orig_payload.get("cluster_name") or default_cluster_name
         )
         cluster_config_for_default_org = next(
-            cluster_config
-            for cluster_config in cluster_configs
-            if cluster_config.config.name == cluster_for_default_org
+            (
+                cluster_config
+                for cluster_config in cluster_configs
+                if cluster_config.config.name == cluster_for_default_org
+            ),
+            None,
         )
         # Always use NO_ORG as default if use has direct access to cluster
         # if cluster_config_for_default_org is None validator below will raise an error
