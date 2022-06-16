@@ -436,16 +436,28 @@ class JobsPollerService:
         job_to_start: Job,
         jobs_to_suspend: list[Job],
     ) -> list[Job]:
-        jobs_to_suspend = [
-            job for job in jobs_to_suspend if job_to_start.priority >= job.priority
-        ]
-        suspended_jobs = await orchestrator.preempt_jobs(
-            [job_to_start], jobs_to_suspend
-        )
-        for job in suspended_jobs:
-            job.status = JobStatus.SUSPENDED
-            job.materialized = False
-        return suspended_jobs
+        try:
+            jobs_to_suspend = [
+                job for job in jobs_to_suspend if job_to_start.priority >= job.priority
+            ]
+            suspended_jobs = await orchestrator.preempt_jobs(
+                [job_to_start], jobs_to_suspend
+            )
+            for job in suspended_jobs:
+                job.status = JobStatus.SUSPENDED
+                job.materialized = False
+            return suspended_jobs
+        except JobError as exc:
+            logger.info(
+                "Failed to suspend jobs for job %r. Reason: %s", job_to_start.id, exc
+            )
+            job_to_start.status_history.current = JobStatusItem.create(
+                JobStatus.FAILED,
+                reason=str(exc),
+                description="The job could not be started.",
+            )
+            await self._revoke_pass_config(job_to_start)
+            return []
 
     async def _update_job_status_wrapper(self, job_record: JobRecord) -> None:
         try:
