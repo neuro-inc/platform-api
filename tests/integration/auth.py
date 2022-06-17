@@ -206,11 +206,14 @@ async def regular_user_factory(
                     await admin_client.create_org(org_name)
                 except ClientResponseError:
                     pass
-                await admin_client.create_org_user(
-                    org_name=org_name,
-                    user_name=name,
-                    role=OrgUserRoleType.USER,
-                )
+                try:
+                    await admin_client.create_org_user(
+                        org_name=org_name,
+                        user_name=name,
+                        role=OrgUserRoleType.USER,
+                    )
+                except ClientResponseError:
+                    pass
                 try:
                     await admin_client.create_org_cluster(
                         cluster_name=cluster,
