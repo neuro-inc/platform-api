@@ -174,13 +174,6 @@ class TestContainerRequestValidator:
         assert result["resources"]["gpu"]
         assert result["resources"]["gpu"] == 1
 
-    def test_with_too_many_gpu(self, payload_with_too_many_gpu: dict[str, Any]) -> None:
-        validator = create_container_request_validator(
-            allow_volumes=True, cluster_name="test-cluster"
-        )
-        with pytest.raises(ValueError, match="gpu"):
-            validator.check(payload_with_too_many_gpu)
-
     def test_with_negative_gpu(self, payload_with_negative_gpu: dict[str, Any]) -> None:
         validator = create_container_request_validator(
             allow_volumes=True, cluster_name="test-cluster"

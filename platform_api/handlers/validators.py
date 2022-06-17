@@ -197,12 +197,9 @@ def create_resources_validator(
     allow_any_tpu: bool = False,
     allowed_tpu_resources: Sequence[TPUResource] = (),
 ) -> t.Trafaret:
-    MAX_GPU_COUNT = 128
-    MAX_CPU_COUNT = 128.0
-
     common_resources_validator = t.Dict(
         {
-            "cpu": t.Float(gte=0.1, lte=MAX_CPU_COUNT),
+            "cpu": t.Float(gte=0.1),
             "memory_mb": t.Int(gte=16),
             t.Key("shm", optional=True): t.Bool,
         }
@@ -212,7 +209,7 @@ def create_resources_validator(
         allow_any=allow_any_tpu, allowed=allowed_tpu_resources
     )
 
-    gpu_validator = t.Int(gte=0, lte=MAX_GPU_COUNT)
+    gpu_validator = t.Int(gte=0)
     if allow_any_gpu_models:
         gpu_model_validator = t.String
     else:
