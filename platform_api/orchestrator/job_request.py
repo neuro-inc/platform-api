@@ -185,7 +185,7 @@ class ContainerTPUResource:
 @dataclass(frozen=True)
 class ContainerResources:
     cpu: float
-    memory_mb: int
+    memory: int
     gpu: Optional[int] = None
     gpu_model_id: Optional[str] = None
     shm: Optional[bool] = None
@@ -198,7 +198,9 @@ class ContainerResources:
             tpu = ContainerTPUResource.from_primitive(payload["tpu"])
         return cls(
             cpu=payload["cpu"],
-            memory_mb=payload["memory_mb"],
+            memory=payload["memory"]
+            if "memory" in payload
+            else payload["memory_mb"] * 2**20,
             gpu=payload.get("gpu"),
             gpu_model_id=payload.get("gpu_model_id"),
             shm=payload.get("shm"),
@@ -206,7 +208,7 @@ class ContainerResources:
         )
 
     def to_primitive(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {"cpu": self.cpu, "memory_mb": self.memory_mb}
+        payload: dict[str, Any] = {"cpu": self.cpu, "memory": self.memory}
         if self.gpu is not None:
             payload["gpu"] = self.gpu
             payload["gpu_model_id"] = self.gpu_model_id
@@ -217,11 +219,11 @@ class ContainerResources:
         return payload
 
     def check_fit_into_pool_type(self, pool_type: ResourcePoolType) -> bool:
-        if not pool_type.available_cpu or not pool_type.available_memory_mb:
+        if not pool_type.available_cpu or not pool_type.available_memory:
             return False
         return (
             self.cpu <= pool_type.available_cpu
-            and self.memory_mb <= pool_type.available_memory_mb
+            and self.memory <= pool_type.available_memory
             and self._check_gpu(pool_type)
             and self._check_tpu(pool_type)
         )
@@ -229,7 +231,7 @@ class ContainerResources:
     def check_fit_into_preset(self, preset: Preset) -> bool:
         return (
             self.cpu <= preset.cpu
-            and self.memory_mb <= preset.memory_mb
+            and self.memory <= preset.memory
             and self._check_gpu(preset)
             and self._check_tpu_preset(preset)
         )

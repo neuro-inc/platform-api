@@ -37,7 +37,7 @@ class Preset:
     name: str
     credits_per_hour: Decimal
     cpu: float
-    memory_mb: int
+    memory: int
     scheduler_enabled: bool = False
     preemptible_node: bool = False
     gpu: Optional[int] = None
@@ -61,8 +61,8 @@ class ResourcePoolType:
     is_preemptible: Optional[bool] = False
     cpu: Optional[float] = None
     available_cpu: Optional[float] = None
-    memory_mb: Optional[int] = None
-    available_memory_mb: Optional[int] = None
+    memory: Optional[int] = None
+    available_memory: Optional[int] = None
     gpu: Optional[int] = None
     gpu_model: Optional[str] = None
     disk_gb: Optional[int] = None

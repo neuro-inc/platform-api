@@ -83,7 +83,7 @@ class TestKubeClient:
         container = Container(
             image="ubuntu:20.10",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=32),
+            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)
@@ -100,7 +100,7 @@ class TestKubeClient:
         container = Container(
             image="ubuntu:20.10",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)
@@ -125,7 +125,7 @@ class TestKubeClient:
             image="ubuntu:20.10",
             entrypoint=entrypoint,
             command=command,
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)
@@ -326,7 +326,7 @@ class TestKubeClient:
         container = Container(
             image="ubuntu:20.10",
             command="true",
-            resources=ContainerResources(cpu=0.1, memory_mb=128),
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)
@@ -359,7 +359,7 @@ class TestKubeClient:
         container = Container(
             image="lachlanevenson/k8s-kubectl:v1.10.3",
             command="get pods",
-            resources=ContainerResources(cpu=0.2, memory_mb=128),
+            resources=ContainerResources(cpu=0.2, memory=128 * 10**6),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)

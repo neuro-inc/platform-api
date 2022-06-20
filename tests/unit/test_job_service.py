@@ -2406,7 +2406,7 @@ class TestScheduledJobsService:
                         name="cpu-small",
                         credits_per_hour=Decimal("10"),
                         cpu=2,
-                        memory_mb=2 * 1024,
+                        memory=2000 * 10**6,
                         scheduler_enabled=True,
                     ),
                 ],

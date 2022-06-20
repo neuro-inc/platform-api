@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 from collections import defaultdict
 from collections.abc import AsyncIterator, Sequence, Set
 from dataclasses import dataclass, replace
@@ -196,7 +197,7 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
             shm = payload.get("resources", {}).get("shm", False)
         container_resources = {
             "cpu": preset.cpu,
-            "memory_mb": preset.memory_mb,
+            "memory": preset.memory,
             "shm": shm,
         }
         if preset.gpu:
@@ -348,7 +349,8 @@ def convert_job_container_to_json(container: Container) -> dict[str, Any]:
 
     resources: dict[str, Any] = {
         "cpu": container.resources.cpu,
-        "memory_mb": container.resources.memory_mb,
+        "memory": container.resources.memory,
+        "memory_mb": math.floor(container.resources.memory / 2**20),
     }
     if container.resources.gpu is not None:
         resources["gpu"] = container.resources.gpu

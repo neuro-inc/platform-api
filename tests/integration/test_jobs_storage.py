@@ -34,10 +34,10 @@ class TestJobsStorage:
     def _create_job_request(self, with_gpu: bool = False) -> JobRequest:
         if with_gpu:
             resources = ContainerResources(
-                cpu=0.1, memory_mb=256, gpu=1, gpu_model_id="nvidia-tesla-k80"
+                cpu=0.1, memory=256 * 10**6, gpu=1, gpu_model_id="nvidia-tesla-k80"
             )
         else:
-            resources = ContainerResources(cpu=0.1, memory_mb=256)
+            resources = ContainerResources(cpu=0.1, memory=256 * 10**6)
         container = Container(
             image="ubuntu:20.10", command="sleep 5", resources=resources
         )

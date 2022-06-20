@@ -354,7 +354,7 @@ class TestPodDescriptor:
             name="testname",
             image="testimage",
             env={"TESTVAR": "testvalue"},
-            resources=Resources(cpu=0.5, memory=1024, gpu=1),
+            resources=Resources(cpu=0.5, memory=1024 * 10**6, gpu=1),
             port=1234,
             tty=True,
             node_selector={"label": "value"},
@@ -387,12 +387,12 @@ class TestPodDescriptor:
                         "resources": {
                             "requests": {
                                 "cpu": "500m",
-                                "memory": "1024Mi",
+                                "memory": "1024000000",
                                 "nvidia.com/gpu": 1,
                             },
                             "limits": {
                                 "cpu": "500m",
-                                "memory": "1024Mi",
+                                "memory": "1024000000",
                                 "nvidia.com/gpu": 1,
                             },
                         },
@@ -435,7 +435,7 @@ class TestPodDescriptor:
             name="testname",
             image="testimage",
             env={"TESTVAR": "testvalue"},
-            resources=Resources(cpu=0.5, memory=1024, gpu=1),
+            resources=Resources(cpu=0.5, memory=1024 * 10**6, gpu=1),
             port=1234,
             readiness_probe=True,
         )
@@ -457,12 +457,12 @@ class TestPodDescriptor:
                         "resources": {
                             "requests": {
                                 "cpu": "500m",
-                                "memory": "1024Mi",
+                                "memory": "1024000000",
                                 "nvidia.com/gpu": 1,
                             },
                             "limits": {
                                 "cpu": "500m",
-                                "memory": "1024Mi",
+                                "memory": "1024000000",
                                 "nvidia.com/gpu": 1,
                             },
                         },
@@ -495,7 +495,7 @@ class TestPodDescriptor:
             name="testname",
             image="testimage",
             env={"TESTVAR": "testvalue"},
-            resources=Resources(cpu=0.5, memory=1024, gpu=1),
+            resources=Resources(cpu=0.5, memory=1024 * 10**6, gpu=1),
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
@@ -515,12 +515,12 @@ class TestPodDescriptor:
                         "resources": {
                             "requests": {
                                 "cpu": "500m",
-                                "memory": "1024Mi",
+                                "memory": "1024000000",
                                 "nvidia.com/gpu": 1,
                             },
                             "limits": {
                                 "cpu": "500m",
-                                "memory": "1024Mi",
+                                "memory": "1024000000",
                                 "nvidia.com/gpu": 1,
                             },
                         },
@@ -552,7 +552,7 @@ class TestPodDescriptor:
             name="testname",
             image="testimage",
             env={"TESTVAR": "testvalue"},
-            resources=Resources(cpu=0.5, memory=1024, gpu=1),
+            resources=Resources(cpu=0.5, memory=1024 * 10**6, gpu=1),
             port=1234,
             volumes=[dev_shm],
             volume_mounts=[dev_shm.create_mount(container_volume)],
@@ -582,12 +582,12 @@ class TestPodDescriptor:
                         "resources": {
                             "requests": {
                                 "cpu": "500m",
-                                "memory": "1024Mi",
+                                "memory": "1024000000",
                                 "nvidia.com/gpu": 1,
                             },
                             "limits": {
                                 "cpu": "500m",
-                                "memory": "1024Mi",
+                                "memory": "1024000000",
                                 "nvidia.com/gpu": 1,
                             },
                         },
@@ -616,7 +616,7 @@ class TestPodDescriptor:
             command="testcommand 123",
             working_dir="/working/dir",
             env={"TESTVAR": "testvalue"},
-            resources=ContainerResources(cpu=1, memory_mb=128, gpu=1),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6, gpu=1),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
@@ -627,7 +627,7 @@ class TestPodDescriptor:
         assert pod.args == ["testcommand", "123"]
         assert pod.env == {"TESTVAR": "testvalue"}
         assert pod.env_list == [{"name": "TESTVAR", "value": "testvalue"}]
-        assert pod.resources == Resources(cpu=1, memory=128, gpu=1)
+        assert pod.resources == Resources(cpu=1, memory=128 * 10**6, gpu=1)
         assert pod.priority_class_name == "testpriority"
         assert pod.working_dir == "/working/dir"
 
@@ -636,7 +636,7 @@ class TestPodDescriptor:
             image="testimage",
             resources=ContainerResources(
                 cpu=1,
-                memory_mb=128,
+                memory=128 * 10**6,
                 tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
             ),
         )
@@ -670,7 +670,7 @@ class TestPodDescriptor:
         container = Container(
             image="testimage",
             command="testcommand 123",
-            resources=ContainerResources(cpu=1, memory_mb=128, gpu=1),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6, gpu=1),
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://cluster/user1"),
@@ -948,33 +948,35 @@ class TestJobStatusItemFactory:
 class TestResources:
     def test_invalid_tpu(self) -> None:
         with pytest.raises(ValueError, match="invalid TPU configuration"):
-            Resources(cpu=0.5, memory=1024, tpu_version="v2")
+            Resources(cpu=0.5, memory=1024 * 10**6, tpu_version="v2")
 
     def test_to_primitive(self) -> None:
-        resources = Resources(cpu=0.5, memory=1024)
+        resources = Resources(cpu=0.5, memory=1024000000)
         assert resources.to_primitive() == {
-            "requests": {"cpu": "500m", "memory": "1024Mi"},
-            "limits": {"cpu": "500m", "memory": "1024Mi"},
+            "requests": {"cpu": "500m", "memory": "1024000000"},
+            "limits": {"cpu": "500m", "memory": "1024000000"},
         }
 
     def test_to_primitive_gpu(self) -> None:
-        resources = Resources(cpu=0.5, memory=1024, gpu=2)
+        resources = Resources(cpu=0.5, memory=1024 * 10**6, gpu=2)
         assert resources.to_primitive() == {
-            "requests": {"cpu": "500m", "memory": "1024Mi", "nvidia.com/gpu": 2},
-            "limits": {"cpu": "500m", "memory": "1024Mi", "nvidia.com/gpu": 2},
+            "requests": {"cpu": "500m", "memory": "1024000000", "nvidia.com/gpu": 2},
+            "limits": {"cpu": "500m", "memory": "1024000000", "nvidia.com/gpu": 2},
         }
 
     def test_to_primitive_tpu(self) -> None:
-        resources = Resources(cpu=0.5, memory=1024, tpu_version="v2", tpu_cores=8)
+        resources = Resources(
+            cpu=0.5, memory=1024 * 10**6, tpu_version="v2", tpu_cores=8
+        )
         assert resources.to_primitive() == {
             "requests": {
                 "cpu": "500m",
-                "memory": "1024Mi",
+                "memory": "1024000000",
                 "cloud-tpus.google.com/v2": 8,
             },
             "limits": {
                 "cpu": "500m",
-                "memory": "1024Mi",
+                "memory": "1024000000",
                 "cloud-tpus.google.com/v2": 8,
             },
         }
@@ -982,40 +984,42 @@ class TestResources:
     def test_to_primitive_with_memory_request(self) -> None:
         resources = Resources(
             cpu=1,
-            memory=1024,
-            memory_request=128,
+            memory=1024 * 10**6,
+            memory_request=128 * 10**6,
         )
 
         assert resources.to_primitive() == {
             "requests": {
                 "cpu": "1000m",
-                "memory": "128Mi",
+                "memory": "128000000",
             },
             "limits": {
                 "cpu": "1000m",
-                "memory": "1024Mi",
+                "memory": "1024000000",
             },
         }
 
     def test_from_container_resources(self) -> None:
-        container_resources = ContainerResources(cpu=1, memory_mb=128, gpu=1)
+        container_resources = ContainerResources(cpu=1, memory=128 * 10**6, gpu=1)
         resources = Resources.from_container_resources(container_resources)
-        assert resources == Resources(cpu=1, memory=128, gpu=1)
+        assert resources == Resources(cpu=1, memory=128 * 10**6, gpu=1)
 
     def test_from_container_resources_tpu(self) -> None:
         container_resources = ContainerResources(
             cpu=1,
-            memory_mb=128,
+            memory=128 * 10**6,
             tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
         )
         resources = Resources.from_container_resources(container_resources)
-        assert resources == Resources(cpu=1, memory=128, tpu_version="v2", tpu_cores=8)
+        assert resources == Resources(
+            cpu=1, memory=128 * 10**6, tpu_version="v2", tpu_cores=8
+        )
 
     @pytest.mark.parametrize("type_", ("v2", "v2-nan", "v2-", "-"))
     def test_from_container_resources_tpu_invalid_type(self, type_: str) -> None:
         container_resources = ContainerResources(
             cpu=1,
-            memory_mb=128,
+            memory=128 * 10**6,
             tpu=ContainerTPUResource(type=type_, software_version="1.14"),
         )
         with pytest.raises(ValueError, match=f"invalid TPU type format: '{type_}'"):
@@ -1026,43 +1030,43 @@ class TestResources:
             {"requests": {"cpu": "1", "memory": "4096Mi"}}
         )
 
-        assert resources == Resources(cpu=1, memory=4096)
+        assert resources == Resources(cpu=1, memory=4096 * 2**20)
 
     def test_from_primitive_cpu(self) -> None:
         resources = Resources.from_primitive(
             {"requests": {"cpu": "1000m", "memory": "4096Mi"}}
         )
 
-        assert resources == Resources(cpu=1, memory=4096)
+        assert resources == Resources(cpu=1, memory=4096 * 2**20)
 
     def test_from_primitive_memory(self) -> None:
         resources = Resources.from_primitive(
             {"requests": {"cpu": "1", "memory": "4194304Ki"}}
         )
-        assert resources == Resources(cpu=1, memory=4096)
+        assert resources == Resources(cpu=1, memory=4194304 * 2**10)
 
         resources = Resources.from_primitive(
             {"requests": {"cpu": "1", "memory": "4096Mi"}}
         )
-        assert resources == Resources(cpu=1, memory=4096)
+        assert resources == Resources(cpu=1, memory=4096 * 2**20)
 
         resources = Resources.from_primitive(
             {"requests": {"cpu": "1", "memory": "4Gi"}}
         )
-        assert resources == Resources(cpu=1, memory=4096)
+        assert resources == Resources(cpu=1, memory=4 * 2**30)
 
         resources = Resources.from_primitive(
             {"requests": {"cpu": "1", "memory": "4000000K"}}
         )
-        assert resources == Resources(cpu=1, memory=3815)
+        assert resources == Resources(cpu=1, memory=4000000 * 10**3)
 
         resources = Resources.from_primitive(
             {"requests": {"cpu": "1", "memory": "4000M"}}
         )
-        assert resources == Resources(cpu=1, memory=3815)
+        assert resources == Resources(cpu=1, memory=4000 * 10**6)
 
         resources = Resources.from_primitive({"requests": {"cpu": "1", "memory": "4G"}})
-        assert resources == Resources(cpu=1, memory=3815)
+        assert resources == Resources(cpu=1, memory=4 * 10**9)
 
         with pytest.raises(ValueError, match="'4Ti' memory format is not supported"):
             Resources.from_primitive({"requests": {"cpu": "1", "memory": "4Ti"}})
@@ -1072,7 +1076,7 @@ class TestResources:
             {"requests": {"cpu": "1", "memory": "4096Mi", "nvidia.com/gpu": "1"}}
         )
 
-        assert resources == Resources(cpu=1, memory=4096, gpu=1)
+        assert resources == Resources(cpu=1, memory=4096 * 2**20, gpu=1)
 
     def test_from_primitive_tpu(self) -> None:
         resources = Resources.from_primitive(
@@ -1085,7 +1089,9 @@ class TestResources:
             }
         )
 
-        assert resources == Resources(cpu=1, memory=4096, tpu_cores=8, tpu_version="v2")
+        assert resources == Resources(
+            cpu=1, memory=4096 * 2**20, tpu_cores=8, tpu_version="v2"
+        )
 
     def test_from_primitive_default(self) -> None:
         resources = Resources.from_primitive({})

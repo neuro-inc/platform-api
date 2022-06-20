@@ -417,7 +417,7 @@ class KubeOrchestrator(Orchestrator):
             key = (
                 pool_type.gpu or 0,
                 pool_type.available_cpu or 0,
-                pool_type.available_memory_mb or 0,
+                pool_type.available_memory or 0,
             )
             pool_types[key].append(pool_type)
 
@@ -433,12 +433,12 @@ class KubeOrchestrator(Orchestrator):
         if not pod.resources:
             return pod
         max_node_cpu = max(p.available_cpu or 0 for p in pool_types)
-        max_node_memory_mb = max(p.available_memory_mb or 0 for p in pool_types)
+        max_node_memory = max(p.available_memory or 0 for p in pool_types)
         max_node_gpu = max(p.gpu or 0 for p in pool_types)
         pod_gpu = pod.resources.gpu or 0
         if (
             max_node_cpu > pod.resources.cpu
-            or max_node_memory_mb > pod.resources.memory
+            or max_node_memory > pod.resources.memory
             or max_node_gpu > pod_gpu
         ):
             # Ignore pods that don't require all node's resources

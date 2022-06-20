@@ -12,6 +12,15 @@ from .resource import Preset, ResourcePoolType, TPUPreset, TPUResource
 _cluster_config_validator = t.Dict({"name": t.String}).allow_extra("*")
 
 
+def _get_memory_with_deprecated_mb(data: Any, key: str) -> Optional[int]:
+    if key in data:
+        return data[key]
+    mb_key = key + "_mb"
+    if mb_key in data:
+        return data[mb_key] * 2**20
+    return None
+
+
 class ClusterConfigFactory:
     def create_cluster_configs(
         self, payload: Sequence[dict[str, Any]]
@@ -45,12 +54,15 @@ class ClusterConfigFactory:
     def _create_presets(self, payload: dict[str, Any]) -> list[Preset]:
         result = []
         for preset in payload.get("resource_presets", []):
+            memory = _get_memory_with_deprecated_mb(preset, "memory")
+            if memory is None:
+                raise ValueError("memory is not set for resource preset")
             result.append(
                 Preset(
                     name=preset["name"],
                     credits_per_hour=Decimal(preset["credits_per_hour"]),
                     cpu=preset.get("cpu") or payload["cpu"],
-                    memory_mb=preset.get("memory_mb"),
+                    memory=memory,
                     scheduler_enabled=preset.get("scheduler_enabled")
                     or preset.get("is_preemptible", False),
                     preemptible_node=preset.get("preemptible_node")
@@ -104,7 +116,9 @@ class ClusterConfigFactory:
 
     def _create_resource_pool_type(self, payload: dict[str, Any]) -> ResourcePoolType:
         cpu = payload.get("cpu")
-        memory_mb = payload.get("memory_mb")
+
+        memory = _get_memory_with_deprecated_mb(payload, "memory")
+        available_memory = _get_memory_with_deprecated_mb(payload, "available_memory")
         return ResourcePoolType(
             name=payload["name"],
             gpu=payload.get("gpu"),
@@ -112,8 +126,8 @@ class ClusterConfigFactory:
             is_preemptible=payload.get("is_preemptible"),
             cpu=cpu,
             available_cpu=payload.get("available_cpu") or cpu,
-            memory_mb=payload.get("memory_mb"),
-            available_memory_mb=payload.get("available_memory_mb") or memory_mb,
+            memory=memory,
+            available_memory=available_memory or memory,
             disk_gb=payload.get("disk_size_gb"),
             min_size=payload.get("min_size"),
             max_size=payload.get("max_size"),
