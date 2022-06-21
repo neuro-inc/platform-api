@@ -25,7 +25,7 @@ function k8s::start {
     sudo -E minikube config set WantNoneDriverWarning false
 
     sudo -E minikube start \
-        --driver=virtualbox \
+        --vm-driver=none \
         --install-addons=true \
         --addons=ingress \
         --feature-gates=DevicePlugins=true \
