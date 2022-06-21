@@ -140,8 +140,8 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                 ResourcePoolType(
                     cpu=100,
                     available_cpu=100,
-                    memory=500 * 10**6_000,
-                    available_memory=500 * 10**6_000,
+                    memory=500_000 * 10**6,
+                    available_memory=500_000 * 10**6,
                 ),
                 ResourcePoolType(
                     cpu=1.0,
