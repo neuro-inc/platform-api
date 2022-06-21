@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import math
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
 from importlib.metadata import version
@@ -167,7 +166,7 @@ class ConfigApiHandler:
             "credits_per_hour": str(preset.credits_per_hour),
             "cpu": preset.cpu,
             "memory": preset.memory,
-            "memory_mb": math.floor(preset.memory / 2**20),
+            "memory_mb": preset.memory // 2**20,
             "scheduler_enabled": preset.scheduler_enabled,
             "preemptible_node": preset.preemptible_node,
             "is_preemptible": preset.scheduler_enabled,

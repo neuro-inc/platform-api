@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import math
 from collections import defaultdict
 from collections.abc import AsyncIterator, Sequence, Set
 from dataclasses import dataclass, replace
@@ -350,7 +349,7 @@ def convert_job_container_to_json(container: Container) -> dict[str, Any]:
     resources: dict[str, Any] = {
         "cpu": container.resources.cpu,
         "memory": container.resources.memory,
-        "memory_mb": math.floor(container.resources.memory / 2**20),
+        "memory_mb": container.resources.memory // 2**20,
     }
     if container.resources.gpu is not None:
         resources["gpu"] = container.resources.gpu
