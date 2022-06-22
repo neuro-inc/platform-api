@@ -451,7 +451,9 @@ class KubeOrchestrator(Orchestrator):
         # It's scale up triggering algorithm is based on the pod resources.
         # The more resources you request the more there is a chance that scale up
         # will be triggered.
-        new_resources = replace(pod.resources, memory_request=1024)
+        new_resources = replace(
+            pod.resources, memory_request=int(pod.resources.memory * 0.8)
+        )  # 1GB
         return replace(pod, resources=new_resources)
 
     def _get_user_pod_labels(self, job: Job) -> dict[str, str]:

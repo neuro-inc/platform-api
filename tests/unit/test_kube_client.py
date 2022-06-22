@@ -581,7 +581,7 @@ class TestNodeResources:
         resources = NodeResources.from_primitive({"cpu": "1", "memory": "4Gi"})
         assert resources == NodeResources(cpu=1, memory=4 * 2**30)
 
-        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4000000K"})
+        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4000000k"})
         assert resources == NodeResources(cpu=1, memory=4000000 * 10**3)
 
         resources = NodeResources.from_primitive({"cpu": "1", "memory": "4000M"})

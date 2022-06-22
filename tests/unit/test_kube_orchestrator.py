@@ -1056,7 +1056,7 @@ class TestResources:
         assert resources == Resources(cpu=1, memory=4 * 2**30)
 
         resources = Resources.from_primitive(
-            {"requests": {"cpu": "1", "memory": "4000000K"}}
+            {"requests": {"cpu": "1", "memory": "4000000k"}}
         )
         assert resources == Resources(cpu=1, memory=4000000 * 10**3)
 

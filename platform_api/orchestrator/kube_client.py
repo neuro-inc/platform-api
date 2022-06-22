@@ -365,7 +365,7 @@ class Resources:
         except ValueError:
             if memory.endswith("Ki"):
                 memory_b = int(memory[:-2]) * 1024
-            elif memory.endswith("K"):
+            elif memory.endswith("k"):
                 memory_b = int(memory[:-1]) * 1000
             elif memory.endswith("Mi"):
                 memory_b = int(memory[:-2]) * 1024**2

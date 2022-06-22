@@ -397,8 +397,8 @@ class TestKubeOrchestrator:
 
         assert job_pod["spec"]["containers"]
         assert job_pod["spec"]["containers"][0]["resources"] == {
-            "requests": {"cpu": "100m", "memory": "1Gi"},
-            "limits": {"cpu": "100m", "memory": "1025Mi"},
+            "requests": {"cpu": "100m", "memory": "820M"},  # 0.8 of total request
+            "limits": {"cpu": "100m", "memory": "1025M"},
         }
 
     async def test_job_bunch_of_cpu(self, kube_orchestrator: KubeOrchestrator) -> None:
