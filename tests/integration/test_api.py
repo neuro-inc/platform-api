@@ -2680,7 +2680,7 @@ class TestJobs:
             "container": {
                 "image": "some_broken_image",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 10**6},
+                "resources": {"cpu": 0.1, "memory": 32 * 2**20},
                 "volumes": [
                     {
                         "src_storage_uri": f"storage://{cluster_name}/"
@@ -2719,7 +2719,7 @@ class TestJobs:
             "container": {
                 "image": "ubuntu:20.10",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 10**6},
+                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 2**20},
                 "volumes": [
                     {
                         "src_storage_uri": f"storage://{cluster_name}",
@@ -2752,7 +2752,7 @@ class TestJobs:
             "container": {
                 "image": "registry.dev.neuromation.io/anotheruser/image:tag",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 10**6},
+                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 2**20},
             }
         }
 
@@ -2782,7 +2782,7 @@ class TestJobs:
             "container": {
                 "image": f"registry.dev.neuromation.io/{regular_user.name}/image:tag",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 10**6},
+                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 2**20},
             }
         }
 
@@ -4796,7 +4796,7 @@ class TestJobs:
             "container": {
                 "image": "ubuntu:20.10",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 2**20},
+                "resources": {"cpu": 0.1, "memory": 32 * 2**20},
                 "volumes": [
                     {
                         "src_storage_uri": f"storage://{cluster_name}/"
@@ -4842,7 +4842,7 @@ class TestJobs:
                     "command": "true",
                     "env": {},
                     "image": "ubuntu:20.10",
-                    "resources": {"cpu": 0.1, "memory": 32 * 10**6},
+                    "resources": {"cpu": 0.1, "memory": 32 * 2**20, "memory_mb": 32},
                     "volumes": [
                         {
                             "dst_path": "/var/storage",
@@ -4990,7 +4990,7 @@ class TestJobs:
                 "resources": {
                     "cpu": 0.1,
                     "memory_mb": 32,
-                    "memory": 32 * 10**6,
+                    "memory": 32 * 2**20,
                 },
                 "env": {},
                 "volumes": [
@@ -5115,6 +5115,7 @@ class TestJobs:
                     "resources": {
                         "cpu": 0.1,
                         "memory": 32 * 2**20,
+                        "memory_mb": 32,
                         "gpu": 1,
                         "gpu_model": "gpumodel",
                     },
