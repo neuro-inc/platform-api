@@ -303,7 +303,7 @@ class TestContainerBuilder:
                 )
             ],
             resources=ContainerResources(
-                cpu=0.1, memory=128 * 10**6, gpu=1, shm=None
+                cpu=0.1, memory=128 * 2**20, gpu=1, shm=None
             ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
@@ -343,7 +343,7 @@ class TestContainerBuilder:
                 )
             ],
             resources=ContainerResources(
-                cpu=0.1, memory=128 * 10**6, gpu=1, shm=None
+                cpu=0.1, memory=128 * 2**20, gpu=1, shm=None
             ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
@@ -363,7 +363,7 @@ class TestContainerBuilder:
         assert container == Container(
             image="testimage",
             resources=ContainerResources(
-                cpu=0.1, memory=128 * 10**6, gpu=1, gpu_model_id="gpumodel"
+                cpu=0.1, memory=128 * 2**20, gpu=1, gpu_model_id="gpumodel"
             ),
         )
 
@@ -381,7 +381,7 @@ class TestContainerBuilder:
             image="testimage",
             resources=ContainerResources(
                 cpu=0.1,
-                memory=128 * 10**6,
+                memory=128 * 2**20,
                 tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
             ),
         )
@@ -414,7 +414,7 @@ class TestContainerBuilder:
                 )
             ],
             resources=ContainerResources(
-                cpu=0.1, memory=128 * 10**6, gpu=1, shm=True
+                cpu=0.1, memory=128 * 2**20, gpu=1, shm=True
             ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
         )
@@ -438,7 +438,7 @@ class TestContainerBuilder:
             env={"TESTVAR": "testvalue"},
             volumes=[],
             resources=ContainerResources(
-                cpu=0.1, memory=128 * 10**6, gpu=1, shm=None
+                cpu=0.1, memory=128 * 2**20, gpu=1, shm=None
             ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=True,

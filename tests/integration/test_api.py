@@ -4796,7 +4796,7 @@ class TestJobs:
             "container": {
                 "image": "ubuntu:20.10",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 10**6},
+                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 2**20},
                 "volumes": [
                     {
                         "src_storage_uri": f"storage://{cluster_name}/"
@@ -4842,7 +4842,7 @@ class TestJobs:
                     "command": "true",
                     "env": {},
                     "image": "ubuntu:20.10",
-                    "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 10**6},
+                    "resources": {"cpu": 0.1, "memory": 32 * 10**6},
                     "volumes": [
                         {
                             "dst_path": "/var/storage",
@@ -4894,7 +4894,7 @@ class TestJobs:
                 "command": "true",
                 "env": {},
                 "image": "ubuntu:20.10",
-                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 10**6},
+                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 2**20},
                 "volumes": [
                     {
                         "dst_path": "/var/storage",
@@ -4935,8 +4935,7 @@ class TestJobs:
                 "command": command,
                 "resources": {
                     "cpu": 0.1,
-                    "memory_mb": 32,
-                    "memory": 32 * 10**6,
+                    "memory": 32 * 2**20,
                 },
                 "volumes": [
                     {
@@ -5040,7 +5039,6 @@ class TestJobs:
                 "resources": {
                     "cpu": 0.1,
                     "memory_mb": 32,
-                    "memory": 32 * 10**6,
                     "gpu": 1,
                     "gpu_model": "unknown",
                 },
@@ -5074,7 +5072,7 @@ class TestJobs:
                 "resources": {
                     "cpu": 0.1,
                     "memory_mb": 32,
-                    "memory": 32 * 10**6,
+                    "memory": 32 * 2**20,
                     "gpu": 1,
                     "gpu_model": "gpumodel",
                 },
@@ -5116,8 +5114,7 @@ class TestJobs:
                     "image": "ubuntu:20.10",
                     "resources": {
                         "cpu": 0.1,
-                        "memory_mb": 32,
-                        "memory": 32 * 10**6,
+                        "memory": 32 * 2**20,
                         "gpu": 1,
                         "gpu_model": "gpumodel",
                     },
@@ -5153,7 +5150,7 @@ class TestJobs:
                 "resources": {
                     "cpu": 0.1,
                     "memory_mb": 32,
-                    "memory": 32 * 10**6,
+                    "memory": 32 * 2**20,
                     "tpu": {"type": "unknown", "software_version": "unknown"},
                 },
             }
@@ -5182,8 +5179,7 @@ class TestJobs:
                 "command": "true",
                 "resources": {
                     "cpu": 0.1,
-                    "memory_mb": 32,
-                    "memory": 32 * 10**6,
+                    "memory": 32 * 2**20,
                     "tpu": {"type": "v2-8", "software_version": "1.14"},
                 },
             }
@@ -5225,7 +5221,7 @@ class TestJobs:
                     "resources": {
                         "cpu": 0.1,
                         "memory_mb": 32,
-                        "memory": 32 * 10**6,
+                        "memory": 32 * 2**20,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                     "volumes": [],
