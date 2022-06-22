@@ -411,7 +411,9 @@ class TestKubeClient:
         self, pod_factory: Callable[..., Awaitable[PodDescriptor]]
     ) -> Callable[..., Awaitable[PodDescriptor]]:
         async def _create(
-            cpu: float = 0.1, memory: int = 128, labels: dict[str, str] | None = None
+            cpu: float = 0.1,
+            memory: int = 128 * 10**6,
+            labels: dict[str, str] | None = None,
         ) -> PodDescriptor:
             return await pod_factory(
                 image="gcr.io/google_containers/pause:3.1",

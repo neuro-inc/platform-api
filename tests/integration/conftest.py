@@ -744,7 +744,7 @@ async def pod_factory(
         image: str,
         command: Optional[list[str]] = None,
         cpu: float = 0.1,
-        memory: int = 128,
+        memory: int = 128 * 10**6,
         labels: Optional[dict[str, str]] = None,
         wait: bool = True,
         wait_timeout_s: float = 60,
