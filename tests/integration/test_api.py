@@ -5353,7 +5353,7 @@ class TestBillingEnforcer:
             expected_charge = duration * second * per_hour
             # As we track runtime using jobs poller, the tracked runtime
             # will have some drift from real value
-            allowed_drift = 5 * second * per_hour
+            allowed_drift = 8 * second * per_hour
             assert abs(expected_charge - real_charge) < allowed_drift, (
                 f"Wrong charge for duration {duration}: "
                 f"delta from right value is {expected_charge - real_charge}"
