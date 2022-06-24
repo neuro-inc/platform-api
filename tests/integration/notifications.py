@@ -23,7 +23,7 @@ class NotificationsServer(NamedTuple):
     def requests(self) -> tuple[tuple[str, Any]]:
         return tuple(request for request in self.app["requests"])  # type: ignore
 
-    def _cleanup(self) -> None:
+    def remove_requests(self) -> None:
         self.app["requests"].clear()
 
 
@@ -54,5 +54,5 @@ async def mock_notifications_server() -> AsyncIterator[NotificationsServer]:
 def notifications_config(
     mock_notifications_server: NotificationsServer,
 ) -> NotificationsConfig:
-    mock_notifications_server._cleanup()
+    mock_notifications_server.remove_requests()
     return NotificationsConfig(url=mock_notifications_server.url, token="token")
