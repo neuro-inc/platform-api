@@ -75,7 +75,7 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
 
         return ContainerResources(
             cpu=data["cpu"],
-            memory_mb=data["memory_mb"],
+            memory=data["memory"],
             gpu=data.get("gpu"),
             gpu_model_id=data.get("gpu_model"),
             shm=data.get("shm"),

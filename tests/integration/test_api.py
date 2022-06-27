@@ -246,7 +246,8 @@ class TestApi:
                         "name": "gpu-small",
                         "credits_per_hour": "10",
                         "cpu": 7,
-                        "memory_mb": 30720,
+                        "memory": 30720 * 10**6,
+                        "memory_mb": 29296,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
                         "scheduler_enabled": False,
@@ -258,7 +259,8 @@ class TestApi:
                         "name": "gpu-large",
                         "credits_per_hour": "10",
                         "cpu": 7,
-                        "memory_mb": 61440,
+                        "memory": 61440000000,
+                        "memory_mb": 58593,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": False,
@@ -270,7 +272,8 @@ class TestApi:
                         "name": "gpu-large-p",
                         "credits_per_hour": "10",
                         "cpu": 7,
-                        "memory_mb": 61440,
+                        "memory": 61440000000,
+                        "memory_mb": 58593,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": True,
@@ -282,7 +285,8 @@ class TestApi:
                         "name": "cpu-micro",
                         "credits_per_hour": "10",
                         "cpu": 0.1,
-                        "memory_mb": 100,
+                        "memory": 100000000,
+                        "memory_mb": 95,
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
@@ -292,7 +296,8 @@ class TestApi:
                         "name": "cpu-small",
                         "credits_per_hour": "10",
                         "cpu": 2,
-                        "memory_mb": 2048,
+                        "memory": 2048000000,
+                        "memory_mb": 1953,
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
@@ -302,7 +307,8 @@ class TestApi:
                         "name": "cpu-large",
                         "credits_per_hour": "10",
                         "cpu": 3,
-                        "memory_mb": 14336,
+                        "memory": 14336000000,
+                        "memory_mb": 13671,
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
@@ -312,7 +318,8 @@ class TestApi:
                         "name": "tpu",
                         "credits_per_hour": "10",
                         "cpu": 3,
-                        "memory_mb": 14336,
+                        "memory": 14336000000,
+                        "memory_mb": 13671,
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
@@ -365,7 +372,8 @@ class TestApi:
                         "name": "gpu-small",
                         "credits_per_hour": "10",
                         "cpu": 7,
-                        "memory_mb": 30720,
+                        "memory": 30720 * 10**6,
+                        "memory_mb": 29296,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
                         "scheduler_enabled": False,
@@ -377,7 +385,8 @@ class TestApi:
                         "name": "gpu-large",
                         "credits_per_hour": "10",
                         "cpu": 7,
-                        "memory_mb": 61440,
+                        "memory": 61440000000,
+                        "memory_mb": 58593,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": False,
@@ -389,7 +398,8 @@ class TestApi:
                         "name": "gpu-large-p",
                         "credits_per_hour": "10",
                         "cpu": 7,
-                        "memory_mb": 61440,
+                        "memory": 61440000000,
+                        "memory_mb": 58593,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": True,
@@ -401,7 +411,8 @@ class TestApi:
                         "name": "cpu-micro",
                         "credits_per_hour": "10",
                         "cpu": 0.1,
-                        "memory_mb": 100,
+                        "memory": 100000000,
+                        "memory_mb": 95,
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
@@ -411,7 +422,8 @@ class TestApi:
                         "name": "cpu-small",
                         "credits_per_hour": "10",
                         "cpu": 2,
-                        "memory_mb": 2048,
+                        "memory": 2048000000,
+                        "memory_mb": 1953,
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
@@ -421,7 +433,8 @@ class TestApi:
                         "name": "cpu-large",
                         "credits_per_hour": "10",
                         "cpu": 3,
-                        "memory_mb": 14336,
+                        "memory": 14336000000,
+                        "memory_mb": 13671,
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
@@ -431,7 +444,8 @@ class TestApi:
                         "name": "tpu",
                         "credits_per_hour": "10",
                         "cpu": 3,
-                        "memory_mb": 14336,
+                        "memory": 14336000000,
+                        "memory_mb": 13671,
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
@@ -474,7 +488,8 @@ class TestApi:
                         "name": "gpu-small",
                         "credits_per_hour": "10",
                         "cpu": 7,
-                        "memory_mb": 30720,
+                        "memory": 30720 * 10**6,
+                        "memory_mb": 29296,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
                         "scheduler_enabled": False,
@@ -486,7 +501,8 @@ class TestApi:
                         "name": "gpu-large",
                         "credits_per_hour": "10",
                         "cpu": 7,
-                        "memory_mb": 61440,
+                        "memory": 61440000000,
+                        "memory_mb": 58593,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": False,
@@ -498,7 +514,8 @@ class TestApi:
                         "name": "gpu-large-p",
                         "credits_per_hour": "10",
                         "cpu": 7,
-                        "memory_mb": 61440,
+                        "memory": 61440000000,
+                        "memory_mb": 58593,
                         "gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": True,
@@ -510,7 +527,8 @@ class TestApi:
                         "name": "cpu-micro",
                         "credits_per_hour": "10",
                         "cpu": 0.1,
-                        "memory_mb": 100,
+                        "memory": 100000000,
+                        "memory_mb": 95,
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
@@ -520,7 +538,8 @@ class TestApi:
                         "name": "cpu-small",
                         "credits_per_hour": "10",
                         "cpu": 2,
-                        "memory_mb": 2048,
+                        "memory": 2048000000,
+                        "memory_mb": 1953,
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
@@ -530,7 +549,8 @@ class TestApi:
                         "name": "cpu-large",
                         "credits_per_hour": "10",
                         "cpu": 3,
-                        "memory_mb": 14336,
+                        "memory": 14336000000,
+                        "memory_mb": 13671,
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
@@ -540,7 +560,8 @@ class TestApi:
                         "name": "tpu",
                         "credits_per_hour": "10",
                         "cpu": 3,
-                        "memory_mb": 14336,
+                        "memory": 14336000000,
+                        "memory_mb": 13671,
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
@@ -2659,7 +2680,7 @@ class TestJobs:
             "container": {
                 "image": "some_broken_image",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 32},
+                "resources": {"cpu": 0.1, "memory": 32 * 2**20},
                 "volumes": [
                     {
                         "src_storage_uri": f"storage://{cluster_name}/"
@@ -2698,7 +2719,7 @@ class TestJobs:
             "container": {
                 "image": "ubuntu:20.10",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 32},
+                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 2**20},
                 "volumes": [
                     {
                         "src_storage_uri": f"storage://{cluster_name}",
@@ -2731,7 +2752,7 @@ class TestJobs:
             "container": {
                 "image": "registry.dev.neuromation.io/anotheruser/image:tag",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 32},
+                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 2**20},
             }
         }
 
@@ -2761,7 +2782,7 @@ class TestJobs:
             "container": {
                 "image": f"registry.dev.neuromation.io/{regular_user.name}/image:tag",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 32},
+                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 2**20},
             }
         }
 
@@ -4775,7 +4796,7 @@ class TestJobs:
             "container": {
                 "image": "ubuntu:20.10",
                 "command": "true",
-                "resources": {"cpu": 0.1, "memory_mb": 32},
+                "resources": {"cpu": 0.1, "memory": 32 * 2**20},
                 "volumes": [
                     {
                         "src_storage_uri": f"storage://{cluster_name}/"
@@ -4821,7 +4842,7 @@ class TestJobs:
                     "command": "true",
                     "env": {},
                     "image": "ubuntu:20.10",
-                    "resources": {"cpu": 0.1, "memory_mb": 32},
+                    "resources": {"cpu": 0.1, "memory": 32 * 2**20, "memory_mb": 32},
                     "volumes": [
                         {
                             "dst_path": "/var/storage",
@@ -4873,7 +4894,7 @@ class TestJobs:
                 "command": "true",
                 "env": {},
                 "image": "ubuntu:20.10",
-                "resources": {"cpu": 0.1, "memory_mb": 32},
+                "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 2**20},
                 "volumes": [
                     {
                         "dst_path": "/var/storage",
@@ -4912,7 +4933,10 @@ class TestJobs:
             "container": {
                 "image": "ubuntu:20.10",
                 "command": command,
-                "resources": {"cpu": 0.1, "memory_mb": 32},
+                "resources": {
+                    "cpu": 0.1,
+                    "memory": 32 * 2**20,
+                },
                 "volumes": [
                     {
                         "dst_path": f"/var/storage/{regular_user.name}",
@@ -4963,7 +4987,11 @@ class TestJobs:
             "container": {
                 "command": 'bash -c "echo Failed!; false"',
                 "image": "ubuntu:20.10",
-                "resources": {"cpu": 0.1, "memory_mb": 32},
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 32,
+                    "memory": 32 * 2**20,
+                },
                 "env": {},
                 "volumes": [
                     {
@@ -5044,6 +5072,7 @@ class TestJobs:
                 "resources": {
                     "cpu": 0.1,
                     "memory_mb": 32,
+                    "memory": 32 * 2**20,
                     "gpu": 1,
                     "gpu_model": "gpumodel",
                 },
@@ -5085,6 +5114,7 @@ class TestJobs:
                     "image": "ubuntu:20.10",
                     "resources": {
                         "cpu": 0.1,
+                        "memory": 32 * 2**20,
                         "memory_mb": 32,
                         "gpu": 1,
                         "gpu_model": "gpumodel",
@@ -5121,6 +5151,7 @@ class TestJobs:
                 "resources": {
                     "cpu": 0.1,
                     "memory_mb": 32,
+                    "memory": 32 * 2**20,
                     "tpu": {"type": "unknown", "software_version": "unknown"},
                 },
             }
@@ -5149,7 +5180,7 @@ class TestJobs:
                 "command": "true",
                 "resources": {
                     "cpu": 0.1,
-                    "memory_mb": 32,
+                    "memory": 32 * 2**20,
                     "tpu": {"type": "v2-8", "software_version": "1.14"},
                 },
             }
@@ -5191,6 +5222,7 @@ class TestJobs:
                     "resources": {
                         "cpu": 0.1,
                         "memory_mb": 32,
+                        "memory": 32 * 2**20,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                     "volumes": [],
@@ -5321,7 +5353,7 @@ class TestBillingEnforcer:
             expected_charge = duration * second * per_hour
             # As we track runtime using jobs poller, the tracked runtime
             # will have some drift from real value
-            allowed_drift = 5 * second * per_hour
+            allowed_drift = 8 * second * per_hour
             assert abs(expected_charge - real_charge) < allowed_drift, (
                 f"Wrong charge for duration {duration}: "
                 f"delta from right value is {expected_charge - real_charge}"

@@ -57,7 +57,7 @@ def create_pod() -> PodFactory:
         name: str | None = None,
         *,
         cpu: float = 0.1,
-        memory: int = 128,
+        memory: int = 128 * 10**6,
         gpu: int = 1,
         labels: dict[str, str] | None = None,
         node_name: str | None = "minikube",
@@ -190,7 +190,7 @@ class TestNodeResourcesHandler:
 
         assert handler.get_pod_node_name("job") == "minikube"
         resources = handler.get_resource_requests("minikube")
-        assert resources == NodeResources(cpu=0.1, memory=128, gpu=1)
+        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, gpu=1)
 
     async def test_init_running(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
@@ -204,9 +204,9 @@ class TestNodeResourcesHandler:
 
         assert handler.get_pod_node_name("job") == "minikube"
         resources = handler.get_resource_requests("minikube")
-        assert resources == NodeResources(cpu=0.2, memory=256, gpu=1)
+        assert resources == NodeResources(cpu=0.2, memory=256 * 10**6, gpu=1)
         resources = handler.get_resource_requests("minikube2")
-        assert resources == NodeResources(cpu=0.1, memory=128, gpu=1)
+        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, gpu=1)
 
     async def test_init_succeeded(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
@@ -253,7 +253,7 @@ class TestNodeResourcesHandler:
 
         assert handler.get_pod_node_name("job") == "minikube"
         resources = handler.get_resource_requests("minikube")
-        assert resources == NodeResources(cpu=0.1, memory=128, gpu=1)
+        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, gpu=1)
 
     async def test_handle_added_running_multiple_times(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
@@ -267,7 +267,7 @@ class TestNodeResourcesHandler:
 
         assert handler.get_pod_node_name("job") == "minikube"
         resources = handler.get_resource_requests("minikube")
-        assert resources == NodeResources(cpu=0.1, memory=128, gpu=1)
+        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, gpu=1)
 
     async def test_handle_modified_succeeded(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
@@ -284,7 +284,7 @@ class TestNodeResourcesHandler:
 
         assert handler.get_pod_node_name("job") is None
         resources = handler.get_resource_requests("minikube")
-        assert resources == NodeResources(cpu=0.1, memory=128)
+        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6)
 
     async def test_handle_deleted(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
@@ -301,7 +301,7 @@ class TestNodeResourcesHandler:
 
         assert handler.get_pod_node_name("job") is None
         resources = handler.get_resource_requests("minikube")
-        assert resources == NodeResources(cpu=0.1, memory=128)
+        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6)
 
     async def test_handle_deleted_multiple_times(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
@@ -321,7 +321,7 @@ class TestNodeResourcesHandler:
 
         assert handler.get_pod_node_name("job") is None
         resources = handler.get_resource_requests("minikube")
-        assert resources == NodeResources(cpu=0.1, memory=128, gpu=0)
+        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, gpu=0)
 
     async def test_handle_deleted_last(
         self, handler: NodeResourcesHandler, create_pod: PodFactory

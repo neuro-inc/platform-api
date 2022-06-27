@@ -28,10 +28,10 @@ class TestInMemoryJobsStorage:
             Container(
                 image="testimage",
                 resources=ContainerResources(
-                    cpu=1, memory_mb=128, gpu=1, gpu_model_id="nvidia-tesla-k80"
+                    cpu=1, memory=128, gpu=1, gpu_model_id="nvidia-tesla-k80"
                 )
                 if is_gpu_job
-                else ContainerResources(cpu=1, memory_mb=128),
+                else ContainerResources(cpu=1, memory=128),
             )
         )
 
@@ -118,7 +118,7 @@ class TestJobFilter:
     def _create_job_request(self) -> JobRequest:
         return JobRequest.create(
             Container(
-                image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
+                image="testimage", resources=ContainerResources(cpu=1, memory=128)
             )
         )
 

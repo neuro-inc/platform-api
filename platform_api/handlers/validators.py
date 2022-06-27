@@ -197,10 +197,16 @@ def create_resources_validator(
     allow_any_tpu: bool = False,
     allowed_tpu_resources: Sequence[TPUResource] = (),
 ) -> t.Trafaret:
+    def check_memory_keys(data: Any) -> Any:
+        if "memory" not in data and "memory_mb" not in data:
+            raise t.DataError("Either memory or memory_mb should be present")
+        return data
+
     common_resources_validator = t.Dict(
         {
             "cpu": t.Float(gte=0.1),
-            "memory_mb": t.Int(gte=16),
+            t.Key("memory", optional=True): t.Int(gte=16 * 2**20),
+            t.Key("memory_mb", optional=True): t.Int(gte=16),
             t.Key("shm", optional=True): t.Bool,
         }
     )
@@ -229,7 +235,7 @@ def create_resources_validator(
     if tpu_validator:
         validators.append(common_resources_validator + t.Dict({"tpu": tpu_validator}))
 
-    return t.Or(*validators)
+    return t.Or(*validators) & check_memory_keys
 
 
 def create_tpu_validator(

@@ -371,9 +371,9 @@ class MockJobsPollerApi(JobsPollerApi):
 @pytest.fixture
 def job_request_factory() -> Callable[[], JobRequest]:
     def factory(
-        cpu: float = 1, memory: int = 128, with_gpu: bool = False
+        cpu: float = 1, memory: int = 128 * 10**6, with_gpu: bool = False
     ) -> JobRequest:
-        cont_kwargs: dict[str, Any] = {"cpu": cpu, "memory_mb": memory}
+        cont_kwargs: dict[str, Any] = {"cpu": cpu, "memory": memory}
         if with_gpu:
             cont_kwargs["gpu"] = 1
             cont_kwargs["gpu_model_id"] = "nvidia-tesla-k80"
@@ -433,7 +433,7 @@ def cluster_config() -> ClusterConfig:
                 name="cpu-small",
                 credits_per_hour=Decimal("10"),
                 cpu=2,
-                memory_mb=2 * 1024,
+                memory=2 * 10**6 * 1024,
             ),
         ],
     )

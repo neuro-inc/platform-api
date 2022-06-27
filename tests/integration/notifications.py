@@ -23,8 +23,11 @@ class NotificationsServer(NamedTuple):
     def requests(self) -> tuple[tuple[str, Any]]:
         return tuple(request for request in self.app["requests"])  # type: ignore
 
+    def remove_requests(self) -> None:
+        self.app["requests"].clear()
 
-@pytest.fixture
+
+@pytest.fixture(scope="session")
 async def mock_notifications_server() -> AsyncIterator[NotificationsServer]:
     async def _notify(request: aiohttp.web.Request) -> aiohttp.web.Response:
         type = request.match_info["type"]
@@ -51,4 +54,5 @@ async def mock_notifications_server() -> AsyncIterator[NotificationsServer]:
 def notifications_config(
     mock_notifications_server: NotificationsServer,
 ) -> NotificationsConfig:
+    mock_notifications_server.remove_requests()
     return NotificationsConfig(url=mock_notifications_server.url, token="token")

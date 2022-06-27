@@ -40,7 +40,7 @@ from .conftest import MockOrchestrator
 class TestContainer:
     def test_command_entrypoint_list_command_list_empty(self) -> None:
         container = Container(
-            image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
+            image="testimage", resources=ContainerResources(cpu=1, memory=128 * 10**6)
         )
         assert container.entrypoint_list == []
         assert container.command_list == []
@@ -49,7 +49,7 @@ class TestContainer:
         container = Container(
             image="testimage",
             command="bash -c date",
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         assert container.command_list == ["bash", "-c", "date"]
 
@@ -57,7 +57,7 @@ class TestContainer:
         container = Container(
             image="testimage",
             command='"',
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         with pytest.raises(JobError, match="invalid command format"):
             container.command_list
@@ -66,7 +66,7 @@ class TestContainer:
         container = Container(
             image="testimage",
             entrypoint='"',
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         with pytest.raises(JobError, match="invalid command format"):
             container.entrypoint_list
@@ -75,7 +75,7 @@ class TestContainer:
         container = Container(
             image="testimage",
             entrypoint="bash -c date",
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         assert container.entrypoint_list == ["bash", "-c", "date"]
 
@@ -84,35 +84,35 @@ class TestContainer:
             image="testimage",
             entrypoint="/script.sh",
             command="arg1 arg2 arg3",
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         assert container.entrypoint_list == ["/script.sh"]
         assert container.command_list == ["arg1", "arg2", "arg3"]
 
     def test_belongs_to_registry_no_host(self) -> None:
         container = Container(
-            image="testimage", resources=ContainerResources(cpu=1, memory_mb=128)
+            image="testimage", resources=ContainerResources(cpu=1, memory=128 * 10**6)
         )
         assert not container.belongs_to_registry("example.com")
 
     def test_belongs_to_registry_different_host(self) -> None:
         container = Container(
             image="registry.com/project/testimage",
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         assert not container.belongs_to_registry("example.com")
 
     def test_belongs_to_registry(self) -> None:
         container = Container(
             image="example.com/project/testimage",
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         assert container.belongs_to_registry("example.com")
 
     def test_to_image_uri_failure(self) -> None:
         container = Container(
             image="registry.com/project/testimage",
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         with pytest.raises(AssertionError, match="Unknown registry"):
             container.to_image_uri("example.com", "test-cluster")
@@ -120,7 +120,7 @@ class TestContainer:
     def test_to_image_uri(self) -> None:
         container = Container(
             image="example.com/project/testimage%2d",
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         uri = container.to_image_uri("example.com", "test-cluster")
         assert uri == URL("image://test-cluster/project/testimage%252d")
@@ -128,7 +128,7 @@ class TestContainer:
     def test_to_image_uri_registry_with_custom_port(self) -> None:
         container = Container(
             image="example.com:5000/project/testimage",
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         uri = container.to_image_uri("example.com:5000", "test-cluster")
         assert uri == URL("image://test-cluster/project/testimage")
@@ -136,7 +136,7 @@ class TestContainer:
     def test_to_image_uri_ignore_tag(self) -> None:
         container = Container(
             image="example.com/project/testimage:latest",
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         uri = container.to_image_uri("example.com", "test-cluster")
         assert uri == URL("image://test-cluster/project/testimage")
@@ -302,7 +302,9 @@ class TestContainerBuilder:
                     read_only=True,
                 )
             ],
-            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
+            resources=ContainerResources(
+                cpu=0.1, memory=128 * 2**20, gpu=1, shm=None
+            ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
         )
@@ -340,7 +342,9 @@ class TestContainerBuilder:
                     read_only=True,
                 )
             ],
-            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
+            resources=ContainerResources(
+                cpu=0.1, memory=128 * 2**20, gpu=1, shm=None
+            ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
         )
@@ -359,7 +363,7 @@ class TestContainerBuilder:
         assert container == Container(
             image="testimage",
             resources=ContainerResources(
-                cpu=0.1, memory_mb=128, gpu=1, gpu_model_id="gpumodel"
+                cpu=0.1, memory=128 * 2**20, gpu=1, gpu_model_id="gpumodel"
             ),
         )
 
@@ -377,7 +381,7 @@ class TestContainerBuilder:
             image="testimage",
             resources=ContainerResources(
                 cpu=0.1,
-                memory_mb=128,
+                memory=128 * 2**20,
                 tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
             ),
         )
@@ -409,7 +413,9 @@ class TestContainerBuilder:
                     read_only=True,
                 )
             ],
-            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=True),
+            resources=ContainerResources(
+                cpu=0.1, memory=128 * 2**20, gpu=1, shm=True
+            ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
         )
 
@@ -431,7 +437,9 @@ class TestContainerBuilder:
             command="testcommand",
             env={"TESTVAR": "testvalue"},
             volumes=[],
-            resources=ContainerResources(cpu=0.1, memory_mb=128, gpu=1, shm=None),
+            resources=ContainerResources(
+                cpu=0.1, memory=128 * 2**20, gpu=1, shm=None
+            ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=True,
         )
@@ -444,7 +452,7 @@ def job_request_payload() -> dict[str, Any]:
         "description": "Description of the testjob",
         "container": {
             "image": "testimage",
-            "resources": {"cpu": 1, "memory_mb": 128},
+            "resources": {"cpu": 1, "memory": 128 * 10**6},
             "command": None,
             "env": {"testvar": "testval"},
             "volumes": [
@@ -484,7 +492,7 @@ def job_request_payload_with_shm(job_request_payload: dict[str, Any]) -> dict[st
 def job_request() -> JobRequest:
     container = Container(
         image="testimage",
-        resources=ContainerResources(cpu=1, memory_mb=128),
+        resources=ContainerResources(cpu=1, memory=128 * 10**6),
         http_server=ContainerHTTPServer(port=1234),
     )
     return JobRequest(
@@ -517,7 +525,7 @@ class TestJob:
         container = Container(
             image="testimage",
             resources=ContainerResources(
-                cpu=1, memory_mb=64, gpu=1, gpu_model_id="nvidia-tesla-k80"
+                cpu=1, memory=64 * 10**6, gpu=1, gpu_model_id="nvidia-tesla-k80"
             ),
         )
         return JobRequest(
@@ -530,7 +538,7 @@ class TestJob:
     def job_request_with_http(self) -> JobRequest:
         container = Container(
             image="testimage",
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
             http_server=ContainerHTTPServer(port=1234),
         )
         return JobRequest(
@@ -1330,7 +1338,7 @@ class TestJobRequest:
         container = Container(
             image="testimage",
             env={"testvar": "testval"},
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://host/src/path"),
@@ -1353,7 +1361,7 @@ class TestJobRequest:
             image="testimage",
             entrypoint="/bin/ls",
             env={"testvar": "testval"},
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://host/src/path"),
@@ -1376,7 +1384,7 @@ class TestJobRequest:
             image="testimage",
             working_dir="/working/dir",
             env={"testvar": "testval"},
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://host/src/path"),
@@ -1397,7 +1405,7 @@ class TestJobRequest:
         container = Container(
             image="testimage",
             env={"testvar": "testval"},
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://host/src/path"),
@@ -1420,7 +1428,7 @@ class TestJobRequest:
         expected_container = Container(
             image="testimage",
             env={"testvar": "testval"},
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://host/src/path"),
@@ -1441,7 +1449,7 @@ class TestJobRequest:
             image="testimage",
             working_dir="/working/dir",
             env={"testvar": "testval"},
-            resources=ContainerResources(cpu=1, memory_mb=128),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://host/src/path"),
@@ -1460,7 +1468,7 @@ class TestJobRequest:
         expected_container = Container(
             image="testimage",
             env={"testvar": "testval"},
-            resources=ContainerResources(cpu=1, memory_mb=128, shm=True),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6, shm=True),
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://host/src/path"),

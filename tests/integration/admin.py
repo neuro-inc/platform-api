@@ -16,6 +16,7 @@ from yarl import URL
 from platform_api.config import AuthConfig
 
 from tests.integration.conftest import ApiRunner
+from tests.integration.notifications import NotificationsServer
 
 
 @pytest.fixture(scope="session")
@@ -96,6 +97,7 @@ async def _admin_server_setup_db(
     admin_token: str,
     admin_postgres_dsn: str,
     fake_config_app: URL,
+    mock_notifications_server: NotificationsServer,
 ) -> None:
     image_name = admin_server_image_name
     container_name = "admin_migrations"
@@ -117,6 +119,8 @@ async def _admin_server_setup_db(
             f"NP_ADMIN_CONFIG_TOKEN={admin_token}",
             "NP_ADMIN_CONFIG_URL=http://host.docker.internal:8089",
             f"NP_ADMIN_POSTGRES_DSN={admin_postgres_dsn}",
+            f"NP_ADMIN_NOTIFICATIONS_URL=http://host.docker.internal:8083",
+            "NP_ADMIN_NOTIFICATIONS_TOKEN=token",
         ],
     }
 
@@ -145,6 +149,7 @@ async def admin_server(
     admin_token: str,
     admin_postgres_dsn: str,
     _admin_server_setup_db: None,
+    mock_notifications_server: NotificationsServer,
 ) -> AsyncIterator[URL]:
     image_name = admin_server_image_name
     container_name = "admin_server"
@@ -165,6 +170,8 @@ async def admin_server(
             f"NP_ADMIN_CONFIG_TOKEN={admin_token}",
             "NP_ADMIN_CONFIG_URL=http://host.docker.internal:8089",
             f"NP_ADMIN_POSTGRES_DSN={admin_postgres_dsn}",
+            f"NP_ADMIN_NOTIFICATIONS_URL=http://host.docker.internal:8083",
+            "NP_ADMIN_NOTIFICATIONS_TOKEN=token",
         ],
     }
 

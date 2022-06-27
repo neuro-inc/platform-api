@@ -62,7 +62,7 @@ class TestContainerRequestValidator:
     def payload(self) -> dict[str, Any]:
         return {
             "image": "testimage",
-            "resources": {"cpu": 0.1, "memory_mb": 16},
+            "resources": {"cpu": 0.1, "memory": 16 * 2**20},
             "volumes": [
                 {
                     "src_storage_uri": "storage://test-cluster/",
@@ -441,7 +441,7 @@ class TestJobPresetValidator:
                     name="preset",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
-                    memory_mb=100,
+                    memory=100 * 10**6,
                 )
             ]
         )
@@ -449,7 +449,9 @@ class TestJobPresetValidator:
 
         assert payload == {
             "preset_name": "preset",
-            "container": {"resources": {"cpu": 0.1, "memory_mb": 100, "shm": False}},
+            "container": {
+                "resources": {"cpu": 0.1, "memory": 100 * 10**6, "shm": False}
+            },
             "scheduler_enabled": False,
             "preemptible_node": False,
         }
@@ -471,7 +473,7 @@ class TestJobPresetValidator:
                     name="preset",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
-                    memory_mb=100,
+                    memory=100 * 10**6,
                 )
             ]
         )
@@ -479,7 +481,9 @@ class TestJobPresetValidator:
 
         assert payload == {
             "preset_name": "preset",
-            "container": {"resources": {"cpu": 0.1, "memory_mb": 100, "shm": False}},
+            "container": {
+                "resources": {"cpu": 0.1, "memory": 100 * 10**6, "shm": False}
+            },
             "scheduler_enabled": False,
             "preemptible_node": False,
         }
@@ -492,7 +496,7 @@ class TestJobPresetValidator:
                     name="preset",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
-                    memory_mb=100,
+                    memory=100 * 10**6,
                 )
             ]
         )
@@ -500,7 +504,7 @@ class TestJobPresetValidator:
 
         assert payload == {
             "preset_name": "preset",
-            "resources": {"cpu": 0.1, "memory_mb": 100, "shm": False},
+            "resources": {"cpu": 0.1, "memory": 100 * 10**6, "shm": False},
             "scheduler_enabled": False,
             "preemptible_node": False,
         }
@@ -513,7 +517,7 @@ class TestJobPresetValidator:
                     name="preset",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
-                    memory_mb=100,
+                    memory=100 * 10**6,
                 )
             ]
         )
@@ -523,7 +527,7 @@ class TestJobPresetValidator:
     def test_validator_preset_name_and_resources(self) -> None:
         request = {
             "preset_name": "preset",
-            "container": {"resources": {"cpu": 1.0, "memory_mb": 1024}},
+            "container": {"resources": {"cpu": 1.0, "memory": 1024 * 10**6}},
         }
         validator = create_job_preset_validator(
             [
@@ -531,7 +535,7 @@ class TestJobPresetValidator:
                     name="preset",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
-                    memory_mb=100,
+                    memory=100 * 10**6,
                 )
             ]
         )
@@ -543,7 +547,7 @@ class TestJobPresetValidator:
     def test_validator_flat_structure_preset_name_and_resources(self) -> None:
         request = {
             "preset_name": "preset",
-            "resources": {"cpu": 1.0, "memory_mb": 1024},
+            "resources": {"cpu": 1.0, "memory": 1024 * 10**6},
         }
         validator = create_job_preset_validator(
             [
@@ -551,7 +555,7 @@ class TestJobPresetValidator:
                     name="preset",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
-                    memory_mb=100,
+                    memory=100 * 10**6,
                 )
             ]
         )
@@ -571,7 +575,7 @@ class TestJobPresetValidator:
                     name="preset",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
-                    memory_mb=100,
+                    memory=100 * 10**6,
                     gpu=1,
                     gpu_model="nvidia-tesla-k80",
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),
@@ -587,7 +591,7 @@ class TestJobPresetValidator:
             "container": {
                 "resources": {
                     "cpu": 0.1,
-                    "memory_mb": 100,
+                    "memory": 100 * 10**6,
                     "shm": True,
                     "gpu": 1,
                     "gpu_model": "nvidia-tesla-k80",
@@ -837,12 +841,12 @@ class TestJobRequestValidator:
 class TestJobContainerToJson:
     def test_minimal(self) -> None:
         container = Container(
-            image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
+            image="image", resources=ContainerResources(cpu=0.1, memory=16 * 10**6)
         )
         assert convert_job_container_to_json(container) == {
             "env": {},
             "image": "image",
-            "resources": {"cpu": 0.1, "memory_mb": 16},
+            "resources": {"cpu": 0.1, "memory": 16000000, "memory_mb": 15},
             "volumes": [],
         }
 
@@ -851,7 +855,7 @@ class TestJobContainerToJson:
             image="image",
             resources=ContainerResources(
                 cpu=0.1,
-                memory_mb=16,
+                memory=16 * 10**6,
                 tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
             ),
         )
@@ -860,7 +864,8 @@ class TestJobContainerToJson:
             "image": "image",
             "resources": {
                 "cpu": 0.1,
-                "memory_mb": 16,
+                "memory": 16 * 10**6,
+                "memory_mb": 15,
                 "tpu": {"type": "v2-8", "software_version": "1.14"},
             },
             "volumes": [],
@@ -869,25 +874,35 @@ class TestJobContainerToJson:
     def test_gpu_and_shm_resources(self) -> None:
         container = Container(
             image="image",
-            resources=ContainerResources(cpu=0.1, memory_mb=16, gpu=1, shm=True),
+            resources=ContainerResources(cpu=0.1, memory=16 * 10**6, gpu=1, shm=True),
         )
         assert convert_job_container_to_json(container) == {
             "env": {},
             "image": "image",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1, "shm": True},
+            "resources": {
+                "cpu": 0.1,
+                "memory": 16 * 10**6,
+                "memory_mb": 15,
+                "gpu": 1,
+                "shm": True,
+            },
             "volumes": [],
         }
 
     def test_with_working_dir(self) -> None:
         container = Container(
             image="image",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory=16 * 10**6),
             working_dir="/working/dir",
         )
         assert convert_job_container_to_json(container) == {
             "env": {},
             "image": "image",
-            "resources": {"cpu": 0.1, "memory_mb": 16},
+            "resources": {
+                "cpu": 0.1,
+                "memory": 16 * 10**6,
+                "memory_mb": 15,
+            },
             "volumes": [],
             "working_dir": "/working/dir",
         }
@@ -1535,7 +1550,7 @@ class TestInferPermissionsFromContainer:
     def test_no_volumes(self) -> None:
         user = AuthUser(name="testuser")
         container = Container(
-            image="image", resources=ContainerResources(cpu=0.1, memory_mb=16)
+            image="image", resources=ContainerResources(cpu=0.1, memory=16 * 10**6)
         )
         permissions = infer_permissions_from_container(
             user,
@@ -1552,7 +1567,7 @@ class TestInferPermissionsFromContainer:
         user = AuthUser(name="testuser")
         container = Container(
             image="image",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory=16 * 10**6),
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://test-cluster/testuser/dataset"),
@@ -1582,7 +1597,7 @@ class TestInferPermissionsFromContainer:
         user = AuthUser(name="testuser")
         container = Container(
             image="example.com/testuser/image",
-            resources=ContainerResources(cpu=0.1, memory_mb=16),
+            resources=ContainerResources(cpu=0.1, memory=16 * 10**6),
         )
         permissions = infer_permissions_from_container(
             user,
@@ -1606,7 +1621,7 @@ async def test_parse_response(mock_orchestrator: MockOrchestrator) -> None:
                     image="testimage",
                     resources=ContainerResources(
                         cpu=1,
-                        memory_mb=128,
+                        memory=128 * 10**6,
                         gpu=1,
                         gpu_model_id="nvidia-tesla-k80",
                         shm=True,
@@ -1663,7 +1678,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
             request=JobRequest.create(
                 Container(
                     image="testimage",
-                    resources=ContainerResources(cpu=1, memory_mb=128),
+                    resources=ContainerResources(cpu=1, memory=128 * 10**6),
                 ),
                 description="test test description",
             ),
@@ -1699,7 +1714,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
             "image": "testimage",
             "env": {},
             "volumes": [],
-            "resources": {"cpu": 1, "memory_mb": 128},
+            "resources": {"cpu": 1, "memory": 128000000, "memory_mb": 122},
         },
         "name": "test-job-name",
         "description": "test test description",
@@ -1745,7 +1760,7 @@ async def test_job_to_job_response_nonzero_runtime(
             request=JobRequest.create(
                 Container(
                     image="testimage",
-                    resources=ContainerResources(cpu=1, memory_mb=128),
+                    resources=ContainerResources(cpu=1, memory=128 * 10**6),
                 ),
                 description="test test description",
             ),
@@ -1771,7 +1786,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             request=JobRequest.create(
                 Container(
                     image="testimage",
-                    resources=ContainerResources(cpu=1, memory_mb=128),
+                    resources=ContainerResources(cpu=1, memory=128 * 10**6),
                     http_server=ContainerHTTPServer(port=80),
                 )
             ),
@@ -1809,7 +1824,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             "image": "testimage",
             "env": {},
             "volumes": [],
-            "resources": {"cpu": 1, "memory_mb": 128},
+            "resources": {"cpu": 1, "memory": 128000000, "memory_mb": 122},
             "http": {"port": 80, "health_check_path": "/", "requires_auth": False},
         },
         "scheduler_enabled": False,
@@ -1840,7 +1855,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
             request=JobRequest.create(
                 Container(
                     image="testimage",
-                    resources=ContainerResources(cpu=1, memory_mb=128),
+                    resources=ContainerResources(cpu=1, memory=128 * 10**6),
                     http_server=ContainerHTTPServer(port=80),
                 )
             ),
@@ -1879,7 +1894,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
             "image": "testimage",
             "env": {},
             "volumes": [],
-            "resources": {"cpu": 1, "memory_mb": 128},
+            "resources": {"cpu": 1, "memory": 128000000, "memory_mb": 122},
             "http": {"port": 80, "health_check_path": "/", "requires_auth": False},
         },
         "scheduler_enabled": False,
@@ -1908,7 +1923,7 @@ async def test_job_to_job_response_assert_non_empty_cluster_name(
             request=JobRequest.create(
                 Container(
                     image="testimage",
-                    resources=ContainerResources(cpu=1, memory_mb=128),
+                    resources=ContainerResources(cpu=1, memory=128 * 10**6),
                 )
             ),
             cluster_name="",
@@ -1927,7 +1942,7 @@ async def test_job_to_job_response_with_preset_name(
             request=JobRequest.create(
                 Container(
                     image="testimage",
-                    resources=ContainerResources(cpu=1, memory_mb=128),
+                    resources=ContainerResources(cpu=1, memory=128 * 10**6),
                 )
             ),
             cluster_name="test-cluster",

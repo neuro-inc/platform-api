@@ -35,7 +35,7 @@ def cluster_configs_payload() -> list[dict[str, Any]]:
                         "name": "cpu-micro",
                         "credits_per_hour": "10",
                         "cpu": 0.1,
-                        "memory_mb": 100,
+                        "memory": 100,
                     }
                 ],
                 "is_http_ingress_secure": True,

@@ -12,7 +12,6 @@ from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
-from math import ceil
 from pathlib import Path, PurePath
 from types import TracebackType
 from typing import Any, ClassVar, NoReturn, Optional, Union
@@ -310,12 +309,12 @@ class Resources:
         return int(self.cpu * 1000)
 
     @property
-    def memory_mib(self) -> str:
-        return f"{self.memory}Mi"
+    def memory_str(self) -> str:
+        return f"{self.memory}"
 
     @property
-    def memory_request_mib(self) -> str:
-        return f"{self.memory_request}Mi"
+    def memory_request_str(self) -> str:
+        return f"{self.memory_request}"
 
     @property
     def tpu_key(self) -> str:
@@ -324,8 +323,8 @@ class Resources:
 
     def to_primitive(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "requests": {"cpu": f"{self.cpu_mcores}m", "memory": self.memory_mib},
-            "limits": {"cpu": f"{self.cpu_mcores}m", "memory": self.memory_mib},
+            "requests": {"cpu": f"{self.cpu_mcores}m", "memory": self.memory_str},
+            "limits": {"cpu": f"{self.cpu_mcores}m", "memory": self.memory_str},
         }
         if self.gpu:
             payload["requests"][self.gpu_key] = self.gpu
@@ -334,7 +333,7 @@ class Resources:
             payload["requests"][self.tpu_key] = self.tpu_cores
             payload["limits"][self.tpu_key] = self.tpu_cores
         if self.memory_request:
-            payload["requests"]["memory"] = self.memory_request_mib
+            payload["requests"]["memory"] = self.memory_request_str
         return payload
 
     @classmethod
@@ -366,10 +365,10 @@ class Resources:
         except ValueError:
             if memory.endswith("Ki"):
                 memory_b = int(memory[:-2]) * 1024
-            elif memory.endswith("K"):
+            elif memory.endswith("k"):
                 memory_b = int(memory[:-1]) * 1000
             elif memory.endswith("Mi"):
-                return int(memory[:-2])
+                memory_b = int(memory[:-2]) * 1024**2
             elif memory.endswith("M"):
                 memory_b = int(memory[:-1]) * 1000**2
             elif memory.endswith("Gi"):
@@ -378,7 +377,7 @@ class Resources:
                 memory_b = int(memory[:-1]) * 1000**3
             else:
                 raise ValueError(f"{memory!r} memory format is not supported")
-        return ceil(memory_b / 1024**2)
+        return memory_b
 
     @classmethod
     def _parse_tpu(cls, payload: dict[str, Any]) -> tuple[Optional[str], Optional[int]]:
@@ -404,7 +403,7 @@ class Resources:
             )
         return cls(
             cpu=resources.cpu,
-            memory=resources.memory_mb,
+            memory=resources.memory,
             gpu=resources.gpu,
             shm=resources.shm,
             **kwargs,

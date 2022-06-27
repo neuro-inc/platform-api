@@ -141,6 +141,7 @@ class TestJobTransition:
         job_request = job_request_factory()
         job_request["container"]["command"] = "sleep 15m"
 
+        mock_notifications_server.remove_requests()
         job_id = await run_job(user, job_request, do_kill=False)
         await jobs_client.delete_job(job_id)
         await api.runner.close()
@@ -181,6 +182,7 @@ class TestJobTransition:
         job_request = job_request_factory()
         job_request["container"]["command"] = "failed-command"
 
+        mock_notifications_server.remove_requests()
         job_id = await run_job(user, job_request, wait_for_start=False)
         await jobs_client.long_polling_by_job_id(job_id, "failed")
         await api.runner.close()
