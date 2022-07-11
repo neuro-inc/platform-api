@@ -2,12 +2,11 @@ import asyncio
 from collections.abc import AsyncIterator, Callable, Mapping
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any
+from typing import Any, Protocol
 
 import pytest
 from neuro_admin_client import AdminClient, Balance, Quota
 from neuro_auth_client import User
-from typing_extensions import Protocol
 
 from platform_api.orchestrator.billing_log.service import (
     BillingLogService,
