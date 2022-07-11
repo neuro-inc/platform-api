@@ -1,11 +1,11 @@
 import asyncio
 from collections import defaultdict
-from collections.abc import AsyncIterator, Callable, Iterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from functools import partial
 from pathlib import Path
-from typing import Any, Awaitable, Optional, Union, cast
+from typing import Any, Optional, Union, cast
 
 import pytest
 from aiohttp import ClientResponseError
