@@ -1,9 +1,9 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 from aiorwlock import RWLock
 

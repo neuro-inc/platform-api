@@ -1,12 +1,12 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppress
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 import asyncpg
 from sqlalchemy.ext.asyncio import AsyncEngine
-from typing_extensions import AsyncIterator
 
 from platform_api.orchestrator.base_postgres_storage import _safe_connect
 
