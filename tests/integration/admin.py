@@ -11,6 +11,7 @@ from aiohttp import ClientError, ClientResponseError
 from aiohttp.web_exceptions import HTTPCreated, HTTPNoContent, HTTPNotFound
 from async_timeout import timeout
 from neuro_admin_client import AdminClient
+from neuro_logging import make_request_logging_trace_config
 from yarl import URL
 
 from platform_api.config import AuthConfig
@@ -222,7 +223,11 @@ async def admin_url(admin_server: URL) -> AsyncIterator[URL]:
 async def create_admin_client(
     url: URL, config: AuthConfig
 ) -> AsyncGenerator[AdminClient, None]:
-    async with AdminClient(base_url=url, service_token=config.service_token) as client:
+    async with AdminClient(
+        base_url=url,
+        service_token=config.service_token,
+        trace_configs=[make_request_logging_trace_config()],
+    ) as client:
         # Make user for compute token so it can be owner of clusters
         try:
             await client.create_user(name="compute", email="compute@admin.com")

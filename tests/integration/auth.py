@@ -221,14 +221,17 @@ async def regular_user_factory(
                     )
                 except ClientResponseError:
                     pass
-            await admin_client.create_cluster_user(
-                cluster_name=cluster,
-                org_name=org_name,
-                role=ClusterUserRoleType.USER,
-                user_name=name,
-                balance=balance,
-                quota=quota,
-            )
+            try:
+                await admin_client.create_cluster_user(
+                    cluster_name=cluster,
+                    org_name=org_name,
+                    role=ClusterUserRoleType.USER,
+                    user_name=name,
+                    balance=balance,
+                    quota=quota,
+                )
+            except ClientResponseError:
+                pass
         user_token = token_factory(name)
         return _User(
             name=name,
