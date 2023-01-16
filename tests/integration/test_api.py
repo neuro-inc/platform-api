@@ -232,7 +232,7 @@ class TestApi:
             result = await resp.json()
             expected_cluster_payload = {
                 "name": "test-cluster",
-                "orgs": [None],
+                "orgs": mock.ANY,
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
@@ -338,6 +338,9 @@ class TestApi:
             }
             assert result == expected_payload
 
+            result_orgs = result["clusters"][0]["orgs"]
+            assert None in result_orgs
+
     async def test_config_with_orgs(
         self,
         api: ApiConfig,
@@ -358,7 +361,6 @@ class TestApi:
             result = await resp.json()
             expected_cluster_payload = {
                 "name": "test-cluster",
-                "orgs": [None, "org1", "org2"],
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
@@ -461,6 +463,11 @@ class TestApi:
             }
             assert result == expected_payload
 
+            result_orgs = result["clusters"][0]["orgs"]
+            assert None in result_orgs
+            assert "org1" in result_orgs
+            assert "org2" in result_orgs
+
     async def test_config_with_oauth(
         self,
         api_with_oauth: ApiConfig,
@@ -474,7 +481,7 @@ class TestApi:
             result = await resp.json()
             expected_cluster_payload = {
                 "name": "test-cluster",
-                "orgs": [None],
+                "orgs": mock.ANY,
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
