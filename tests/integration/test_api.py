@@ -361,6 +361,7 @@ class TestApi:
             result = await resp.json()
             expected_cluster_payload = {
                 "name": "test-cluster",
+                "orgs": mock.ANY,
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
