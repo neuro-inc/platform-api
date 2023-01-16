@@ -28,33 +28,32 @@ postgres:
   dsn:
     valueFrom:
       secretKeyRef:
-        name: platformapi-postgres
-        key: platformapi-service-dsn
+        name: platform-api-postgres
+        key: service-dsn
 
 postgres-db-init:
   adminDsn:
     valueFrom:
       secretKeyRef:
-        name: postgres
-        key: admin-dsn
+        name: platform-postgresql
+        key: postgresql-dsn
   migrationsRunnerDsn:
     valueFrom:
       secretKeyRef:
-        name: platformapi-postgres
-        key: platformapi-migrations-dsn
+        name: platform-api-postgres
+        key: migrations-dsn
   serviceDsn:
     valueFrom:
       secretKeyRef:
-        name: platformapi-postgres
-        key: platformapi-service-dsn
-
+        name: platform-api-postgres
+        key: service-dsn
   migrations:
     env:
       - name: NP_DB_POSTGRES_DSN
         valueFrom:
           secretKeyRef:
-            name: platformapi-postgres
-            key: platformapi-migrations-dsn
+            name: platform-api-postgres
+            key: migrations-dsn
 
 ingress:
   enabled: true
