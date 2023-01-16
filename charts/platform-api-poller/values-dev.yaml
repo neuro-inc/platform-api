@@ -1,3 +1,8 @@
+resources:
+  requests:
+    cpu: "0.5"
+    memory: "1Gi"
+
 platform:
   clusterName: default
   authUrl: http://platform-auth:8080
