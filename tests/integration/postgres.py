@@ -16,13 +16,14 @@ from platform_api.postgres import MigrationRunner, make_async_engine
 async def admin_postgres_dsn(
     docker: aiodocker.Docker, reuse_docker: bool
 ) -> AsyncIterator[str]:
-    image_name = "postgres:11.3"
+    image_name = "postgres:12.11"
     container_name = "postgres-admin"
     container_config = {
         "Image": image_name,
         "AttachStdout": False,
         "AttachStderr": False,
         "HostConfig": {"PublishAllPorts": True},
+        "Env": ["POSTGRES_HOST_AUTH_METHOD=trust"],
     }
     dsn = "postgresql://postgres@postgres:5432/postgres"
 
@@ -60,13 +61,14 @@ async def admin_postgres_dsn(
 async def postgres_dsn(
     docker: aiodocker.Docker, reuse_docker: bool
 ) -> AsyncIterator[str]:
-    image_name = "postgres:11.3"
+    image_name = "postgres:12.11"
     container_name = "postgres"
     container_config = {
         "Image": image_name,
         "AttachStdout": False,
         "AttachStderr": False,
         "HostConfig": {"PublishAllPorts": True},
+        "Env": ["POSTGRES_HOST_AUTH_METHOD=trust"],
     }
 
     if reuse_docker:
