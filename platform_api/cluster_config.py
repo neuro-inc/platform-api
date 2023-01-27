@@ -18,6 +18,18 @@ class EnergySchedulePeriod:
     start_time: time
     end_time: time
 
+    def __post_init__(self) -> None:
+        if not self.start_time.tzinfo or not self.end_time.tzinfo:
+            raise ValueError("start_time and end_time must have tzinfo")
+        if self.end_time == time.min.replace(tzinfo=self.end_time.tzinfo):
+            object.__setattr__(
+                self, "end_time", time.max.replace(tzinfo=self.end_time.tzinfo)
+            )
+        if not 1 <= self.weekday <= 7:
+            raise ValueError("weekday must be in range 1-7")
+        if self.start_time >= self.end_time:
+            raise ValueError("start_time must be less than end_time")
+
     @classmethod
     def create_full_day(
         cls, *, weekday: int, timezone: tzinfo

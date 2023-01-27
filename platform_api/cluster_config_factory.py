@@ -193,7 +193,7 @@ class ClusterConfigFactory:
     ) -> EnergyConfig:
         schedules = {
             schedule.name: schedule
-            for s in payload["schedules"]
+            for s in payload.get("energy", {}).get("schedules", [])
             if (schedule := self._create_energy_schedule(s, timezone=timezone))
         }
         schedules["default"] = EnergySchedule.create_default(timezone=timezone)
