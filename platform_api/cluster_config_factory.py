@@ -1,12 +1,21 @@
 import logging
 from collections.abc import Sequence
+from datetime import time, tzinfo
 from decimal import Decimal
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 import trafaret as t
 from yarl import URL
 
-from .cluster_config import ClusterConfig, IngressConfig, OrchestratorConfig
+from .cluster_config import (
+    ClusterConfig,
+    EnergyConfig,
+    EnergySchedule,
+    EnergySchedulePeriod,
+    IngressConfig,
+    OrchestratorConfig,
+)
 from .resource import Preset, ResourcePoolType, TPUPreset, TPUResource
 
 _cluster_config_validator = t.Dict({"name": t.String}).allow_extra("*")
@@ -31,10 +40,13 @@ class ClusterConfigFactory:
     def create_cluster_config(self, payload: dict[str, Any]) -> Optional[ClusterConfig]:
         try:
             _cluster_config_validator.check(payload)
+            timezone = self._create_timezone(payload.get("timezone"))
             return ClusterConfig(
                 name=payload["name"],
                 orchestrator=self._create_orchestrator_config(payload),
                 ingress=self._create_ingress_config(payload),
+                timezone=timezone,
+                energy=self._create_energy_config(payload, timezone=timezone),
             )
         except t.DataError as err:
             logging.warning(f"failed to parse cluster config: {err}")
@@ -145,3 +157,44 @@ class ClusterConfigFactory:
             types=tuple(payload["types"]),
             software_versions=tuple(payload["software_versions"]),
         )
+
+    def _create_timezone(self, name: Optional[str]) -> tzinfo:
+        if not name:
+            return ClusterConfig.timezone
+        try:
+            return ZoneInfo(name)
+        except Exception:
+            raise ValueError(f"invalid timezone: {name}")
+
+    def _create_energy_schedule_period(
+        self, payload: dict[str, Any], *, timezone: tzinfo
+    ) -> EnergySchedulePeriod:
+        start_time = time.fromisoformat(payload["start_time"]).replace(tzinfo=timezone)
+        end_time = time.fromisoformat(payload["end_time"]).replace(tzinfo=timezone)
+        return EnergySchedulePeriod(
+            weekday=payload["weekday"],
+            start_time=start_time,
+            end_time=end_time,
+        )
+
+    def _create_energy_schedule(
+        self, payload: dict[str, Any], timezone: tzinfo
+    ) -> EnergySchedule:
+        return EnergySchedule(
+            name=payload["name"],
+            periods=[
+                self._create_energy_schedule_period(p, timezone=timezone)
+                for p in payload["periods"]
+            ],
+        )
+
+    def _create_energy_config(
+        self, payload: dict[str, Any], *, timezone: tzinfo
+    ) -> EnergyConfig:
+        schedules = {
+            schedule.name: schedule
+            for s in payload["schedules"]
+            if (schedule := self._create_energy_schedule(s, timezone=timezone))
+        }
+        schedules["default"] = EnergySchedule.create_default(timezone=timezone)
+        return EnergyConfig(schedules=list(schedules.values()))
