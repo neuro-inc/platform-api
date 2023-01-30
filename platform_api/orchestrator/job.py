@@ -12,6 +12,7 @@ from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig
 
+from ..cluster_config import DEFAULT_ENERGY_SCHEDULE_NAME
 from ..resource import Preset
 from .job_request import (
     ContainerResources,
@@ -301,6 +302,7 @@ class JobRecord:
     schedule_timeout: Optional[float] = None
     restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER
     priority: JobPriority = JobPriority.NORMAL
+    energy_schedule_name: str = DEFAULT_ENERGY_SCHEDULE_NAME
 
     # Billing in credits
     fully_billed: bool = False  # True if job has final price

@@ -81,7 +81,7 @@ async def create_app(
     async def _init_app(app: aiohttp.web.Application) -> AsyncIterator[None]:
         async with AsyncExitStack() as exit_stack:
 
-            logger.info("Initializing Auth client")
+            logger.info("Initializing AuthClient")
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
                     url=config.auth.server_endpoint_url,
@@ -101,12 +101,12 @@ async def create_app(
                 app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER
             )
 
-            logger.info("Initializing Cluster Registry")
+            logger.info("Initializing ClusterHolder")
             cluster_holder = await exit_stack.enter_async_context(
                 ClusterHolder(factory=create_cluster_factory(config))
             )
 
-            logger.info("Initializing Config client")
+            logger.info("Initializing ConfigClient")
             config_client = await exit_stack.enter_async_context(
                 ConfigClient(
                     base_url=config.config_url,
@@ -129,7 +129,11 @@ async def create_app(
             jobs_poller_service = JobsPollerService(
                 cluster_holder=cluster_holder,
                 jobs_config=config.jobs,
-                scheduler=JobsScheduler(config.scheduler, admin_client=admin_client),
+                scheduler=JobsScheduler(
+                    config.scheduler,
+                    cluster_holder=cluster_holder,
+                    admin_client=admin_client,
+                ),
                 auth_client=auth_client,
                 api=poller_api,
             )

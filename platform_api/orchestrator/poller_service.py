@@ -19,7 +19,7 @@ from platform_api.cluster import (
     ClusterNotAvailable,
     ClusterNotFound,
 )
-from platform_api.cluster_config import OrchestratorConfig
+from platform_api.cluster_config import EnergyConfig, OrchestratorConfig
 from platform_api.config import JobsConfig, JobsSchedulerConfig
 
 from ..utils.asyncio import run_and_log_exceptions
@@ -53,10 +53,12 @@ class JobsScheduler:
         self,
         config: JobsSchedulerConfig,
         admin_client: AdminClient,
+        cluster_holder: ClusterHolder,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
     ) -> None:
         self._config = config
         self._admin_client = admin_client
+        self._cluster_holder = cluster_holder
         self._current_datetime_factory = current_datetime_factory
 
     async def _get_user_running_jobs_quota(
@@ -146,7 +148,19 @@ class JobsScheduler:
 
         return jobs_to_update
 
+    def _check_energy_schedule(
+        self, *, job: JobRecord, energy_config: EnergyConfig, current_time: datetime
+    ) -> bool:
+        if not job.scheduler_enabled:
+            return True
+        schedule = energy_config.get_schedule(job.energy_schedule_name)
+        return schedule.check_time(self._current_datetime_factory())
+
     async def schedule(self, unfinished: list[JobRecord]) -> SchedulingResult:
+        current_time = self._current_datetime_factory()
+        async with self._cluster_holder.get() as cluster:
+            cluster_config = cluster.config
+
         unfinished = await self._enforce_running_job_quota(unfinished)
 
         if not unfinished:
@@ -159,8 +173,13 @@ class JobsScheduler:
 
         # Process pending jobs
         for job in unfinished:
-            if job.status.is_pending:
-                jobs_to_start.append(job)
+            if not job.status.is_pending:
+                continue
+            if not self._check_energy_schedule(
+                job=job, energy_config=cluster_config.energy, current_time=current_time
+            ):
+                continue
+            jobs_to_start.append(job)
 
         if jobs_to_start:
             max_job_to_start_priority = max(job.priority for job in jobs_to_start)
@@ -172,7 +191,15 @@ class JobsScheduler:
             if job.scheduler_enabled:
                 continued_at = job.status_history.continued_at
                 assert continued_at, "Running job should have continued_at"
-                if now - continued_at < self._config.run_quantum:
+                fits_energy_schedule = self._check_energy_schedule(
+                    job=job,
+                    energy_config=cluster_config.energy,
+                    current_time=current_time,
+                )
+                if (
+                    now - continued_at < self._config.run_quantum
+                    and fits_energy_schedule
+                ):
                     jobs_to_update.append(job)
                 else:
                     jobs_to_suspend.append(job)
@@ -184,7 +211,12 @@ class JobsScheduler:
             if not job.status.is_suspended:
                 continue
             suspended_at = job.status_history.current.transition_time
-            if (
+            fits_energy_schedule = self._check_energy_schedule(
+                job=job,
+                energy_config=cluster_config.energy,
+                current_time=current_time,
+            )
+            if fits_energy_schedule and (
                 not jobs_to_start
                 or job.priority > max_job_to_start_priority
                 or now - suspended_at >= self._config.max_suspended_time

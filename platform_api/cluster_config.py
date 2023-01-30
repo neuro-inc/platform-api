@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import time, tzinfo
+from datetime import datetime, time, tzinfo
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -9,6 +9,7 @@ from yarl import URL
 from .resource import Preset, ResourcePoolType, TPUResource
 
 UTC = ZoneInfo("UTC")
+DEFAULT_ENERGY_SCHEDULE_NAME = "default"
 
 
 @dataclass(frozen=True)
@@ -49,17 +50,31 @@ class EnergySchedule:
     @classmethod
     def create_default(cls, *, timezone: tzinfo) -> "EnergySchedule":
         return cls(
-            name="default",
+            name=DEFAULT_ENERGY_SCHEDULE_NAME,
             periods=[
                 EnergySchedulePeriod.create_full_day(weekday=weekday, timezone=timezone)
                 for weekday in range(1, 8)
             ],
         )
 
+    def check_time(self, current_time: datetime) -> bool:
+        for period in self.periods:
+            period_current_time = current_time.astimezone(period.start_time.tzinfo)
+            if period.weekday == period_current_time.isoweekday():
+                if period.start_time <= period_current_time.timetz() < period.end_time:
+                    return True
+        return False
+
 
 @dataclass(frozen=True)
 class EnergyConfig:
     schedules: Sequence[EnergySchedule] = (EnergySchedule.create_default(timezone=UTC),)
+
+    def get_schedule(self, name: str) -> EnergySchedule:
+        for schedule in self.schedules:
+            if schedule.name == name:
+                return schedule
+        return self.__class__.schedules[0]
 
 
 @dataclass(frozen=True)
