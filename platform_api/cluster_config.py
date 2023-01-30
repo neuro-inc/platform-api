@@ -1,10 +1,65 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import time, tzinfo
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from yarl import URL
 
 from .resource import Preset, ResourcePoolType, TPUResource
+
+UTC = ZoneInfo("UTC")
+
+
+@dataclass(frozen=True)
+class EnergySchedulePeriod:
+    # ISO 8601 weekday number (1-7)
+    weekday: int
+    start_time: time
+    end_time: time
+
+    def __post_init__(self) -> None:
+        if not self.start_time.tzinfo or not self.end_time.tzinfo:
+            raise ValueError("start_time and end_time must have tzinfo")
+        if self.end_time == time.min.replace(tzinfo=self.end_time.tzinfo):
+            object.__setattr__(
+                self, "end_time", time.max.replace(tzinfo=self.end_time.tzinfo)
+            )
+        if not 1 <= self.weekday <= 7:
+            raise ValueError("weekday must be in range 1-7")
+        if self.start_time >= self.end_time:
+            raise ValueError("start_time must be less than end_time")
+
+    @classmethod
+    def create_full_day(
+        cls, *, weekday: int, timezone: tzinfo
+    ) -> "EnergySchedulePeriod":
+        return cls(
+            weekday=weekday,
+            start_time=time.min.replace(tzinfo=timezone),
+            end_time=time.max.replace(tzinfo=timezone),
+        )
+
+
+@dataclass(frozen=True)
+class EnergySchedule:
+    name: str
+    periods: Sequence[EnergySchedulePeriod] = ()
+
+    @classmethod
+    def create_default(cls, *, timezone: tzinfo) -> "EnergySchedule":
+        return cls(
+            name="default",
+            periods=[
+                EnergySchedulePeriod.create_full_day(weekday=weekday, timezone=timezone)
+                for weekday in range(1, 8)
+            ],
+        )
+
+
+@dataclass(frozen=True)
+class EnergyConfig:
+    schedules: Sequence[EnergySchedule] = (EnergySchedule.create_default(timezone=UTC),)
 
 
 @dataclass(frozen=True)
@@ -67,3 +122,5 @@ class ClusterConfig:
     name: str
     orchestrator: OrchestratorConfig
     ingress: IngressConfig
+    timezone: tzinfo = UTC
+    energy: EnergyConfig = EnergyConfig()

@@ -1,10 +1,19 @@
 from collections.abc import Sequence
+from datetime import time
 from decimal import Decimal
 from typing import Any
+from unittest import mock
+from zoneinfo import ZoneInfo
 
 import pytest
 from yarl import URL
 
+from platform_api.cluster_config import (
+    UTC,
+    EnergyConfig,
+    EnergySchedule,
+    EnergySchedulePeriod,
+)
 from platform_api.cluster_config_factory import ClusterConfigFactory
 from platform_api.resource import GKEGPUModels, Preset, TPUPreset, TPUResource
 
@@ -299,6 +308,11 @@ class TestClusterConfigFactory:
         )
         assert orchestrator.tpu_ipv4_cidr_block == "1.1.1.1/32"
 
+        assert cluster.timezone == UTC
+        assert cluster.energy == EnergyConfig(
+            schedules=[EnergySchedule.create_default(timezone=UTC)]
+        )
+
     def test_orchestrator_resource_presets_default(
         self, clusters_payload: Sequence[dict[str, Any]]
     ) -> None:
@@ -390,3 +404,88 @@ class TestClusterConfigFactory:
         clusters = factory.create_cluster_configs(clusters_payload)
 
         assert len(clusters) == 1
+
+    def test_energy(self, clusters_payload: Sequence[dict[str, Any]]) -> None:
+        clusters_payload[0]["timezone"] = "Europe/Kyiv"
+        clusters_payload[0]["energy"] = {
+            "schedules": [
+                {
+                    "name": "default",
+                    "periods": [
+                        {
+                            "weekday": 1,
+                            "start_time": "00:00",
+                            "end_time": "06:00",
+                        },
+                    ],
+                },
+                {
+                    "name": "green",
+                    "periods": [
+                        {
+                            "weekday": 1,
+                            "start_time": "00:00",
+                            "end_time": "06:00",
+                        },
+                    ],
+                },
+            ]
+        }
+        factory = ClusterConfigFactory()
+        clusters = factory.create_cluster_configs(clusters_payload)
+
+        assert clusters[0].timezone == ZoneInfo("Europe/Kyiv")
+        assert clusters[0].energy == EnergyConfig(schedules=mock.ANY)
+        assert clusters[0].energy.schedules == [
+            EnergySchedule.create_default(timezone=ZoneInfo("Europe/Kyiv")),
+            EnergySchedule(
+                name="green",
+                periods=[
+                    EnergySchedulePeriod(
+                        weekday=1,
+                        start_time=time(0, 0, tzinfo=ZoneInfo("Europe/Kyiv")),
+                        end_time=time(6, 0, tzinfo=ZoneInfo("Europe/Kyiv")),
+                    )
+                ],
+            ),
+        ]
+
+
+class TestEnergySchedulePeriod:
+    def test__post_init__missing_start_time_tzinfo(self) -> None:
+        with pytest.raises(
+            ValueError, match="start_time and end_time must have tzinfo"
+        ):
+            EnergySchedulePeriod(weekday=1, start_time=time(0, 0), end_time=time(6, 0))
+
+    def test__post_init__missing_end_time_tzinfo(self) -> None:
+        with pytest.raises(
+            ValueError, match="start_time and end_time must have tzinfo"
+        ):
+            EnergySchedulePeriod(
+                weekday=1, start_time=time(0, 0, tzinfo=UTC), end_time=time(6, 0)
+            )
+
+    def test__post_init__end_time_before_start_time(self) -> None:
+        with pytest.raises(ValueError, match="start_time must be less than end_time"):
+            EnergySchedulePeriod(
+                weekday=1,
+                start_time=time(6, 0, tzinfo=UTC),
+                end_time=time(6, 0, tzinfo=UTC),
+            )
+
+    def test__post_init__invalid_weekday(self) -> None:
+        with pytest.raises(ValueError, match="weekday must be in range 1-7"):
+            EnergySchedulePeriod(
+                weekday=0,
+                start_time=time(0, 0, tzinfo=UTC),
+                end_time=time(6, 0, tzinfo=UTC),
+            )
+
+    def test__post_init__end_time_00_00_turns_into_time_max(self) -> None:
+        period = EnergySchedulePeriod(
+            weekday=1,
+            start_time=time(0, 0, tzinfo=UTC),
+            end_time=time(0, 0, tzinfo=UTC),
+        )
+        assert period.end_time == time.max.replace(tzinfo=UTC)
