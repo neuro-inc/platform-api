@@ -130,9 +130,9 @@ async def create_app(
                 cluster_holder=cluster_holder,
                 jobs_config=config.jobs,
                 scheduler=JobsScheduler(
-                    config.scheduler,
-                    cluster_holder=cluster_holder,
+                    config=config.scheduler,
                     admin_client=admin_client,
+                    cluster_holder=cluster_holder,
                 ),
                 auth_client=auth_client,
                 api=poller_api,

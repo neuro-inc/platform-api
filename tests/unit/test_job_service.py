@@ -60,17 +60,23 @@ from .conftest import (
 class MockJobsScheduler(JobsScheduler):
     _now: datetime
 
-    def __init__(self, admin_client: AdminClient) -> None:
+    def __init__(
+        self, *, admin_client: AdminClient, cluster_holder: ClusterHolder
+    ) -> None:
         self._now = datetime.now(timezone.utc)
         super().__init__(
-            JobsSchedulerConfig(
+            config=JobsSchedulerConfig(
                 is_waiting_min_time_sec=1,
                 run_quantum_sec=10,
                 max_suspended_time_sec=100,
             ),
-            admin_client,
-            self.current_datetime_factory,
+            admin_client=admin_client,
+            cluster_holder=cluster_holder,
+            current_datetime_factory=self.current_datetime_factory,
         )
+
+    def set_current_datetime(self, value: datetime) -> None:
+        self._now = value
 
     def current_datetime_factory(self) -> datetime:
         return self._now
@@ -86,8 +92,12 @@ class MockJobsScheduler(JobsScheduler):
 
 
 @pytest.fixture
-def test_scheduler(mock_admin_client: AdminClient) -> MockJobsScheduler:
-    return MockJobsScheduler(mock_admin_client)
+def test_scheduler(
+    mock_admin_client: AdminClient, cluster_holder: ClusterHolder
+) -> MockJobsScheduler:
+    return MockJobsScheduler(
+        admin_client=mock_admin_client, cluster_holder=cluster_holder
+    )
 
 
 @pytest.fixture
@@ -1780,7 +1790,11 @@ class TestJobsServiceCluster:
         jobs_poller_service = JobsPollerService(
             cluster_holder=cluster_holder,
             jobs_config=jobs_config,
-            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_admin_client),
+            scheduler=JobsScheduler(
+                config=JobsSchedulerConfig(),
+                admin_client=mock_admin_client,
+                cluster_holder=cluster_holder,
+            ),
             auth_client=mock_auth_client,
             api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
         )
@@ -1835,7 +1849,11 @@ class TestJobsServiceCluster:
         jobs_poller_service = JobsPollerService(
             cluster_holder=cluster_holder,
             jobs_config=jobs_config,
-            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_admin_client),
+            scheduler=JobsScheduler(
+                config=JobsSchedulerConfig(),
+                admin_client=mock_admin_client,
+                cluster_holder=cluster_holder,
+            ),
             auth_client=mock_auth_client,
             api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
         )
@@ -1889,7 +1907,11 @@ class TestJobsServiceCluster:
         jobs_poller_service = JobsPollerService(
             cluster_holder=cluster_holder,
             jobs_config=jobs_config,
-            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_admin_client),
+            scheduler=JobsScheduler(
+                config=JobsSchedulerConfig(),
+                admin_client=mock_admin_client,
+                cluster_holder=cluster_holder,
+            ),
             auth_client=mock_auth_client,
             api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
         )
@@ -1985,7 +2007,11 @@ class TestJobsServiceCluster:
         jobs_poller_service = JobsPollerService(
             cluster_holder=cluster_holder,
             jobs_config=jobs_config,
-            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_admin_client),
+            scheduler=JobsScheduler(
+                config=JobsSchedulerConfig(),
+                admin_client=mock_admin_client,
+                cluster_holder=cluster_holder,
+            ),
             auth_client=mock_auth_client,
             api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
         )
@@ -2033,7 +2059,11 @@ class TestJobsServiceCluster:
         jobs_poller_service = JobsPollerService(
             cluster_holder=cluster_holder,
             jobs_config=jobs_config,
-            scheduler=JobsScheduler(JobsSchedulerConfig(), mock_admin_client),
+            scheduler=JobsScheduler(
+                config=JobsSchedulerConfig(),
+                admin_client=mock_admin_client,
+                cluster_holder=cluster_holder,
+            ),
             auth_client=mock_auth_client,
             api=MockJobsPollerApi(jobs_service, mock_jobs_storage),
         )
@@ -2425,6 +2455,24 @@ class TestScheduledJobsService:
             test_scheduler.current_datetime_factory
         )
         return mock_orchestrator
+
+    @pytest.fixture
+    async def cluster_holder(
+        self, cluster_config: ClusterConfig, mock_orchestrator: MockOrchestrator
+    ) -> AsyncIterator[ClusterHolder]:
+        """
+        This fixture is a complete copy of the same fixture in conftest.py.
+        `mock_orchestrator` above overrides `mock_orchestrator` in conftest.py, and it
+        causes recursive dependency issue with `cluster_holder`. To resolve the issue
+        `cluster_holder` is redefined here.
+        """
+
+        def _cluster_factory(config: ClusterConfig) -> Cluster:
+            return MockCluster(config, mock_orchestrator)
+
+        async with ClusterHolder(factory=_cluster_factory) as holder:
+            await holder.update(cluster_config)
+            yield holder
 
     @pytest.fixture
     def jobs_service(
@@ -3012,3 +3060,78 @@ class TestScheduledJobsService:
         job2 = await jobs_service.get_job(job2.id)
         assert job2.status == JobStatus.RUNNING
         assert job2.materialized
+
+    async def test_update_jobs__energy_schedule(
+        self,
+        jobs_service: JobsService,
+        jobs_poller_service: JobsPollerService,
+        mock_orchestrator: MockOrchestrator,
+        job_request_factory: Callable[[], JobRequest],
+        test_scheduler: MockJobsScheduler,
+        test_user: AuthUser,
+        test_cluster: str,
+    ) -> None:
+        # Sunday
+        test_scheduler.set_current_datetime(
+            datetime(2023, 1, 1, 0, 0, tzinfo=timezone.utc)
+        )
+
+        job1, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user,
+            cluster_name=test_cluster,
+            scheduler_enabled=True,
+            energy_schedule_name="green",
+        )
+
+        mock_orchestrator.update_schedulable_jobs(job1)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        # the current time is not in the green schedule
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.PENDING
+        assert not job1.materialized
+
+        # Monday 00:00
+        test_scheduler.set_current_datetime(
+            datetime(2023, 1, 2, 0, 0, tzinfo=timezone.utc)
+        )
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        # the current time is in the green schedule
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.PENDING
+        assert job1.materialized
+
+        mock_orchestrator.update_status_to_return_single(job1.id, JobStatus.RUNNING)
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.RUNNING
+
+        # Monday 06:00
+        test_scheduler.set_current_datetime(
+            datetime(2023, 1, 2, 6, 0, tzinfo=timezone.utc)
+        )
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        # the current time is past the green schedule
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.SUSPENDED
+        assert not job1.materialized
+
+        # Next Monday 00:00
+        test_scheduler.set_current_datetime(
+            datetime(2023, 1, 9, 0, 0, tzinfo=timezone.utc)
+        )
+
+        await jobs_poller_service.update_jobs_statuses()
+
+        # the current time is again in the green schedule
+        job1 = await jobs_service.get_job(job1.id)
+        assert job1.status == JobStatus.RUNNING
+        assert job1.materialized

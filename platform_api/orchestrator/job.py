@@ -502,6 +502,8 @@ class JobRecord:
             result["logs_removed"] = self.logs_removed
         if self.org_name:
             result["org_name"] = self.org_name
+        if self.energy_schedule_name:
+            result["energy_schedule_name"] = self.energy_schedule_name
         return result
 
     @classmethod
@@ -545,6 +547,9 @@ class JobRecord:
             else None,
             being_dropped=payload.get("being_dropped", False),
             logs_removed=payload.get("logs_removed", False),
+            energy_schedule_name=payload.get(
+                "energy_schedule_name", cls.energy_schedule_name
+            ),
         )
 
     @staticmethod

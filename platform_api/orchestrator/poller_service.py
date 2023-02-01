@@ -19,7 +19,7 @@ from platform_api.cluster import (
     ClusterNotAvailable,
     ClusterNotFound,
 )
-from platform_api.cluster_config import EnergyConfig, OrchestratorConfig
+from platform_api.cluster_config import ClusterConfig, OrchestratorConfig
 from platform_api.config import JobsConfig, JobsSchedulerConfig
 
 from ..utils.asyncio import run_and_log_exceptions
@@ -42,6 +42,9 @@ logger = logging.getLogger(__file__)
 class SchedulingResult:
     jobs_to_start: list[JobRecord] = field(default_factory=list)
     jobs_to_update: list[JobRecord] = field(default_factory=list)
+    # `jobs_to_replace` is a list of jobs that may be replaced by `jobs_to_start` in
+    # case of a congested cluster.
+    jobs_to_replace: list[JobRecord] = field(default_factory=list)
     jobs_to_suspend: list[JobRecord] = field(default_factory=list)
 
 
@@ -51,6 +54,7 @@ current_datetime_factory = partial(datetime.now, timezone.utc)
 class JobsScheduler:
     def __init__(
         self,
+        *,
         config: JobsSchedulerConfig,
         admin_client: AdminClient,
         cluster_holder: ClusterHolder,
@@ -148,19 +152,32 @@ class JobsScheduler:
 
         return jobs_to_update
 
+    async def _get_cluster_config(self) -> Optional[ClusterConfig]:
+        try:
+            async with self._cluster_holder.get() as cluster:
+                return cluster.config
+        except (ClusterNotFound, ClusterNotAvailable):
+            return None
+
     def _check_energy_schedule(
-        self, *, job: JobRecord, energy_config: EnergyConfig, current_time: datetime
+        self,
+        *,
+        job: JobRecord,
+        cluster_config: Optional[ClusterConfig],
+        current_time: datetime,
     ) -> bool:
-        if not job.scheduler_enabled:
+        if (
+            not cluster_config
+            or not cluster_config.orchestrator.allow_scheduler_enabled_job
+            or not job.scheduler_enabled
+        ):
             return True
-        schedule = energy_config.get_schedule(job.energy_schedule_name)
-        return schedule.check_time(self._current_datetime_factory())
+        schedule = cluster_config.energy.get_schedule(job.energy_schedule_name)
+        return schedule.check_time(current_time)
 
     async def schedule(self, unfinished: list[JobRecord]) -> SchedulingResult:
-        current_time = self._current_datetime_factory()
-        async with self._cluster_holder.get() as cluster:
-            cluster_config = cluster.config
-
+        now = self._current_datetime_factory()
+        cluster_config = await self._get_cluster_config()
         unfinished = await self._enforce_running_job_quota(unfinished)
 
         if not unfinished:
@@ -168,15 +185,15 @@ class JobsScheduler:
 
         jobs_to_start: list[JobRecord] = []
         jobs_to_update: list[JobRecord] = []
+        jobs_to_replace: list[JobRecord] = []
         jobs_to_suspend: list[JobRecord] = []
-        now = self._current_datetime_factory()
 
         # Process pending jobs
         for job in unfinished:
             if not job.status.is_pending:
                 continue
             if not self._check_energy_schedule(
-                job=job, energy_config=cluster_config.energy, current_time=current_time
+                job=job, cluster_config=cluster_config, current_time=now
             ):
                 continue
             jobs_to_start.append(job)
@@ -188,21 +205,18 @@ class JobsScheduler:
         for job in unfinished:
             if not job.status.is_running:
                 continue
+            if not self._check_energy_schedule(
+                job=job, cluster_config=cluster_config, current_time=now
+            ):
+                jobs_to_suspend.append(job)
+                continue
             if job.scheduler_enabled:
                 continued_at = job.status_history.continued_at
                 assert continued_at, "Running job should have continued_at"
-                fits_energy_schedule = self._check_energy_schedule(
-                    job=job,
-                    energy_config=cluster_config.energy,
-                    current_time=current_time,
-                )
-                if (
-                    now - continued_at < self._config.run_quantum
-                    and fits_energy_schedule
-                ):
+                if now - continued_at < self._config.run_quantum:
                     jobs_to_update.append(job)
                 else:
-                    jobs_to_suspend.append(job)
+                    jobs_to_replace.append(job)
             else:
                 jobs_to_update.append(job)
 
@@ -210,12 +224,10 @@ class JobsScheduler:
         for job in unfinished:
             if not job.status.is_suspended:
                 continue
-            suspended_at = job.status_history.current.transition_time
             fits_energy_schedule = self._check_energy_schedule(
-                job=job,
-                energy_config=cluster_config.energy,
-                current_time=current_time,
+                job=job, cluster_config=cluster_config, current_time=now
             )
+            suspended_at = job.status_history.current.transition_time
             if fits_energy_schedule and (
                 not jobs_to_start
                 or job.priority > max_job_to_start_priority
@@ -237,6 +249,7 @@ class JobsScheduler:
         return SchedulingResult(
             jobs_to_start=jobs_to_start,
             jobs_to_update=jobs_to_update,
+            jobs_to_replace=jobs_to_replace,
             jobs_to_suspend=jobs_to_suspend,
         )
 
@@ -330,7 +343,9 @@ class JobsPollerService:
         result = await self._scheduler.schedule(unfinished)
 
         await run_and_log_exceptions(
-            self._start_jobs_wrapper(result.jobs_to_start, result.jobs_to_suspend)
+            self._start_jobs_wrapper(
+                result.jobs_to_start, result.jobs_to_replace, result.jobs_to_suspend
+            )
         )
 
         await run_and_log_exceptions(
@@ -356,20 +371,30 @@ class JobsPollerService:
         )
 
     async def _start_jobs_wrapper(
-        self, records_to_start: list[JobRecord], records_to_suspend: list[JobRecord]
+        self,
+        records_to_start: list[JobRecord],
+        records_to_replace: list[JobRecord],
+        records_to_suspend: list[JobRecord],
     ) -> None:
         try:
             async with AsyncExitStack() as stack:
-                for record in itertools.chain(records_to_start, records_to_suspend):
+                for record in itertools.chain(
+                    records_to_start, records_to_replace, records_to_suspend
+                ):
                     await stack.enter_async_context(self._update_job(record))
 
                 try:
                     async with self._cluster_holder.get() as cluster:
+                        await self._suspend_jobs(
+                            cluster=cluster, records=records_to_suspend
+                        )
                         await self._start_jobs(
-                            cluster, records_to_start, records_to_suspend
+                            cluster, records_to_start, records_to_replace
                         )
                 except ClusterNotFound as cluster_err:
-                    for record in itertools.chain(records_to_start, records_to_suspend):
+                    for record in itertools.chain(
+                        records_to_start, records_to_replace, records_to_suspend
+                    ):
                         # marking PENDING/RUNNING job as FAILED
                         logger.warning(
                             "Failed to get job '%s' status. Reason: %s",
@@ -435,7 +460,7 @@ class JobsPollerService:
                     # Do not materialize next jobs until job is scheduled
                     stop_materializing = True
                     continue
-                suspended_jobs = await self._suspend_jobs(
+                suspended_jobs = await self._replace_jobs(
                     cluster.orchestrator, job, jobs_to_suspend
                 )
                 if suspended_jobs:
@@ -454,6 +479,9 @@ class JobsPollerService:
                     await self._revoke_pass_config(job)
                     job.materialized = False
 
+            # `_replace_jobs` may have suspended some but not all jobs.
+            # If jobs were not suspended, we either want to start them, or update their
+            # statuses.
             for job in jobs_to_suspend:
                 if job.status != JobStatus.SUSPENDED:
                     await self._update_job_status(cluster.orchestrator, job)
@@ -462,7 +490,7 @@ class JobsPollerService:
             # the job as deleted. suppressing.
             logger.warning("Could not start jobs. Reason: '%s'", exc)
 
-    async def _suspend_jobs(
+    async def _replace_jobs(
         self,
         orchestrator: Orchestrator,
         job_to_start: Job,
@@ -490,6 +518,20 @@ class JobsPollerService:
             )
             await self._revoke_pass_config(job_to_start)
             return []
+
+    async def _suspend_jobs(
+        self, *, cluster: Cluster, records: list[JobRecord]
+    ) -> None:
+        if not records:
+            return
+        try:
+            for record in records:
+                job = self._make_job(record, cluster)
+                await cluster.orchestrator.delete_job(job)
+                job.status = JobStatus.SUSPENDED
+                job.materialized = False
+        except JobException as exc:
+            logger.info("Failed to suspend jobs. Reason: %s", exc)
 
     async def _update_job_status_wrapper(self, job_record: JobRecord) -> None:
         try:
