@@ -78,12 +78,20 @@ def create_job_request_validator(
     cluster_name: str,
     org_name: Optional[str],
     storage_scheme: str = "storage",
+    allowed_energy_schedule_names: Sequence[str] = (),
 ) -> t.Trafaret:
     def _check_no_schedule_timeout_for_scheduled_jobs(
         payload: dict[str, Any]
     ) -> dict[str, Any]:
         if "schedule_timeout" in payload and payload["scheduler_enabled"]:
             raise t.DataError("schedule_timeout is not allowed for scheduled jobs")
+        return payload
+
+    def _check_scheduler_enabled_for_energy_schedule_name(
+        payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        if payload.get("energy_schedule_name") and not payload["scheduler_enabled"]:
+            raise t.DataError("energy_schedule_name requires scheduler_enabled")
         return payload
 
     container_validator = create_container_request_validator(
@@ -134,6 +142,9 @@ def create_job_request_validator(
                 *(str(policy) for policy in JobRestartPolicy)
             )
             >> JobRestartPolicy,
+            t.Key("energy_schedule_name", optional=True): t.Enum(
+                *allowed_energy_schedule_names
+            ),
         },
         multiname_key(
             "scheduler_enabled",
@@ -151,12 +162,14 @@ def create_job_request_validator(
     # Either flat structure or payload with container field are allowed
     if not allow_flat_structure:
         # Deprecated. Use flat structure
-        return (
-            job_validator + t.Dict({"container": container_validator})
-        ) >> _check_no_schedule_timeout_for_scheduled_jobs
+        validator = job_validator + t.Dict({"container": container_validator})
+    else:
+        validator = job_validator + container_validator
     return (
-        job_validator + container_validator
-    ) >> _check_no_schedule_timeout_for_scheduled_jobs
+        validator
+        >> _check_no_schedule_timeout_for_scheduled_jobs
+        >> _check_scheduler_enabled_for_energy_schedule_name
+    )
 
 
 def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
@@ -281,6 +294,7 @@ def create_job_response_validator() -> t.Trafaret:
             "restart_policy": t.String,
             "privileged": t.Bool,
             "priority": t.String,
+            t.Key("energy_schedule_name", optional=True): t.String,
         }
     )
 
@@ -483,6 +497,8 @@ def convert_job_to_job_response(job: Job) -> dict[str, Any]:
         response_payload["history"]["exit_code"] = current_status.exit_code
     if job.org_name:
         response_payload["org_name"] = job.org_name
+    if job.energy_schedule_name:
+        response_payload["energy_schedule_name"] = job.energy_schedule_name
     return response_payload
 
 
@@ -585,6 +601,7 @@ class JobsHandler:
             cluster_name=cluster_config.name,
             org_name=org_name,
             storage_scheme=STORAGE_URI_SCHEME,
+            allowed_energy_schedule_names=cluster_config.energy.schedule_names,
         )
 
     def _get_cluster_config(
@@ -712,6 +729,7 @@ class JobsHandler:
             max_run_time_minutes=max_run_time_minutes,
             restart_policy=request_payload["restart_policy"],
             priority=priority,
+            energy_schedule_name=request_payload.get("energy_schedule_name"),
         )
         response_payload = convert_job_to_job_response(job)
         self._job_response_validator.check(response_payload)

@@ -17,7 +17,14 @@ import pytest
 from async_timeout import timeout
 from yarl import URL
 
-from platform_api.cluster_config import ClusterConfig, IngressConfig, OrchestratorConfig
+from platform_api.cluster_config import (
+    UTC,
+    ClusterConfig,
+    EnergyConfig,
+    EnergySchedule,
+    IngressConfig,
+    OrchestratorConfig,
+)
 from platform_api.config import (
     AuthConfig,
     Config,
@@ -831,7 +838,16 @@ def cluster_config_factory(
             buckets_url=URL("https://neu.ro/api/v1/buckets"),
         )
         return ClusterConfig(
-            name=cluster_name, orchestrator=orchestrator_config, ingress=ingress_config
+            name=cluster_name,
+            orchestrator=orchestrator_config,
+            ingress=ingress_config,
+            timezone=UTC,
+            energy=EnergyConfig(
+                schedules=[
+                    EnergySchedule.create_default(timezone=UTC),
+                    EnergySchedule.create_default(timezone=UTC, name="green"),
+                ]
+            ),
         )
 
     return _f

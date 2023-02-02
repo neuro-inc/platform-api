@@ -846,6 +846,7 @@ class TestJobs:
     ) -> None:
         url = api.jobs_base_url
         job_submit["priority"] = "high"
+        job_submit["energy_schedule_name"] = "green"
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as response:
@@ -853,9 +854,13 @@ class TestJobs:
             result = await response.json()
             assert result["status"] in ["pending"]
             assert result["priority"] == "high"
+            assert result["energy_schedule_name"] == "green"
             job_id = result["id"]
 
-        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
+        assert response_payload["energy_schedule_name"] == "green"
         await jobs_client.delete_job(job_id=job_id)
 
     async def test_create_job_with_tty(

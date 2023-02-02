@@ -861,6 +861,12 @@ class Job:
         return self._preemptible_node
 
     @property
+    def energy_schedule_name(self) -> Optional[str]:
+        if self.scheduler_enabled:
+            return self._record.energy_schedule_name
+        return None
+
+    @property
     def pass_config(self) -> bool:
         return self._pass_config
 
