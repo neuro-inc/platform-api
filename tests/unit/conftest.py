@@ -1,7 +1,7 @@
 import asyncio
 from collections import defaultdict
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
 from functools import partial
 from pathlib import Path
@@ -32,7 +32,14 @@ from platform_api.cluster import (
     ClusterConfigRegistry,
     ClusterHolder,
 )
-from platform_api.cluster_config import IngressConfig, OrchestratorConfig
+from platform_api.cluster_config import (
+    UTC,
+    EnergyConfig,
+    EnergySchedule,
+    EnergySchedulePeriod,
+    IngressConfig,
+    OrchestratorConfig,
+)
 from platform_api.config import JobsConfig, JobsSchedulerConfig, RegistryConfig
 from platform_api.orchestrator.base import Orchestrator
 from platform_api.orchestrator.job import Job, JobRecord, JobStatusItem, JobStatusReason
@@ -449,6 +456,20 @@ def cluster_config() -> ClusterConfig:
             disks_url=URL(),
             buckets_url=URL(),
         ),
+        energy=EnergyConfig(
+            schedules=[
+                EnergySchedule(
+                    name="green",
+                    periods=[
+                        EnergySchedulePeriod(
+                            weekday=1,
+                            start_time=time(0, 0, tzinfo=UTC),
+                            end_time=time(6, 0, tzinfo=UTC),
+                        )
+                    ],
+                )
+            ]
+        ),
     )
 
 
@@ -554,7 +575,11 @@ def jobs_poller_service(
     return JobsPollerService(
         cluster_holder=cluster_holder,
         jobs_config=jobs_config,
-        scheduler=JobsScheduler(scheduler_config, mock_admin_client),
+        scheduler=JobsScheduler(
+            config=scheduler_config,
+            admin_client=mock_admin_client,
+            cluster_holder=cluster_holder,
+        ),
         auth_client=mock_auth_client,
         api=mock_poller_api,
     )

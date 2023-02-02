@@ -9,6 +9,7 @@ import trafaret as t
 from yarl import URL
 
 from .cluster_config import (
+    DEFAULT_ENERGY_SCHEDULE_NAME,
     ClusterConfig,
     EnergyConfig,
     EnergySchedule,
@@ -196,5 +197,7 @@ class ClusterConfigFactory:
             for s in payload.get("energy", {}).get("schedules", [])
             if (schedule := self._create_energy_schedule(s, timezone=timezone))
         }
-        schedules["default"] = EnergySchedule.create_default(timezone=timezone)
+        schedules[DEFAULT_ENERGY_SCHEDULE_NAME] = EnergySchedule.create_default(
+            timezone=timezone
+        )
         return EnergyConfig(schedules=list(schedules.values()))

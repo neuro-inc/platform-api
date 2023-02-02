@@ -12,6 +12,7 @@ from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig
 
+from ..cluster_config import DEFAULT_ENERGY_SCHEDULE_NAME
 from ..resource import Preset
 from .job_request import (
     ContainerResources,
@@ -301,6 +302,7 @@ class JobRecord:
     schedule_timeout: Optional[float] = None
     restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER
     priority: JobPriority = JobPriority.NORMAL
+    energy_schedule_name: str = DEFAULT_ENERGY_SCHEDULE_NAME
 
     # Billing in credits
     fully_billed: bool = False  # True if job has final price
@@ -500,6 +502,8 @@ class JobRecord:
             result["logs_removed"] = self.logs_removed
         if self.org_name:
             result["org_name"] = self.org_name
+        if self.energy_schedule_name:
+            result["energy_schedule_name"] = self.energy_schedule_name
         return result
 
     @classmethod
@@ -543,6 +547,9 @@ class JobRecord:
             else None,
             being_dropped=payload.get("being_dropped", False),
             logs_removed=payload.get("logs_removed", False),
+            energy_schedule_name=payload.get(
+                "energy_schedule_name", cls.energy_schedule_name
+            ),
         )
 
     @staticmethod

@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from datetime import time
+from datetime import datetime, time
 from decimal import Decimal
 from typing import Any
 from unittest import mock
@@ -489,3 +489,101 @@ class TestEnergySchedulePeriod:
             end_time=time(0, 0, tzinfo=UTC),
         )
         assert period.end_time == time.max.replace(tzinfo=UTC)
+
+
+class TestEnergyConfig:
+    def test_get_schedule(self) -> None:
+        config = EnergyConfig(
+            schedules=[
+                EnergySchedule.create_default(timezone=UTC),
+                EnergySchedule(name="green"),
+            ]
+        )
+        assert config.get_schedule("default") == EnergySchedule.create_default(
+            timezone=UTC
+        )
+        assert config.get_schedule("green") == EnergySchedule(name="green")
+        assert config.get_schedule("unknown") == EnergySchedule.create_default(
+            timezone=UTC
+        )
+
+
+class TestEnergySchedule:
+    @pytest.mark.parametrize(
+        "current_time, result",
+        [
+            # Monday
+            (
+                datetime(2023, 1, 2, 2, 0, tzinfo=ZoneInfo("Europe/Kyiv")).astimezone(
+                    UTC
+                ),
+                False,
+            ),
+            # Monday, right before the start of a period
+            (
+                datetime(2023, 1, 2, 23, 59, tzinfo=ZoneInfo("Europe/Kyiv")).astimezone(
+                    UTC
+                ),
+                False,
+            ),
+            # Tuesday, right at the start of a period
+            (
+                datetime(2023, 1, 3, 0, 0, tzinfo=ZoneInfo("Europe/Kyiv")).astimezone(
+                    UTC
+                ),
+                True,
+            ),
+            # Tuesday, in the middle of a period
+            (
+                datetime(2023, 1, 3, 2, 0, tzinfo=ZoneInfo("Europe/Kyiv")).astimezone(
+                    UTC
+                ),
+                True,
+            ),
+            # Tuesday, right at at the end of a period
+            (
+                datetime(2023, 1, 3, 5, 59, tzinfo=ZoneInfo("Europe/Kyiv")).astimezone(
+                    UTC
+                ),
+                True,
+            ),
+            # Tuesday, right after the end of a period
+            (
+                datetime(2023, 1, 3, 6, 0, tzinfo=ZoneInfo("Europe/Kyiv")).astimezone(
+                    UTC
+                ),
+                False,
+            ),
+            # Wednesday, in the middle of a period
+            (
+                datetime(2023, 1, 4, 2, 0, tzinfo=ZoneInfo("Europe/Kyiv")).astimezone(
+                    UTC
+                ),
+                True,
+            ),
+            # Thursday
+            (
+                datetime(2023, 1, 5, 2, 0, tzinfo=ZoneInfo("Europe/Kyiv")).astimezone(
+                    UTC
+                ),
+                False,
+            ),
+        ],
+    )
+    def test_check_period(self, current_time: datetime, result: bool) -> None:
+        schedule = EnergySchedule(
+            name="green",
+            periods=[
+                EnergySchedulePeriod(
+                    weekday=2,
+                    start_time=time(0, 0, tzinfo=ZoneInfo("Europe/Kyiv")),
+                    end_time=time(6, 0, tzinfo=ZoneInfo("Europe/Kyiv")),
+                ),
+                EnergySchedulePeriod(
+                    weekday=3,
+                    start_time=time(0, 0, tzinfo=ZoneInfo("Europe/Kyiv")),
+                    end_time=time(6, 0, tzinfo=ZoneInfo("Europe/Kyiv")),
+                ),
+            ],
+        )
+        assert schedule.check_time(current_time) is result

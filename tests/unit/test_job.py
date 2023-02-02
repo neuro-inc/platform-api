@@ -904,6 +904,7 @@ class TestJob:
             "privileged": False,
             "total_price_credits": "0",
             "priority": 0,
+            "energy_schedule_name": "default",
         }
 
     def test_to_primitive_with_max_run_time(
@@ -942,6 +943,7 @@ class TestJob:
             "privileged": False,
             "total_price_credits": "0",
             "priority": 0,
+            "energy_schedule_name": "default",
         }
 
     def test_to_primitive_with_tags(
@@ -1326,6 +1328,7 @@ class TestJob:
             "privileged": False,
             "total_price_credits": "0",
             "priority": 0,
+            "energy_schedule_name": "green",
         }
         actual = Job.to_primitive(
             Job.from_primitive(mock_orchestrator.config, expected)

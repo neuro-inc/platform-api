@@ -234,6 +234,7 @@ class JobsService:
         max_run_time_minutes: Optional[int] = None,
         restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
         priority: JobPriority = JobPriority.NORMAL,
+        energy_schedule_name: Optional[str] = None,
     ) -> tuple[Job, Status]:
         base_name = user.name.split("/", 1)[
             0
@@ -298,6 +299,7 @@ class JobsService:
             restart_policy=restart_policy,
             privileged=privileged,
             priority=priority,
+            energy_schedule_name=energy_schedule_name,
         )
         job_id = job_request.job_id
 
