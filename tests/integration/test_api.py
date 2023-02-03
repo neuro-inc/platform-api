@@ -663,7 +663,7 @@ class TestApi:
                     },
                 ],
                 "timezone": "UTC",
-                "energy_schedules": mock.ANY
+                "energy_schedules": mock.ANY,
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -933,6 +933,7 @@ class TestJobs:
     ) -> None:
         url = api.jobs_base_url
         job_submit["priority"] = "high"
+        job_submit["scheduler_enabled"] = True
         job_submit["energy_schedule_name"] = "green"
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
