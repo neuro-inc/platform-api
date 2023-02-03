@@ -368,7 +368,47 @@ class TestApi:
                                 "end_time": "23:59",
                             },
                         ],
-                    }
+                    },
+                    {
+                        "name": "green",
+                        "periods": [
+                            {
+                                "weekday": 1,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 2,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 3,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 4,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 5,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 6,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 7,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                        ],
+                    },
                 ],
             }
             expected_payload: dict[str, Any] = {
@@ -499,6 +539,8 @@ class TestApi:
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                 ],
+                "timezone": "UTC",
+                "energy_schedules": mock.ANY,
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -620,6 +662,8 @@ class TestApi:
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                 ],
+                "timezone": "UTC",
+                "energy_schedules": mock.ANY
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
