@@ -5019,6 +5019,7 @@ class TestJobs:
             "total_price_credits": "0",
             "price_credits_per_hour": "10",
             "priority": "normal",
+            "energy_schedule_name": "default",
         }
 
     async def test_job_failed(
