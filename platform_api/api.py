@@ -206,8 +206,12 @@ class ConfigApiHandler:
     ) -> dict[str, Any]:
         return {
             "weekday": period.weekday,
-            "start": period.start_time.isoformat(timespec="minutes"),
-            "end": period.end_time.isoformat(timespec="minutes"),
+            "start_time": period.start_time.replace(tzinfo=None).isoformat(
+                timespec="minutes"
+            ),
+            "end_time": period.end_time.replace(tzinfo=None).isoformat(
+                timespec="minutes"
+            ),
         }
 
 
