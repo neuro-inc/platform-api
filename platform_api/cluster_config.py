@@ -48,9 +48,11 @@ class EnergySchedule:
     periods: Sequence[EnergySchedulePeriod] = ()
 
     @classmethod
-    def create_default(cls, *, timezone: tzinfo) -> "EnergySchedule":
+    def create_default(
+        cls, *, timezone: tzinfo, name: str = DEFAULT_ENERGY_SCHEDULE_NAME
+    ) -> "EnergySchedule":
         return cls(
-            name=DEFAULT_ENERGY_SCHEDULE_NAME,
+            name=name,
             periods=[
                 EnergySchedulePeriod.create_full_day(weekday=weekday, timezone=timezone)
                 for weekday in range(1, 8)
@@ -75,6 +77,10 @@ class EnergyConfig:
             if schedule.name == name:
                 return schedule
         return self.__class__.schedules[0]
+
+    @property
+    def schedule_names(self) -> list[str]:
+        return [schedule.name for schedule in self.schedules]
 
 
 @dataclass(frozen=True)

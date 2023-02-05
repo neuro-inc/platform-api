@@ -35,6 +35,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
 )
 
 from .cluster import ClusterConfig, ClusterConfigRegistry, ClusterUpdater
+from .cluster_config import EnergySchedule, EnergySchedulePeriod
 from .config import Config, CORSConfig
 from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
@@ -155,6 +156,11 @@ class ConfigApiHandler:
             "buckets_url": str(cluster_config.ingress.buckets_url),
             "resource_presets": presets,
             "orgs": orgs,
+            "timezone": str(cluster_config.timezone),
+            "energy_schedules": [
+                self._convert_energy_schedule_to_payload(schedule)
+                for schedule in cluster_config.energy.schedules
+            ],
         }
         if self._config.auth.public_endpoint_url:
             result["users_url"] = str(self._config.auth.public_endpoint_url)
@@ -183,6 +189,30 @@ class ConfigApiHandler:
                 "software_version": preset.tpu.software_version,
             }
         return payload
+
+    def _convert_energy_schedule_to_payload(
+        self, schedule: EnergySchedule
+    ) -> dict[str, Any]:
+        return {
+            "name": schedule.name,
+            "periods": [
+                self._convert_energy_schedule_period_to_payload(p)
+                for p in schedule.periods
+            ],
+        }
+
+    def _convert_energy_schedule_period_to_payload(
+        self, period: EnergySchedulePeriod
+    ) -> dict[str, Any]:
+        return {
+            "weekday": period.weekday,
+            "start_time": period.start_time.replace(tzinfo=None).isoformat(
+                timespec="minutes"
+            ),
+            "end_time": period.end_time.replace(tzinfo=None).isoformat(
+                timespec="minutes"
+            ),
+        }
 
 
 @aiohttp.web.middleware

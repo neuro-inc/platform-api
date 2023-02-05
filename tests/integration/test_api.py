@@ -327,6 +327,89 @@ class TestApi:
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                 ],
+                "timezone": "UTC",
+                "energy_schedules": [
+                    {
+                        "name": "default",
+                        "periods": [
+                            {
+                                "weekday": 1,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 2,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 3,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 4,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 5,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 6,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 7,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                        ],
+                    },
+                    {
+                        "name": "green",
+                        "periods": [
+                            {
+                                "weekday": 1,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 2,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 3,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 4,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 5,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 6,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                            {
+                                "weekday": 7,
+                                "start_time": "00:00",
+                                "end_time": "23:59",
+                            },
+                        ],
+                    },
+                ],
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -456,6 +539,8 @@ class TestApi:
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                 ],
+                "timezone": "UTC",
+                "energy_schedules": mock.ANY,
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -577,6 +662,8 @@ class TestApi:
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                 ],
+                "timezone": "UTC",
+                "energy_schedules": mock.ANY,
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -846,6 +933,8 @@ class TestJobs:
     ) -> None:
         url = api.jobs_base_url
         job_submit["priority"] = "high"
+        job_submit["scheduler_enabled"] = True
+        job_submit["energy_schedule_name"] = "green"
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as response:
@@ -853,9 +942,13 @@ class TestJobs:
             result = await response.json()
             assert result["status"] in ["pending"]
             assert result["priority"] == "high"
+            assert result["energy_schedule_name"] == "green"
             job_id = result["id"]
 
-        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        response_payload = await jobs_client.long_polling_by_job_id(
+            job_id=job_id, status="succeeded"
+        )
+        assert response_payload["energy_schedule_name"] == "green"
         await jobs_client.delete_job(job_id=job_id)
 
     async def test_create_job_with_tty(
@@ -4926,6 +5019,7 @@ class TestJobs:
             "total_price_credits": "0",
             "price_credits_per_hour": "10",
             "priority": "normal",
+            "energy_schedule_name": "default",
         }
 
     async def test_job_failed(

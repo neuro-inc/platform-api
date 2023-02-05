@@ -837,6 +837,67 @@ class TestJobRequestValidator:
         )
         validator.check(request)
 
+    def test_energy_schedule_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        request = {
+            "container": container,
+            "scheduler_enabled": True,
+            "energy_schedule_name": "default",
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(),
+            allowed_tpu_resources=(),
+            cluster_name="testcluster",
+            org_name=None,
+            allowed_energy_schedule_names=["default"],
+        )
+        validator.check(request)
+
+    def test_energy_schedule_name__unknown(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        request = {
+            "container": container,
+            "scheduler_enabled": True,
+            "energy_schedule_name": "default",
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(),
+            allowed_tpu_resources=(),
+            cluster_name="testcluster",
+            org_name=None,
+            allowed_energy_schedule_names=[],
+        )
+        with pytest.raises(DataError, match="value doesn't match any"):
+            validator.check(request)
+
+    def test_energy_schedule_name_allowed_only_when_scheduler_enabled(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        request = {
+            "container": container,
+            "energy_schedule_name": "default",
+        }
+        validator = create_job_request_validator(
+            allowed_gpu_models=(),
+            allowed_tpu_resources=(),
+            cluster_name="testcluster",
+            org_name=None,
+            allowed_energy_schedule_names=["default"],
+        )
+        with pytest.raises(DataError, match="energy_schedule_name.+scheduler.+enabled"):
+            validator.check(request)
+
 
 class TestJobContainerToJson:
     def test_minimal(self) -> None:
@@ -1952,3 +2013,26 @@ async def test_job_to_job_response_with_preset_name(
     payload = convert_job_to_job_response(job)
 
     assert payload["preset_name"] == "cpu-small"
+
+
+async def test_job_to_job_response__energy_schedule_name(
+    mock_orchestrator: MockOrchestrator,
+) -> None:
+    job = Job(
+        orchestrator_config=mock_orchestrator.config,
+        record=JobRecord.create(
+            request=JobRequest.create(
+                Container(
+                    image="testimage",
+                    resources=ContainerResources(cpu=1, memory=128 * 10**6),
+                )
+            ),
+            cluster_name="test-cluster",
+            preset_name="cpu-small",
+            scheduler_enabled=True,
+            energy_schedule_name="green",
+        ),
+    )
+    payload = convert_job_to_job_response(job)
+
+    assert payload["energy_schedule_name"] == "green"
