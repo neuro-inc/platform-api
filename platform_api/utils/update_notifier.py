@@ -18,7 +18,7 @@ Callback = Callable[[], None]
 
 class Subscription(ABC):
     async def is_alive(self) -> bool:
-        pass
+        return False
 
 
 class Notifier(ABC):

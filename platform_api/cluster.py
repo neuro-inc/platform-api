@@ -119,10 +119,8 @@ class ClusterUpdater:
     async def _do_update(self) -> None:
         cluster_configs = await self._config_client.get_clusters()
         cluster_registry = self._cluster_registry
-        [
+        for cluster_config in cluster_configs:
             await cluster_registry.replace(cluster_config)
-            for cluster_config in cluster_configs
-        ]
         await cluster_registry.cleanup(cluster_configs)
 
 

@@ -167,10 +167,10 @@ class MockOrchestrator(Orchestrator):
     async def get_missing_secrets(
         self, user_name: str, secret_names: list[str]
     ) -> list[str]:
-        pass
+        return []
 
     async def get_missing_disks(self, disks: list[Disk]) -> list[Disk]:
-        pass
+        return []
 
     def update_preemptible_jobs(self, *jobs: Union[Job, list[Job]]) -> None:
         self._preemptible_job_ids = []
