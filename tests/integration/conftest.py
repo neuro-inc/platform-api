@@ -340,7 +340,7 @@ class MyKubeClient(KubeClient):
         pvc_name: str,
         namespace: str,
         storage: Optional[int] = None,
-        labels: Mapping[str, str] = None,
+        labels: Optional[Mapping[str, str]] = None,
     ) -> None:
         url = self._generate_all_pvcs_url(namespace)
         storage = storage or 1024 * 1024

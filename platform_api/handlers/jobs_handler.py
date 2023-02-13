@@ -588,7 +588,7 @@ class JobsHandler:
         self,
         cluster_config: ClusterConfig,
         allow_flat_structure: bool = False,
-        org_name: str = None,
+        org_name: Optional[str] = None,
     ) -> t.Trafaret:
         resource_pool_types = cluster_config.orchestrator.resource_pool_types
         gpu_models = list(

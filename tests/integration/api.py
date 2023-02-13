@@ -178,7 +178,7 @@ class JobsClient:
             assert result["status"] == "pending"
             return result
 
-    async def get_all_jobs(self, params: Any = None) -> list[dict[str, Any]]:
+    async def get_all_jobs(self, params: Optional[Any] = None) -> list[dict[str, Any]]:
         url = self._api_config.jobs_base_url
         headers = self._headers.copy()
         headers["Accept"] = "application/x-ndjson"
