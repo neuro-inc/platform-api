@@ -1725,6 +1725,8 @@ async def test_parse_response(mock_orchestrator: MockOrchestrator) -> None:
             ),
             cluster_name="test-cluster",
             name="test-job-name",
+            scheduler_enabled=True,
+            energy_schedule_name="green",
         ),
     )
 
