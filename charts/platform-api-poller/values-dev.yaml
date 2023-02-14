@@ -22,7 +22,7 @@ jobs:
 
 storages:
 - type: pvc
-  claimName: platform-jobs-storage
+  claimName: platform-storage
 
 ingress:
   enabled: true
