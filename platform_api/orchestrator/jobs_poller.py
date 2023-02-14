@@ -146,6 +146,9 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
         schedule_timeout=payload.get("schedule_timeout"),
         restart_policy=JobRestartPolicy(payload["restart_policy"]),
         priority=JobPriority.from_name(payload["priority"]),
+        energy_schedule_name=payload.get(
+            "energy_schedule_name", JobRecord.energy_schedule_name
+        ),
     )
 
 
