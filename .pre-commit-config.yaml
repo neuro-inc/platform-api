@@ -1,11 +1,11 @@
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: 'v4.3.0'
+  rev: 'v4.4.0'
   hooks:
   - id: check-merge-conflict
     exclude: "rst$"
 - repo: https://github.com/asottile/yesqa
-  rev: v1.3.0
+  rev: v1.4.0
   hooks:
   - id: yesqa
 - repo: https://github.com/sondrelg/pep585-upgrade
@@ -15,7 +15,7 @@ repos:
     args:
     - --futures=true
 - repo: https://github.com/Zac-HD/shed
-  rev: 0.10.1
+  rev: 2023.3.1
   hooks:
   - id: shed
     args:
@@ -26,11 +26,11 @@ repos:
     - markdown
     - rst
 - repo: https://github.com/PyCQA/flake8
-  rev: 4.0.1
+  rev: 6.0.0
   hooks:
   - id: flake8
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: 'v4.3.0'
+  rev: 'v4.4.0'
   hooks:
   - id: check-case-conflict
   - id: check-json
@@ -44,7 +44,7 @@ repos:
   - id: debug-statements
 # Another entry is required to apply file-contents-sorter to another file
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: 'v4.3.0'
+  rev: 'v4.4.0'
   hooks:
   - id: file-contents-sorter
     files: |
@@ -62,7 +62,7 @@ repos:
 #     - -ignore
 #     - 'SC1004:'
 - repo: https://github.com/sirosen/check-jsonschema
-  rev: 0.17.1
+  rev: 0.21.0
   hooks:
   - id: check-github-actions
   - id: check-github-workflows
