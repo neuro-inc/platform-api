@@ -1,11 +1,14 @@
-K8S_DIND_CLUSTER_CMD := tests/k8s/dind-cluster-v1.10.sh
-
-$(K8S_DIND_CLUSTER_CMD):
+tests/bin/kind:
 	mkdir -p $(@D)
-	curl -Lo $@ https://cdn.rawgit.com/Mirantis/kubeadm-dind-cluster/master/fixed/dind-cluster-v1.10.sh
-	chmod u+x $@
+	# for Intel Macs
+	[ $$(uname -m) = x86_64 ] && curl -Lo $@ https://kind.sigs.k8s.io/dl/v0.17.0/kind-darwin-amd64 || :
+	# for M1 / ARM Macs
+	[ $$(uname -m) = arm64 ] && curl -Lo $@ https://kind.sigs.k8s.io/dl/v0.17.0/kind-darwin-arm64 || :
+	chmod +x $@
 
-# K8S_CLUSTER_CMD := $(K8S_DIND_CLUSTER_CMD)
+# tests/bin/kind create cluster --name neuro --wait 5m
+# kubectl cluster-info --context kind-neuro
+
 K8S_CLUSTER_CMD := tests/k8s/cluster.sh
 
 install_k8s:

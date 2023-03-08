@@ -23,6 +23,7 @@ from yarl import URL
 from platform_api.config import AuthConfig, OAuthConfig
 
 from tests.conftest import random_str
+from tests.integration.conftest import _TestConfigClient
 
 
 @pytest.fixture(scope="session")
@@ -173,6 +174,7 @@ class UserFactory(Protocol):
 @pytest.fixture
 async def regular_user_factory(
     auth_client: AuthClient,
+    config_client: _TestConfigClient,
     admin_client: AdminClient,
     token_factory: Callable[[str], str],
     admin_token: str,
@@ -199,6 +201,12 @@ async def regular_user_factory(
                 )
             try:
                 await admin_client.create_cluster(cluster)
+            except ClientResponseError:
+                pass
+            try:
+                # in case docker containers are reused, we want to recreate clusters
+                # that were previously stored in memory
+                await config_client.create_cluster(name=cluster)
             except ClientResponseError:
                 pass
             if org_name is not None:

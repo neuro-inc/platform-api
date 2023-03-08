@@ -16,7 +16,7 @@ from yarl import URL
 
 from platform_api.config import AuthConfig
 
-from tests.integration.conftest import ApiRunner
+from tests.integration.conftest import ApiRunner, _TestConfigClient
 from tests.integration.notifications import NotificationsServer
 
 
@@ -81,6 +81,16 @@ async def fake_config_app() -> AsyncIterator[URL]:
     api_address = await runner.run()
     yield URL(f"http://{api_address.host}:{api_address.port}/api/v1")
     await runner.close()
+
+
+@pytest.fixture
+async def config_client(fake_config_app: URL) -> AsyncIterator[_TestConfigClient]:
+    client = _TestConfigClient(
+        base_url=fake_config_app,
+        service_token="token",
+    )
+    async with client:
+        yield client
 
 
 @pytest.fixture(scope="session")
