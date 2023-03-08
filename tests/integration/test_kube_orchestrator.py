@@ -1687,7 +1687,7 @@ class TestKubeOrchestrator:
         disk_volumes_raw = [
             v
             for v in raw["spec"]["volumes"]
-            if v.get("persistentVolumeClaim", dict()).get("claimName") == disk_id
+            if v.get("persistentVolumeClaim", {}).get("claimName") == disk_id
         ]
         assert len(disk_volumes_raw) == 1
 
@@ -3150,7 +3150,8 @@ class TestJobsPreemption:
             assert preempted == []
 
             job_pod = await kube_client.get_pod(job.id)
-            assert job_pod.status and job_pod.status.is_phase_pending
+            assert job_pod.status
+            assert job_pod.status.is_phase_pending
 
     async def test_not_enough_resources(
         self,
@@ -3167,7 +3168,8 @@ class TestJobsPreemption:
         assert preempted == []
 
         job_pod = await kube_client.get_pod(job.id)
-        assert job_pod.status and job_pod.status.is_phase_pending
+        assert job_pod.status
+        assert job_pod.status.is_phase_pending
 
     async def test_running_jobs_ignored(
         self,
@@ -3182,7 +3184,8 @@ class TestJobsPreemption:
         assert preempted == []
 
         preemptible_pod = await kube_client.get_pod(preemptible_job.id)
-        assert preemptible_pod.status and preemptible_pod.status.is_scheduled
+        assert preemptible_pod.status
+        assert preemptible_pod.status.is_scheduled
 
     async def test_no_preemptible_jobs(
         self,
@@ -3198,7 +3201,8 @@ class TestJobsPreemption:
         assert preempted == []
 
         job_pod = await kube_client.get_pod(job.id)
-        assert job_pod.status and job_pod.status.is_phase_pending
+        assert job_pod.status
+        assert job_pod.status.is_phase_pending
 
     async def test_no_jobs(
         self,
@@ -3212,4 +3216,5 @@ class TestJobsPreemption:
         assert preempted == []
 
         preemptible_pod = await kube_client.get_pod(preemptible_job.id)
-        assert preemptible_pod.status and preemptible_pod.status.is_scheduled
+        assert preemptible_pod.status
+        assert preemptible_pod.status.is_scheduled

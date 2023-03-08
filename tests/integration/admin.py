@@ -251,7 +251,6 @@ async def admin_client(
     admin_url: URL, auth_config: AuthConfig
 ) -> AsyncGenerator[AdminClient, None]:
     async with create_admin_client(admin_url, auth_config) as client:
-
         yield client
 
 
