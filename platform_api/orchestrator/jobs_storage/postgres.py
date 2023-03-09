@@ -42,6 +42,7 @@ class JobTables:
             sa.Column("name", sa.String(), nullable=True),
             sa.Column("cluster_name", sa.String(), nullable=False),
             sa.Column("org_name", sa.String(), nullable=True),
+            sa.Column("project_name", sa.String(), nullable=False),
             sa.Column("tags", sapg.JSONB(), nullable=True),
             # Denormalized fields for optimized access/unique constrains checks
             sa.Column("status", sa.String(), nullable=False),
@@ -74,6 +75,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             "name": payload.pop("name", None),
             "cluster_name": payload.pop("cluster_name"),
             "org_name": payload.pop("org_name", None),
+            "project_name": payload.pop("project_name"),
             "tags": payload.pop("tags", None),
             "status": job.status_history.current.status,
             "created_at": job.status_history.created_at,
@@ -88,6 +90,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         payload["name"] = record["name"]
         payload["cluster_name"] = record["cluster_name"]
         payload["org_name"] = record["org_name"]
+        payload["project_name"] = record["project_name"]
         if record["tags"] is not None:
             payload["tags"] = record["tags"]
         return JobRecord.from_primitive(payload)

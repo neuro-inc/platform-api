@@ -287,6 +287,7 @@ class JobRecord:
     owner: str
     status_history: JobStatusHistory
     cluster_name: str
+    project_name: str
     org_name: Optional[str] = None
     name: Optional[str] = None
     preset_name: Optional[str] = None
@@ -336,6 +337,8 @@ class JobRecord:
             kwargs["status_history"] = status_history
         if not kwargs.get("owner"):
             kwargs["owner"] = orphaned_job_owner
+        if not kwargs.get("project_name"):
+            kwargs["project_name"] = kwargs["owner"]
         return cls(**kwargs)
 
     @property
@@ -466,6 +469,7 @@ class JobRecord:
             "id": self.id,
             "owner": self.owner,
             "cluster_name": self.cluster_name,
+            "project_name": self.project_name,
             "request": self.request.to_primitive(),
             "status": self.status.value,
             "statuses": statuses,
@@ -516,16 +520,19 @@ class JobRecord:
         status_history = cls.create_status_history_from_primitive(
             request.job_id, payload
         )
+        owner = payload.get("owner") or orphaned_job_owner
+        project_name = payload.get("project_name") or owner
         return cls(
             request=request,
             status_history=status_history,
             materialized=payload.get("materialized", False),
-            owner=payload.get("owner") or orphaned_job_owner,
+            owner=owner,
             cluster_name=payload.get("cluster_name") or "",
             name=payload.get("name"),
             preset_name=payload.get("preset_name"),
             tags=payload.get("tags", ()),
             org_name=payload.get("org_name", None),
+            project_name=project_name,
             scheduler_enabled=payload.get("scheduler_enabled", None)
             or payload.get("is_preemptible", False),
             preemptible_node=payload.get("preemptible_node", None)
@@ -915,6 +922,10 @@ class Job:
     @property
     def org_name(self) -> Optional[str]:
         return self._record.org_name
+
+    @property
+    def project_name(self) -> str:
+        return self._record.project_name
 
     @property
     def priority(self) -> JobPriority:
