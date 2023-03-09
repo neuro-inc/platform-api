@@ -384,7 +384,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
             user=test_user,
@@ -407,7 +406,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
             user=test_user,
@@ -430,7 +428,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
             user=test_user,
@@ -458,7 +455,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
             user=test_user,
@@ -485,7 +481,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
             user=test_user,
@@ -510,7 +505,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         mock_job_request.container.env[NEURO_PASSED_CONFIG] = "anything"
         with pytest.raises(
             JobsServiceException,
@@ -561,7 +555,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job_name = "test-Job_name"
         request = job_request_factory()
         job_1, _ = await jobs_service.create_job(
@@ -588,7 +581,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job_name = "test-Job_name"
         request = job_request_factory()
         job_1, _ = await jobs_service.create_job(
@@ -634,7 +626,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job_name = "test-Job_name"
         request = job_request_factory()
 
@@ -698,7 +689,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job, _ = await jobs_service.create_job(
             job_request=mock_job_request, user=test_user, cluster_name=test_cluster
         )
@@ -712,7 +702,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job, _ = await jobs_service.create_job(
             job_request=mock_job_request, user=test_user, cluster_name=test_cluster
         )
@@ -748,7 +737,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job, _ = await jobs_service.create_job(
             job_request=mock_job_request, user=test_user, cluster_name=test_cluster
         )
@@ -768,7 +756,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job, _ = await jobs_service.create_job(
             job_request=mock_job_request, user=test_user, cluster_name=test_cluster
         )
@@ -790,7 +777,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job_ids = []
         num_jobs = 1000
         for _ in range(num_jobs):
@@ -866,7 +852,6 @@ class TestJobsService:
         test_cluster: str,
         user_factory: UserFactory,
     ) -> None:
-
         otheruser = await user_factory(
             "other-user", [(test_cluster, Balance(), Quota())]
         )
@@ -1445,7 +1430,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
             user=test_user,
@@ -1526,7 +1510,6 @@ class TestJobsService:
         user_factory: UserFactory,
         test_cluster: str,
     ) -> None:
-
         user = await user_factory("testuser", [(test_cluster, balance, Quota())])
         request = job_request_factory(with_gpu=True)
 
@@ -1591,7 +1574,6 @@ class TestJobsService:
         user_factory: UserFactory,
         test_cluster: str,
     ) -> None:
-
         org_name = await org_factory(
             "testorg", [(test_cluster, Balance(), Quota(total_running_jobs=5))]
         )
@@ -1645,7 +1627,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job, _ = await jobs_service.create_job(
             job_request=mock_job_request, user=test_user, cluster_name=test_cluster
         )
@@ -1660,7 +1641,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job, _ = await jobs_service.create_job(
             job_request=mock_job_request, user=test_user, cluster_name=test_cluster
         )
@@ -1684,7 +1664,6 @@ class TestJobsService:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job1, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
         )
@@ -1755,7 +1734,6 @@ class TestJobsServiceCluster:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         with pytest.raises(
             JobsServiceException, match="Cluster 'test-cluster' not found"
         ):
@@ -2155,7 +2133,6 @@ class TestJobServiceNotification:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job, _ = await jobs_service.create_job(
             job_request=mock_job_request, user=test_user, cluster_name=test_cluster
         )
@@ -2199,7 +2176,6 @@ class TestJobServiceNotification:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job, _ = await jobs_service.create_job(
             job_request=mock_job_request, user=test_user, cluster_name=test_cluster
         )
@@ -2248,7 +2224,6 @@ class TestJobServiceNotification:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
         )
@@ -2325,7 +2300,6 @@ class TestJobServiceNotification:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         job, _ = await jobs_service.create_job(
             job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
         )
@@ -2409,7 +2383,6 @@ class TestJobServiceNotification:
         test_user: AuthUser,
         test_cluster: str,
     ) -> None:
-
         with pytest.raises(JobsServiceException) as cm:
             await jobs_service.create_job(
                 job_request=mock_job_request,

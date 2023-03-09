@@ -228,7 +228,6 @@ class JobsClient:
         unreachable_optimization: bool = True,
         headers: Optional[dict[str, str]] = None,
     ) -> dict[str, Any]:
-
         # A little optimization with unreachable statuses
         unreachable_statuses_map: dict[str, list[str]] = {
             JobStatus.PENDING.value: [

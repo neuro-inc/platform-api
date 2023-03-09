@@ -37,7 +37,11 @@ pip install -e .[dev]
 ```shell
 pytest -vv tests/unit
 ```
-8. Run the integration test suite:
+9. Run the integration test suite:
 ```shell
 pytest -vv tests/integration
 ```
+
+### Debugging Tests
+Pass `-x -s --log-cli-level=DEBUG` to your `pytest` commands for better debugging
+experience.

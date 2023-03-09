@@ -1380,7 +1380,6 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         disk_client_factory: Callable[[_User], DiskAPIClient],
     ) -> None:
-
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
         )
@@ -2290,7 +2289,6 @@ class TestJobs:
             result = await jobs_client.get_job_by_id(job_id)
             assert result["history"]["reason"] == "Missing secrets: 'key1', 'key2'"
         finally:
-
             if job_id:
                 await jobs_client.delete_job(job_id)
 

@@ -968,7 +968,7 @@ class PodDescriptor:
         pod_volumes = []
         volume_mounts = []
 
-        pvc_volumes: dict[str, PVCDiskVolume] = dict()
+        pvc_volumes: dict[str, PVCDiskVolume] = {}
         for index, disk_volume in enumerate(disk_volumes, 1):
             pvc_volume = pvc_volumes.get(disk_volume.disk.disk_id)
             if pvc_volume is None:

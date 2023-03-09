@@ -35,7 +35,7 @@ class TestCannotStartJobNoCredits:
             await response.read()
         # Notification will be sent in graceful app shutdown
         await api.runner.close()
-        for (slug, request) in mock_notifications_server.requests:
+        for slug, request in mock_notifications_server.requests:
             if slug == JobCannotStartNoCredits.slug():
                 raise AssertionError("Unexpected JobCannotStartQuotaReached sent")
 
@@ -123,7 +123,7 @@ class TestJobTransition:
         # Notification will be sent in graceful app shutdown
         await api.runner.close()
 
-        for (slug, payload) in mock_notifications_server.requests:
+        for slug, payload in mock_notifications_server.requests:
             if slug == "job-transition":
                 raise AssertionError("Unexpected JobTransition sent")
 
@@ -147,7 +147,7 @@ class TestJobTransition:
         await api.runner.close()
 
         states: set[str] = set()
-        for (slug, payload) in mock_notifications_server.requests:
+        for slug, payload in mock_notifications_server.requests:
             if slug != "job-transition":
                 raise AssertionError(f"Unexpected Notification: {slug} : {payload}")
 
@@ -188,7 +188,7 @@ class TestJobTransition:
         await api.runner.close()
 
         states: set[str] = set()
-        for (slug, payload) in mock_notifications_server.requests:
+        for slug, payload in mock_notifications_server.requests:
             if slug != "job-transition":
                 raise AssertionError(f"Unexpected Notification: {slug} : {payload}")
 

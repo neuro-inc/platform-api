@@ -126,7 +126,6 @@ async def _wait_for_postgres_server(
 
 @pytest.fixture
 async def postgres_config(postgres_dsn: str) -> AsyncIterator[PostgresConfig]:
-
     db_config = PostgresConfig(
         postgres_dsn=postgres_dsn,
         alembic=EnvironConfigFactory().create_alembic(postgres_dsn),

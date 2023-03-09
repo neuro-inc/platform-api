@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Mapping
@@ -39,6 +40,7 @@ from platform_api.config import (
     ServerConfig,
     StorageConfig,
 )
+from platform_api.config_client import ConfigClient
 from platform_api.orchestrator.job_request import JobNotFoundException
 from platform_api.orchestrator.kube_client import (
     AlreadyExistsException,
@@ -75,7 +77,13 @@ def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
 @pytest.fixture(scope="session")
 async def kube_config_payload() -> dict[str, Any]:
     process = await asyncio.create_subprocess_exec(
-        "kubectl", "config", "view", "-o", "json", stdout=asyncio.subprocess.PIPE
+        "kubectl",
+        "config",
+        "view",
+        "--raw",
+        "-o",
+        "json",
+        stdout=asyncio.subprocess.PIPE,
     )
     output, _ = await process.communicate()
     payload_str = output.decode().rstrip()
@@ -96,17 +104,35 @@ async def kube_config_cluster_payload(kube_config_payload: dict[str, Any]) -> An
 def cert_authority_data_pem(
     kube_config_cluster_payload: dict[str, Any]
 ) -> Optional[str]:
-    ca_path = kube_config_cluster_payload["certificate-authority"]
-    if ca_path:
-        return Path(ca_path).read_text()
+    if "certificate-authority" in kube_config_cluster_payload:
+        ca_path = kube_config_cluster_payload["certificate-authority"]
+        if ca_path:
+            return Path(ca_path).read_text()
+    elif "certificate-authority-data" in kube_config_cluster_payload:
+        return base64.b64decode(
+            kube_config_cluster_payload["certificate-authority-data"]
+        ).decode()
     return None
 
 
 @pytest.fixture(scope="session")
 async def kube_config_user_payload(kube_config_payload: dict[str, Any]) -> Any:
+    import tempfile
+
     user_name = "minikube"
     users = {user["name"]: user["user"] for user in kube_config_payload["users"]}
-    return users[user_name]
+    user = users[user_name]
+    if "client-certificate-data" in user:
+        with tempfile.NamedTemporaryFile(delete=False) as cert_file:
+            cert_file.write(base64.b64decode(user["client-certificate-data"]))
+            cert_file.flush()
+            user["client-certificate"] = cert_file.name
+    if "client-key-data" in user:
+        with tempfile.NamedTemporaryFile(delete=False) as key_file:
+            key_file.write(base64.b64decode(user["client-key-data"]))
+            key_file.flush()
+            user["client-key"] = key_file.name
+    return user
 
 
 @pytest.fixture(scope="session")
@@ -530,7 +556,6 @@ class MyKubeClient(KubeClient):
 @pytest.fixture(scope="session")
 async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeClient]:
     def _f(custom_kube_config: Optional[KubeConfig] = None) -> MyKubeClient:
-
         config = custom_kube_config or kube_config
         kube_client = MyKubeClient(
             base_url=config.endpoint_url,
@@ -922,4 +947,10 @@ class ApiRunner:
 
     @property
     def closed(self) -> bool:
-        return not bool(self._task)
+        return not self._task
+
+
+class _TestConfigClient(ConfigClient):
+    async def create_cluster(self, *, name: str) -> None:
+        async with self._request("POST", "clusters", json={"name": name}):
+            pass

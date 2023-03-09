@@ -80,7 +80,6 @@ async def create_app(
 
     async def _init_app(app: aiohttp.web.Application) -> AsyncIterator[None]:
         async with AsyncExitStack() as exit_stack:
-
             logger.info("Initializing AuthClient")
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
@@ -144,6 +143,8 @@ async def create_app(
                 cluster_holder=cluster_holder,
                 cluster_name=config.cluster_name,
             )
+            if cluster:
+                cluster_updater.disable_updates_for_test = True
 
             logger.info("Initializing JobsPoller")
             jobs_poller = JobsPoller(
@@ -153,7 +154,6 @@ async def create_app(
 
             if cluster:
                 await cluster_holder.update(cluster)
-                cluster_updater.disable_updates_for_test = True
             else:
                 await cluster_updater.do_update()
 
