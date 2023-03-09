@@ -530,7 +530,6 @@ class MyKubeClient(KubeClient):
 @pytest.fixture(scope="session")
 async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeClient]:
     def _f(custom_kube_config: Optional[KubeConfig] = None) -> MyKubeClient:
-
         config = custom_kube_config or kube_config
         kube_client = MyKubeClient(
             base_url=config.endpoint_url,
@@ -922,4 +921,4 @@ class ApiRunner:
 
     @property
     def closed(self) -> bool:
-        return not bool(self._task)
+        return not self._task

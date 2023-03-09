@@ -80,7 +80,6 @@ async def create_app(
 
     async def _init_app(app: aiohttp.web.Application) -> AsyncIterator[None]:
         async with AsyncExitStack() as exit_stack:
-
             logger.info("Initializing AuthClient")
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
