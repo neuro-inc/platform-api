@@ -111,7 +111,6 @@ class TestJobsStorage:
             await storage.drop_job(original_job.id)
 
     async def test_try_create_job__no_name__ok(self, storage: JobsStorage) -> None:
-
         pending_job = self._create_pending_job()
         async with storage.try_create_job(pending_job) as job:
             assert pending_job.status == JobStatus.PENDING
@@ -163,7 +162,6 @@ class TestJobsStorage:
     async def test_try_create_job__different_name_same_owner__ok(
         self, storage: JobsStorage
     ) -> None:
-
         owner = "test-user-1"
         job_name_1 = "some-test-job-name-1"
         job_name_2 = "some-test-job-name-2"
@@ -187,7 +185,6 @@ class TestJobsStorage:
     async def test_try_create_job__same_name_different_owner__ok(
         self, storage: JobsStorage
     ) -> None:
-
         owner_1 = "test-user-1"
         job_name_1 = "some-test-job-name-1"
         owner_2 = "test-user-2"
@@ -213,7 +210,6 @@ class TestJobsStorage:
     async def test_try_create_job__same_name_with_an_active_job__conflict(
         self, storage: JobsStorage, first_job_status: JobStatus
     ) -> None:
-
         owner = "test-user"
         job_name = "some-test-job-name"
 
@@ -239,7 +235,6 @@ class TestJobsStorage:
     async def test_try_create_job__same_name_and_base_owner_with_active_job__conflict(
         self, storage: JobsStorage, first_job_status: JobStatus
     ) -> None:
-
         owner = "test-user"
         job_name = "some-test-job-name"
 
@@ -322,7 +317,6 @@ class TestJobsStorage:
         assert job.status == JobStatus.PENDING
 
     async def test_try_create_job_with_tags(self, storage: JobsStorage) -> None:
-
         tags = ["tag1", "tag2"]
         job = self._create_job(tags=tags)
         async with storage.try_create_job(job) as job:
@@ -337,7 +331,6 @@ class TestJobsStorage:
             await storage.get_job("unknown")
 
     async def test_get_all_no_filter_empty_result(self, storage: JobsStorage) -> None:
-
         jobs = await storage.get_all_jobs()
         assert not jobs
 
@@ -1228,7 +1221,6 @@ class TestJobsStorage:
         assert job_ids == []
 
     async def test_get_running_empty(self, storage: JobsStorage) -> None:
-
         jobs = await storage.get_running_jobs()
         assert not jobs
 
@@ -1451,7 +1443,6 @@ class TestJobsStorage:
     async def test_try_update_job__different_name_same_owner__ok(
         self, storage: JobsStorage
     ) -> None:
-
         owner = "test-user-1"
         job_name_1 = "some-test-job-name-1"
         job_name_2 = "some-test-job-name-2"
@@ -1478,7 +1469,6 @@ class TestJobsStorage:
     async def test_try_update_job__same_name_different_owner__ok(
         self, storage: JobsStorage
     ) -> None:
-
         owner_1 = "test-user-1"
         owner_2 = "test-user-2"
         job_name = "some-test-job-name"
