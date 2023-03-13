@@ -1727,6 +1727,7 @@ async def test_parse_response(mock_orchestrator: MockOrchestrator) -> None:
             name="test-job-name",
             scheduler_enabled=True,
             energy_schedule_name="green",
+            project_name="test-project",
         ),
     )
 
@@ -1748,6 +1749,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
             cluster_name="test-cluster",
             org_name="test-tenant-id",
             name="test-job-name",
+            project_name="test-project",
         ),
     )
     response = convert_job_to_job_response(job)
@@ -1756,6 +1758,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "owner": "compute",
         "cluster_name": "test-cluster",
         "org_name": "test-tenant-id",
+        "project_name": "test-project",
         "status": "pending",
         "statuses": [
             {
@@ -1863,6 +1866,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "id": job.id,
         "owner": owner_name,
         "cluster_name": "test-cluster",
+        "project_name": owner_name,
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         "http_url_named": f"http://{job_name}--{owner_name}.jobs",
@@ -1932,6 +1936,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "id": job.id,
         "owner": owner_name,
         "cluster_name": "test-cluster",
+        "project_name": owner_name,
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         "http_url_named": f"http://{job_name}--{owner_name}.jobs",

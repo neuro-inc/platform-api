@@ -439,6 +439,7 @@ def convert_job_to_job_response(job: Job) -> dict[str, Any]:
         "id": job.id,
         "owner": job.owner,
         "cluster_name": job.cluster_name,
+        "project_name": job.project_name,
         "status": current_status.status,
         "statuses": [item.to_primitive() for item in history.all],
         "history": {
