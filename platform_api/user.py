@@ -9,10 +9,17 @@ from yarl import URL
 logger = logging.getLogger(__name__)
 
 
-def make_job_uri(user: AuthUser, cluster_name: str, org_name: Optional[str]) -> URL:
-    if org_name is None:
-        return URL.build(scheme="job", host=cluster_name) / user.name
-    return URL.build(scheme="job", host=cluster_name) / org_name / user.name
+def make_job_uri(
+    user: AuthUser,
+    cluster_name: str,
+    org_name: Optional[str],
+    project_name: Optional[str] = None,
+) -> URL:
+    return (
+        URL.build(scheme="job", host=cluster_name)
+        / (org_name or "")
+        / (project_name or user.name)
+    )
 
 
 async def untrusted_user(request: Request) -> AuthUser:

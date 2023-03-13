@@ -138,6 +138,7 @@ def create_job_request_validator(
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=1),
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
             t.Key("org_name", default=org_name): t.Atom(org_name),
+            t.Key("project_name", optional=True): t.String,
             t.Key("restart_policy", default=str(JobRestartPolicy.NEVER)): t.Enum(
                 *(str(policy) for policy in JobRestartPolicy)
             )
@@ -233,12 +234,16 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
 
 
 def create_job_cluster_org_name_validator(
-    default_cluster_name: str, default_org_name: Optional[str]
+    *,
+    default_cluster_name: str,
+    default_org_name: Optional[str],
+    default_project_name: str,
 ) -> t.Trafaret:
     return t.Dict(
         {
             t.Key("cluster_name", default=default_cluster_name): t.String,
             t.Key("org_name", default=default_org_name): t.String | t.Null,
+            t.Key("project_name", default=default_project_name): t.String,
         }
     ).allow_extra("*")
 
@@ -254,6 +259,7 @@ def create_job_response_validator() -> t.Trafaret:
             "owner": t.String(allow_blank=True),
             "cluster_name": t.String(allow_blank=False),
             t.Key("org_name", optional=True): t.String,
+            "project_name": t.String(allow_blank=False),
             "uri": t.String(allow_blank=False),
             # `status` is left for backward compat. the python client/cli still
             # relies on it.
@@ -509,6 +515,7 @@ def infer_permissions_from_container(
     registry_host: str,
     cluster_name: str,
     org_name: Optional[str],
+    project_name: str,
 ) -> list[Permission]:
     permissions = [
         Permission(uri=str(make_job_uri(user, cluster_name, org_name)), action="write")
@@ -666,11 +673,14 @@ class JobsHandler:
             default_org_name = cluster_config_for_default_org.orgs[0]
 
         job_cluster_org_name_validator = create_job_cluster_org_name_validator(
-            default_cluster_name, default_org_name
+            default_cluster_name=default_cluster_name,
+            default_org_name=default_org_name,
+            default_project_name=user.name,
         )
         request_payload = job_cluster_org_name_validator.check(orig_payload)
         cluster_name = request_payload["cluster_name"]
         org_name = request_payload["org_name"]
+        project_name = request_payload["project_name"]
         cluster_config = self._get_cluster_config(
             cluster_configs, cluster_name, org_name
         )
@@ -697,6 +707,7 @@ class JobsHandler:
             cluster_config.ingress.registry_host,
             cluster_name,
             org_name,
+            project_name,
         )
         await check_permissions(request, permissions)
 
@@ -718,6 +729,7 @@ class JobsHandler:
             user=user,
             cluster_name=cluster_name,
             org_name=org_name,
+            project_name=project_name,
             job_name=name,
             preset_name=preset_name,
             tags=tags,

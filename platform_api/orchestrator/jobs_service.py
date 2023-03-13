@@ -222,6 +222,7 @@ class JobsService:
         cluster_name: str,
         *,
         org_name: Optional[str] = None,
+        project_name: Optional[str] = None,
         job_name: Optional[str] = None,
         preset_name: Optional[str] = None,
         tags: Sequence[str] = (),
@@ -236,6 +237,7 @@ class JobsService:
         priority: JobPriority = JobPriority.NORMAL,
         energy_schedule_name: Optional[str] = None,
     ) -> tuple[Job, Status]:
+        project_name = project_name or user.name
         base_name = user.name.split("/", 1)[
             0
         ]  # SA has access to same clusters as a user
@@ -281,6 +283,7 @@ class JobsService:
             owner=user.name,
             cluster_name=cluster_name,
             org_name=org_name,
+            project_name=project_name,
             status_history=JobStatusHistory(
                 [
                     JobStatusItem.create(
