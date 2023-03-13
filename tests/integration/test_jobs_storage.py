@@ -115,8 +115,10 @@ class TestJobsStorage:
         async with storage.try_create_job(pending_job) as job:
             assert pending_job.status == JobStatus.PENDING
             assert job.id == pending_job.id
+            assert job.project_name == "compute"
             job.status = JobStatus.RUNNING
         result_job = await storage.get_job(pending_job.id)
+        assert result_job.project_name == "compute"
         assert result_job.status == JobStatus.RUNNING
 
         running_job = self._create_running_job()
@@ -126,6 +128,17 @@ class TestJobsStorage:
             job.status = JobStatus.SUCCEEDED
         result_job = await storage.get_job(running_job.id)
         assert result_job.status == JobStatus.SUCCEEDED
+
+    async def test_try_create_job__project_name__ok(self, storage: JobsStorage) -> None:
+        pending_job = self._create_pending_job(project_name="project")
+        async with storage.try_create_job(pending_job) as job:
+            assert pending_job.status == JobStatus.PENDING
+            assert job.id == pending_job.id
+            assert job.project_name == "project"
+            job.status = JobStatus.RUNNING
+        result_job = await storage.get_job(pending_job.id)
+        assert result_job.project_name == "project"
+        assert result_job.status == JobStatus.RUNNING
 
     async def test_try_create_job__no_name__job_changed_while_creation(
         self, storage: JobsStorage
@@ -593,6 +606,32 @@ class TestJobsStorage:
             self._create_pending_job(
                 owner="user4/service-accounts/test", job_name="jobname4"
             ),
+            # project1, user1, jobname3:
+            self._create_succeeded_job(
+                project_name="project1", owner="user1", job_name="jobname3"
+            ),
+            self._create_failed_job(
+                project_name="project1", owner="user1", job_name="jobname3"
+            ),
+            self._create_cancelled_job(
+                project_name="project1", owner="user1", job_name="jobname3"
+            ),
+            self._create_pending_job(
+                project_name="project1", owner="user1", job_name="jobname3"
+            ),
+            # project2, user1, jobname3:
+            self._create_succeeded_job(
+                project_name="project2", owner="user1", job_name="jobname4"
+            ),
+            self._create_failed_job(
+                project_name="project2", owner="user1", job_name="jobname4"
+            ),
+            self._create_cancelled_job(
+                project_name="project2", owner="user1", job_name="jobname4"
+            ),
+            self._create_pending_job(
+                project_name="project2", owner="user1", job_name="jobname4"
+            ),
         ]
         for job in jobs:
             async with storage.try_create_job(job):
@@ -696,6 +735,78 @@ class TestJobsStorage:
                 for job in jobs
                 if (not name or job.name == name)
                 and (not owners or job.owner in owners)
+                and (not statuses or job.status in statuses)
+            ]
+        )
+        assert actual == expected
+
+    @pytest.mark.parametrize(
+        "projects,statuses",
+        [
+            ((), ()),
+            ((), (pend,)),
+            ((), (pend, runn)),
+            ((), (succ, fail)),
+            ((), (succ, fail, runn)),
+            ((), (succ, fail, runn, pend)),
+            ((), (succ, canc, fail, runn, pend)),
+            (("user1",), ()),
+            (("user1",), (pend,)),
+            (("user1",), (pend, runn)),
+            (("user1",), (succ, fail)),
+            (("user1",), (succ, fail, runn, pend)),
+            (("user1",), (succ, canc, fail, runn, pend)),
+            (("user1", "user2"), ()),
+            (("user1", "user2"), (pend,)),
+            (("user1", "user2"), (pend, runn)),
+            (("user1", "user2"), (succ, fail)),
+            (("user1", "user2"), (succ, fail, runn, pend)),
+            (("user1", "user2"), (succ, canc, fail, runn, pend)),
+            (("user1",), ()),
+            (("user1",), (pend,)),
+            (("user1",), (pend, runn)),
+            (("user1",), (succ, fail)),
+            (("user1",), (succ, fail, runn, pend)),
+            (("user1",), (succ, canc, fail, runn, pend)),
+            (("user1", "user2"), ()),
+            (("user1", "user2"), (pend,)),
+            (("user1", "user2"), (pend, runn)),
+            (("user1", "user2"), (succ, fail)),
+            (("user1", "user2"), (succ, fail, runn, pend)),
+            (("user1", "user2"), (succ, canc, fail, runn, pend)),
+            (("project1",), ()),
+            (("project1",), (pend,)),
+            (("project1",), (pend, runn)),
+            (("project1",), (succ, fail)),
+            (("project1",), (succ, fail, runn, pend)),
+            (("project1",), (succ, canc, fail, runn, pend)),
+            (("project1", "project2"), ()),
+            (("project1", "project2"), (pend,)),
+            (("project1", "project2"), (pend, runn)),
+            (("project1", "project2"), (succ, fail)),
+            (("project1", "project2"), (succ, fail, runn, pend)),
+            (("project1", "project2"), (succ, canc, fail, runn, pend)),
+        ],
+    )
+    async def test_get_all__filter_by_projects_and_statuses(
+        self,
+        projects: tuple[str, ...],
+        statuses: tuple[JobStatus, ...],
+        storage: JobsStorage,
+    ) -> None:
+        def sort_jobs_as_primitives(array: list[JobRecord]) -> list[dict[str, Any]]:
+            return sorted(
+                (job.to_primitive() for job in array), key=lambda job: job["id"]
+            )
+
+        jobs = await self.prepare_filtering_test(storage)
+        job_filter = JobFilter(projects=set(projects), statuses=set(statuses))
+        actual = sort_jobs_as_primitives(await storage.get_all_jobs(job_filter))
+        expected = sort_jobs_as_primitives(
+            [
+                job
+                for job in jobs
+                if (not projects or job.project_name in projects)
                 and (not statuses or job.status in statuses)
             ]
         )

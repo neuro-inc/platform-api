@@ -374,6 +374,9 @@ class JobFilterClauseBuilder:
             )
         self._clauses.append(or_(*cluster_clauses))
 
+    def filter_projects(self, projects: Set[str]) -> None:
+        self._clauses.append(self._tables.jobs.c.project_name.in_(projects))
+
     def filter_orgs(self, orgs: Set[Optional[str]]) -> None:
         not_null_orgs = [org for org in orgs if org is not None]
         or_clauses = []
@@ -435,6 +438,8 @@ class JobFilterClauseBuilder:
             builder.filter_clusters(job_filter.clusters)
         if job_filter.orgs:
             builder.filter_orgs(job_filter.orgs)
+        if job_filter.projects:
+            builder.filter_projects(job_filter.projects)
         if job_filter.name:
             builder.filter_name(job_filter.name)
         if job_filter.ids:

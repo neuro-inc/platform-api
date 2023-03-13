@@ -41,6 +41,7 @@ class JobFilter:
         default_factory=cast(type[Set[Optional[str]]], set)
     )
     owners: Set[str] = field(default_factory=cast(type[Set[str]], set))
+    projects: Set[str] = field(default_factory=cast(type[Set[str]], set))
     base_owners: Set[str] = field(default_factory=cast(type[Set[str]], set))
     tags: Set[str] = field(default_factory=cast(type[Set[str]], set))
     name: Optional[str] = None
@@ -59,7 +60,10 @@ class JobFilter:
             return False
         if self.base_owners and job.base_owner not in self.base_owners:
             return False
+        if self.projects and job.project_name not in self.projects:
+            return False
         if self.clusters:
+            # TODO: this also must be patched. we need job URLs to have project names
             orgs = self.clusters.get(job.cluster_name)
             if orgs is None:
                 return False

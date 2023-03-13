@@ -877,6 +877,7 @@ class TestJob:
             "name": "test-job-name",
             "owner": "testuser",
             "cluster_name": "test-cluster",
+            "project_name": "testuser",
             "request": job_request.to_primitive(),
             "status": "failed",
             "materialized": False,
@@ -922,6 +923,7 @@ class TestJob:
             "id": "testjob",
             "owner": "compute",
             "cluster_name": "test-cluster",
+            "project_name": "compute",
             "request": job_request.to_primitive(),
             "status": "pending",
             "statuses": [
@@ -1316,6 +1318,7 @@ class TestJob:
             "request": job_request_payload,
             "owner": "user",
             "cluster_name": "testcluster",
+            "project_name": "project",
             "status": current_status_item["status"],
             "statuses": [current_status_item],
             "materialized": False,
