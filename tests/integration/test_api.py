@@ -4919,6 +4919,7 @@ class TestJobs:
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
+                "project_name": regular_user.name,
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "statuses": [
@@ -4975,6 +4976,7 @@ class TestJobs:
             "id": job_id,
             "owner": regular_user.name,
             "cluster_name": "test-cluster",
+            "project_name": regular_user.name,
             "internal_hostname": f"{job_id}.platformapi-tests",
             "status": "succeeded",
             "statuses": mock.ANY,
@@ -5070,6 +5072,7 @@ class TestJobs:
             "id": job_id,
             "owner": regular_user.name,
             "cluster_name": "test-cluster",
+            "project_name": regular_user.name,
             "status": "failed",
             "statuses": mock.ANY,
             "internal_hostname": f"{job_id}.platformapi-tests",
@@ -5190,6 +5193,7 @@ class TestJobs:
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
+                "project_name": regular_user.name,
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "statuses": [
@@ -5297,6 +5301,7 @@ class TestJobs:
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
+                "project_name": regular_user.name,
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "statuses": [
