@@ -360,10 +360,15 @@ class TestJobClusterNameValidator:
         request = {
             "container": container,
         }
-        validator = create_job_cluster_org_name_validator("default", None)
+        validator = create_job_cluster_org_name_validator(
+            default_cluster_name="default",
+            default_org_name=None,
+            default_project_name="default-project",
+        )
         payload = validator.check(request)
         assert payload["cluster_name"] == "default"
         assert payload["org_name"] is None
+        assert payload["project_name"] == "default-project"
 
     def test_without_org_name(self) -> None:
         container = {
@@ -374,10 +379,15 @@ class TestJobClusterNameValidator:
         request = {
             "container": container,
         }
-        validator = create_job_cluster_org_name_validator("default", "some_org")
+        validator = create_job_cluster_org_name_validator(
+            default_cluster_name="default",
+            default_org_name="some_org",
+            default_project_name="default-project",
+        )
         payload = validator.check(request)
         assert payload["cluster_name"] == "default"
         assert payload["org_name"] == "some_org"
+        assert payload["project_name"] == "default-project"
 
     def test_with_cluster_name(self) -> None:
         container = {
@@ -389,7 +399,11 @@ class TestJobClusterNameValidator:
             "cluster_name": "testcluster",
             "container": container,
         }
-        validator = create_job_cluster_org_name_validator("default", None)
+        validator = create_job_cluster_org_name_validator(
+            default_cluster_name="default",
+            default_org_name=None,
+            default_project_name="default-project",
+        )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
         assert payload["org_name"] is None
@@ -405,13 +419,21 @@ class TestJobClusterNameValidator:
             "org_name": "testorg",
             "container": container,
         }
-        validator = create_job_cluster_org_name_validator("default", None)
+        validator = create_job_cluster_org_name_validator(
+            default_cluster_name="default",
+            default_org_name=None,
+            default_project_name="default-project",
+        )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
         assert payload["org_name"] == "testorg"
 
     def test_invalid_payload_type(self) -> None:
-        validator = create_job_cluster_org_name_validator("default", None)
+        validator = create_job_cluster_org_name_validator(
+            default_cluster_name="default",
+            default_org_name=None,
+            default_project_name="default-project",
+        )
         with pytest.raises(DataError):
             validator.check([])
 
@@ -419,7 +441,11 @@ class TestJobClusterNameValidator:
         request = {
             "cluster_name": 123,
         }
-        validator = create_job_cluster_org_name_validator("default", None)
+        validator = create_job_cluster_org_name_validator(
+            default_cluster_name="default",
+            default_org_name=None,
+            default_project_name="default-project",
+        )
         with pytest.raises(DataError, match="value is not a string"):
             validator.check(request)
 
@@ -427,7 +453,47 @@ class TestJobClusterNameValidator:
         request = {
             "org_name": 123,
         }
-        validator = create_job_cluster_org_name_validator("default", None)
+        validator = create_job_cluster_org_name_validator(
+            default_cluster_name="default",
+            default_org_name=None,
+            default_project_name="default-project",
+        )
+        with pytest.raises(DataError, match="value is not a string"):
+            validator.check(request)
+
+    def test_with_project_name(self) -> None:
+        container = {
+            "image": "testimage",
+            "command": "arg1 arg2 arg3",
+            "resources": {"cpu": 0.1, "memory_mb": 16, "shm": True},
+        }
+        request = {
+            "cluster_name": "testcluster",
+            "org_name": "testorg",
+            "project_name": "testproject",
+            "container": container,
+        }
+        validator = create_job_cluster_org_name_validator(
+            default_cluster_name="default",
+            default_org_name=None,
+            default_project_name="default-project",
+        )
+        payload = validator.check(request)
+        assert payload["cluster_name"] == "testcluster"
+        assert payload["org_name"] == "testorg"
+        assert payload["project_name"] == "testproject"
+
+    def test_invalid_project_name_type(self) -> None:
+        request = {
+            "cluster_name": "testcluster",
+            "org_name": "testorg",
+            "project_name": 123,
+        }
+        validator = create_job_cluster_org_name_validator(
+            default_cluster_name="default",
+            default_org_name=None,
+            default_project_name="default-project",
+        )
         with pytest.raises(DataError, match="value is not a string"):
             validator.check(request)
 
@@ -1618,10 +1684,11 @@ class TestInferPermissionsFromContainer:
             container,
             "example.com",
             "test-cluster",
-            org_name=None,
+            None,
+            project_name="testproject",
         )
         assert permissions == [
-            Permission(uri="job://test-cluster/testuser", action="write")
+            Permission(uri="job://test-cluster/testproject", action="write")
         ]
 
     def test_volumes(self) -> None:
@@ -1647,9 +1714,10 @@ class TestInferPermissionsFromContainer:
             "http://example.com",
             "test-cluster",
             org_name=None,
+            project_name="testproject",
         )
         assert permissions == [
-            Permission(uri="job://test-cluster/testuser", action="write"),
+            Permission(uri="job://test-cluster/testproject", action="write"),
             Permission(uri="storage://test-cluster/testuser/dataset", action="read"),
             Permission(uri="storage://test-cluster/testuser/result", action="write"),
         ]
@@ -1666,9 +1734,10 @@ class TestInferPermissionsFromContainer:
             "example.com",
             "test-cluster",
             org_name=None,
+            project_name="testproject",
         )
         assert permissions == [
-            Permission(uri="job://test-cluster/testuser", action="write"),
+            Permission(uri="job://test-cluster/testproject", action="write"),
             Permission(uri="image://test-cluster/testuser/image", action="read"),
         ]
 

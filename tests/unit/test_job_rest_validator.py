@@ -242,6 +242,7 @@ class TestJobResponseValidator:
             "id": "test-job-id",
             "owner": "tests",
             "cluster_name": "cluster-name",
+            "project_name": "project",
             "status": "pending",
             "statuses": [
                 {
@@ -287,6 +288,7 @@ class TestJobResponseValidator:
             "id": "test-job-id",
             "owner": "tests",
             "cluster_name": "cluster-name",
+            "project_name": "project",
             "status": "pending",
             "statuses": [
                 {
@@ -332,6 +334,7 @@ class TestJobResponseValidator:
             "id": "test-job-id",
             "owner": "tests",
             "cluster_name": "cluster-name",
+            "project_name": "project",
             "status": "pending",
             "statuses": [
                 {
@@ -377,6 +380,7 @@ class TestJobResponseValidator:
             "id": "test-job-id",
             "owner": "tests",
             "cluster_name": "cluster-name",
+            "project_name": "project",
             "status": "pending",
             "statuses": [
                 {
@@ -424,6 +428,7 @@ class TestJobResponseValidator:
             "id": "test-job-id",
             "owner": "tests",
             "cluster_name": "cluster-name",
+            "project_name": "project",
             "status": "pending",
             "statuses": [
                 {
@@ -469,6 +474,7 @@ class TestJobResponseValidator:
             "id": "test-job-id",
             "owner": "tests",
             "cluster_name": "cluster-name",
+            "project_name": "project",
             "status": "pending",
             "statuses": [
                 {
@@ -511,6 +517,7 @@ class TestJobResponseValidator:
             "id": "test-job-id",
             "owner": "tests",
             "cluster_name": "cluster-name",
+            "project_name": "project",
             "status": "pending",
             "statuses": [
                 {
@@ -558,6 +565,7 @@ class TestJobResponseValidator:
             "id": "test-job-id",
             "owner": "tests",
             "cluster_name": "cluster-name",
+            "project_name": "project",
             "status": "pending",
             "statuses": [
                 {
@@ -602,6 +610,7 @@ class TestJobResponseValidator:
             "id": "test-job-id",
             "owner": "tests",
             "cluster_name": "cluster-name",
+            "project_name": "project",
             "status": "pending",
             "statuses": [
                 {
@@ -645,6 +654,7 @@ class TestJobResponseValidator:
             "id": "test-job-id",
             "owner": "tests",
             "cluster_name": "cluster-name",
+            "project_name": "project",
             "status": "pending",
             "statuses": [
                 {
@@ -686,6 +696,7 @@ class TestJobResponseValidator:
             "id": "test-job-id",
             "owner": "tests",
             "cluster_name": "cluster-name",
+            "project_name": "project",
             "status": "pending",
             "statuses": [
                 {

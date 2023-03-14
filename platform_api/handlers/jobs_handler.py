@@ -515,10 +515,16 @@ def infer_permissions_from_container(
     registry_host: str,
     cluster_name: str,
     org_name: Optional[str],
+    *,
     project_name: str,
 ) -> list[Permission]:
     permissions = [
-        Permission(uri=str(make_job_uri(user, cluster_name, org_name)), action="write")
+        Permission(
+            uri=str(
+                make_job_uri(user, cluster_name, org_name, project_name=project_name)
+            ),
+            action="write",
+        )
     ]
     if container.belongs_to_registry(registry_host):
         permissions.append(
@@ -707,7 +713,7 @@ class JobsHandler:
             cluster_config.ingress.registry_host,
             cluster_name,
             org_name,
-            project_name,
+            project_name=project_name,
         )
         await check_permissions(request, permissions)
 
