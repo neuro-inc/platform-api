@@ -686,6 +686,50 @@ class TestApi:
 
 
 class TestJobs:
+    async def test_create_job__explicit_project_name__forbidden(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        project_name = random_str()
+        job_submit["project_name"] = project_name
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPForbidden.status_code, await response.text()
+            result = await response.json()
+            assert result == {
+                "missing": [
+                    {
+                        "uri": f"job://{regular_user.cluster_name}/{project_name}",
+                        "action": "write",
+                    }
+                ]
+            }
+
+    async def test_create_job__explicit_project_name__bad_request(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: dict[str, Any],
+        jobs_client: JobsClient,
+        regular_user: _User,
+    ) -> None:
+        url = api.jobs_base_url
+        project_name = "_"
+        job_submit["project_name"] = project_name
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPBadRequest.status_code, await response.text()
+            result = await response.json()
+            assert result == {"error": mock.ANY}
+            assert "project_name" in result["error"]
+
     async def test_create_job_with_http(
         self,
         api: ApiConfig,
