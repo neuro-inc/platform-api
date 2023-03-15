@@ -381,12 +381,12 @@ class TestJobClusterNameValidator:
         }
         validator = create_job_cluster_org_name_validator(
             default_cluster_name="default",
-            default_org_name="some_org",
+            default_org_name="some-org",
             default_project_name="default-project",
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "default"
-        assert payload["org_name"] == "some_org"
+        assert payload["org_name"] == "some-org"
         assert payload["project_name"] == "default-project"
 
     def test_with_cluster_name(self) -> None:

@@ -242,9 +242,14 @@ def create_job_cluster_org_name_validator(
 ) -> t.Trafaret:
     return t.Dict(
         {
-            t.Key("cluster_name", default=default_cluster_name): t.String,
-            t.Key("org_name", default=default_org_name): t.String | t.Null,
-            t.Key("project_name", default=default_project_name): t.String,
+            t.Key(
+                "cluster_name", default=default_cluster_name
+            ): create_cluster_name_validator(),
+            t.Key("org_name", default=default_org_name): create_org_name_validator()
+            | t.Null,
+            t.Key(
+                "project_name", default=default_project_name
+            ): create_project_name_validator(),
         }
     ).allow_extra("*")
 
