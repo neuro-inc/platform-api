@@ -164,7 +164,11 @@ class SecretsClient:
         return base64.b64encode(value.encode()).decode()
 
     async def create_secret(
-        self, key: str, value: str, org_name: Optional[str] = None
+        self,
+        key: str,
+        value: str,
+        org_name: Optional[str] = None,
+        project_name: Optional[str] = None,
     ) -> None:
         url = self._base_url / "secrets"
         payload = {
@@ -172,10 +176,18 @@ class SecretsClient:
             "value": self._base64_encode(value),
             "org_name": org_name,
         }
+        if project_name:
+            payload["project_name"] = project_name
+        expected_project_name = project_name or self._user_name
         async with self._client.post(url, json=payload) as resp:
             assert resp.status == 201, await resp.text()
             data = await resp.json()
-            assert data == {"key": key, "org_name": org_name, "owner": self._user_name}
+            assert data == {
+                "key": key,
+                "org_name": org_name,
+                "owner": self._user_name,
+                "project_name": expected_project_name,
+            }
 
 
 @asynccontextmanager

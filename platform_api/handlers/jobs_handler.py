@@ -63,6 +63,7 @@ from .validators import (
     create_job_status_validator,
     create_job_tag_validator,
     create_org_name_validator,
+    create_project_name_validator,
     create_user_name_validator,
     sanitize_dns_name,
 )
@@ -1043,6 +1044,7 @@ class JobFilterFactory:
         self._base_owner_name_validator = create_base_owner_name_validator()
         self._cluster_name_validator = create_cluster_name_validator()
         self._org_name_validator = create_org_name_validator()
+        self._project_name_validator = create_project_name_validator()
 
     def create_from_query(self, query: MultiDictProxy) -> JobFilter:  # type: ignore
         statuses = {JobStatus(s) for s in query.getall("status", [])}
@@ -1070,6 +1072,10 @@ class JobFilterFactory:
                 self._org_name_validator.check(org_name)
                 for org_name in query.getall("org_name", [])
             }
+            projects = {
+                self._project_name_validator.check(project_name)
+                for project_name in query.getall("project_name", [])
+            }
             since = query.get("since")
             until = query.get("until")
             return JobFilter(
@@ -1078,6 +1084,7 @@ class JobFilterFactory:
                 orgs=orgs,
                 owners=owners,
                 base_owners=base_owners,
+                projects=projects,
                 name=job_name,
                 tags=tags,
                 since=iso8601.parse_date(since) if since else JobFilter.since,

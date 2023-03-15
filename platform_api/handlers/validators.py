@@ -16,6 +16,7 @@ USER_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
 ROLE_NAME_PATTERN = r"\A[a-z0-9](?:[-/]?[a-z0-9])*\Z"
 CLUSTER_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
 ORG_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
+PROJECT_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
 JOB_TAG_PATTERN = r"\A(?:\S)*\Z"
 
 # Since the client supports job-names to be interchangeable with job-IDs
@@ -62,6 +63,10 @@ def create_cluster_name_validator() -> t.Trafaret:
 
 def create_org_name_validator() -> t.Trafaret:
     return t.String(min_length=3, max_length=255) & t.Regexp(ORG_NAME_PATTERN)
+
+
+def create_project_name_validator() -> t.Trafaret:
+    return t.String(min_length=3, max_length=255) & t.Regexp(PROJECT_NAME_PATTERN)
 
 
 def create_job_status_validator() -> t.Trafaret:
