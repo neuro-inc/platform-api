@@ -43,7 +43,7 @@ async def auth_server(
         "AttachStdout": False,
         "AttachStderr": False,
         "HostConfig": {"PublishAllPorts": True},
-        "Env": ["NP_JWT_SECRET=secret"],
+        "Env": ["NP_JWT_SECRET=secret", "NP_LOG_LEVEL=DEBUG"],
     }
 
     if reuse_docker:
@@ -167,6 +167,8 @@ class UserFactory(Protocol):
         clusters: Optional[
             list[Union[tuple[str, Balance, Quota], tuple[str, str, Balance, Quota]]]
         ] = None,
+        cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
+        org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
     ) -> _User:
         ...
 
@@ -185,6 +187,8 @@ async def regular_user_factory(
         clusters: Optional[
             list[Union[tuple[str, Balance, Quota], tuple[str, str, Balance, Quota]]]
         ] = None,
+        cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
+        org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
     ) -> _User:
         if not name:
             name = random_str()
@@ -218,7 +222,7 @@ async def regular_user_factory(
                     await admin_client.create_org_user(
                         org_name=org_name,
                         user_name=name,
-                        role=OrgUserRoleType.USER,
+                        role=org_user_role,
                     )
                 except ClientResponseError:
                     pass
@@ -233,7 +237,7 @@ async def regular_user_factory(
                 await admin_client.create_cluster_user(
                     cluster_name=cluster,
                     org_name=org_name,
-                    role=ClusterUserRoleType.USER,
+                    role=cluster_user_role,
                     user_name=name,
                     balance=balance,
                     quota=quota,

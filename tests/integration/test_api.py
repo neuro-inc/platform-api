@@ -20,7 +20,7 @@ from aiohttp.web import (
     HTTPOk,
     HTTPUnauthorized,
 )
-from neuro_admin_client import AdminClient, Balance, Quota
+from neuro_admin_client import AdminClient, Balance, ClusterUserRoleType, Quota
 from neuro_auth_client import Permission
 from yarl import URL
 
@@ -729,6 +729,42 @@ class TestJobs:
             result = await response.json()
             assert result == {"error": mock.ANY}
             assert "project_name" in result["error"]
+
+    async def test_create_job__explicit_project_name__ok(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: dict[str, Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        regular_user_factory: UserFactory,
+        admin_client_factory: Callable[[str], Awaitable[AdminClient]],
+    ) -> None:
+        url = api.jobs_base_url
+        project_name = random_str()
+
+        regular_user = await regular_user_factory(
+            cluster_user_role=ClusterUserRoleType.MANAGER
+        )
+
+        jobs_client = jobs_client_factory(regular_user)
+        admin_client = await admin_client_factory(regular_user.token)
+
+        await admin_client.create_project(project_name, regular_user.cluster_name, None)
+
+        job_submit["project_name"] = project_name
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            assert result["project_name"] == project_name
+            job_id = result["id"]
+
+        filters = {"project_name": project_name}
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id}
 
     async def test_create_job_with_http(
         self,

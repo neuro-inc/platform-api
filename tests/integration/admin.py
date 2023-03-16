@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import asyncio
-from collections.abc import AsyncGenerator, AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime
 from typing import Any
 
@@ -183,6 +185,7 @@ async def admin_server(
             f"NP_ADMIN_POSTGRES_DSN={admin_postgres_dsn}",
             f"NP_ADMIN_NOTIFICATIONS_URL=http://host.docker.internal:8083",
             "NP_ADMIN_NOTIFICATIONS_TOKEN=token",
+            "NP_LOG_LEVEL=DEBUG",
         ],
     }
 
@@ -231,26 +234,51 @@ async def admin_url(admin_server: URL) -> AsyncIterator[URL]:
 
 @asynccontextmanager
 async def create_admin_client(
-    url: URL, config: AuthConfig
+    url: URL, service_token: str, *, do_create_compute_user: bool = False
 ) -> AsyncGenerator[AdminClient, None]:
     async with AdminClient(
         base_url=url,
-        service_token=config.service_token,
+        service_token=service_token,
         trace_configs=[make_request_logging_trace_config()],
     ) as client:
-        # Make user for compute token so it can be owner of clusters
-        try:
-            await client.create_user(name="compute", email="compute@admin.com")
-        except ClientResponseError:  # Already exists
-            pass
+        if do_create_compute_user:
+            await create_compute_user(client)
         yield client
+
+
+async def create_compute_user(admin_client: AdminClient) -> None:
+    try:
+        await admin_client.create_user(name="compute", email="compute@admin.com")
+    except ClientResponseError:  # Already exists
+        pass
+
+
+@pytest.fixture
+async def admin_client_factory(
+    admin_url: URL,
+) -> AsyncIterator[Callable[[str], Awaitable[AdminClient]]]:
+    exit_stack = AsyncExitStack()
+
+    async def _factory(
+        service_token: str, *, do_create_compute_user: bool = False
+    ) -> AdminClient:
+        return await exit_stack.enter_async_context(
+            create_admin_client(
+                admin_url, service_token, do_create_compute_user=do_create_compute_user
+            )
+        )
+
+    async with exit_stack:
+        yield _factory
 
 
 @pytest.fixture
 async def admin_client(
     admin_url: URL, auth_config: AuthConfig
 ) -> AsyncGenerator[AdminClient, None]:
-    async with create_admin_client(admin_url, auth_config) as client:
+    async with create_admin_client(
+        admin_url, auth_config.service_token, do_create_compute_user=True
+    ) as client:
         yield client
 
 
@@ -260,7 +288,9 @@ async def wait_for_admin_server(
     async with timeout(timeout_s):
         while True:
             try:
-                async with create_admin_client(url, auth_config) as admin_client:
+                async with create_admin_client(
+                    url, auth_config.service_token, do_create_compute_user=True
+                ) as admin_client:
                     await admin_client.list_users()
                     break
             except (AssertionError, ClientError):
