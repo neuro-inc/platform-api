@@ -354,9 +354,8 @@ class JobFilterClauseBuilder:
                     # TODO: this might not be really performant. we will need to rework
                     # the tables to avoid filtering using `split_part` in the future.
                     owner_pred = (
-                        self._tables.jobs.c.owner
-                        == owner | self._create_base_owner_clause({owner})
-                    )
+                        self._tables.jobs.c.owner == owner
+                    ) | self._create_base_owner_clause({owner})
                     cluster_clauses.append(
                         (self._tables.jobs.c.cluster_name == cluster)
                         & org_pred
