@@ -320,9 +320,10 @@ class JobFilterClauseBuilder:
         self._clauses.append(self._tables.jobs.c.owner.in_(owners))
 
     def filter_base_owners(self, base_owners: Set[str]) -> None:
-        self._clauses.append(
-            func.split_part(self._tables.jobs.c.owner, "/", 1).in_(base_owners)
-        )
+        self._clauses.append(self._create_base_owner_clause(base_owners))
+
+    def _create_base_owner_clause(self, base_owners: Set[str]) -> sasql.ClauseElement:
+        return func.split_part(self._tables.jobs.c.owner, "/", 1).in_(base_owners)
 
     def filter_clusters(self, clusters: ClusterOrgOwnerNameSet) -> None:
         cluster_clauses = []
@@ -345,17 +346,30 @@ class JobFilterClauseBuilder:
                     if not names:
                         owners_empty_names.append(owner)
                         continue
+                    # `self._tables.jobs.c.owner` is either
+                    # - a user name, e.g. `"user"`, or
+                    # - a service user name, e.g. `"user/service-account/name"`
+                    # but `owner` here is always a user name, e.g. `"user"`.
+                    # so we need to check both cases.
+                    # TODO: this might not be really performant. we will need to rework
+                    # the tables to avoid filtering using `split_part` in the future.
+                    owner_pred = (
+                        self._tables.jobs.c.owner
+                        == owner | self._create_base_owner_clause({owner})
+                    )
                     cluster_clauses.append(
                         (self._tables.jobs.c.cluster_name == cluster)
                         & org_pred
-                        & (self._tables.jobs.c.owner == owner)
+                        & owner_pred
                         & self._tables.jobs.c.name.in_(names)
                     )
                 if owners_empty_names:
+                    # the same as above about `self._tables.jobs.c.owner`
+                    owner_pred = self._create_base_owner_clause({owner})
                     cluster_clauses.append(
                         (self._tables.jobs.c.cluster_name == cluster)
                         & org_pred
-                        & self._tables.jobs.c.owner.in_(owners_empty_names)
+                        & owner_pred
                     )
             not_null_orgs = [org for org in orgs_empty_owners if org is not None]
             if not_null_orgs:

@@ -347,7 +347,7 @@ class JobRecord:
 
     @property
     def base_owner(self) -> str:
-        return self.owner.split("/", 1)[0]
+        return get_base_owner(self.owner)
 
     @property
     def status(self) -> JobStatus:
@@ -662,7 +662,7 @@ class Job:
 
     @property
     def base_owner(self) -> str:
-        return self._owner.split("/", 1)[0]
+        return get_base_owner(self._owner)
 
     @property
     def cluster_name(self) -> str:
@@ -950,3 +950,7 @@ class Job:
 def maybe_job_id(value: str) -> bool:
     """Check whether the string looks like a job id"""
     return value.startswith("job-")
+
+
+def get_base_owner(value: str) -> str:
+    return value.split("/", 1)[0]

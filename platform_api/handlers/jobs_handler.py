@@ -31,6 +31,7 @@ from platform_api.orchestrator.job import (
     JobRestartPolicy,
     JobStatusItem,
     JobStatusReason,
+    get_base_owner,
     maybe_job_id,
 )
 from platform_api.orchestrator.job_request import (
@@ -687,7 +688,7 @@ class JobsHandler:
         job_cluster_org_name_validator = create_job_cluster_org_name_validator(
             default_cluster_name=default_cluster_name,
             default_org_name=default_org_name,
-            default_project_name=user.name,
+            default_project_name=get_base_owner(user.name),
         )
         request_payload = job_cluster_org_name_validator.check(orig_payload)
         cluster_name = request_payload["cluster_name"]

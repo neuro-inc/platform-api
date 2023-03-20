@@ -838,6 +838,7 @@ class TestJobs:
             assert result["status"] in ["pending"]
             job_id = result["id"]
             assert result["owner"] == service_user.name
+            assert result["project_name"] == regular_user.name
             assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
             assert (
                 result["http_url_named"]
