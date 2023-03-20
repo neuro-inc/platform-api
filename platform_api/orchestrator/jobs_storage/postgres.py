@@ -364,7 +364,7 @@ class JobFilterClauseBuilder:
                     )
                 if owners_empty_names:
                     # the same as above about `self._tables.jobs.c.owner`
-                    owner_pred = self._create_base_owner_clause({owner})
+                    owner_pred = self._create_base_owner_clause(set(owners_empty_names))
                     cluster_clauses.append(
                         (self._tables.jobs.c.cluster_name == cluster)
                         & org_pred
