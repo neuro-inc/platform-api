@@ -99,7 +99,11 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
 
     def _make_description(self, values: Mapping[str, Any]) -> str:
         if values["name"] is not None:
-            return f"id={values['id']}, owner={values['owner']}, name={values['name']}"
+            return (
+                f"id={values['id']}, "
+                f"project={values['project_name']}, "
+                f"name={values['name']}"
+            )
         return f"id={values['id']}"
 
     async def _select_row(
@@ -120,17 +124,14 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         except IntegrityError as exc:
             if isinstance(exc.orig.__cause__, UniqueViolationError):
                 e = exc.orig.__cause__
-                if e.constraint_name == "jobs_name_owner_uq":
+                if e.constraint_name == "jobs_name_project_name_uq":
                     # We need to retrieve conflicting job from database to
                     # build JobStorageJobFoundError
-                    base_owner = values["owner"].split("/")[0]
+                    project_name = values["project_name"]
                     query = (
                         self._tables.jobs.select()
                         .where(self._tables.jobs.c.name == values["name"])
-                        .where(
-                            func.split_part(self._tables.jobs.c.owner, "/", 1)
-                            == base_owner
-                        )
+                        .where(self._tables.jobs.c.project_name == project_name)
                         .where(
                             self._tables.jobs.c.status.in_(JobStatus.active_values())
                         )
@@ -139,7 +140,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
                     if record:
                         raise JobStorageJobFoundError(
                             job_name=values["name"],
-                            job_owner=base_owner,
+                            project_name=project_name,
                             found_job_id=record["id"],
                         )
                     else:

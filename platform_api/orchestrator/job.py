@@ -338,7 +338,7 @@ class JobRecord:
         if not kwargs.get("owner"):
             kwargs["owner"] = orphaned_job_owner
         if not kwargs.get("project_name"):
-            kwargs["project_name"] = kwargs["owner"]
+            kwargs["project_name"] = get_base_owner(kwargs["owner"])
         return cls(**kwargs)
 
     @property
@@ -521,7 +521,7 @@ class JobRecord:
             request.job_id, payload
         )
         owner = payload.get("owner") or orphaned_job_owner
-        project_name = payload.get("project_name") or owner
+        project_name = payload.get("project_name") or get_base_owner(owner)
         return cls(
             request=request,
             status_history=status_history,

@@ -238,7 +238,7 @@ class TestJobsStorage:
         second_job = self._create_pending_job(job_name=job_name, owner=owner)
         with pytest.raises(
             JobStorageJobFoundError,
-            match=f"job with name '{job_name}' and owner '{first_job.owner}'"
+            match=f"job with name '{job_name}' and project '{first_job.project_name}'"
             f" already exists: '{first_job.id}'",
         ):
             async with storage.try_create_job(second_job):
@@ -265,7 +265,7 @@ class TestJobsStorage:
         )
         with pytest.raises(
             JobStorageJobFoundError,
-            match=f"job with name '{job_name}' and owner '{first_job.owner}'"
+            match=f"job with name '{job_name}' and project '{first_job.project_name}'"
             f" already exists: '{first_job.id}'",
         ):
             async with storage.try_create_job(second_job):

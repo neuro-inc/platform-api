@@ -21,9 +21,9 @@ class JobStorageTransactionError(JobsStorageException):
 
 
 class JobStorageJobFoundError(JobsStorageException):
-    def __init__(self, job_name: str, job_owner: str, found_job_id: str):
+    def __init__(self, job_name: str, project_name: str, found_job_id: str):
         super().__init__(
-            f"job with name '{job_name}' and owner '{job_owner}' "
+            f"job with name '{job_name}' and project '{project_name}' "
             f"already exists: '{found_job_id}'"
         )
 
