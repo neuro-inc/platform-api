@@ -673,8 +673,8 @@ class Job:
         uri = URL.build(scheme="job", host=self.cluster_name)
         if self.org_name:
             uri /= self.org_name
-        if self.owner:
-            uri /= self.owner
+        if self.project_name:
+            uri /= self.project_name
         return uri / self.id
 
     @property

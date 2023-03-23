@@ -1850,7 +1850,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "is_preemptible_node_required": False,
         "materialized": False,
         "pass_config": False,
-        "uri": f"job://test-cluster/test-tenant-id/compute/{job.id}",
+        "uri": f"job://test-cluster/test-tenant-id/test-project/{job.id}",
         "restart_policy": "never",
         "privileged": False,
         "being_dropped": False,
