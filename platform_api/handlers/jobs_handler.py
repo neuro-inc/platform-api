@@ -45,7 +45,7 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.jobs_service import JobsService, UserClusterConfig
 from platform_api.orchestrator.jobs_storage import (
-    ClusterOrgOwnerNameSet,
+    ClusterOrgProjectNameSet,
     JobFilter,
     JobStorageTransactionError,
 )
@@ -1070,7 +1070,7 @@ class JobFilterFactory:
                 self._base_owner_name_validator.check(owner)
                 for owner in query.getall("base_owner", [])
             }
-            clusters: ClusterOrgOwnerNameSet = {
+            clusters: ClusterOrgProjectNameSet = {
                 self._cluster_name_validator.check(cluster_name): {}
                 for cluster_name in query.getall("cluster_name", [])
             }
@@ -1098,12 +1098,12 @@ class JobFilterFactory:
                 **bool_filters,  # type: ignore
             )
 
-        for key in ("name", "owner", "cluster_name", "since", "until"):
+        for key in ("name", "project_name", "cluster_name", "since", "until"):
             if key in query:
                 raise ValueError("Invalid request")
 
         label = hostname.partition(".")[0]
-        job_name, sep, base_owner = label.rpartition(JOB_USER_NAMES_SEPARATOR)
+        job_name, sep, project_name = label.rpartition(JOB_USER_NAMES_SEPARATOR)
         if not sep:
             return JobFilter(
                 statuses=statuses,
@@ -1112,10 +1112,10 @@ class JobFilterFactory:
                 **bool_filters,  # type: ignore
             )
         job_name = self._job_name_validator.check(job_name)
-        base_owner = self._base_owner_name_validator.check(base_owner)
+        project_name = self._project_name_validator.check(project_name)
         return JobFilter(
             statuses=statuses,
-            base_owners={base_owner},
+            projects={project_name},
             name=job_name,
             tags=tags,
             **bool_filters,  # type: ignore
@@ -1143,7 +1143,7 @@ class BulkJobFilterBuilder:
         self._clusters_shared_any: dict[
             str, dict[Optional[str], dict[str, set[str]]]
         ] = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
-        self._owners_shared_any: set[str] = set()
+        self._projects_shared_any: set[str] = set()
         self._orgs_shared_any: set[Optional[str]] = set()
         self._shared_ids: set[str] = set()
 
@@ -1174,7 +1174,7 @@ class BulkJobFilterBuilder:
         if (
             not self._clusters_shared_any
             and not self._orgs_shared_any
-            and not self._owners_shared_any
+            and not self._projects_shared_any
             and not self._shared_ids
         ):
             # no job resources whatsoever
@@ -1202,7 +1202,7 @@ class BulkJobFilterBuilder:
                 if self._query_filter.orgs and None not in self._query_filter.orgs:
                     # skipping None org
                     continue
-                self._traverse_owners(sub_tree, cluster_name, None)
+                self._traverse_projects(sub_tree, cluster_name, None)
 
     def _traverse_orgs(self, tree: ClientAccessSubTreeView, cluster_name: str) -> None:
         for org_name, sub_tree in tree.children.items():
@@ -1221,49 +1221,49 @@ class BulkJobFilterBuilder:
                 self._clusters_shared_any[cluster_name][org_name] = {}
             else:
                 # specific ids or names
-                self._traverse_owners(sub_tree, cluster_name, org_name)
+                self._traverse_projects(sub_tree, cluster_name, org_name)
 
-    def _traverse_owners(
+    def _traverse_projects(
         self,
         tree: ClientAccessSubTreeView,
         cluster_name: str,
         org_name: Optional[str],
-        owner_prefix: Optional[str] = None,
     ) -> None:
-        for owner, sub_tree in tree.children.items():
-            if owner_prefix:
-                owner = f"{owner_prefix}/{owner}"
-            if sub_tree.children.keys():
-                self._traverse_owners(sub_tree, cluster_name, org_name, owner)
+        for project, sub_tree in tree.children.items():
             if not sub_tree.can_list():
                 continue
 
-            if self._query_filter.owners and owner not in self._query_filter.owners:
+            if (
+                self._query_filter.projects
+                and project not in self._query_filter.projects
+            ):
                 # skipping owners
                 continue
 
             if sub_tree.can_read():
-                # read/write/manage access to all owner's jobs =
-                # job://cluster/owner or job://cluster/org/owner
+                # read/write/manage access to all jobs within the project =
+                # job://cluster/project or job://cluster/org/project
                 self._orgs_shared_any.add(org_name)
-                self._owners_shared_any.add(owner)
-                self._clusters_shared_any[cluster_name][org_name][owner] = set()
+                self._projects_shared_any.add(project)
+                self._clusters_shared_any[cluster_name][org_name][project] = set()
             else:
                 # specific ids or names
-                self._traverse_jobs(sub_tree, cluster_name, org_name, owner)
+                self._traverse_jobs(sub_tree, cluster_name, org_name, project)
 
     def _traverse_jobs(
         self,
         tree: ClientAccessSubTreeView,
         cluster_name: str,
         org_name: Optional[str],
-        owner: str,
+        project_name: str,
     ) -> None:
         for name, sub_tree in tree.children.items():
             if sub_tree.children.keys():
                 continue  # Not a leaf node
             if sub_tree.can_read():
                 if maybe_job_id(name):
+                    # NOTE: it is not entirely clear why we do not add the project to
+                    # `_projects_shared_any` here.
                     self._shared_ids.add(name)
                     continue
 
@@ -1272,15 +1272,17 @@ class BulkJobFilterBuilder:
                     continue
 
                 self._orgs_shared_any.add(org_name)
-                self._owners_shared_any.add(owner)
-                self._clusters_shared_any[cluster_name][org_name][owner].add(name)
+                self._projects_shared_any.add(project_name)
+                self._clusters_shared_any[cluster_name][org_name][project_name].add(
+                    name
+                )
 
     def _create_bulk_filter(self) -> Optional[JobFilter]:
         if not (
             self._has_access_to_all
             or self._clusters_shared_any
             or self._orgs_shared_any
-            or self._owners_shared_any
+            or self._projects_shared_any
         ):
             return None
         bulk_filter = self._query_filter
@@ -1291,53 +1293,53 @@ class BulkJobFilterBuilder:
         # passed in the query, otherwise pull all.
         if not self._has_clusters_shared_all and self._orgs_shared_any:
             bulk_filter = replace(bulk_filter, orgs=self._orgs_shared_any)
-        # `self._owners_shared_any` is already filtered against
-        # `self._query_filter.owners`.
-        # if `self._owners_shared_any` is empty and no org share full
-        # access, we still want to try to limit the scope to the owners
+        # `self._projects_shared_any` is already filtered against
+        # `self._query_filter.projects`.
+        # if `self._projects_shared_any` is empty and no org share full
+        # access, we still want to try to limit the scope to the projects
         # passed in the query, otherwise pull all.
         if (
             not self._has_clusters_shared_all
             and not self._has_orgs_shared_all
-            and self._owners_shared_any
+            and self._projects_shared_any
         ):
-            bulk_filter = replace(bulk_filter, owners=self._owners_shared_any)
+            bulk_filter = replace(bulk_filter, projects=self._projects_shared_any)
         # `self._clusters_shared_any` is already filtered against
         # `self._query_filter.clusters`.
         # if `self._clusters_shared_any` is empty, we still want to try to limit
         # the scope to the clusters passed in the query, otherwise pull all.
         if not self._has_access_to_all:
-            self._optimize_clusters_owners(
-                bulk_filter.orgs, bulk_filter.owners, bulk_filter.name
+            self._optimize_clusters_projects(
+                bulk_filter.orgs, bulk_filter.projects, bulk_filter.name
             )
             bulk_filter = replace(
                 bulk_filter,
                 clusters={
                     cluster_name: {
-                        org_name: dict(owners) for org_name, owners in orgs.items()
+                        org_name: dict(projects) for org_name, projects in orgs.items()
                     }
                     for cluster_name, orgs in self._clusters_shared_any.items()
                 },
             )
         return bulk_filter
 
-    def _optimize_clusters_owners(
-        self, orgs: Set[Optional[str]], owners: Set[str], name: Optional[str]
+    def _optimize_clusters_projects(
+        self, orgs: Set[Optional[str]], projects: Set[str], name: Optional[str]
     ) -> None:
-        if orgs or owners or name:
+        if orgs or projects or name:
             names = {name}
             for cluster_orgs in self._clusters_shared_any.values():
-                for org_owners in cluster_orgs.values():
+                for org_projects in cluster_orgs.values():
                     if name:
-                        for owner_names in org_owners.values():
-                            if owner_names == names:
-                                owner_names.clear()
+                        for project_names in org_projects.values():
+                            if project_names == names:
+                                project_names.clear()
                     if (
-                        owners
-                        and org_owners.keys() == owners
-                        and not any(org_owners.values())
+                        projects
+                        and org_projects.keys() == projects
+                        and not any(org_projects.values())
                     ):
-                        org_owners.clear()
+                        org_projects.clear()
                 if (
                     orgs
                     and cluster_orgs.keys() == orgs

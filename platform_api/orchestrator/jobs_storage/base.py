@@ -28,14 +28,14 @@ class JobStorageJobFoundError(JobsStorageException):
         )
 
 
-ClusterOrgOwnerNameSet = dict[str, dict[Optional[str], dict[str, Set[str]]]]
+ClusterOrgProjectNameSet = dict[str, dict[Optional[str], dict[str, Set[str]]]]
 
 
 @dataclass(frozen=True)
 class JobFilter:
     statuses: Set[JobStatus] = field(default_factory=cast(type[Set[JobStatus]], set))
-    clusters: ClusterOrgOwnerNameSet = field(
-        default_factory=cast(type[ClusterOrgOwnerNameSet], dict)
+    clusters: ClusterOrgProjectNameSet = field(
+        default_factory=cast(type[ClusterOrgProjectNameSet], dict)
     )
     orgs: Set[Optional[str]] = field(
         default_factory=cast(type[Set[Optional[str]]], set)
@@ -63,16 +63,15 @@ class JobFilter:
         if self.projects and job.project_name not in self.projects:
             return False
         if self.clusters:
-            # TODO: this also must be patched. we need job URLs to have project names
             orgs = self.clusters.get(job.cluster_name)
             if orgs is None:
                 return False
             if orgs:
-                owners = orgs.get(job.org_name)
-                if owners is None:
+                projects = orgs.get(job.org_name)
+                if projects is None:
                     return False
-                if owners:
-                    names = owners.get(job.owner)
+                if projects:
+                    names = projects.get(job.project_name)
                     if names is None:
                         return False
                     if names and job.name not in names:

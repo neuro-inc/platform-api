@@ -20,7 +20,7 @@ from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
 from ..base_postgres_storage import BasePostgresStorage
 from .base import (
-    ClusterOrgOwnerNameSet,
+    ClusterOrgProjectNameSet,
     JobsStorage,
     JobStorageJobFoundError,
     JobStorageTransactionError,
@@ -326,58 +326,50 @@ class JobFilterClauseBuilder:
     def _create_base_owner_clause(self, base_owners: Set[str]) -> sasql.ClauseElement:
         return func.split_part(self._tables.jobs.c.owner, "/", 1).in_(base_owners)
 
-    def filter_clusters(self, clusters: ClusterOrgOwnerNameSet) -> None:
+    def filter_clusters(self, clusters: ClusterOrgProjectNameSet) -> None:
         cluster_clauses = []
         clusters_empty_orgs = []
         for cluster, orgs in clusters.items():
             if not orgs:
                 clusters_empty_orgs.append(cluster)
                 continue
-            orgs_empty_owners = []
-            for org, owners in orgs.items():
-                if not owners:
-                    orgs_empty_owners.append(org)
+            orgs_empty_projects = []
+            for org, projects in orgs.items():
+                if not projects:
+                    orgs_empty_projects.append(org)
                     continue
                 if org is None:
                     org_pred = self._tables.jobs.c.org_name.is_(None)
                 else:
                     org_pred = self._tables.jobs.c.org_name == org
-                owners_empty_names = []
-                for owner, names in owners.items():
+                projects_empty_names = []
+                for project, names in projects.items():
                     if not names:
-                        owners_empty_names.append(owner)
+                        projects_empty_names.append(project)
                         continue
-                    # `self._tables.jobs.c.owner` is either
-                    # - a user name, e.g. `"user"`, or
-                    # - a service user name, e.g. `"user/service-account/name"`
-                    # but `owner` here is always a user name, e.g. `"user"`.
-                    # so we need to check both cases.
-                    # TODO: this might not be really performant. we will need to rework
-                    # the tables to avoid filtering using `split_part` in the future.
-                    owner_pred = (
-                        self._tables.jobs.c.owner == owner
-                    ) | self._create_base_owner_clause({owner})
+                    project_pred = self._tables.jobs.c.project_name == project
                     cluster_clauses.append(
                         (self._tables.jobs.c.cluster_name == cluster)
                         & org_pred
-                        & owner_pred
+                        & project_pred
                         & self._tables.jobs.c.name.in_(names)
                     )
-                if owners_empty_names:
-                    # the same as above about `self._tables.jobs.c.owner`
-                    owner_pred = self._create_base_owner_clause(set(owners_empty_names))
+                if projects_empty_names:
+                    project_pred = self._tables.jobs.c.project_name.in_(
+                        projects_empty_names
+                    )
                     cluster_clauses.append(
                         (self._tables.jobs.c.cluster_name == cluster)
                         & org_pred
-                        & owner_pred
+                        & project_pred
                     )
-            not_null_orgs = [org for org in orgs_empty_owners if org is not None]
+            not_null_orgs = [org for org in orgs_empty_projects if org is not None]
             if not_null_orgs:
                 cluster_clauses.append(
                     (self._tables.jobs.c.cluster_name == cluster)
                     & self._tables.jobs.c.org_name.in_(not_null_orgs)
                 )
-            if None in orgs_empty_owners:
+            if None in orgs_empty_projects:
                 cluster_clauses.append(
                     (self._tables.jobs.c.cluster_name == cluster)
                     & self._tables.jobs.c.org_name.is_(None)
