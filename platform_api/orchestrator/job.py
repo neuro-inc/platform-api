@@ -23,7 +23,7 @@ from .job_request import (
 )
 
 # For named jobs, their hostname is of the form of
-# `{job-name}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
+# `{job-name}{JOB_USER_NAMES_SEPARATOR}{job-project-name}.jobs.neu.ro`.
 
 
 JOB_USER_NAMES_SEPARATOR = "--"
@@ -338,7 +338,7 @@ class JobRecord:
         if not kwargs.get("owner"):
             kwargs["owner"] = orphaned_job_owner
         if not kwargs.get("project_name"):
-            kwargs["project_name"] = kwargs["owner"]
+            kwargs["project_name"] = get_base_owner(kwargs["owner"])
         return cls(**kwargs)
 
     @property
@@ -521,7 +521,7 @@ class JobRecord:
             request.job_id, payload
         )
         owner = payload.get("owner") or orphaned_job_owner
-        project_name = payload.get("project_name") or owner
+        project_name = payload.get("project_name") or get_base_owner(owner)
         return cls(
             request=request,
             status_history=status_history,
@@ -673,8 +673,8 @@ class Job:
         uri = URL.build(scheme="job", host=self.cluster_name)
         if self.org_name:
             uri /= self.org_name
-        if self.owner:
-            uri /= self.owner
+        if self.project_name:
+            uri /= self.project_name
         return uri / self.id
 
     @property
@@ -818,7 +818,7 @@ class Job:
         from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
 
         return self._orchestrator_config.jobs_domain_name_template.format(
-            job_id=f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.base_owner}"
+            job_id=f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.project_name}"
         )
 
     @property

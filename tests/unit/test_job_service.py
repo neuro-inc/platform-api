@@ -565,7 +565,7 @@ class TestJobsService:
 
         with pytest.raises(
             JobsServiceException,
-            match=f"job with name '{job_name}' and owner '{test_user.name}'"
+            match=f"job with name '{job_name}' and project '{test_user.name}'"
             f" already exists: '{job_1.id}'",
         ):
             job_2, _ = await jobs_service.create_job(
@@ -606,7 +606,7 @@ class TestJobsService:
 
         with pytest.raises(
             JobsServiceException,
-            match=f"job with name '{job_name}' and owner '{test_user.name}'"
+            match=f"job with name '{job_name}' and project '{test_user.name}'"
             f" already exists: '{job_1.id}'",
         ):
             job_2, _ = await jobs_service.create_job(

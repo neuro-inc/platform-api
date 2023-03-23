@@ -20,7 +20,13 @@ from aiohttp.web import (
     HTTPOk,
     HTTPUnauthorized,
 )
-from neuro_admin_client import AdminClient, Balance, ClusterUserRoleType, Quota
+from neuro_admin_client import (
+    AdminClient,
+    Balance,
+    ClusterUserRoleType,
+    OrgUserRoleType,
+    Quota,
+)
 from neuro_auth_client import Permission
 from yarl import URL
 
@@ -741,6 +747,7 @@ class TestJobs:
     ) -> None:
         url = api.jobs_base_url
         project_name = random_str()
+        job_name = f"j-{random_str()}"
 
         regular_user = await regular_user_factory(
             cluster_user_role=ClusterUserRoleType.MANAGER
@@ -752,6 +759,7 @@ class TestJobs:
         await admin_client.create_project(project_name, regular_user.cluster_name, None)
 
         job_submit["project_name"] = project_name
+        job_submit["name"] = job_name
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as response:
@@ -760,8 +768,64 @@ class TestJobs:
             assert result["status"] in ["pending"]
             assert result["project_name"] == project_name
             job_id = result["id"]
+            assert result["name"] == job_name
+            assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
+            assert (
+                result["http_url_named"]
+                == f"http://{job_name}--{project_name}.jobs.neu.ro"
+            )
 
         filters = {"project_name": project_name}
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id}
+
+    async def test_create_job__explicit_project_name_and_org_name__ok(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        job_submit: dict[str, Any],
+        jobs_client_factory: Callable[[_User], JobsClient],
+        regular_user_factory: UserFactory,
+        admin_client_factory: Callable[[str], Awaitable[AdminClient]],
+    ) -> None:
+        url = api.jobs_base_url
+        org_name = random_str()
+        project_name = random_str()
+
+        regular_user = await regular_user_factory(
+            clusters=[
+                ("test-cluster", org_name, Balance(), Quota()),
+            ],
+            cluster_user_role=ClusterUserRoleType.MANAGER,
+            org_user_role=OrgUserRoleType.MANAGER,
+        )
+
+        jobs_client = jobs_client_factory(regular_user)
+        admin_client = await admin_client_factory(regular_user.token)
+
+        await admin_client.create_project(
+            project_name, regular_user.cluster_name, org_name
+        )
+
+        job_submit["org_name"] = org_name
+        job_submit["project_name"] = project_name
+        async with client.post(
+            url, headers=regular_user.headers, json=job_submit
+        ) as response:
+            assert response.status == HTTPAccepted.status_code, await response.text()
+            result = await response.json()
+            assert result["status"] in ["pending"]
+            assert result["org_name"] == org_name
+            assert result["project_name"] == project_name
+            job_id = result["id"]
+
+        filters = {"project_name": project_name}
+        jobs = await jobs_client.get_all_jobs(filters)
+        job_ids = {job["id"] for job in jobs}
+        assert job_ids == {job_id}
+
+        filters = {"project_name": project_name, "org_name": org_name}
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job_id}
@@ -862,7 +926,6 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: dict[str, Any],
-        service_account_factory: ServiceAccountFactory,
         regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
     ) -> None:

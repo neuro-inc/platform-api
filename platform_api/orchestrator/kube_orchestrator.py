@@ -464,6 +464,9 @@ class KubeOrchestrator(Orchestrator):
         # in response which are required for Grafana tables plugin.
         return {"platform.neuromation.io/org": job.org_name or "no_org"}
 
+    def _get_project_pod_labels(self, job: Job) -> dict[str, str]:
+        return {"platform.neuromation.io/project": job.project_name}
+
     def _get_job_labels(self, job: Job) -> dict[str, str]:
         return {"platform.neuromation.io/job": job.id}
 
@@ -481,6 +484,7 @@ class KubeOrchestrator(Orchestrator):
         labels = self._get_job_labels(job)
         labels.update(self._get_user_pod_labels(job))
         labels.update(self._get_org_pod_labels(job))
+        labels.update(self._get_project_pod_labels(job))
         labels.update(self._get_gpu_labels(job))
         labels.update(self._get_preset_labels(job))
         return labels
@@ -529,7 +533,7 @@ class KubeOrchestrator(Orchestrator):
     def _get_service_name_for_named(self, job: Job) -> str:
         from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
 
-        return f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.base_owner}"
+        return f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.project_name}"
 
     async def start_job(
         self, job: Job, tolerate_unreachable_node: bool = False

@@ -25,7 +25,7 @@ JOB_TAG_PATTERN = r"\A(?:\S)*\Z"
 # of the form `job-{uuid4()}` of length 40.
 JOB_NAME_MAX_LENGTH = 40
 # For named jobs, their hostname is of the form of
-# `{job-id}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
+# `{job-id}{JOB_USER_NAMES_SEPARATOR}{job-project-name}.jobs.neu.ro`.
 # The length limit for DNS label is 63 chars.
 USER_NAME_MAX_LENGTH = 63 - len(JOB_USER_NAMES_SEPARATOR) - JOB_NAME_MAX_LENGTH
 

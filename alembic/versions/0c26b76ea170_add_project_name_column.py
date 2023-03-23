@@ -21,20 +21,40 @@ def upgrade() -> None:
         "jobs",
         sa.Column("project_name", sa.String()),
     )
-
     op.execute(
         """
         UPDATE jobs
-        SET project_name = owner
+        SET project_name = split_part(owner, '/', 1)
         """
     )
-
     op.alter_column(
         "jobs",
         "project_name",
         nullable=False,
     )
 
+    op.drop_index("jobs_name_owner_uq")
+    op.create_index(
+        "jobs_name_project_name_uq",
+        "jobs",
+        ["name", "project_name"],
+        unique=True,
+        postgresql_where=sa.text(
+            "(jobs.status != 'succeeded' AND jobs.status != 'failed' AND jobs.status != 'cancelled')"  # noqa
+        ),
+    )
+
 
 def downgrade() -> None:
+    op.drop_index("jobs_name_project_name_uq")
+    op.create_index(
+        "jobs_name_owner_uq",
+        "jobs",
+        ["name", sa.text("split_part(owner, '/', 1)")],
+        unique=True,
+        postgresql_where=sa.text(
+            "(jobs.status != 'succeeded' AND jobs.status != 'failed' AND jobs.status != 'cancelled')"  # noqa
+        ),
+    )
+
     op.drop_column("jobs", "project_name")
