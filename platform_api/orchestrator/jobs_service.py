@@ -211,7 +211,7 @@ class JobsService:
 
             job.internal_hostname_named = (
                 orchestrator_config.jobs_internal_domain_name_template.format(
-                    job_id=f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.base_owner}"
+                    job_id=f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.project_name}"
                 )
             )
 

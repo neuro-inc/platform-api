@@ -23,7 +23,7 @@ from .job_request import (
 )
 
 # For named jobs, their hostname is of the form of
-# `{job-name}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
+# `{job-name}{JOB_USER_NAMES_SEPARATOR}{job-project-name}.jobs.neu.ro`.
 
 
 JOB_USER_NAMES_SEPARATOR = "--"
@@ -818,7 +818,7 @@ class Job:
         from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
 
         return self._orchestrator_config.jobs_domain_name_template.format(
-            job_id=f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.base_owner}"
+            job_id=f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.project_name}"
         )
 
     @property

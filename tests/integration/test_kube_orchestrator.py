@@ -89,7 +89,7 @@ class MyJob(Job):
             from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
 
             self.internal_hostname_named = (
-                f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.base_owner}.{namespace}"
+                f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.project_name}.{namespace}"
             )
 
     async def start(self) -> JobStatus:
