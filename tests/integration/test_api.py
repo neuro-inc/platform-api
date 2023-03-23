@@ -747,6 +747,7 @@ class TestJobs:
     ) -> None:
         url = api.jobs_base_url
         project_name = random_str()
+        job_name = f"j-{random_str()}"
 
         regular_user = await regular_user_factory(
             cluster_user_role=ClusterUserRoleType.MANAGER
@@ -758,6 +759,7 @@ class TestJobs:
         await admin_client.create_project(project_name, regular_user.cluster_name, None)
 
         job_submit["project_name"] = project_name
+        job_submit["name"] = job_name
         async with client.post(
             url, headers=regular_user.headers, json=job_submit
         ) as response:
@@ -766,6 +768,12 @@ class TestJobs:
             assert result["status"] in ["pending"]
             assert result["project_name"] == project_name
             job_id = result["id"]
+            assert result["name"] == job_name
+            assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
+            assert (
+                result["http_url_named"]
+                == f"http://{job_name}--{project_name}.jobs.neu.ro"
+            )
 
         filters = {"project_name": project_name}
         jobs = await jobs_client.get_all_jobs(filters)
