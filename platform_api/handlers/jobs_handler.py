@@ -50,7 +50,7 @@ from platform_api.orchestrator.jobs_storage import (
     JobStorageTransactionError,
 )
 from platform_api.resource import Preset, TPUResource
-from platform_api.user import authorized_user, make_job_uri, untrusted_user
+from platform_api.user import authorized_user, untrusted_user
 from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
 from .job_request_builder import create_container_from_payload
@@ -553,6 +553,19 @@ def infer_permissions_from_container(
     return permissions
 
 
+def make_job_uri(
+    user: AuthUser,
+    cluster_name: str,
+    org_name: Optional[str],
+    project_name: Optional[str] = None,
+) -> URL:
+    return (
+        URL.build(scheme="job", host=cluster_name)
+        / (org_name or "")
+        / (project_name or user.name)
+    )
+
+
 class JobsHandler:
     def __init__(self, *, app: aiohttp.web.Application, config: Config) -> None:
         self._app = app
@@ -813,6 +826,8 @@ class JobsHandler:
             tree = await self._auth_client.get_permissions_tree(user.name, "job:")
 
         try:
+            # if "/" in user.name:
+            #     breakpoint()
             bulk_job_filter = BulkJobFilterBuilder(
                 query_filter=self._job_filter_factory.create_from_query(request.query),
                 access_tree=tree,
@@ -1148,6 +1163,7 @@ class BulkJobFilterBuilder:
         self._shared_ids: set[str] = set()
 
     def build(self) -> BulkJobFilter:
+        # breakpoint()
         self._traverse_access_tree()
         bulk_filter = self._create_bulk_filter()
         shared_ids_filter = self._query_filter if self._shared_ids else None

@@ -32,6 +32,7 @@ from .job import (
     JobStatusHistory,
     JobStatusItem,
     JobStatusReason,
+    get_base_owner,
     maybe_job_id,
 )
 from .job_request import JobError, JobRequest, JobStatus
@@ -238,9 +239,9 @@ class JobsService:
         energy_schedule_name: Optional[str] = None,
     ) -> tuple[Job, Status]:
         project_name = project_name or user.name
-        base_name = user.name.split("/", 1)[
-            0
-        ]  # SA has access to same clusters as a user
+        base_name = get_base_owner(
+            user.name
+        )  # SA has access to same clusters as a user
         cluster_user = await self._admin_client.get_cluster_user(
             user_name=base_name,
             cluster_name=cluster_name,
