@@ -3259,7 +3259,7 @@ class TestJobs:
             assert payload == {
                 "error": (
                     f"Failed to create job: job with name '{job_name}' "
-                    f"and owner '{regular_user.name}' already exists: '{job_id}'"
+                    f"and project '{regular_user.name}' already exists: '{job_id}'"
                 )
             }
 
@@ -4612,7 +4612,7 @@ class TestJobs:
         hostname = f"{job_name}--{usr.name}.jobs.neu.ro"
         for params in (
             {"hostname": hostname, "name": job_name},
-            {"hostname": hostname, "owner": usr.name},
+            {"hostname": hostname, "project_name": usr.name},
         ):
             async with client.get(url, headers=usr.headers, params=params) as response:
                 response_text = await response.text()
