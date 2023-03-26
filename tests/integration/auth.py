@@ -283,11 +283,13 @@ async def service_account_factory(
         for cluster in owner.clusters:
             permissions.extend(
                 [
-                    Permission(uri=f"storage://{cluster}/{user.name}", action="manage"),
-                    Permission(uri=f"image://{cluster}/{user.name}", action="manage"),
-                    Permission(uri=f"job://{cluster}/{user.name}", action="manage"),
-                    Permission(uri=f"secret://{cluster}/{user.name}", action="manage"),
-                    Permission(uri=f"disk://{cluster}/{user.name}", action="write"),
+                    Permission(
+                        uri=f"storage://{cluster}/{owner.name}", action="manage"
+                    ),
+                    Permission(uri=f"image://{cluster}/{owner.name}", action="manage"),
+                    Permission(uri=f"job://{cluster}/{owner.name}", action="manage"),
+                    Permission(uri=f"secret://{cluster}/{owner.name}", action="manage"),
+                    Permission(uri=f"disk://{cluster}/{owner.name}", action="write"),
                 ]
             )
         await auth_client.grant_user_permissions(
