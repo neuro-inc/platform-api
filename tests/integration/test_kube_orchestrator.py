@@ -1259,6 +1259,7 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/preset": job.preset_name,
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": "no_org",
+            "platform.neuromation.io/project": job.owner,
         }
 
         policy_name = "neurouser-" + job.owner
@@ -1298,6 +1299,7 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": job.org_name,
+            "platform.neuromation.io/project": job.owner,
         }
 
     async def test_gpu_job_pod_labels(
@@ -1337,6 +1339,7 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": "no_org",
             "platform.neuromation.io/gpu-model": job.gpu_model_id,
+            "platform.neuromation.io/project": job.owner,
         }
 
     async def test_job_resource_labels(
@@ -1370,6 +1373,7 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": "no_org",
+            "platform.neuromation.io/project": job.owner,
         }
 
         ingress_name = job.id
@@ -1378,6 +1382,7 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": "no_org",
+            "platform.neuromation.io/project": job.owner,
         }
 
     async def test_named_job_resource_labels(
@@ -1413,6 +1418,7 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": "no_org",
+            "platform.neuromation.io/project": job.owner,
         }
 
         ingress_name = job.id
@@ -1422,6 +1428,7 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": "no_org",
             "platform.neuromation.io/job-name": job.name,
+            "platform.neuromation.io/project": job.owner,
         }
 
     async def test_job_check_ingress_annotations_jobs_ingress_class_nginx(
