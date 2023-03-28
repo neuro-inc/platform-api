@@ -16,6 +16,7 @@ USER_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
 ROLE_NAME_PATTERN = r"\A[a-z0-9](?:[-/]?[a-z0-9])*\Z"
 CLUSTER_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
 ORG_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
+PROJECT_NAME_PATTERN = r"\A[a-z0-9](?:-?[a-z0-9])*\Z"
 JOB_TAG_PATTERN = r"\A(?:\S)*\Z"
 
 # Since the client supports job-names to be interchangeable with job-IDs
@@ -24,7 +25,7 @@ JOB_TAG_PATTERN = r"\A(?:\S)*\Z"
 # of the form `job-{uuid4()}` of length 40.
 JOB_NAME_MAX_LENGTH = 40
 # For named jobs, their hostname is of the form of
-# `{job-id}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
+# `{job-id}{JOB_USER_NAMES_SEPARATOR}{job-project-name}.jobs.neu.ro`.
 # The length limit for DNS label is 63 chars.
 USER_NAME_MAX_LENGTH = 63 - len(JOB_USER_NAMES_SEPARATOR) - JOB_NAME_MAX_LENGTH
 
@@ -62,6 +63,10 @@ def create_cluster_name_validator() -> t.Trafaret:
 
 def create_org_name_validator() -> t.Trafaret:
     return t.String(min_length=3, max_length=255) & t.Regexp(ORG_NAME_PATTERN)
+
+
+def create_project_name_validator() -> t.Trafaret:
+    return t.String(min_length=3, max_length=255) & t.Regexp(PROJECT_NAME_PATTERN)
 
 
 def create_job_status_validator() -> t.Trafaret:

@@ -15,30 +15,32 @@ class InMemoryJobsStorage(JobsStorage):
     def __init__(self) -> None:
         # job_id to job mapping:
         self._job_records: dict[str, str] = {}
-        # job_name+owner to job_id mapping:
+        # job_name+project to job_id mapping:
         self._last_alive_job_records: dict[tuple[str, str], str] = {}
-        # owner to job tags mapping:
-        self._owner_to_tags: dict[str, list[str]] = {}
+        # project to job tags mapping:
+        self._project_to_tags: dict[str, list[str]] = {}
 
     @asynccontextmanager
     async def try_create_job(self, job: JobRecord) -> AsyncIterator[JobRecord]:
         if job.name is not None:
-            key = (job.owner, job.name)
+            key = (job.project_name, job.name)
             same_name_job_id = self._last_alive_job_records.get(key)
             if same_name_job_id is not None:
                 same_name_job = await self.get_job(same_name_job_id)
                 if not same_name_job.is_finished:
-                    raise JobStorageJobFoundError(job.name, job.owner, same_name_job_id)
+                    raise JobStorageJobFoundError(
+                        job.name, job.project_name, same_name_job_id
+                    )
             self._last_alive_job_records[key] = job.id
 
         if job.tags:
-            if job.owner not in self._owner_to_tags:
-                self._owner_to_tags[job.owner] = []
-            owner_tags = self._owner_to_tags[job.owner]
+            if job.project_name not in self._project_to_tags:
+                self._project_to_tags[job.project_name] = []
+            project_tags = self._project_to_tags[job.project_name]
             for tag in sorted(job.tags, reverse=True):
-                if tag in owner_tags:
-                    owner_tags.remove(tag)
-                owner_tags.insert(0, tag)
+                if tag in project_tags:
+                    project_tags.remove(tag)
+                project_tags.insert(0, tag)
 
         yield job
         await self.set_job(job)

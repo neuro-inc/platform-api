@@ -23,7 +23,7 @@ from .job_request import (
 )
 
 # For named jobs, their hostname is of the form of
-# `{job-name}{JOB_USER_NAMES_SEPARATOR}{job-owner}.jobs.neu.ro`.
+# `{job-name}{JOB_USER_NAMES_SEPARATOR}{job-project-name}.jobs.neu.ro`.
 
 
 JOB_USER_NAMES_SEPARATOR = "--"
@@ -287,6 +287,7 @@ class JobRecord:
     owner: str
     status_history: JobStatusHistory
     cluster_name: str
+    project_name: str
     org_name: Optional[str] = None
     name: Optional[str] = None
     preset_name: Optional[str] = None
@@ -336,6 +337,8 @@ class JobRecord:
             kwargs["status_history"] = status_history
         if not kwargs.get("owner"):
             kwargs["owner"] = orphaned_job_owner
+        if not kwargs.get("project_name"):
+            kwargs["project_name"] = get_base_owner(kwargs["owner"])
         return cls(**kwargs)
 
     @property
@@ -344,7 +347,7 @@ class JobRecord:
 
     @property
     def base_owner(self) -> str:
-        return self.owner.split("/", 1)[0]
+        return get_base_owner(self.owner)
 
     @property
     def status(self) -> JobStatus:
@@ -466,6 +469,7 @@ class JobRecord:
             "id": self.id,
             "owner": self.owner,
             "cluster_name": self.cluster_name,
+            "project_name": self.project_name,
             "request": self.request.to_primitive(),
             "status": self.status.value,
             "statuses": statuses,
@@ -516,16 +520,19 @@ class JobRecord:
         status_history = cls.create_status_history_from_primitive(
             request.job_id, payload
         )
+        owner = payload.get("owner") or orphaned_job_owner
+        project_name = payload.get("project_name") or get_base_owner(owner)
         return cls(
             request=request,
             status_history=status_history,
             materialized=payload.get("materialized", False),
-            owner=payload.get("owner") or orphaned_job_owner,
+            owner=owner,
             cluster_name=payload.get("cluster_name") or "",
             name=payload.get("name"),
             preset_name=payload.get("preset_name"),
             tags=payload.get("tags", ()),
             org_name=payload.get("org_name", None),
+            project_name=project_name,
             scheduler_enabled=payload.get("scheduler_enabled", None)
             or payload.get("is_preemptible", False),
             preemptible_node=payload.get("preemptible_node", None)
@@ -655,7 +662,7 @@ class Job:
 
     @property
     def base_owner(self) -> str:
-        return self._owner.split("/", 1)[0]
+        return get_base_owner(self._owner)
 
     @property
     def cluster_name(self) -> str:
@@ -666,8 +673,8 @@ class Job:
         uri = URL.build(scheme="job", host=self.cluster_name)
         if self.org_name:
             uri /= self.org_name
-        if self.owner:
-            uri /= self.owner
+        if self.project_name:
+            uri /= self.project_name
         return uri / self.id
 
     @property
@@ -811,7 +818,7 @@ class Job:
         from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
 
         return self._orchestrator_config.jobs_domain_name_template.format(
-            job_id=f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.base_owner}"
+            job_id=f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.project_name}"
         )
 
     @property
@@ -917,6 +924,10 @@ class Job:
         return self._record.org_name
 
     @property
+    def project_name(self) -> str:
+        return self._record.project_name
+
+    @property
     def priority(self) -> JobPriority:
         return self._record.priority
 
@@ -939,3 +950,7 @@ class Job:
 def maybe_job_id(value: str) -> bool:
     """Check whether the string looks like a job id"""
     return value.startswith("job-")
+
+
+def get_base_owner(value: str) -> str:
+    return value.split("/", 1)[0]

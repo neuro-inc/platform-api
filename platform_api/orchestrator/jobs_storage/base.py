@@ -21,26 +21,27 @@ class JobStorageTransactionError(JobsStorageException):
 
 
 class JobStorageJobFoundError(JobsStorageException):
-    def __init__(self, job_name: str, job_owner: str, found_job_id: str):
+    def __init__(self, job_name: str, project_name: str, found_job_id: str):
         super().__init__(
-            f"job with name '{job_name}' and owner '{job_owner}' "
+            f"job with name '{job_name}' and project '{project_name}' "
             f"already exists: '{found_job_id}'"
         )
 
 
-ClusterOrgOwnerNameSet = dict[str, dict[Optional[str], dict[str, Set[str]]]]
+ClusterOrgProjectNameSet = dict[str, dict[Optional[str], dict[str, Set[str]]]]
 
 
 @dataclass(frozen=True)
 class JobFilter:
     statuses: Set[JobStatus] = field(default_factory=cast(type[Set[JobStatus]], set))
-    clusters: ClusterOrgOwnerNameSet = field(
-        default_factory=cast(type[ClusterOrgOwnerNameSet], dict)
+    clusters: ClusterOrgProjectNameSet = field(
+        default_factory=cast(type[ClusterOrgProjectNameSet], dict)
     )
     orgs: Set[Optional[str]] = field(
         default_factory=cast(type[Set[Optional[str]]], set)
     )
     owners: Set[str] = field(default_factory=cast(type[Set[str]], set))
+    projects: Set[str] = field(default_factory=cast(type[Set[str]], set))
     base_owners: Set[str] = field(default_factory=cast(type[Set[str]], set))
     tags: Set[str] = field(default_factory=cast(type[Set[str]], set))
     name: Optional[str] = None
@@ -59,16 +60,18 @@ class JobFilter:
             return False
         if self.base_owners and job.base_owner not in self.base_owners:
             return False
+        if self.projects and job.project_name not in self.projects:
+            return False
         if self.clusters:
             orgs = self.clusters.get(job.cluster_name)
             if orgs is None:
                 return False
             if orgs:
-                owners = orgs.get(job.org_name)
-                if owners is None:
+                projects = orgs.get(job.org_name)
+                if projects is None:
                     return False
-                if owners:
-                    names = owners.get(job.owner)
+                if projects:
+                    names = projects.get(job.project_name)
                     if names is None:
                         return False
                     if names and job.name not in names:

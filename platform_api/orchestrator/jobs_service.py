@@ -32,6 +32,7 @@ from .job import (
     JobStatusHistory,
     JobStatusItem,
     JobStatusReason,
+    get_base_owner,
     maybe_job_id,
 )
 from .job_request import JobError, JobRequest, JobStatus
@@ -211,7 +212,7 @@ class JobsService:
 
             job.internal_hostname_named = (
                 orchestrator_config.jobs_internal_domain_name_template.format(
-                    job_id=f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.base_owner}"
+                    job_id=f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.project_name}"
                 )
             )
 
@@ -222,6 +223,7 @@ class JobsService:
         cluster_name: str,
         *,
         org_name: Optional[str] = None,
+        project_name: Optional[str] = None,
         job_name: Optional[str] = None,
         preset_name: Optional[str] = None,
         tags: Sequence[str] = (),
@@ -236,9 +238,10 @@ class JobsService:
         priority: JobPriority = JobPriority.NORMAL,
         energy_schedule_name: Optional[str] = None,
     ) -> tuple[Job, Status]:
-        base_name = user.name.split("/", 1)[
-            0
-        ]  # SA has access to same clusters as a user
+        project_name = project_name or user.name
+        base_name = get_base_owner(
+            user.name
+        )  # SA has access to same clusters as a user
         cluster_user = await self._admin_client.get_cluster_user(
             user_name=base_name,
             cluster_name=cluster_name,
@@ -281,6 +284,7 @@ class JobsService:
             owner=user.name,
             cluster_name=cluster_name,
             org_name=org_name,
+            project_name=project_name,
             status_history=JobStatusHistory(
                 [
                     JobStatusItem.create(

@@ -335,3 +335,21 @@ class TestJobFilter:
             ("user1", None),
             ("user2", "name2"),
         ]
+
+    def test_check_project_names(self) -> None:
+        filter = JobFilter(
+            clusters={"test-cluster": {None: {"user1": set(), "user2": {"name2"}}}},
+            projects={"user1", "user2"},
+        )
+        found = []
+        for owner in ("user1", "user2", "user3"):
+            for name in ("name1", "name2", None):
+                job = self._create_job(owner=owner, project_name=owner, name=name)
+                if filter.check(job):
+                    found.append((owner, name))
+        assert found == [
+            ("user1", "name1"),
+            ("user1", "name2"),
+            ("user1", None),
+            ("user2", "name2"),
+        ]

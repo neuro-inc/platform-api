@@ -31,6 +31,7 @@ from platform_api.orchestrator.job import (
     JobRestartPolicy,
     JobStatusItem,
     JobStatusReason,
+    get_base_owner,
     maybe_job_id,
 )
 from platform_api.orchestrator.job_request import (
@@ -44,12 +45,12 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.jobs_service import JobsService, UserClusterConfig
 from platform_api.orchestrator.jobs_storage import (
-    ClusterOrgOwnerNameSet,
+    ClusterOrgProjectNameSet,
     JobFilter,
     JobStorageTransactionError,
 )
 from platform_api.resource import Preset, TPUResource
-from platform_api.user import authorized_user, make_job_uri, untrusted_user
+from platform_api.user import authorized_user, untrusted_user
 from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
 from .job_request_builder import create_container_from_payload
@@ -63,6 +64,7 @@ from .validators import (
     create_job_status_validator,
     create_job_tag_validator,
     create_org_name_validator,
+    create_project_name_validator,
     create_user_name_validator,
     sanitize_dns_name,
 )
@@ -138,6 +140,7 @@ def create_job_request_validator(
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=1),
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
             t.Key("org_name", default=org_name): t.Atom(org_name),
+            t.Key("project_name", optional=True): t.String,
             t.Key("restart_policy", default=str(JobRestartPolicy.NEVER)): t.Enum(
                 *(str(policy) for policy in JobRestartPolicy)
             )
@@ -233,12 +236,21 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
 
 
 def create_job_cluster_org_name_validator(
-    default_cluster_name: str, default_org_name: Optional[str]
+    *,
+    default_cluster_name: str,
+    default_org_name: Optional[str],
+    default_project_name: str,
 ) -> t.Trafaret:
     return t.Dict(
         {
-            t.Key("cluster_name", default=default_cluster_name): t.String,
-            t.Key("org_name", default=default_org_name): t.String | t.Null,
+            t.Key(
+                "cluster_name", default=default_cluster_name
+            ): create_cluster_name_validator(),
+            t.Key("org_name", default=default_org_name): create_org_name_validator()
+            | t.Null,
+            t.Key(
+                "project_name", default=default_project_name
+            ): create_project_name_validator(),
         }
     ).allow_extra("*")
 
@@ -254,6 +266,7 @@ def create_job_response_validator() -> t.Trafaret:
             "owner": t.String(allow_blank=True),
             "cluster_name": t.String(allow_blank=False),
             t.Key("org_name", optional=True): t.String,
+            "project_name": t.String(allow_blank=False),
             "uri": t.String(allow_blank=False),
             # `status` is left for backward compat. the python client/cli still
             # relies on it.
@@ -439,6 +452,7 @@ def convert_job_to_job_response(job: Job) -> dict[str, Any]:
         "id": job.id,
         "owner": job.owner,
         "cluster_name": job.cluster_name,
+        "project_name": job.project_name,
         "status": current_status.status,
         "statuses": [item.to_primitive() for item in history.all],
         "history": {
@@ -508,9 +522,16 @@ def infer_permissions_from_container(
     registry_host: str,
     cluster_name: str,
     org_name: Optional[str],
+    *,
+    project_name: str,
 ) -> list[Permission]:
     permissions = [
-        Permission(uri=str(make_job_uri(user, cluster_name, org_name)), action="write")
+        Permission(
+            uri=str(
+                make_job_uri(user, cluster_name, org_name, project_name=project_name)
+            ),
+            action="write",
+        )
     ]
     if container.belongs_to_registry(registry_host):
         permissions.append(
@@ -530,6 +551,19 @@ def infer_permissions_from_container(
         permission = Permission(uri=str(disk_volume.disk.to_uri()), action=action)
         permissions.append(permission)
     return permissions
+
+
+def make_job_uri(
+    user: AuthUser,
+    cluster_name: str,
+    org_name: Optional[str],
+    project_name: Optional[str] = None,
+) -> URL:
+    return (
+        URL.build(scheme="job", host=cluster_name)
+        / (org_name or "")
+        / (project_name or user.name)
+    )
 
 
 class JobsHandler:
@@ -665,11 +699,14 @@ class JobsHandler:
             default_org_name = cluster_config_for_default_org.orgs[0]
 
         job_cluster_org_name_validator = create_job_cluster_org_name_validator(
-            default_cluster_name, default_org_name
+            default_cluster_name=default_cluster_name,
+            default_org_name=default_org_name,
+            default_project_name=get_base_owner(user.name),
         )
         request_payload = job_cluster_org_name_validator.check(orig_payload)
         cluster_name = request_payload["cluster_name"]
         org_name = request_payload["org_name"]
+        project_name = request_payload["project_name"]
         cluster_config = self._get_cluster_config(
             cluster_configs, cluster_name, org_name
         )
@@ -696,6 +733,7 @@ class JobsHandler:
             cluster_config.ingress.registry_host,
             cluster_name,
             org_name,
+            project_name=project_name,
         )
         await check_permissions(request, permissions)
 
@@ -717,6 +755,7 @@ class JobsHandler:
             user=user,
             cluster_name=cluster_name,
             org_name=org_name,
+            project_name=project_name,
             job_name=name,
             preset_name=preset_name,
             tags=tags,
@@ -1024,6 +1063,7 @@ class JobFilterFactory:
         self._base_owner_name_validator = create_base_owner_name_validator()
         self._cluster_name_validator = create_cluster_name_validator()
         self._org_name_validator = create_org_name_validator()
+        self._project_name_validator = create_project_name_validator()
 
     def create_from_query(self, query: MultiDictProxy) -> JobFilter:  # type: ignore
         statuses = {JobStatus(s) for s in query.getall("status", [])}
@@ -1043,13 +1083,17 @@ class JobFilterFactory:
                 self._base_owner_name_validator.check(owner)
                 for owner in query.getall("base_owner", [])
             }
-            clusters: ClusterOrgOwnerNameSet = {
+            clusters: ClusterOrgProjectNameSet = {
                 self._cluster_name_validator.check(cluster_name): {}
                 for cluster_name in query.getall("cluster_name", [])
             }
             orgs = {
                 self._org_name_validator.check(org_name)
                 for org_name in query.getall("org_name", [])
+            }
+            projects = {
+                self._project_name_validator.check(project_name)
+                for project_name in query.getall("project_name", [])
             }
             since = query.get("since")
             until = query.get("until")
@@ -1059,6 +1103,7 @@ class JobFilterFactory:
                 orgs=orgs,
                 owners=owners,
                 base_owners=base_owners,
+                projects=projects,
                 name=job_name,
                 tags=tags,
                 since=iso8601.parse_date(since) if since else JobFilter.since,
@@ -1066,12 +1111,12 @@ class JobFilterFactory:
                 **bool_filters,  # type: ignore
             )
 
-        for key in ("name", "owner", "cluster_name", "since", "until"):
+        for key in ("name", "project_name", "cluster_name", "since", "until"):
             if key in query:
                 raise ValueError("Invalid request")
 
         label = hostname.partition(".")[0]
-        job_name, sep, base_owner = label.rpartition(JOB_USER_NAMES_SEPARATOR)
+        job_name, sep, project_name = label.rpartition(JOB_USER_NAMES_SEPARATOR)
         if not sep:
             return JobFilter(
                 statuses=statuses,
@@ -1080,10 +1125,10 @@ class JobFilterFactory:
                 **bool_filters,  # type: ignore
             )
         job_name = self._job_name_validator.check(job_name)
-        base_owner = self._base_owner_name_validator.check(base_owner)
+        project_name = self._project_name_validator.check(project_name)
         return JobFilter(
             statuses=statuses,
-            base_owners={base_owner},
+            projects={project_name},
             name=job_name,
             tags=tags,
             **bool_filters,  # type: ignore
@@ -1111,7 +1156,7 @@ class BulkJobFilterBuilder:
         self._clusters_shared_any: dict[
             str, dict[Optional[str], dict[str, set[str]]]
         ] = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
-        self._owners_shared_any: set[str] = set()
+        self._projects_shared_any: set[str] = set()
         self._orgs_shared_any: set[Optional[str]] = set()
         self._shared_ids: set[str] = set()
 
@@ -1142,7 +1187,7 @@ class BulkJobFilterBuilder:
         if (
             not self._clusters_shared_any
             and not self._orgs_shared_any
-            and not self._owners_shared_any
+            and not self._projects_shared_any
             and not self._shared_ids
         ):
             # no job resources whatsoever
@@ -1170,7 +1215,7 @@ class BulkJobFilterBuilder:
                 if self._query_filter.orgs and None not in self._query_filter.orgs:
                     # skipping None org
                     continue
-                self._traverse_owners(sub_tree, cluster_name, None)
+                self._traverse_projects(sub_tree, cluster_name, None)
 
     def _traverse_orgs(self, tree: ClientAccessSubTreeView, cluster_name: str) -> None:
         for org_name, sub_tree in tree.children.items():
@@ -1189,49 +1234,49 @@ class BulkJobFilterBuilder:
                 self._clusters_shared_any[cluster_name][org_name] = {}
             else:
                 # specific ids or names
-                self._traverse_owners(sub_tree, cluster_name, org_name)
+                self._traverse_projects(sub_tree, cluster_name, org_name)
 
-    def _traverse_owners(
+    def _traverse_projects(
         self,
         tree: ClientAccessSubTreeView,
         cluster_name: str,
         org_name: Optional[str],
-        owner_prefix: Optional[str] = None,
     ) -> None:
-        for owner, sub_tree in tree.children.items():
-            if owner_prefix:
-                owner = f"{owner_prefix}/{owner}"
-            if sub_tree.children.keys():
-                self._traverse_owners(sub_tree, cluster_name, org_name, owner)
+        for project, sub_tree in tree.children.items():
             if not sub_tree.can_list():
                 continue
 
-            if self._query_filter.owners and owner not in self._query_filter.owners:
+            if (
+                self._query_filter.projects
+                and project not in self._query_filter.projects
+            ):
                 # skipping owners
                 continue
 
             if sub_tree.can_read():
-                # read/write/manage access to all owner's jobs =
-                # job://cluster/owner or job://cluster/org/owner
+                # read/write/manage access to all jobs within the project =
+                # job://cluster/project or job://cluster/org/project
                 self._orgs_shared_any.add(org_name)
-                self._owners_shared_any.add(owner)
-                self._clusters_shared_any[cluster_name][org_name][owner] = set()
+                self._projects_shared_any.add(project)
+                self._clusters_shared_any[cluster_name][org_name][project] = set()
             else:
                 # specific ids or names
-                self._traverse_jobs(sub_tree, cluster_name, org_name, owner)
+                self._traverse_jobs(sub_tree, cluster_name, org_name, project)
 
     def _traverse_jobs(
         self,
         tree: ClientAccessSubTreeView,
         cluster_name: str,
         org_name: Optional[str],
-        owner: str,
+        project_name: str,
     ) -> None:
         for name, sub_tree in tree.children.items():
             if sub_tree.children.keys():
                 continue  # Not a leaf node
             if sub_tree.can_read():
                 if maybe_job_id(name):
+                    # NOTE: it is not entirely clear why we do not add the project to
+                    # `_projects_shared_any` here.
                     self._shared_ids.add(name)
                     continue
 
@@ -1240,15 +1285,17 @@ class BulkJobFilterBuilder:
                     continue
 
                 self._orgs_shared_any.add(org_name)
-                self._owners_shared_any.add(owner)
-                self._clusters_shared_any[cluster_name][org_name][owner].add(name)
+                self._projects_shared_any.add(project_name)
+                self._clusters_shared_any[cluster_name][org_name][project_name].add(
+                    name
+                )
 
     def _create_bulk_filter(self) -> Optional[JobFilter]:
         if not (
             self._has_access_to_all
             or self._clusters_shared_any
             or self._orgs_shared_any
-            or self._owners_shared_any
+            or self._projects_shared_any
         ):
             return None
         bulk_filter = self._query_filter
@@ -1259,53 +1306,53 @@ class BulkJobFilterBuilder:
         # passed in the query, otherwise pull all.
         if not self._has_clusters_shared_all and self._orgs_shared_any:
             bulk_filter = replace(bulk_filter, orgs=self._orgs_shared_any)
-        # `self._owners_shared_any` is already filtered against
-        # `self._query_filter.owners`.
-        # if `self._owners_shared_any` is empty and no org share full
-        # access, we still want to try to limit the scope to the owners
+        # `self._projects_shared_any` is already filtered against
+        # `self._query_filter.projects`.
+        # if `self._projects_shared_any` is empty and no org share full
+        # access, we still want to try to limit the scope to the projects
         # passed in the query, otherwise pull all.
         if (
             not self._has_clusters_shared_all
             and not self._has_orgs_shared_all
-            and self._owners_shared_any
+            and self._projects_shared_any
         ):
-            bulk_filter = replace(bulk_filter, owners=self._owners_shared_any)
+            bulk_filter = replace(bulk_filter, projects=self._projects_shared_any)
         # `self._clusters_shared_any` is already filtered against
         # `self._query_filter.clusters`.
         # if `self._clusters_shared_any` is empty, we still want to try to limit
         # the scope to the clusters passed in the query, otherwise pull all.
         if not self._has_access_to_all:
-            self._optimize_clusters_owners(
-                bulk_filter.orgs, bulk_filter.owners, bulk_filter.name
+            self._optimize_clusters_projects(
+                bulk_filter.orgs, bulk_filter.projects, bulk_filter.name
             )
             bulk_filter = replace(
                 bulk_filter,
                 clusters={
                     cluster_name: {
-                        org_name: dict(owners) for org_name, owners in orgs.items()
+                        org_name: dict(projects) for org_name, projects in orgs.items()
                     }
                     for cluster_name, orgs in self._clusters_shared_any.items()
                 },
             )
         return bulk_filter
 
-    def _optimize_clusters_owners(
-        self, orgs: Set[Optional[str]], owners: Set[str], name: Optional[str]
+    def _optimize_clusters_projects(
+        self, orgs: Set[Optional[str]], projects: Set[str], name: Optional[str]
     ) -> None:
-        if orgs or owners or name:
+        if orgs or projects or name:
             names = {name}
             for cluster_orgs in self._clusters_shared_any.values():
-                for org_owners in cluster_orgs.values():
+                for org_projects in cluster_orgs.values():
                     if name:
-                        for owner_names in org_owners.values():
-                            if owner_names == names:
-                                owner_names.clear()
+                        for project_names in org_projects.values():
+                            if project_names == names:
+                                project_names.clear()
                     if (
-                        owners
-                        and org_owners.keys() == owners
-                        and not any(org_owners.values())
+                        projects
+                        and org_projects.keys() == projects
+                        and not any(org_projects.values())
                     ):
-                        org_owners.clear()
+                        org_projects.clear()
                 if (
                     orgs
                     and cluster_orgs.keys() == orgs

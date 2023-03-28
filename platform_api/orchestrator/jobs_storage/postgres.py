@@ -20,7 +20,7 @@ from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
 from ..base_postgres_storage import BasePostgresStorage
 from .base import (
-    ClusterOrgOwnerNameSet,
+    ClusterOrgProjectNameSet,
     JobsStorage,
     JobStorageJobFoundError,
     JobStorageTransactionError,
@@ -42,6 +42,7 @@ class JobTables:
             sa.Column("name", sa.String(), nullable=True),
             sa.Column("cluster_name", sa.String(), nullable=False),
             sa.Column("org_name", sa.String(), nullable=True),
+            sa.Column("project_name", sa.String(), nullable=False),
             sa.Column("tags", sapg.JSONB(), nullable=True),
             # Denormalized fields for optimized access/unique constrains checks
             sa.Column("status", sa.String(), nullable=False),
@@ -74,6 +75,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             "name": payload.pop("name", None),
             "cluster_name": payload.pop("cluster_name"),
             "org_name": payload.pop("org_name", None),
+            "project_name": payload.pop("project_name"),
             "tags": payload.pop("tags", None),
             "status": job.status_history.current.status,
             "created_at": job.status_history.created_at,
@@ -88,6 +90,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         payload["name"] = record["name"]
         payload["cluster_name"] = record["cluster_name"]
         payload["org_name"] = record["org_name"]
+        payload["project_name"] = record["project_name"]
         if record["tags"] is not None:
             payload["tags"] = record["tags"]
         return JobRecord.from_primitive(payload)
@@ -96,7 +99,11 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
 
     def _make_description(self, values: Mapping[str, Any]) -> str:
         if values["name"] is not None:
-            return f"id={values['id']}, owner={values['owner']}, name={values['name']}"
+            return (
+                f"id={values['id']}, "
+                f"project={values['project_name']}, "
+                f"name={values['name']}"
+            )
         return f"id={values['id']}"
 
     async def _select_row(
@@ -117,17 +124,14 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         except IntegrityError as exc:
             if isinstance(exc.orig.__cause__, UniqueViolationError):
                 e = exc.orig.__cause__
-                if e.constraint_name == "jobs_name_owner_uq":
+                if e.constraint_name == "jobs_name_project_name_uq":
                     # We need to retrieve conflicting job from database to
                     # build JobStorageJobFoundError
-                    base_owner = values["owner"].split("/")[0]
+                    project_name = values["project_name"]
                     query = (
                         self._tables.jobs.select()
                         .where(self._tables.jobs.c.name == values["name"])
-                        .where(
-                            func.split_part(self._tables.jobs.c.owner, "/", 1)
-                            == base_owner
-                        )
+                        .where(self._tables.jobs.c.project_name == project_name)
                         .where(
                             self._tables.jobs.c.status.in_(JobStatus.active_values())
                         )
@@ -136,7 +140,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
                     if record:
                         raise JobStorageJobFoundError(
                             job_name=values["name"],
-                            job_owner=base_owner,
+                            project_name=project_name,
                             found_job_id=record["id"],
                         )
                     else:
@@ -317,50 +321,55 @@ class JobFilterClauseBuilder:
         self._clauses.append(self._tables.jobs.c.owner.in_(owners))
 
     def filter_base_owners(self, base_owners: Set[str]) -> None:
-        self._clauses.append(
-            func.split_part(self._tables.jobs.c.owner, "/", 1).in_(base_owners)
-        )
+        self._clauses.append(self._create_base_owner_clause(base_owners))
 
-    def filter_clusters(self, clusters: ClusterOrgOwnerNameSet) -> None:
+    def _create_base_owner_clause(self, base_owners: Set[str]) -> sasql.ClauseElement:
+        return func.split_part(self._tables.jobs.c.owner, "/", 1).in_(base_owners)
+
+    def filter_clusters(self, clusters: ClusterOrgProjectNameSet) -> None:
         cluster_clauses = []
         clusters_empty_orgs = []
         for cluster, orgs in clusters.items():
             if not orgs:
                 clusters_empty_orgs.append(cluster)
                 continue
-            orgs_empty_owners = []
-            for org, owners in orgs.items():
-                if not owners:
-                    orgs_empty_owners.append(org)
+            orgs_empty_projects = []
+            for org, projects in orgs.items():
+                if not projects:
+                    orgs_empty_projects.append(org)
                     continue
                 if org is None:
                     org_pred = self._tables.jobs.c.org_name.is_(None)
                 else:
                     org_pred = self._tables.jobs.c.org_name == org
-                owners_empty_names = []
-                for owner, names in owners.items():
+                projects_empty_names = []
+                for project, names in projects.items():
                     if not names:
-                        owners_empty_names.append(owner)
+                        projects_empty_names.append(project)
                         continue
+                    project_pred = self._tables.jobs.c.project_name == project
                     cluster_clauses.append(
                         (self._tables.jobs.c.cluster_name == cluster)
                         & org_pred
-                        & (self._tables.jobs.c.owner == owner)
+                        & project_pred
                         & self._tables.jobs.c.name.in_(names)
                     )
-                if owners_empty_names:
+                if projects_empty_names:
+                    project_pred = self._tables.jobs.c.project_name.in_(
+                        projects_empty_names
+                    )
                     cluster_clauses.append(
                         (self._tables.jobs.c.cluster_name == cluster)
                         & org_pred
-                        & self._tables.jobs.c.owner.in_(owners_empty_names)
+                        & project_pred
                     )
-            not_null_orgs = [org for org in orgs_empty_owners if org is not None]
+            not_null_orgs = [org for org in orgs_empty_projects if org is not None]
             if not_null_orgs:
                 cluster_clauses.append(
                     (self._tables.jobs.c.cluster_name == cluster)
                     & self._tables.jobs.c.org_name.in_(not_null_orgs)
                 )
-            if None in orgs_empty_owners:
+            if None in orgs_empty_projects:
                 cluster_clauses.append(
                     (self._tables.jobs.c.cluster_name == cluster)
                     & self._tables.jobs.c.org_name.is_(None)
@@ -370,6 +379,9 @@ class JobFilterClauseBuilder:
                 self._tables.jobs.c.cluster_name.in_(clusters_empty_orgs)
             )
         self._clauses.append(or_(*cluster_clauses))
+
+    def filter_projects(self, projects: Set[str]) -> None:
+        self._clauses.append(self._tables.jobs.c.project_name.in_(projects))
 
     def filter_orgs(self, orgs: Set[Optional[str]]) -> None:
         not_null_orgs = [org for org in orgs if org is not None]
@@ -432,6 +444,8 @@ class JobFilterClauseBuilder:
             builder.filter_clusters(job_filter.clusters)
         if job_filter.orgs:
             builder.filter_orgs(job_filter.orgs)
+        if job_filter.projects:
+            builder.filter_projects(job_filter.projects)
         if job_filter.name:
             builder.filter_name(job_filter.name)
         if job_filter.ids:

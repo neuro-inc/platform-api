@@ -1,18 +1,10 @@
 import logging
-from typing import Optional
 
 from aiohttp.web import HTTPUnauthorized, Request
 from aiohttp_security.api import AUTZ_KEY, IDENTITY_KEY
 from neuro_auth_client import User as AuthUser
-from yarl import URL
 
 logger = logging.getLogger(__name__)
-
-
-def make_job_uri(user: AuthUser, cluster_name: str, org_name: Optional[str]) -> URL:
-    if org_name is None:
-        return URL.build(scheme="job", host=cluster_name) / user.name
-    return URL.build(scheme="job", host=cluster_name) / org_name / user.name
 
 
 async def untrusted_user(request: Request) -> AuthUser:
