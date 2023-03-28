@@ -826,8 +826,6 @@ class JobsHandler:
             tree = await self._auth_client.get_permissions_tree(user.name, "job:")
 
         try:
-            # if "/" in user.name:
-            #     breakpoint()
             bulk_job_filter = BulkJobFilterBuilder(
                 query_filter=self._job_filter_factory.create_from_query(request.query),
                 access_tree=tree,
@@ -1163,7 +1161,6 @@ class BulkJobFilterBuilder:
         self._shared_ids: set[str] = set()
 
     def build(self) -> BulkJobFilter:
-        # breakpoint()
         self._traverse_access_tree()
         bulk_filter = self._create_bulk_filter()
         shared_ids_filter = self._query_filter if self._shared_ids else None
