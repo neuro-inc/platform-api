@@ -69,6 +69,10 @@ class ResourceGoneException(KubeClientException):
     pass
 
 
+class KubeClientUnauthorizedException(KubeClientException):
+    pass
+
+
 def _raise_status_job_exception(pod: dict[str, Any], job_id: Optional[str]) -> NoReturn:
     if pod["code"] == 409:
         raise AlreadyExistsException(pod.get("reason", "job already exists"))
@@ -1901,6 +1905,11 @@ class KubeClient:
     async def __aexit__(self, *args: Any) -> None:
         await self.close()
 
+    async def _reload_http_client(self) -> None:
+        await self.close()
+        self._token = None
+        await self.init()
+
     @property
     def _api_v1_url(self) -> str:
         return f"{self._base_url}/api/v1"
@@ -2013,11 +2022,20 @@ class KubeClient:
 
     async def _request(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         assert self._client
+        doing_retry = kwargs.pop("doing_retry", False)
+
         async with self._client.request(*args, **kwargs) as response:
-            # TODO (A Danshyn 05/21/18): check status code etc
             payload = await response.json()
-            logging.debug("k8s response payload: %s", payload)
-            return payload
+            logger.debug("k8s response payload: %s", payload)
+        try:
+            self._check_status_payload(payload)
+        except KubeClientUnauthorizedException:
+            if doing_retry:
+                raise
+            await self._reload_http_client()
+            kwargs["doing_retry"] = True
+            payload = await self._request(*args, **kwargs)
+        return payload
 
     async def _watch(
         self,
@@ -2061,7 +2079,6 @@ class KubeClient:
             and payload["reason"] == "Conflict"
         ):
             raise NotFoundException(payload["reason"])
-        self._check_status_payload(payload)
 
     async def get_endpoint(
         self, name: str, namespace: Optional[str] = None
@@ -2089,8 +2106,7 @@ class KubeClient:
             },
         }
         url = self._nodes_url
-        result = await self._request(method="POST", url=url, json=payload)
-        self._check_status_payload(result)
+        await self._request(method="POST", url=url, json=payload)
 
     async def delete_node(self, name: str) -> None:
         url = self._generate_node_url(name)
@@ -2098,16 +2114,14 @@ class KubeClient:
 
     async def get_nodes(self) -> Sequence[Node]:
         payload = await self._request(method="GET", url=self._nodes_url)
-        self._check_status_payload(payload)
         assert payload["kind"] == "NodeList"
-        pods = []
+        nodes = []
         for item in payload["items"]:
-            pods.append(Node.from_primitive(item))
-        return pods
+            nodes.append(Node.from_primitive(item))
+        return nodes
 
     async def get_node(self, name: str) -> Node:
         payload = await self._request(method="GET", url=self._generate_node_url(name))
-        self._check_status_payload(payload)
         assert payload["kind"] == "Node"
         return Node.from_primitive(payload)
 
@@ -2120,7 +2134,6 @@ class KubeClient:
                 "=".join(item) for item in labels.items()
             )
         payload = await self._request(method="GET", url=self._nodes_url, params=params)
-        self._check_status_payload(payload)
         assert payload["kind"] == "NodeList"
         return ListResult.from_primitive(payload)
 
@@ -2162,7 +2175,6 @@ class KubeClient:
     async def get_raw_pods(self, all_namespaces: bool = False) -> ListResult:
         url = self._generate_pods_url(all_namespaces)
         payload = await self._request(method="GET", url=url)
-        self._check_status_payload(payload)
         assert payload["kind"] == "PodList"
         return ListResult.from_primitive(payload)
 
@@ -2198,10 +2210,7 @@ class KubeClient:
             params["labelSelector"] = ",".join(
                 "=".join(item) for item in labels.items()
             )
-        payload = await self._request(
-            method="DELETE", url=self._pods_url, params=params
-        )
-        self._check_status_payload(payload)
+        await self._request(method="DELETE", url=self._pods_url, params=params)
 
     async def create_ingress(
         self,
@@ -2243,15 +2252,11 @@ class KubeClient:
             params["labelSelector"] = ",".join(
                 "=".join(item) for item in labels.items()
             )
-        payload = await self._request(
-            method="DELETE", url=self._ingresses_url, params=params
-        )
-        self._check_status_payload(payload)
+        await self._request(method="DELETE", url=self._ingresses_url, params=params)
 
     async def delete_ingress(self, name: str) -> None:
         url = self._generate_ingress_url(name)
-        payload = await self._request(method="DELETE", url=url)
-        self._check_status_payload(payload)
+        await self._request(method="DELETE", url=url)
 
     def _check_status_payload(self, payload: dict[str, Any]) -> None:
         if payload.get("kind") == "Status":
@@ -2263,6 +2268,8 @@ class KubeClient:
                     raise NotFoundException(payload["reason"])
                 if reason == "Gone":
                     raise ResourceGoneException(payload["reason"])
+                if reason == "Unauthorized":
+                    raise KubeClientUnauthorizedException(payload["reason"])
                 raise StatusException(payload["reason"])
 
     async def add_ingress_rule(self, name: str, rule: IngressRule) -> Ingress:
@@ -2307,7 +2314,6 @@ class KubeClient:
     async def get_service(self, name: str) -> Service:
         url = self._generate_service_url(name)
         payload = await self._request(method="GET", url=url)
-        self._check_status_payload(payload)
         return Service.from_primitive(payload)
 
     async def list_services(self, labels: dict[str, str]) -> list[Service]:
@@ -2316,7 +2322,6 @@ class KubeClient:
         payload = await self._request(
             method="GET", url=url, params={"labelSelector": labelSelector}
         )
-        self._check_status_payload(payload)
         return [Service.from_primitive(item) for item in payload["items"]]
 
     async def delete_service(self, name: str, uid: Optional[str] = None) -> None:
@@ -2331,27 +2336,18 @@ class KubeClient:
             params["labelSelector"] = ",".join(
                 "=".join(item) for item in labels.items()
             )
-        payload = await self._request(
-            method="DELETE", url=self._services_url, params=params
-        )
-        self._check_status_payload(payload)
+        await self._request(method="DELETE", url=self._services_url, params=params)
 
     async def create_docker_secret(self, secret: DockerRegistrySecret) -> None:
         url = self._generate_all_secrets_url(secret.namespace)
-        payload = await self._request(
-            method="POST", url=url, json=secret.to_primitive()
-        )
-        self._check_status_payload(payload)
+        await self._request(method="POST", url=url, json=secret.to_primitive())
 
     async def update_docker_secret(
         self, secret: DockerRegistrySecret, create_non_existent: bool = False
     ) -> None:
         try:
             url = self._generate_secret_url(secret.name, secret.namespace)
-            payload = await self._request(
-                method="PUT", url=url, json=secret.to_primitive()
-            )
-            self._check_status_payload(payload)
+            await self._request(method="PUT", url=url, json=secret.to_primitive())
         except StatusException as exc:
             if exc.args[0] != "NotFound" or not create_non_existent:
                 raise
@@ -2362,9 +2358,7 @@ class KubeClient:
         self, secret_name: str, namespace_name: Optional[str] = None
     ) -> dict[str, Any]:
         url = self._generate_secret_url(secret_name, namespace_name)
-        payload = await self._request(method="GET", url=url)
-        self._check_status_payload(payload)
-        return payload
+        return await self._request(method="GET", url=url)
 
     async def delete_secret(
         self, secret_name: str, namespace_name: Optional[str] = None
@@ -2376,9 +2370,7 @@ class KubeClient:
         self, pvc_name: str, namespace_name: Optional[str] = None
     ) -> dict[str, Any]:
         url = self._generate_pvc_url(pvc_name, namespace_name)
-        payload = await self._request(method="GET", url=url)
-        self._check_status_payload(payload)
-        return payload
+        return await self._request(method="GET", url=url)
 
     async def get_pod_events(
         self, pod_id: str, namespace: str
@@ -2392,7 +2384,6 @@ class KubeClient:
         }
         url = f"{self._api_v1_url}/namespaces/{namespace}/events"
         payload = await self._request(method="GET", url=url, params=params)
-        self._check_status_payload(payload)
         return [KubernetesEvent(item) for item in payload.get("items", [])]
 
     async def exec_pod(
@@ -2525,17 +2516,13 @@ class KubeClient:
             },
         }
         url = self._generate_all_network_policies_url(namespace_name)
-        payload = await self._request(method="POST", url=url, json=request_payload)
-        self._check_status_payload(payload)
-        return payload
+        return await self._request(method="POST", url=url, json=request_payload)
 
     async def get_network_policy(
         self, name: str, namespace_name: Optional[str] = None
     ) -> dict[str, Any]:
         url = self._generate_network_policy_url(name, namespace_name)
-        payload = await self._request(method="GET", url=url)
-        self._check_status_payload(payload)
-        return payload
+        return await self._request(method="GET", url=url)
 
     async def delete_network_policy(
         self, name: str, namespace_name: Optional[str] = None
@@ -2554,12 +2541,11 @@ class KubeClient:
             params["labelSelector"] = ",".join(
                 "=".join(item) for item in labels.items()
             )
-        payload = await self._request(
+        await self._request(
             method="DELETE",
             url=self._generate_all_network_policies_url(namespace_name),
             params=params,
         )
-        self._check_status_payload(payload)
 
     def _generate_node_proxy_url(self, name: str, port: int) -> str:
         return f"{self._api_v1_url}/nodes/{name}:{port}/proxy"
