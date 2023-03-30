@@ -10,7 +10,7 @@ import aiohttp_cors
 from aiohttp.web import HTTPUnauthorized
 from aiohttp.web_urldispatcher import AbstractRoute
 from aiohttp_security import check_permission
-from neuro_admin_client import AdminClient
+from neuro_admin_client import AdminClient, OrgUser, ProjectUser
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
 from neuro_logging import (
@@ -110,9 +110,15 @@ class ConfigApiHandler:
         try:
             user = await authorized_user(request)
             data["authorized"] = True
-            cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
+            user_config = await self._jobs_service.get_user_config(user)
+            data["orgs"] = [
+                self._convert_org_user_to_payload(o) for o in user_config.orgs
+            ]
             data["clusters"] = [
-                self._convert_cluster_config_to_payload(c) for c in cluster_configs
+                self._convert_cluster_config_to_payload(c) for c in user_config.clusters
+            ]
+            data["projects"] = [
+                self._convert_project_user_to_payload(p) for p in user_config.projects
             ]
 
             if self._config.admin_public_url:
@@ -135,6 +141,12 @@ class ConfigApiHandler:
                 data["success_redirect_url"] = str(redirect_url)
 
         return aiohttp.web.json_response(data)
+
+    def _convert_org_user_to_payload(self, org_user: OrgUser) -> dict[str, Any]:
+        return {
+            "name": org_user.org_name,
+            "role": str(org_user.role),
+        }
 
     def _convert_cluster_config_to_payload(
         self, user_cluster_config: UserClusterConfig
@@ -212,6 +224,16 @@ class ConfigApiHandler:
             "end_time": period.end_time.replace(tzinfo=None).isoformat(
                 timespec="minutes"
             ),
+        }
+
+    def _convert_project_user_to_payload(
+        self, project_user: ProjectUser
+    ) -> dict[str, Any]:
+        return {
+            "name": project_user.project_name,
+            "role": str(project_user.role),
+            "cluster_name": project_user.cluster_name,
+            "org_name": project_user.org_name,
         }
 
 

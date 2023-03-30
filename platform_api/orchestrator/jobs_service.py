@@ -10,7 +10,15 @@ from decimal import Decimal
 from typing import Optional, Union
 
 from aiohttp import ClientResponseError
-from neuro_admin_client import AdminClient, ClusterUser, OrgCluster
+from neuro_admin_client import (
+    AdminClient,
+    ClusterUser,
+    GetUserResponse,
+    OrgCluster,
+    OrgUser,
+    ProjectUser,
+    User as AdminUser,
+)
 from neuro_auth_client import AuthClient, Permission, User as AuthUser
 from neuro_notifications_client import (
     Client as NotificationsClient,
@@ -85,6 +93,13 @@ class UserClusterConfig:
     config: ClusterConfig
     # None value means the direct access to cluster without any or:
     orgs: list[Optional[str]]
+
+
+@dataclass(frozen=True)
+class UserConfig:
+    orgs: list[OrgUser]
+    clusters: list[UserClusterConfig]
+    projects: list[ProjectUser]
 
 
 class JobsService:
@@ -460,19 +475,38 @@ class JobsService:
         )
         return [await self._get_cluster_job(record) for record in records]
 
+    async def get_user_config(self, user: AuthUser) -> UserConfig:
+        response = await self._get_admin_user(user)
+        return UserConfig(
+            orgs=response.orgs,
+            clusters=self._get_user_cluster_configs(response),
+            projects=response.projects,
+        )
+
     async def get_user_cluster_configs(self, user: AuthUser) -> list[UserClusterConfig]:
-        configs = []
-        base_name = user.name.split("/", 1)[0]  # SA has access to same clusters as user
-        cluster_to_orgs = defaultdict(list)
+        response = await self._get_admin_user(user)
+        return self._get_user_cluster_configs(response)
+
+    async def _get_admin_user(self, user: AuthUser) -> GetUserResponse:
         try:
-            _, user_clusters = await self._admin_client.get_user_with_clusters(
-                base_name
+            return await self._admin_client.get_user(
+                user.name,
+                include_orgs=True,
+                include_clusters=True,
+                include_projects=True,
             )
-            for user_cluster in user_clusters:
-                cluster_to_orgs[user_cluster.cluster_name].append(user_cluster.org_name)
         except ClientResponseError as e:
             if e.status != 404:
                 raise
+            return GetUserResponse(user=AdminUser(name=user.name, email=""))
+
+    def _get_user_cluster_configs(
+        self, response: GetUserResponse
+    ) -> list[UserClusterConfig]:
+        configs = []
+        cluster_to_orgs = defaultdict(list)
+        for user_cluster in response.clusters:
+            cluster_to_orgs[user_cluster.cluster_name].append(user_cluster.org_name)
         for cluster_name, orgs in cluster_to_orgs.items():
             try:
                 cluster_config = self._cluster_registry.get(cluster_name)
