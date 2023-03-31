@@ -490,7 +490,7 @@ class JobsService:
     async def _get_admin_user(self, user: AuthUser) -> GetUserResponse:
         try:
             return await self._admin_client.get_user(
-                user.name,
+                get_base_owner(user.name),
                 include_orgs=True,
                 include_clusters=True,
                 include_projects=True,
