@@ -5,7 +5,7 @@ from collections import defaultdict
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import AbstractAsyncContextManager
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Optional, cast
 from unittest import mock
 
 import aiohttp.web
@@ -215,7 +215,9 @@ class TestApi:
             expected_payload: dict[str, Any] = {
                 "authorized": True,
                 "admin_url": f"{admin_url}",
+                "orgs": [],
                 "clusters": [],
+                "projects": [],
             }
             assert result == expected_payload
 
@@ -424,18 +426,21 @@ class TestApi:
                     expected_cluster_payload,
                     {**expected_cluster_payload, **{"name": "testcluster2"}},
                 ],
+                "orgs": [],
+                "projects": [],
             }
             assert result == expected_payload
 
             result_orgs = result["clusters"][0]["orgs"]
             assert None in result_orgs
 
-    async def test_config_with_orgs(
+    async def test_config__with_orgs_and_projects(
         self,
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user_factory: UserFactory,
         admin_url: URL,
+        admin_client_factory: Callable[[str], Awaitable[AdminClient]],
     ) -> None:
         url = api.config_url
         regular_user = await regular_user_factory(
@@ -444,7 +449,20 @@ class TestApi:
                 ("test-cluster", "org1", Balance(), Quota()),
                 ("test-cluster", "org2", Balance(), Quota()),
             ],
+            cluster_user_role=ClusterUserRoleType.MANAGER,
         )
+
+        admin_client = await admin_client_factory(regular_user.token)
+
+        org3 = await admin_client.create_org(random_str())
+
+        project1 = await admin_client.create_project(
+            random_str(), regular_user.cluster_name, None
+        )
+        project2 = await admin_client.create_project(
+            random_str(), regular_user.cluster_name, "org1"
+        )
+
         async with client.get(url, headers=regular_user.headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
@@ -552,6 +570,8 @@ class TestApi:
                 "authorized": True,
                 "admin_url": f"{admin_url}",
                 "clusters": [expected_cluster_payload],
+                "orgs": mock.ANY,
+                "projects": mock.ANY,
             }
             assert result == expected_payload
 
@@ -559,6 +579,41 @@ class TestApi:
             assert None in result_orgs
             assert "org1" in result_orgs
             assert "org2" in result_orgs
+
+            assert sorted(result["orgs"], key=lambda o: o["name"]) == sorted(
+                [
+                    {
+                        "name": "org1",
+                        "role": "user",
+                    },
+                    {
+                        "name": "org2",
+                        "role": "user",
+                    },
+                    {
+                        "name": org3.name,
+                        "role": "admin",
+                    },
+                ],
+                key=lambda o: o["name"],
+            )
+            assert sorted(result["projects"], key=lambda o: o["name"]) == sorted(
+                [
+                    {
+                        "name": project1.name,
+                        "cluster_name": regular_user.cluster_name,
+                        "org_name": None,
+                        "role": "admin",
+                    },
+                    {
+                        "name": project2.name,
+                        "cluster_name": regular_user.cluster_name,
+                        "org_name": "org1",
+                        "role": "admin",
+                    },
+                ],
+                key=lambda p: cast(dict[str, Any], p)["name"],
+            )
 
     async def test_config_with_oauth(
         self,
@@ -687,6 +742,8 @@ class TestApi:
                 ],
                 "admin_url": f"{admin_url}",
                 "clusters": [expected_cluster_payload],
+                "orgs": [],
+                "projects": [],
             }
             assert result == expected_payload
 
