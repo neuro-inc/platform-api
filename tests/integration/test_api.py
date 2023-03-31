@@ -454,6 +454,8 @@ class TestApi:
 
         admin_client = await admin_client_factory(regular_user.token)
 
+        org3 = await admin_client.create_org(random_str())
+
         project1 = await admin_client.create_project(
             random_str(), regular_user.cluster_name, None
         )
@@ -578,16 +580,23 @@ class TestApi:
             assert "org1" in result_orgs
             assert "org2" in result_orgs
 
-            assert sorted(result["orgs"], key=lambda o: o["name"]) == [
-                {
-                    "name": "org1",
-                    "role": "user",
-                },
-                {
-                    "name": "org2",
-                    "role": "user",
-                },
-            ]
+            assert sorted(result["orgs"], key=lambda o: o["name"]) == sorted(
+                [
+                    {
+                        "name": "org1",
+                        "role": "user",
+                    },
+                    {
+                        "name": "org2",
+                        "role": "user",
+                    },
+                    {
+                        "name": org3.name,
+                        "role": "admin",
+                    },
+                ],
+                key=lambda o: o["name"],
+            )
             assert sorted(result["projects"], key=lambda o: o["name"]) == sorted(
                 [
                     {
