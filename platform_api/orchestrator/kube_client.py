@@ -7,7 +7,7 @@ import re
 import ssl
 from base64 import b64encode
 from collections import defaultdict
-from collections.abc import AsyncIterator, Callable, Iterable, Sequence
+from collections.abc import AsyncIterator, Callable, Coroutine, Iterable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -32,6 +32,7 @@ from .job_request import (
     ContainerTPUResource,
     ContainerVolume,
     DiskContainerVolume,
+    JobAlreadyExistsException,
     JobError,
     JobNotFoundException,
     JobRequest,
@@ -65,6 +66,10 @@ class NotFoundException(StatusException):
     pass
 
 
+class ConflictException(StatusException):
+    pass
+
+
 class ResourceGoneException(KubeClientException):
     pass
 
@@ -74,6 +79,7 @@ class KubeClientUnauthorizedException(KubeClientException):
 
 
 def _raise_status_job_exception(pod: dict[str, Any], job_id: Optional[str]) -> NoReturn:
+    # TODO (Y.S. 04.2023): Remove it, since status codes are handled by KubeClient
     if pod["code"] == 409:
         raise AlreadyExistsException(pod.get("reason", "job already exists"))
     elif pod["code"] == 404:
@@ -82,6 +88,22 @@ def _raise_status_job_exception(pod: dict[str, Any], job_id: Optional[str]) -> N
         raise JobError(f"cant create job with id {job_id}")
     else:
         raise JobError("unexpected")
+
+
+def _reraise_as_job_exceptions(
+    f: Callable[..., Any]
+) -> Callable[..., Coroutine[Any, Any, Any]]:
+    async def _inner(*args: Any, **kwargs: dict[str, Any]) -> Any:
+        try:
+            return await f(*args, **kwargs)
+        except AlreadyExistsException as e:
+            raise JobAlreadyExistsException(str(e))
+        except NotFoundException:
+            raise JobNotFoundException("job was not found")
+        except StatusException as e:
+            raise JobError(f"unexpected: {e}")
+
+    return _inner
 
 
 class GroupVersion(str, Enum):
@@ -2071,14 +2093,12 @@ class KubeClient:
         request_payload = None
         if uid:
             request_payload = {"preconditions": {"uid": uid}}
-        payload = await self._request(method="DELETE", url=url, json=request_payload)
-        if (
-            uid
-            and payload["kind"] == "Status"
-            and payload["status"] == "Failure"
-            and payload["reason"] == "Conflict"
-        ):
-            raise NotFoundException(payload["reason"])
+        try:
+            await self._request(method="DELETE", url=url, json=request_payload)
+        except ConflictException as e:
+            # This might happen if we try to remove resource by it's name, but
+            # different UID, see https://github.com/neuro-inc/platform-api/pull/1525
+            raise NotFoundException(str(e))
 
     async def get_endpoint(
         self, name: str, namespace: Optional[str] = None
@@ -2150,6 +2170,7 @@ class KubeClient:
         async for event in self._watch(self._nodes_url, params, resource_version):
             yield event
 
+    @_reraise_as_job_exceptions
     async def create_pod(self, descriptor: PodDescriptor) -> PodDescriptor:
         payload = await self._request(
             method="POST", url=self._pods_url, json=descriptor.to_primitive()
@@ -2163,6 +2184,7 @@ class KubeClient:
         url = self._generate_pod_url(name) + "/status"
         return await self._request(method="PUT", url=url, json=payload)
 
+    @_reraise_as_job_exceptions
     async def get_pod(self, pod_name: str) -> PodDescriptor:
         url = self._generate_pod_url(pod_name)
         payload = await self._request(method="GET", url=url)
@@ -2185,12 +2207,14 @@ class KubeClient:
         async for event in self._watch(url, resource_version=resource_version):
             yield event
 
+    @_reraise_as_job_exceptions
     async def get_pod_status(self, pod_id: str) -> PodStatus:
         pod = await self.get_pod(pod_id)
         if pod.status is None:
             raise ValueError("Missing pod status")
         return pod.status
 
+    @_reraise_as_job_exceptions
     async def delete_pod(self, pod_name: str, force: bool = False) -> PodStatus:
         url = self._generate_pod_url(pod_name)
         request_payload = None
@@ -2212,6 +2236,7 @@ class KubeClient:
             )
         await self._request(method="DELETE", url=self._pods_url, params=params)
 
+    @_reraise_as_job_exceptions
     async def create_ingress(
         self,
         name: str,
@@ -2239,6 +2264,7 @@ class KubeClient:
         )
         return Ingress.from_primitive(payload)
 
+    @_reraise_as_job_exceptions
     async def get_ingress(self, name: str) -> Ingress:
         url = self._generate_ingress_url(name)
         payload = await self._request(method="GET", url=url)
@@ -2270,8 +2296,11 @@ class KubeClient:
                     raise ResourceGoneException(payload["reason"])
                 if reason == "Unauthorized":
                     raise KubeClientUnauthorizedException(payload["reason"])
+                if reason == "Conflict":
+                    raise ConflictException(payload["reason"])
                 raise StatusException(payload["reason"])
 
+    @_reraise_as_job_exceptions
     async def add_ingress_rule(self, name: str, rule: IngressRule) -> Ingress:
         # TODO (A Danshyn 06/13/18): test if does not exist already
         url = self._generate_ingress_url(name)
