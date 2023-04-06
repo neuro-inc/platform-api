@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import asyncio
-from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Optional, Protocol, Union, cast
+from typing import Protocol, cast
 
 import aiodocker
 import pytest
@@ -163,10 +165,9 @@ def test_cluster_name() -> str:
 class UserFactory(Protocol):
     async def __call__(
         self,
-        name: Optional[str] = None,
-        clusters: Optional[
-            list[Union[tuple[str, Balance, Quota], tuple[str, str, Balance, Quota]]]
-        ] = None,
+        name: str | None = None,
+        clusters: (list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]])
+        | None = None,
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
     ) -> _User:
@@ -181,12 +182,12 @@ async def regular_user_factory(
     token_factory: Callable[[str], str],
     admin_token: str,
     test_cluster_name: str,
+    admin_client_factory: Callable[[str], Awaitable[AdminClient]],
 ) -> UserFactory:
     async def _factory(
-        name: Optional[str] = None,
-        clusters: Optional[
-            list[Union[tuple[str, Balance, Quota], tuple[str, str, Balance, Quota]]]
-        ] = None,
+        name: str | None = None,
+        clusters: (list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]])
+        | None = None,
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
     ) -> _User:
@@ -195,8 +196,10 @@ async def regular_user_factory(
         if clusters is None:
             clusters = [(test_cluster_name, Balance(), Quota())]
         await admin_client.create_user(name=name, email=f"{name}@email.com")
+        user_token = token_factory(name)
+        user_admin_client = await admin_client_factory(user_token)
         for entry in clusters:
-            org_name: Optional[str] = None
+            org_name: str | None = None
             if len(entry) == 3:
                 cluster, balance, quota = cast(tuple[str, Balance, Quota], entry)
             else:
@@ -213,6 +216,7 @@ async def regular_user_factory(
                 await config_client.create_cluster(name=cluster)
             except ClientResponseError:
                 pass
+
             if org_name is not None:
                 try:
                     await admin_client.create_org(org_name)
@@ -233,6 +237,11 @@ async def regular_user_factory(
                     )
                 except ClientResponseError:
                     pass
+                # creating a default project in the tenant for the user
+                try:
+                    await user_admin_client.create_project(name, cluster, org_name)
+                except ClientResponseError:
+                    pass
             try:
                 await admin_client.create_cluster_user(
                     cluster_name=cluster,
@@ -244,7 +253,11 @@ async def regular_user_factory(
                 )
             except ClientResponseError:
                 pass
-        user_token = token_factory(name)
+            # creating a default project in the cluster for the user
+            try:
+                await user_admin_client.create_project(name, cluster, None)
+            except ClientResponseError:
+                pass
         return _User(
             name=name,
             token=user_token,
@@ -258,7 +271,7 @@ class ServiceAccountFactory(Protocol):
     async def __call__(
         self,
         owner: _User,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> _User:
         ...
 
@@ -272,7 +285,7 @@ async def service_account_factory(
 ) -> ServiceAccountFactory:
     async def _factory(
         owner: _User,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> _User:
         if not name:
             name = random_str()
