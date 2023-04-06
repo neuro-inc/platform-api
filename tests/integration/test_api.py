@@ -234,8 +234,7 @@ class TestApi:
                 ("test-cluster", Balance(), Quota()),
                 ("testcluster2", Balance(), Quota()),
             ],
-            do_create_cluster_project=False,
-            do_create_org_project=False,
+            do_create_project=False,
         )
         async with client.get(url, headers=regular_user.headers) as resp:
             assert resp.status == HTTPOk.status_code, await resp.text()
@@ -452,8 +451,7 @@ class TestApi:
                 ("test-cluster", "org2", Balance(), Quota()),
             ],
             cluster_user_role=ClusterUserRoleType.MANAGER,
-            do_create_cluster_project=False,
-            do_create_org_project=False,
+            do_create_project=False,
         )
 
         admin_client = await admin_client_factory(regular_user.token)
@@ -627,8 +625,7 @@ class TestApi:
         admin_url: URL,
     ) -> None:
         regular_user = await regular_user_factory(
-            do_create_cluster_project=False,
-            do_create_org_project=False,
+            do_create_project=False,
         )
         url = api_with_oauth.config_url
         async with client.get(url, headers=regular_user.headers) as resp:
