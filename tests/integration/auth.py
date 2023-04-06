@@ -170,6 +170,8 @@ class UserFactory(Protocol):
         | None = None,
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
+        do_create_cluster_project: bool = True,
+        do_create_org_project: bool = True,
     ) -> _User:
         ...
 
@@ -190,6 +192,8 @@ async def regular_user_factory(
         | None = None,
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
+        do_create_cluster_project: bool = True,
+        do_create_org_project: bool = True,
     ) -> _User:
         if not name:
             name = random_str()
@@ -237,11 +241,12 @@ async def regular_user_factory(
                     )
                 except ClientResponseError:
                     pass
-                # creating a default project in the tenant for the user
-                try:
-                    await user_admin_client.create_project(name, cluster, org_name)
-                except ClientResponseError:
-                    pass
+                if do_create_org_project:
+                    # creating a default project in the tenant for the user
+                    try:
+                        await user_admin_client.create_project(name, cluster, org_name)
+                    except ClientResponseError:
+                        pass
             try:
                 await admin_client.create_cluster_user(
                     cluster_name=cluster,
@@ -253,11 +258,12 @@ async def regular_user_factory(
                 )
             except ClientResponseError:
                 pass
-            # creating a default project in the cluster for the user
-            try:
-                await user_admin_client.create_project(name, cluster, None)
-            except ClientResponseError:
-                pass
+            if do_create_cluster_project:
+                # creating a default project in the cluster for the user
+                try:
+                    await user_admin_client.create_project(name, cluster, None)
+                except ClientResponseError:
+                    pass
         return _User(
             name=name,
             token=user_token,
