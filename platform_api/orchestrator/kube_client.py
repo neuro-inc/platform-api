@@ -7,8 +7,8 @@ import re
 import ssl
 from base64 import b64encode
 from collections import defaultdict
-from collections.abc import AsyncIterator, Callable, Coroutine, Iterable, Sequence
-from contextlib import suppress
+from collections.abc import AsyncIterator, Callable, Iterable, Iterator, Sequence
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
@@ -90,20 +90,16 @@ def _raise_status_job_exception(pod: dict[str, Any], job_id: Optional[str]) -> N
         raise JobError("unexpected")
 
 
-def _reraise_as_job_exceptions(
-    f: Callable[..., Any]
-) -> Callable[..., Coroutine[Any, Any, Any]]:
-    async def _inner(*args: Any, **kwargs: dict[str, Any]) -> Any:
-        try:
-            return await f(*args, **kwargs)
-        except AlreadyExistsException as e:
-            raise JobAlreadyExistsException(str(e))
-        except NotFoundException:
-            raise JobNotFoundException("job was not found")
-        except StatusException as e:
-            raise JobError(f"unexpected: {e}")
-
-    return _inner
+@contextmanager
+def _reraise_as_job_exceptions() -> Iterator[None]:
+    try:
+        yield
+    except AlreadyExistsException as e:
+        raise JobAlreadyExistsException(str(e))
+    except NotFoundException:
+        raise JobNotFoundException("job was not found")
+    except StatusException as e:
+        raise JobError(f"unexpected: {e}")
 
 
 class GroupVersion(str, Enum):
@@ -2170,11 +2166,11 @@ class KubeClient:
         async for event in self._watch(self._nodes_url, params, resource_version):
             yield event
 
-    @_reraise_as_job_exceptions
     async def create_pod(self, descriptor: PodDescriptor) -> PodDescriptor:
-        payload = await self._request(
-            method="POST", url=self._pods_url, json=descriptor.to_primitive()
-        )
+        with _reraise_as_job_exceptions():
+            payload = await self._request(
+                method="POST", url=self._pods_url, json=descriptor.to_primitive()
+            )
         pod = PodDescriptor.from_primitive(payload)
         return pod
 
@@ -2184,10 +2180,10 @@ class KubeClient:
         url = self._generate_pod_url(name) + "/status"
         return await self._request(method="PUT", url=url, json=payload)
 
-    @_reraise_as_job_exceptions
     async def get_pod(self, pod_name: str) -> PodDescriptor:
         url = self._generate_pod_url(pod_name)
-        payload = await self._request(method="GET", url=url)
+        with _reraise_as_job_exceptions():
+            payload = await self._request(method="GET", url=url)
         return PodDescriptor.from_primitive(payload)
 
     async def get_raw_pod(self, name: str) -> dict[str, Any]:
@@ -2207,14 +2203,13 @@ class KubeClient:
         async for event in self._watch(url, resource_version=resource_version):
             yield event
 
-    @_reraise_as_job_exceptions
     async def get_pod_status(self, pod_id: str) -> PodStatus:
-        pod = await self.get_pod(pod_id)
+        with _reraise_as_job_exceptions():
+            pod = await self.get_pod(pod_id)
         if pod.status is None:
             raise ValueError("Missing pod status")
         return pod.status
 
-    @_reraise_as_job_exceptions
     async def delete_pod(self, pod_name: str, force: bool = False) -> PodStatus:
         url = self._generate_pod_url(pod_name)
         request_payload = None
@@ -2224,7 +2219,10 @@ class KubeClient:
                 "kind": "DeleteOptions",
                 "gracePeriodSeconds": 0,
             }
-        payload = await self._request(method="DELETE", url=url, json=request_payload)
+        with _reraise_as_job_exceptions():
+            payload = await self._request(
+                method="DELETE", url=url, json=request_payload
+            )
         pod = PodDescriptor.from_primitive(payload)
         return pod.status  # type: ignore
 
@@ -2236,7 +2234,6 @@ class KubeClient:
             )
         await self._request(method="DELETE", url=self._pods_url, params=params)
 
-    @_reraise_as_job_exceptions
     async def create_ingress(
         self,
         name: str,
@@ -2259,15 +2256,16 @@ class KubeClient:
             payload = ingress.to_v1_primitive()
         else:
             payload = ingress.to_v1beta1_primitive()
-        payload = await self._request(
-            method="POST", url=self._ingresses_url, json=payload
-        )
+        with _reraise_as_job_exceptions():
+            payload = await self._request(
+                method="POST", url=self._ingresses_url, json=payload
+            )
         return Ingress.from_primitive(payload)
 
-    @_reraise_as_job_exceptions
     async def get_ingress(self, name: str) -> Ingress:
         url = self._generate_ingress_url(name)
-        payload = await self._request(method="GET", url=url)
+        with _reraise_as_job_exceptions():
+            payload = await self._request(method="GET", url=url)
         return Ingress.from_primitive(payload)
 
     async def delete_all_ingresses(
@@ -2300,7 +2298,6 @@ class KubeClient:
                     raise ConflictException(payload["reason"])
                 raise StatusException(payload["reason"])
 
-    @_reraise_as_job_exceptions
     async def add_ingress_rule(self, name: str, rule: IngressRule) -> Ingress:
         # TODO (A Danshyn 06/13/18): test if does not exist already
         url = self._generate_ingress_url(name)
@@ -2310,9 +2307,10 @@ class KubeClient:
         else:
             rule_payload = rule.to_v1beta1_primitive()
         patches = [{"op": "add", "path": "/spec/rules/-", "value": rule_payload}]
-        payload = await self._request(
-            method="PATCH", url=url, headers=headers, json=patches
-        )
+        with _reraise_as_job_exceptions():
+            payload = await self._request(
+                method="PATCH", url=url, headers=headers, json=patches
+            )
         return Ingress.from_primitive(payload)
 
     async def remove_ingress_rule(self, name: str, host: str) -> Ingress:
