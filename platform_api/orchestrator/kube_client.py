@@ -1878,7 +1878,7 @@ class KubeClient:
         return ssl_context
 
     async def init(self) -> None:
-        if self._client:
+        if self._client and not self._client.closed:
             return
         connector = aiohttp.TCPConnector(
             limit=self._conn_pool_size, ssl=self._create_ssl_context()
@@ -1902,7 +1902,6 @@ class KubeClient:
         )
 
     async def init_api_resources(self) -> None:
-        assert self._client
         for gv in APIResources.group_versions:
             try:
                 self._api_resources[gv] = await self.get_api_resource(gv)
@@ -2039,6 +2038,7 @@ class KubeClient:
         return f"{all_pvcs_url}/{pvc_name}"
 
     async def _request(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        await self.init()
         assert self._client
         doing_retry = kwargs.pop("doing_retry", False)
 
@@ -2065,6 +2065,7 @@ class KubeClient:
         params.update(watch="true", allowWatchBookmarks="true")
         if resource_version:
             params["resourceVersion"] = resource_version
+        await self.init()
         assert self._client
         async with self._client.get(
             url, params=params, timeout=aiohttp.ClientTimeout()
@@ -2434,7 +2435,9 @@ class KubeClient:
                 args.add("command", part)
 
         url = url.with_query(args)
-        ws = await self._client.ws_connect(url, method="POST")  # type: ignore
+        await self.init()
+        assert self._client
+        ws = await self._client.ws_connect(url, method="POST")
         return PodExec(ws)
 
     async def wait_pod_is_running(
