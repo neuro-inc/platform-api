@@ -337,6 +337,7 @@ class TestJobsService:
         assert passed_data["token"] == f"token-{test_user.name}"
         assert passed_data["cluster"] == original_job.cluster_name
         assert passed_data["org_name"] == original_job.org_name
+        assert passed_data["project_name"] == original_job.project_name
         token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
         assert mock_auth_client.grants[0] == (
             test_user.name,
