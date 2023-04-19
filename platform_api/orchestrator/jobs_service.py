@@ -191,6 +191,7 @@ class JobsService:
         cluster_name: str,
         org_name: Optional[str],
         job_request: JobRequest,
+        project_name: Optional[str] = None,
     ) -> JobRequest:
         if NEURO_PASSED_CONFIG in job_request.container.env:
             raise JobsServiceException(
@@ -206,6 +207,7 @@ class JobsService:
                     "cluster": cluster_name,
                     "org_name": org_name,
                     "url": str(self._api_base_url),
+                    "project_name": project_name,
                 }
             ).encode()
         ).decode()
@@ -291,7 +293,7 @@ class JobsService:
 
         if pass_config:
             job_request = await self._setup_pass_config(
-                user, cluster_name, org_name, job_request
+                user, cluster_name, org_name, job_request, project_name
             )
 
         record = JobRecord.create(
