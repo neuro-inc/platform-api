@@ -166,7 +166,7 @@ class TestPVCVolume:
 
 class TestSecretVolume:
     def test_to_primitive_no_items(self) -> None:
-        secret_name = "user--alice--secrets"
+        secret_name = "project--alice--secrets"
         volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
         assert volume.to_primitive() == {
             "name": "testvolume",
@@ -174,7 +174,7 @@ class TestSecretVolume:
         }
 
     def test_create_secret_mounts(self) -> None:
-        secret_name = "user--alice--secrets"
+        secret_name = "project--alice--secrets"
         volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
         container_volumes = [
             SecretContainerVolume.create(
@@ -209,7 +209,7 @@ class TestSecretEnvVar:
         assert sec_env_var.to_primitive() == {
             "name": "sec-name",
             "valueFrom": {
-                "secretKeyRef": {"name": "user--test-user--secrets", "key": "sec1"}
+                "secretKeyRef": {"name": "project--test-user--secrets", "key": "sec1"}
             },
         }
 

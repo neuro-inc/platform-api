@@ -2461,7 +2461,7 @@ class TestJobs:
         secret_kind: str,
     ) -> None:
         """This test checks the case when the user's k8s secret
-        'user--{user_name}--secrets' is present, but requested secret
+        'project--{user_name}--secrets' is present, but requested secret
         key not found
         """
         user = regular_user
