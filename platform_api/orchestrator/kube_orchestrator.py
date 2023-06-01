@@ -254,8 +254,8 @@ class KubeOrchestrator(Orchestrator):
         return self._kube_config.storage_volume_name + name_suffix
 
     @classmethod
-    def create_secret_volume(cls, user_name: str) -> SecretVolume:
-        name = cls._get_k8s_secret_name(user_name)
+    def create_secret_volume(cls, project_name: str) -> SecretVolume:
+        name = cls._get_k8s_secret_name(project_name)
         if len(name) > 63:
             volume_name = name[:50] + secrets.token_hex(6)
         else:
@@ -263,8 +263,8 @@ class KubeOrchestrator(Orchestrator):
         return SecretVolume(name=volume_name, k8s_secret_name=name)
 
     @classmethod
-    def _get_k8s_secret_name(cls, user_name: str) -> str:
-        return f"user--{user_name.replace('/', '--')}--secrets"
+    def _get_k8s_secret_name(cls, project_name: str) -> str:
+        return f"project--{project_name.replace('/', '--')}--secrets"
 
     def _get_user_resource_name(self, job: Job) -> str:
         return (self._docker_secret_name_prefix + job.owner.replace("/", "--")).lower()

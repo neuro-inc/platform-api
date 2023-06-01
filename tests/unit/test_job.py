@@ -233,7 +233,7 @@ class TestSecret:
     def test_k8s_secret_name(self) -> None:
         uri = "secret://test-cluster/test-user/test-secret%252d"
         sec = Secret.create(uri)
-        assert sec.k8s_secret_name == "user--test-user--secrets"
+        assert sec.k8s_secret_name == "project--test-user--secrets"
 
     def test_to_uri(self) -> None:
         uri = "secret://test-cluster/test-user/test-secret%252d"

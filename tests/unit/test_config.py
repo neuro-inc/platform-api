@@ -317,7 +317,8 @@ class TestSecretVolume:
         user_name = "test-user"
         volume = kube_orchestrator.create_secret_volume(user_name)
         assert volume == SecretVolume(
-            name="user--test-user--secrets", k8s_secret_name="user--test-user--secrets"
+            name="project--test-user--secrets",
+            k8s_secret_name="project--test-user--secrets",
         )
 
 

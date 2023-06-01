@@ -125,7 +125,7 @@ class Secret:
 
     @property
     def k8s_secret_name(self) -> str:
-        return f"user--{self.path.replace('/', '--')}--secrets"
+        return f"project--{self.path.replace('/', '--')}--secrets"
 
     def to_uri(self) -> URL:
         return (
