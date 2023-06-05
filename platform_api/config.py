@@ -14,6 +14,8 @@ from .orchestrator.kube_config import KubeConfig
 
 STORAGE_URI_SCHEME = "storage"
 
+NO_ORG = "NO_ORG"
+
 
 class StorageType(str, Enum):
     HOST = "host"

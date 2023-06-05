@@ -9,7 +9,6 @@ from typing import Any, Optional
 import aiohttp.web
 import iso8601
 import trafaret as t
-import trafaret.keys
 from aiohttp_security import check_authorized
 from multidict import MultiDictProxy
 from neuro_auth_client import (
@@ -22,7 +21,7 @@ from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewR
 from yarl import URL
 
 from platform_api.cluster_config import ClusterConfig
-from platform_api.config import STORAGE_URI_SCHEME, Config
+from platform_api.config import NO_ORG, STORAGE_URI_SCHEME, Config
 from platform_api.log import log_debug_time
 from platform_api.orchestrator.job import (
     JOB_USER_NAMES_SEPARATOR,
@@ -1137,7 +1136,7 @@ class JobFilterFactory:
     def _parse_org_name(self, org_name: str) -> Optional[str]:
         return (
             None
-            if org_name.upper() == "NO_ORG"
+            if org_name.upper() == NO_ORG
             else self._org_name_validator.check(org_name)
         )
 
