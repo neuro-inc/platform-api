@@ -9,6 +9,7 @@ from typing import Any, Optional
 import aiohttp.web
 import iso8601
 import trafaret as t
+import trafaret.keys
 from aiohttp_security import check_authorized
 from multidict import MultiDictProxy
 from neuro_auth_client import (
