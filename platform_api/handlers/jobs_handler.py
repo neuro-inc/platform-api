@@ -1088,7 +1088,7 @@ class JobFilterFactory:
                 for cluster_name in query.getall("cluster_name", [])
             }
             orgs = {
-                self._org_name_validator.check(org_name)
+                self._parse_org_name(org_name)
                 for org_name in query.getall("org_name", [])
             }
             projects = {
@@ -1132,6 +1132,13 @@ class JobFilterFactory:
             name=job_name,
             tags=tags,
             **bool_filters,  # type: ignore
+        )
+
+    def _parse_org_name(self, org_name: str) -> Optional[str]:
+        return (
+            None
+            if org_name.upper() == "NO_ORG"
+            else self._org_name_validator.check(org_name)
         )
 
 

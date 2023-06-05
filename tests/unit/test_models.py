@@ -1075,6 +1075,11 @@ class TestJobFilterFactory:
         query = MultiDict([("logs_removed", "False")])
         assert factory(query) == JobFilter(logs_removed=False)
 
+        query = MultiDict(
+            [("org_name", "NO_ORG"), ("org_name", "org1"), ("org_name", "org2")]
+        )
+        assert factory(query) == JobFilter(orgs={None, "org1", "org2"})
+
     def test_create_from_query_with_status(self) -> None:
         factory = JobFilterFactory().create_from_query
 
@@ -1185,6 +1190,7 @@ class TestJobFilterFactory:
             [("hostname", "testjob--johndoe.example.org"), ("project_name", "johndoe")],
             [("hostname", "TESTJOB--johndoe.example.org")],
             [("hostname", "testjob--JOHNDOE.example.org")],
+            [("org_name", "invalid_org")],
         ],
     )
     def test_create_from_query_fail(self, query: Any) -> None:
