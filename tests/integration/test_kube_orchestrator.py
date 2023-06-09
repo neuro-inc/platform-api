@@ -1653,7 +1653,9 @@ class TestKubeOrchestrator:
                 ),
             ]
 
-            missing = await orchestrator.get_missing_disks(disks=[disk1, disk2, disk3])
+            missing = await orchestrator.get_missing_disks(
+                disks=[disk1, disk2, disk3, disk4]
+            )
             assert missing == [disk3, disk4]
 
     async def test_job_pod_with_disk_volume_simple_ok(
