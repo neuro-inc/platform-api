@@ -1626,14 +1626,20 @@ class TestKubeOrchestrator:
                 kube_config.namespace,
                 labels={
                     "platform.neuromation.io/user": "another_user",
+                    "platform.neuromation.io/project": "test_project",
                 },
             )
 
-            disk1, disk2, disk3 = [
+            disk1, disk2, disk3, disk4 = [
                 Disk(
                     cluster_name=cluster_name,
                     path="user",
                     disk_id="disk-1",
+                ),
+                Disk(
+                    cluster_name=cluster_name,
+                    path="test_project",
+                    disk_id="disk-2",
                 ),
                 Disk(
                     cluster_name=cluster_name,
@@ -1648,7 +1654,7 @@ class TestKubeOrchestrator:
             ]
 
             missing = await orchestrator.get_missing_disks(disks=[disk1, disk2, disk3])
-            assert missing == [disk2, disk3]
+            assert missing == [disk3, disk4]
 
     async def test_job_pod_with_disk_volume_simple_ok(
         self,

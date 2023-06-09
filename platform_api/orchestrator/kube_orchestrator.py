@@ -500,12 +500,17 @@ class KubeOrchestrator(Orchestrator):
                 pvc = await self._client.get_raw_pvc(
                     disk.disk_id, self._kube_config.namespace
                 )
-                pvc_path: str = pvc["metadata"]["labels"][
+                pvc_user: str = pvc["metadata"]["labels"][
                     "platform.neuromation.io/user"
-                ].replace("--", "/")
+                ]
+                pvc_project: str = pvc["metadata"]["labels"].get(
+                    "platform.neuromation.io/project"
+                )
                 pvc_org: Optional[str] = pvc["metadata"]["labels"].get(
                     "platform.neuromation.io/disk-api-org-name"
                 )
+                pvc_path = pvc_project or pvc_user
+                pvc_path = pvc_path.replace("--", "/")
                 if pvc_org:
                     pvc_path = f"{pvc_org}/{pvc_path}"
                 if disk.path != pvc_path:
