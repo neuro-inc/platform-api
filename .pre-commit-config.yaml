@@ -5,7 +5,7 @@ repos:
   - id: check-merge-conflict
     exclude: "rst$"
 - repo: https://github.com/asottile/yesqa
-  rev: v1.4.0
+  rev: v1.5.0
   hooks:
   - id: yesqa
 - repo: https://github.com/sondrelg/pep585-upgrade
@@ -15,7 +15,7 @@ repos:
     args:
     - --futures=true
 - repo: https://github.com/Zac-HD/shed
-  rev: 2023.3.1
+  rev: 2023.5.2
   hooks:
   - id: shed
     args:
@@ -62,7 +62,7 @@ repos:
 #     - -ignore
 #     - 'SC1004:'
 - repo: https://github.com/sirosen/check-jsonschema
-  rev: 0.21.0
+  rev: 0.23.1
   hooks:
   - id: check-github-actions
   - id: check-github-workflows
