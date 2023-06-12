@@ -2073,14 +2073,12 @@ class KubeClient:
             if response.status == 410:
                 raise ResourceGoneException
             async for line in response.content:
+                payload = json.loads(line)
                 try:
-                    payload = json.loads(line)
-                except ValueError:
-                    logger.warning("received invalid watch event object: %s", line)
-                    continue
-                if "type" not in payload or "object" not in payload:
-                    logger.warning("received invalid watch event object: %s", line)
-                    continue
+                    self._check_status_payload(payload)
+                except KubeClientUnauthorizedException:
+                    await self._reload_http_client()
+                    raise
                 if WatchEvent.is_error(payload):
                     self._check_status_payload(payload["object"])
                 if WatchBookmarkEvent.is_bookmark(payload):
@@ -2644,6 +2642,8 @@ class Watcher(abc.ABC):
                         continue
                     for handler in self._handlers:
                         await handler.handle(event)
+            except KubeClientUnauthorizedException as exc:
+                logger.warning("Kube client unauthorized error", exc_info=exc)
             except ResourceGoneException as exc:
                 logger.warning("Resource gone", exc_info=exc)
             except aiohttp.ClientError as exc:
