@@ -78,6 +78,10 @@ class KubeClientUnauthorizedException(KubeClientException):
     pass
 
 
+class ExpiredException(KubeClientException):
+    pass
+
+
 def _raise_status_job_exception(pod: dict[str, Any], job_id: Optional[str]) -> NoReturn:
     # TODO (Y.S. 04.2023): Remove it, since status codes are handled by KubeClient
     if pod["code"] == 409:
@@ -2079,6 +2083,9 @@ class KubeClient:
                 except KubeClientUnauthorizedException:
                     await self._reload_http_client()
                     raise
+                except ExpiredException:
+                    await self._reload_http_client()
+                    raise
                 if WatchEvent.is_error(payload):
                     self._check_status_payload(payload["object"])
                 if WatchBookmarkEvent.is_bookmark(payload):
@@ -2300,6 +2307,8 @@ class KubeClient:
                     raise ResourceGoneException(payload["reason"])
                 if reason == "Unauthorized":
                     raise KubeClientUnauthorizedException(payload["reason"])
+                if reason == "Expired":
+                    raise ExpiredException(payload["reason"])
                 if reason == "Conflict":
                     raise ConflictException(payload["reason"])
                 raise StatusException(payload["reason"])
@@ -2644,6 +2653,8 @@ class Watcher(abc.ABC):
                         await handler.handle(event)
             except KubeClientUnauthorizedException as exc:
                 logger.warning("Kube client unauthorized error", exc_info=exc)
+            except ExpiredException as exc:
+                logger.warning("Kube token expired error", exc_info=exc)
             except ResourceGoneException as exc:
                 logger.warning("Resource gone", exc_info=exc)
             except aiohttp.ClientError as exc:
