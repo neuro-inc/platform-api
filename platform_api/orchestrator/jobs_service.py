@@ -225,11 +225,11 @@ class JobsService:
             orchestrator_config.jobs_internal_domain_name_template.format(job_id=job.id)
         )
         if job.is_named:
-            from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
+            from platform_api.handlers.validators import JOB_NAME_SEPARATOR
 
             job.internal_hostname_named = (
                 orchestrator_config.jobs_internal_domain_name_template.format(
-                    job_id=f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.project_name}"
+                    job_id=f"{job.name}{JOB_NAME_SEPARATOR}{job.project_name}"
                 )
             )
 

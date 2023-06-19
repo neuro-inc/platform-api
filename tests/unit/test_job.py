@@ -1,8 +1,9 @@
 import dataclasses
+import hashlib
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
-from typing import Any
+from typing import Any, Optional
 from unittest import mock
 
 import pytest
@@ -556,6 +557,16 @@ class TestJob:
         )
         assert job.http_host == "testjob.jobs"
 
+    @classmethod
+    def _create_http_host_named_suffix(
+        cls, org_name: Optional[str], project_name: str
+    ) -> str:
+        hasher = hashlib.new("sha256")
+        if org_name:
+            hasher.update(org_name.encode("utf-8"))
+        hasher.update(project_name.encode("utf-8"))
+        return hasher.hexdigest()[:10]
+
     def test_http_host_named(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
@@ -564,12 +575,16 @@ class TestJob:
             record=JobRecord.create(
                 request=job_request,
                 cluster_name="test-cluster",
+                org_name="test-org",
+                project_name="test-project",
                 name="test-job-name",
                 owner="owner",
             ),
         )
+        suffix = self._create_http_host_named_suffix("test-org", "test-project")
+
         assert job.http_host == "testjob.jobs"
-        assert job.http_host_named == "test-job-name--owner.jobs"
+        assert job.http_host_named == f"test-job-name--{suffix}.jobs"
 
     def test_job_name(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
@@ -803,8 +818,10 @@ class TestJob:
                 owner="owner",
             ),
         )
+        suffix = self._create_http_host_named_suffix(None, "owner")
+
         assert job.http_url == "http://testjob.jobs"
-        assert job.http_url_named == "http://test-job-name--owner.jobs"
+        assert job.http_url_named == f"http://test-job-name--{suffix}.jobs"
 
     def test_https_url(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
@@ -833,8 +850,10 @@ class TestJob:
                 owner="owner",
             ),
         )
+        suffix = self._create_http_host_named_suffix(None, "owner")
+
         assert job.http_url == "https://testjob.jobs"
-        assert job.http_url_named == "https://test-job-name--owner.jobs"
+        assert job.http_url_named == f"https://test-job-name--{suffix}.jobs"
 
     def test_http_url_named(
         self,
@@ -850,8 +869,10 @@ class TestJob:
                 owner="owner",
             ),
         )
+        suffix = self._create_http_host_named_suffix(None, "owner")
+
         assert job.http_url == "http://testjob.jobs"
-        assert job.http_url_named == "http://test-job-name--owner.jobs"
+        assert job.http_url_named == f"http://test-job-name--{suffix}.jobs"
 
     def test_to_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest

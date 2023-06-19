@@ -1,4 +1,5 @@
 import enum
+import hashlib
 import logging
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
@@ -26,7 +27,7 @@ from .job_request import (
 # `{job-name}{JOB_USER_NAMES_SEPARATOR}{job-project-name}.jobs.neu.ro`.
 
 
-JOB_USER_NAMES_SEPARATOR = "--"
+JOB_NAME_SEPARATOR = "--"
 
 
 logger = logging.getLogger(__name__)
@@ -815,10 +816,13 @@ class Job:
     def http_host_named(self) -> Optional[str]:
         if not self.name:
             return None
-        from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
-
+        hasher = hashlib.new("sha256")
+        if self.org_name:
+            hasher.update(self.org_name.encode("utf-8"))
+        hasher.update(self.project_name.encode("utf-8"))
+        suffix = hasher.hexdigest()[:10]
         return self._orchestrator_config.jobs_domain_name_template.format(
-            job_id=f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.project_name}"
+            job_id=f"{self.name}{JOB_NAME_SEPARATOR}{suffix}"
         )
 
     @property

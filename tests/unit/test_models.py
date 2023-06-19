@@ -1935,7 +1935,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "project_name": owner_name,
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
-        "http_url_named": f"http://{job_name}--{owner_name}.jobs",
+        "http_url_named": job.http_url_named,
         "status": "pending",
         "statuses": [
             {
@@ -2005,7 +2005,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "project_name": owner_name,
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
-        "http_url_named": f"http://{job_name}--{owner_name}.jobs",
+        "http_url_named": job.http_url_named,
         # NOTE: field `http_url_named` is cut off when it is invalid
         "status": "pending",
         "statuses": [
