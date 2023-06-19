@@ -12,6 +12,7 @@ import iso8601
 from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig
+from platform_api.config import NO_ORG
 
 from ..cluster_config import DEFAULT_ENERGY_SCHEDULE_NAME
 from ..resource import Preset
@@ -817,8 +818,8 @@ class Job:
         if not self.name:
             return None
         hasher = hashlib.new("sha256")
-        if self.org_name:
-            hasher.update(self.org_name.encode("utf-8"))
+        org_name = self.org_name or NO_ORG
+        hasher.update(org_name.encode("utf-8"))
         hasher.update(self.project_name.encode("utf-8"))
         suffix = hasher.hexdigest()[:10]
         return self._orchestrator_config.jobs_domain_name_template.format(

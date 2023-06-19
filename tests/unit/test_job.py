@@ -9,6 +9,7 @@ from unittest import mock
 import pytest
 from yarl import URL
 
+from platform_api.config import NO_ORG
 from platform_api.handlers.job_request_builder import create_container_from_payload
 from platform_api.orchestrator.job import (
     Job,
@@ -562,8 +563,8 @@ class TestJob:
         cls, org_name: Optional[str], project_name: str
     ) -> str:
         hasher = hashlib.new("sha256")
-        if org_name:
-            hasher.update(org_name.encode("utf-8"))
+        org_name = org_name or NO_ORG
+        hasher.update(org_name.encode("utf-8"))
         hasher.update(project_name.encode("utf-8"))
         return hasher.hexdigest()[:10]
 

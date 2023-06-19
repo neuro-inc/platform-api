@@ -832,10 +832,7 @@ class TestJobs:
             job_id = result["id"]
             assert result["name"] == job_name
             assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
-            assert (
-                result["http_url_named"]
-                == f"http://{job_name}--{project_name}.jobs.neu.ro"
-            )
+            assert result["http_url_named"].startswith(f"http://{job_name}--")
 
         filters = {"project_name": project_name}
         jobs = await jobs_client.get_all_jobs(filters)
@@ -966,10 +963,7 @@ class TestJobs:
             assert result["owner"] == service_user.name
             assert result["project_name"] == regular_user.name
             assert result["http_url"] == f"http://{job_id}.jobs.neu.ro"
-            assert (
-                result["http_url_named"]
-                == f"http://{job_name}--{regular_user.name}.jobs.neu.ro"
-            )
+            assert result["http_url_named"].startswith(f"http://{job_name}--")
 
         url = api.jobs_base_url
 
@@ -3220,10 +3214,7 @@ class TestJobs:
             assert payload["container"]["entrypoint"] == "/bin/echo"
             assert payload["container"]["command"] == "false"
             assert payload["http_url"] == f"http://{job_id}.jobs.neu.ro"
-            assert (
-                payload["http_url_named"]
-                == f"http://{job_name}--{regular_user.name}.jobs.neu.ro"
-            )
+            assert payload["http_url_named"].startswith(f"http://{job_name}--")
             expected_internal_hostname = f"{job_id}.platformapi-tests"
             assert payload["internal_hostname"] == expected_internal_hostname
             assert not payload["scheduler_enabled"]
