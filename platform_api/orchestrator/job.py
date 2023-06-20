@@ -814,23 +814,27 @@ class Job:
         )
 
     @property
-    def http_host_named(self) -> Optional[str]:
-        if not self.name:
-            return None
+    def _host_segment_named(self) -> str:
         hasher = hashlib.new("sha256")
         org_name = self.org_name or NO_ORG
         hasher.update(org_name.encode("utf-8"))
         hasher.update(self.project_name.encode("utf-8"))
         suffix = hasher.hexdigest()[:10]
+        return f"{self.name}{JOB_NAME_SEPARATOR}{suffix}"
+
+    @property
+    def http_host_named(self) -> Optional[str]:
+        if not self.is_named:
+            return None
         return self._orchestrator_config.jobs_domain_name_template.format(
-            job_id=f"{self.name}{JOB_NAME_SEPARATOR}{suffix}"
+            job_id=self._host_segment_named
         )
 
     @property
     def http_hosts(self) -> Iterator[str]:
         yield self.http_host
-        if self.http_host_named:
-            yield self.http_host_named
+        if host_named := self.http_host_named:
+            yield host_named
 
     @property
     def http_url(self) -> str:
@@ -840,9 +844,9 @@ class Job:
     @property
     def http_url_named(self) -> Optional[str]:
         assert self.has_http_server_exposed
-        if not self.http_host_named:
-            return None
-        return f"{self._http_scheme}://{self.http_host_named}"
+        if host_named := self.http_host_named:
+            return f"{self._http_scheme}://{host_named}"
+        return None
 
     @property
     def finished_at_str(self) -> Optional[str]:
@@ -852,17 +856,22 @@ class Job:
     def internal_hostname(self) -> Optional[str]:
         return self._record.internal_hostname
 
-    @internal_hostname.setter
-    def internal_hostname(self, value: Optional[str]) -> None:
-        self._record.internal_hostname = value
-
     @property
     def internal_hostname_named(self) -> Optional[str]:
         return self._record.internal_hostname_named
 
-    @internal_hostname_named.setter
-    def internal_hostname_named(self, value: Optional[str]) -> None:
-        self._record.internal_hostname_named = value
+    def init_job_internal_hostnames(self) -> None:
+        self._record.internal_hostname = (
+            self._orchestrator_config.jobs_internal_domain_name_template.format(
+                job_id=self.id
+            )
+        )
+        if self.is_named:
+            self._record.internal_hostname_named = (
+                self._orchestrator_config.jobs_internal_domain_name_template.format(
+                    job_id=self._host_segment_named
+                )
+            )
 
     @property
     def scheduler_enabled(self) -> bool:

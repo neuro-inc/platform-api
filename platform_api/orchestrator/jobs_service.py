@@ -218,21 +218,6 @@ class JobsService:
         new_container = replace(job_request.container, env=new_env)
         return replace(job_request, container=new_container)
 
-    async def _prepare_job_hostnames(
-        self, job: Job, orchestrator_config: OrchestratorConfig
-    ) -> None:
-        job.internal_hostname = (
-            orchestrator_config.jobs_internal_domain_name_template.format(job_id=job.id)
-        )
-        if job.is_named:
-            from platform_api.handlers.validators import JOB_NAME_SEPARATOR
-
-            job.internal_hostname_named = (
-                orchestrator_config.jobs_internal_domain_name_template.format(
-                    job_id=f"{job.name}{JOB_NAME_SEPARATOR}{job.project_name}"
-                )
-            )
-
     async def create_job(
         self,
         job_request: JobRequest,
@@ -345,7 +330,7 @@ class JobsService:
 
             async with self._create_job_in_storage(record) as record:
                 job = self._make_job(record, cluster_config)
-                await self._prepare_job_hostnames(job, cluster_config.orchestrator)
+                job.init_job_internal_hostnames()
             return job, Status.create(job.status)
 
         except ClusterNotFound as cluster_err:
