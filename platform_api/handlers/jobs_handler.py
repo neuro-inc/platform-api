@@ -25,7 +25,7 @@ from platform_api.cluster_config import ClusterConfig
 from platform_api.config import NO_ORG, STORAGE_URI_SCHEME, Config
 from platform_api.log import log_debug_time
 from platform_api.orchestrator.job import (
-    JOB_USER_NAMES_SEPARATOR,
+    JOB_NAME_SEPARATOR,
     Job,
     JobPriority,
     JobRestartPolicy,
@@ -1116,7 +1116,7 @@ class JobFilterFactory:
                 raise ValueError("Invalid request")
 
         label = hostname.partition(".")[0]
-        job_name, sep, project_name = label.rpartition(JOB_USER_NAMES_SEPARATOR)
+        job_name, sep, project_name = label.rpartition(JOB_NAME_SEPARATOR)
         if not sep:
             return JobFilter(
                 statuses=statuses,

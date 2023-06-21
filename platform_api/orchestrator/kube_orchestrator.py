@@ -536,9 +536,9 @@ class KubeOrchestrator(Orchestrator):
             return secret_names
 
     def _get_service_name_for_named(self, job: Job) -> str:
-        from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
+        from platform_api.handlers.validators import JOB_NAME_SEPARATOR
 
-        return f"{job.name}{JOB_USER_NAMES_SEPARATOR}{job.project_name}"
+        return f"{job.name}{JOB_NAME_SEPARATOR}{job.project_name}"
 
     async def start_job(
         self, job: Job, tolerate_unreachable_node: bool = False

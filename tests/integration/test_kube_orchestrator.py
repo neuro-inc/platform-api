@@ -17,6 +17,7 @@ from yarl import URL
 from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import STORAGE_URI_SCHEME, RegistryConfig, StorageConfig
 from platform_api.orchestrator.job import (
+    JOB_NAME_SEPARATOR,
     Job,
     JobRecord,
     JobRestartPolicy,
@@ -84,12 +85,10 @@ class MyJob(Job):
         assert isinstance(self._orchestrator, KubeOrchestrator)
         namespace = self._orchestrator.kube_config.namespace
 
-        self.internal_hostname = f"{self.id}.{namespace}"
+        self._record.internal_hostname = f"{self.id}.{namespace}"
         if self.is_named:
-            from platform_api.handlers.validators import JOB_USER_NAMES_SEPARATOR
-
-            self.internal_hostname_named = (
-                f"{self.name}{JOB_USER_NAMES_SEPARATOR}{self.project_name}.{namespace}"
+            self._record.internal_hostname_named = (
+                f"{self.name}{JOB_NAME_SEPARATOR}{self.project_name}.{namespace}"
             )
 
     async def start(self) -> JobStatus:

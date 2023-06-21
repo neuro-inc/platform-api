@@ -7,7 +7,7 @@ from urllib.parse import unquote, urlsplit
 import trafaret as t
 from yarl import URL
 
-from platform_api.orchestrator.job import JOB_USER_NAMES_SEPARATOR
+from platform_api.orchestrator.job import JOB_NAME_SEPARATOR
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.resource import TPUResource
 
@@ -27,7 +27,7 @@ JOB_NAME_MAX_LENGTH = 40
 # For named jobs, their hostname is of the form of
 # `{job-id}{JOB_USER_NAMES_SEPARATOR}{job-project-name}.jobs.neu.ro`.
 # The length limit for DNS label is 63 chars.
-USER_NAME_MAX_LENGTH = 63 - len(JOB_USER_NAMES_SEPARATOR) - JOB_NAME_MAX_LENGTH
+USER_NAME_MAX_LENGTH = 63 - len(JOB_NAME_SEPARATOR) - JOB_NAME_MAX_LENGTH
 
 OptionalString = t.String(allow_blank=True) | t.Null
 
