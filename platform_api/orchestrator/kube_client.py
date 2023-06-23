@@ -2080,14 +2080,14 @@ class KubeClient:
                 payload = json.loads(line)
                 try:
                     self._check_status_payload(payload)
+                    if WatchEvent.is_error(payload):
+                        self._check_status_payload(payload["object"])
                 except KubeClientUnauthorizedException:
                     await self._reload_http_client()
                     raise
                 except ExpiredException:
                     await self._reload_http_client()
                     raise
-                if WatchEvent.is_error(payload):
-                    self._check_status_payload(payload["object"])
                 if WatchBookmarkEvent.is_bookmark(payload):
                     yield WatchBookmarkEvent.from_primitive(payload)
                 else:
