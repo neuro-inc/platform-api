@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 import asyncio
 import itertools
 import time
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from dataclasses import replace
 from pathlib import PurePath
-from typing import Any, Optional
+from typing import Any
 from unittest import mock
 
 import aiohttp
@@ -1093,8 +1095,8 @@ class TestKubeOrchestrator:
     @pytest.fixture
     def create_server_job(
         self, kube_orchestrator: KubeOrchestrator
-    ) -> Iterator[Callable[[Optional[str]], MyJob]]:
-        def impl(job_name: Optional[str] = None) -> MyJob:
+    ) -> Iterator[Callable[[str | None], MyJob]]:
+        def impl(job_name: str | None = None) -> MyJob:
             server_cont = Container(
                 image="python",
                 command="python -m http.server 80",
@@ -2286,7 +2288,7 @@ class TestKubeOrchestrator:
 
 class TestNodeAffinity:
     @pytest.fixture
-    async def kube_orchestrator(
+    def kube_orchestrator_factory(
         self,
         storage_config_host: StorageConfig,
         registry_config: RegistryConfig,
@@ -2296,7 +2298,7 @@ class TestNodeAffinity:
         kube_job_nodes_factory: Callable[
             [OrchestratorConfig, KubeConfig], Awaitable[None]
         ],
-    ) -> KubeOrchestrator:
+    ) -> Callable[[Sequence[ResourcePoolType]], Awaitable[KubeOrchestrator]]:
         kube_config = replace(
             kube_config,
             node_label_job="job",
@@ -2304,9 +2306,34 @@ class TestNodeAffinity:
             node_label_node_pool="nodepool",
             node_label_preemptible="preemptible",
         )
-        orchestrator_config = replace(
-            orchestrator_config,
-            resource_pool_types=[
+
+        async def _create(
+            resource_pool_types: Sequence[ResourcePoolType],
+        ) -> KubeOrchestrator:
+            orchestrator = replace(
+                orchestrator_config, resource_pool_types=resource_pool_types
+            )
+            await kube_job_nodes_factory(orchestrator_config, kube_config)
+            return KubeOrchestrator(
+                cluster_name="default",
+                storage_configs=[storage_config_host],
+                registry_config=registry_config,
+                orchestrator_config=orchestrator,
+                kube_config=kube_config,
+                kube_client=kube_client,
+            )
+
+        return _create
+
+    @pytest.fixture
+    async def kube_orchestrator(
+        self,
+        kube_orchestrator_factory: Callable[
+            [Sequence[ResourcePoolType]], Awaitable[KubeOrchestrator]
+        ],
+    ) -> KubeOrchestrator:
+        return await kube_orchestrator_factory(
+            [
                 ResourcePoolType(
                     name="cpu-small", available_cpu=2, available_memory=2048 * 10**6
                 ),
@@ -2350,14 +2377,24 @@ class TestNodeAffinity:
                 ),
             ],
         )
-        await kube_job_nodes_factory(orchestrator_config, kube_config)
-        return KubeOrchestrator(
-            cluster_name="default",
-            storage_configs=[storage_config_host],
-            registry_config=registry_config,
-            orchestrator_config=orchestrator_config,
-            kube_config=kube_config,
-            kube_client=kube_client,
+
+    @pytest.fixture
+    async def kube_orchestrator_gpu(
+        self,
+        kube_orchestrator_factory: Callable[
+            [Sequence[ResourcePoolType]], Awaitable[KubeOrchestrator]
+        ],
+    ) -> KubeOrchestrator:
+        return await kube_orchestrator_factory(
+            [
+                ResourcePoolType(
+                    name="gpu-k80",
+                    available_cpu=7,
+                    available_memory=61440 * 10**6,
+                    gpu=8,
+                    gpu_model=GKEGPUModels.K80.value.id,
+                ),
+            ],
         )
 
     @pytest.fixture
@@ -2369,8 +2406,8 @@ class TestNodeAffinity:
             kube_orchestrator: KubeOrchestrator,
             cpu: float,
             memory: int,
-            gpu: Optional[int] = None,
-            gpu_model: Optional[str] = None,
+            gpu: int | None = None,
+            gpu_model: str | None = None,
             scheduler_enabled: bool = False,
             preemptible_node: bool = False,
         ) -> AsyncIterator[MyJob]:
@@ -2430,6 +2467,29 @@ class TestNodeAffinity:
                     required=[
                         NodeSelectorTerm(
                             [NodeSelectorRequirement.create_in("nodepool", "cpu-small")]
+                        )
+                    ]
+                ).to_primitive()
+            )
+
+    async def test_cpu_job_on_gpu_node(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator_gpu: KubeOrchestrator,
+        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
+    ) -> None:
+        async with start_job(
+            kube_orchestrator_gpu, cpu=0.1, memory=32 * 10**6
+        ) as job:
+            await kube_client.wait_pod_scheduled(job.id, "gpu-k80")
+
+            job_pod = await kube_client.get_raw_pod(job.id)
+            assert (
+                job_pod["spec"]["affinity"]["nodeAffinity"]
+                == NodeAffinity(
+                    required=[
+                        NodeSelectorTerm(
+                            [NodeSelectorRequirement.create_in("nodepool", "gpu-k80")]
                         )
                     ]
                 ).to_primitive()
