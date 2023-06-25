@@ -43,6 +43,7 @@ from .kube_client import (
     PodStatus,
     PodWatcher,
     PVCVolume,
+    Resources,
     SecretVolume,
     Service,
     StatusException,
@@ -594,7 +595,11 @@ class KubeOrchestrator(Orchestrator):
         ]
         if job.has_gpu or any(p.gpu for p in pool_types):
             tolerations.append(
-                Toleration(key="nvidia.com/gpu", operator="Exists", effect="NoSchedule")
+                Toleration(
+                    key=Resources.gpu_key,
+                    operator="Exists",
+                    effect="NoSchedule",
+                )
             )
         if (
             self._kube_config.jobs_pod_preemptible_toleration_key
