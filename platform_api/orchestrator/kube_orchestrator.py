@@ -339,9 +339,9 @@ class KubeOrchestrator(Orchestrator):
             ", ".join(p.name for p in pool_types),
         )
         tolerations = self._get_pod_tolerations(
-            job, tolerate_unreachable_node=tolerate_unreachable_node
+            job, pool_types, tolerate_unreachable_node=tolerate_unreachable_node
         )
-        node_affinity = self._get_pod_node_affinity(job, pool_types)
+        node_affinity = self._get_pod_node_affinity(pool_types)
         labels = self._get_pod_labels(job)
         # NOTE: both node selector and affinity must be satisfied for the pod
         # to be scheduled onto a node.
@@ -580,7 +580,10 @@ class KubeOrchestrator(Orchestrator):
         return job.status
 
     def _get_pod_tolerations(
-        self, job: Job, tolerate_unreachable_node: bool = False
+        self,
+        job: Job,
+        pool_types: Sequence[ResourcePoolType],
+        tolerate_unreachable_node: bool = False,
     ) -> list[Toleration]:
         tolerations = [
             Toleration(
@@ -589,6 +592,10 @@ class KubeOrchestrator(Orchestrator):
                 effect="NoSchedule",
             )
         ]
+        if job.has_gpu or any(p.gpu for p in pool_types):
+            tolerations.append(
+                Toleration(key="nvidia.com/gpu", operator="Exists", effect="NoSchedule")
+            )
         if (
             self._kube_config.jobs_pod_preemptible_toleration_key
             and job.preemptible_node
@@ -613,7 +620,7 @@ class KubeOrchestrator(Orchestrator):
         return tolerations
 
     def _get_pod_node_affinity(
-        self, job: Job, pool_types: Sequence[ResourcePoolType]
+        self, pool_types: Sequence[ResourcePoolType]
     ) -> Optional[NodeAffinity]:
         # NOTE:
         # The pod is scheduled onto a node only if at least one of

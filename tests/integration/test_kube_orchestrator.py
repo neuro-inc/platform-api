@@ -2313,7 +2313,7 @@ class TestNodeAffinity:
             orchestrator = replace(
                 orchestrator_config, resource_pool_types=resource_pool_types
             )
-            await kube_job_nodes_factory(orchestrator_config, kube_config)
+            await kube_job_nodes_factory(orchestrator, kube_config)
             return KubeOrchestrator(
                 cluster_name="default",
                 storage_configs=[storage_config_host],
