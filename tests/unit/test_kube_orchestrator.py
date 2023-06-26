@@ -414,12 +414,6 @@ class TestPodDescriptor:
                         "value": "testvalue",
                         "effect": "NoSchedule",
                     },
-                    {
-                        "key": "nvidia.com/gpu",
-                        "operator": "Exists",
-                        "value": "",
-                        "effect": "NoSchedule",
-                    },
                 ],
                 "affinity": {
                     "nodeAffinity": {
@@ -479,14 +473,7 @@ class TestPodDescriptor:
                 "volumes": [],
                 "restartPolicy": "Never",
                 "imagePullSecrets": [],
-                "tolerations": [
-                    {
-                        "key": "nvidia.com/gpu",
-                        "operator": "Exists",
-                        "value": "",
-                        "effect": "NoSchedule",
-                    }
-                ],
+                "tolerations": [],
             },
         }
 
@@ -531,14 +518,7 @@ class TestPodDescriptor:
                 "volumes": [],
                 "restartPolicy": "Never",
                 "imagePullSecrets": [],
-                "tolerations": [
-                    {
-                        "key": "nvidia.com/gpu",
-                        "operator": "Exists",
-                        "value": "",
-                        "effect": "NoSchedule",
-                    }
-                ],
+                "tolerations": [],
             },
         }
 
@@ -599,14 +579,7 @@ class TestPodDescriptor:
                 "volumes": [{"name": "dshm", "emptyDir": {"medium": "Memory"}}],
                 "restartPolicy": "Never",
                 "imagePullSecrets": [],
-                "tolerations": [
-                    {
-                        "key": "nvidia.com/gpu",
-                        "operator": "Exists",
-                        "value": "",
-                        "effect": "NoSchedule",
-                    }
-                ],
+                "tolerations": [],
             },
         }
 

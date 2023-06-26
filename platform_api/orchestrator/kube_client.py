@@ -1154,14 +1154,6 @@ class PodDescriptor:
         if readiness_probe:
             container_payload["readinessProbe"] = readiness_probe
 
-        tolerations = self.tolerations.copy()
-        if self.resources and self.resources.gpu:
-            tolerations.append(
-                Toleration(
-                    key=self.resources.gpu_key, operator="Exists", effect="NoSchedule"
-                )
-            )
-
         payload: dict[str, Any] = {
             "kind": "Pod",
             "apiVersion": "v1",
@@ -1175,7 +1167,7 @@ class PodDescriptor:
                     secret.to_primitive() for secret in self.image_pull_secrets
                 ],
                 "tolerations": [
-                    toleration.to_primitive() for toleration in tolerations
+                    toleration.to_primitive() for toleration in self.tolerations
                 ],
             },
         }
