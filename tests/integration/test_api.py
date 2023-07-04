@@ -4536,7 +4536,10 @@ class TestJobs:
         job_id = await run_job(usr, create_job_request_with_name(job_name))
         await run_job(usr, create_job_request_with_name(job_name2))
 
-        hostname = f"{job_name}--{usr.name}.jobs.neu.ro"
+        job = await jobs_client.get_job_by_id(job_id)
+        org_project_hash = job["org_project_hash"]
+
+        hostname = f"{job_name}--{org_project_hash}.jobs.neu.ro"
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job_id}
@@ -4547,7 +4550,7 @@ class TestJobs:
         assert job_ids == {job_id}
 
         # other base domain name
-        hostname = f"{job_name}--{usr.name}.example.org"
+        hostname = f"{job_name}--{org_project_hash}.example.org"
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job_id}
@@ -4558,11 +4561,11 @@ class TestJobs:
         assert job_ids == {job_id}
 
         # non-existing names
-        hostname = f"nonexisting--{usr.name}.jobs.neu.ro"
+        hostname = f"nonexisting--{org_project_hash}.jobs.neu.ro"
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
         assert not jobs
 
-        hostname = f"{job_name}--nonexisting.jobs.neu.ro"
+        hostname = f"{job_name}--0123456789.jobs.neu.ro"
         jobs = await jobs_client.get_all_jobs({"hostname": hostname})
         assert not jobs
 
@@ -4592,19 +4595,22 @@ class TestJobs:
         # usr2 shares a job with usr1
         await share_job(usr2, usr1, job_id)
 
+        job = await jobs_client_usr1.get_job_by_id(job_id)
+        org_project_hash = job["org_project_hash"]
+
         # shared job of another owner
-        hostname = f"{job_name}--{usr2.name}.jobs.neu.ro"
+        hostname = f"{job_name}--{org_project_hash}.jobs.neu.ro"
         jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
         job_ids = {job["id"] for job in jobs}
         assert job_ids == {job_id}
 
         # unshared job of another owner
-        hostname = f"{job_name2}--{usr2.name}.jobs.neu.ro"
+        hostname = f"{job_name2}--{org_project_hash}.jobs.neu.ro"
         jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
         assert not jobs
 
         # non-existing job of another owner
-        hostname = f"nonexisting--{usr2.name}.jobs.neu.ro"
+        hostname = f"nonexisting--{org_project_hash}.jobs.neu.ro"
         jobs = await jobs_client_usr1.get_all_jobs({"hostname": hostname})
         assert not jobs
 
@@ -4625,8 +4631,11 @@ class TestJobs:
         job_id = await run_job(usr, create_job_request_with_name(job_name))
         await run_job(usr, create_job_request_with_name(job_name2))
 
+        job = await jobs_client.get_job_by_id(job_id)
+        org_project_hash = job["org_project_hash"]
+
         for hostname in (
-            f"{job_name}--{usr.name}.jobs.neu.ro",
+            f"{job_name}--{org_project_hash}.jobs.neu.ro",
             f"{job_id}.jobs.neu.ro",
         ):
             filters = [("hostname", hostname), ("status", "running")]
@@ -4674,7 +4683,7 @@ class TestJobs:
                 assert result["error"] == "Invalid request"
 
         for params in (
-            {"hostname": f"test_job--{usr.name}.jobs.neu.ro"},
+            {"hostname": "test_job--bb347ff101.jobs.neu.ro"},
             {"hostname": f"{job_name}--test_user.jobs.neu.ro"},
         ):
             async with client.get(url, headers=usr.headers, params=params) as response:

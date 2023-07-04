@@ -1120,24 +1120,28 @@ class TestJobFilterFactory:
     def test_create_from_query_by_hostname(self) -> None:
         factory = JobFilterFactory().create_from_query
 
-        query: Any = MultiDict([("hostname", "test-job--john-doe.example.org")])
-        assert factory(query) == JobFilter(name="test-job", projects={"john-doe"})
+        query: Any = MultiDict([("hostname", "test-job--0123abcdef.example.org")])
+        assert factory(query) == JobFilter(
+            name="test-job", org_project_hash="0123abcdef"
+        )
 
         query = MultiDict([("hostname", "test-job-id.example.org")])
         assert factory(query) == JobFilter(ids={"test-job-id"})
 
         query = MultiDict(
             [
-                ("hostname", "test-job--john-doe.example.org"),
+                ("hostname", "test-job--0123abcdef.example.org"),
                 ("hostname", "test-job-id.example.org"),
             ]
         )
-        assert factory(query) == JobFilter(name="test-job", projects={"john-doe"})
+        assert factory(query) == JobFilter(
+            name="test-job", org_project_hash="0123abcdef"
+        )
 
         query = MultiDict(
             [
                 ("hostname", "test-job-id.example.org"),
-                ("hostname", "test-job--john-doe.example.org"),
+                ("hostname", "test-job--0123abcdef.example.org"),
             ]
         )
         assert factory(query) == JobFilter(name=None, ids={"test-job-id"})
@@ -1147,7 +1151,7 @@ class TestJobFilterFactory:
 
         query: Any = MultiDict(
             [
-                ("hostname", "test-job--john-doe.example.org"),
+                ("hostname", "test-job--0123abcdef.example.org"),
                 ("status", "failed"),
                 ("status", "succeeded"),
             ]
@@ -1155,7 +1159,7 @@ class TestJobFilterFactory:
         assert factory(query) == JobFilter(
             statuses={JobStatus.FAILED, JobStatus.SUCCEEDED},
             name="test-job",
-            projects={"john-doe"},
+            org_project_hash="0123abcdef",
         )
 
         query = MultiDict(
@@ -1825,6 +1829,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "cluster_name": "test-cluster",
         "org_name": "test-tenant-id",
         "project_name": "test-project",
+        "org_project_hash": "61c2aef2a5",
         "status": "pending",
         "statuses": [
             {
@@ -1933,6 +1938,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "owner": owner_name,
         "cluster_name": "test-cluster",
         "project_name": owner_name,
+        "org_project_hash": "743d9df172",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         "http_url_named": job.http_url_named,
@@ -2003,6 +2009,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "owner": owner_name,
         "cluster_name": "test-cluster",
         "project_name": owner_name,
+        "org_project_hash": "743d9df172",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         "http_url_named": job.http_url_named,

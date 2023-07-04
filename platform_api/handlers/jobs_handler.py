@@ -64,6 +64,7 @@ from .validators import (
     create_job_status_validator,
     create_job_tag_validator,
     create_org_name_validator,
+    create_org_project_hash_validator,
     create_project_name_validator,
     create_user_name_validator,
     sanitize_dns_name,
@@ -267,6 +268,7 @@ def create_job_response_validator() -> t.Trafaret:
             "cluster_name": t.String(allow_blank=False),
             t.Key("org_name", optional=True): t.String,
             "project_name": t.String(allow_blank=False),
+            "org_project_hash": t.String(allow_blank=False),
             "uri": t.String(allow_blank=False),
             # `status` is left for backward compat. the python client/cli still
             # relies on it.
@@ -453,6 +455,7 @@ def convert_job_to_job_response(job: Job) -> dict[str, Any]:
         "owner": job.owner,
         "cluster_name": job.cluster_name,
         "project_name": job.project_name,
+        "org_project_hash": job.org_project_hash.hex(),
         "status": current_status.status,
         "statuses": [item.to_primitive() for item in history.all],
         "history": {
@@ -1064,6 +1067,7 @@ class JobFilterFactory:
         self._cluster_name_validator = create_cluster_name_validator()
         self._org_name_validator = create_org_name_validator()
         self._project_name_validator = create_project_name_validator()
+        self._org_project_hash_validator = create_org_project_hash_validator()
 
     def create_from_query(self, query: MultiDictProxy) -> JobFilter:  # type: ignore
         statuses = {JobStatus(s) for s in query.getall("status", [])}
@@ -1116,7 +1120,7 @@ class JobFilterFactory:
                 raise ValueError("Invalid request")
 
         label = hostname.partition(".")[0]
-        job_name, sep, project_name = label.rpartition(JOB_NAME_SEPARATOR)
+        job_name, sep, org_project_hash = label.rpartition(JOB_NAME_SEPARATOR)
         if not sep:
             return JobFilter(
                 statuses=statuses,
@@ -1125,10 +1129,10 @@ class JobFilterFactory:
                 **bool_filters,  # type: ignore
             )
         job_name = self._job_name_validator.check(job_name)
-        project_name = self._project_name_validator.check(project_name)
+        org_project_hash = self._org_project_hash_validator.check(org_project_hash)
         return JobFilter(
             statuses=statuses,
-            projects={project_name},
+            org_project_hash=org_project_hash,
             name=job_name,
             tags=tags,
             **bool_filters,  # type: ignore

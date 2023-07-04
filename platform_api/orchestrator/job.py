@@ -286,6 +286,7 @@ class JobRecord:
     status_history: JobStatusHistory
     cluster_name: str
     project_name: str
+    org_project_hash: bytes
     org_name: Optional[str] = None
     name: Optional[str] = None
     preset_name: Optional[str] = None
@@ -337,7 +338,23 @@ class JobRecord:
             kwargs["owner"] = orphaned_job_owner
         if not kwargs.get("project_name"):
             kwargs["project_name"] = get_base_owner(kwargs["owner"])
+        kwargs["org_project_hash"] = cls._create_org_project_hash(
+            kwargs.get("org_name"), kwargs["project_name"]
+        )
         return cls(**kwargs)
+
+    @classmethod
+    def _create_org_project_hash(
+        cls, org_name: Optional[str], project_name: str
+    ) -> bytes:
+        return cls._create_hash(org_name or NO_ORG, project_name)[:5]
+
+    @classmethod
+    def _create_hash(cls, *args: str) -> bytes:
+        hasher = hashlib.new("sha256")
+        for arg in args:
+            hasher.update(arg.encode("utf-8"))
+        return hasher.digest()
 
     @property
     def id(self) -> str:
@@ -468,6 +485,7 @@ class JobRecord:
             "owner": self.owner,
             "cluster_name": self.cluster_name,
             "project_name": self.project_name,
+            "org_project_hash": self.org_project_hash.hex(),
             "request": self.request.to_primitive(),
             "status": self.status.value,
             "statuses": statuses,
@@ -519,7 +537,13 @@ class JobRecord:
             request.job_id, payload
         )
         owner = payload.get("owner") or orphaned_job_owner
+        org_name = payload.get("org_name", None)
         project_name = payload.get("project_name") or get_base_owner(owner)
+        org_project_hash = payload.get("org_project_hash")
+        if org_project_hash and isinstance(org_project_hash, str):
+            org_project_hash = bytes.fromhex(org_project_hash)
+        elif not org_project_hash:
+            org_project_hash = cls._create_org_project_hash(org_name, project_name)
         return cls(
             request=request,
             status_history=status_history,
@@ -529,8 +553,9 @@ class JobRecord:
             name=payload.get("name"),
             preset_name=payload.get("preset_name"),
             tags=payload.get("tags", ()),
-            org_name=payload.get("org_name", None),
+            org_name=org_name,
             project_name=project_name,
+            org_project_hash=org_project_hash,
             scheduler_enabled=payload.get("scheduler_enabled", None)
             or payload.get("is_preemptible", False),
             preemptible_node=payload.get("preemptible_node", None)
@@ -811,11 +836,7 @@ class Job:
 
     @property
     def _host_segment_named(self) -> str:
-        hasher = hashlib.new("sha256")
-        org_name = self.org_name or NO_ORG
-        hasher.update(org_name.encode("utf-8"))
-        hasher.update(self.project_name.encode("utf-8"))
-        suffix = hasher.hexdigest()[:10]
+        suffix = self._record.org_project_hash.hex()
         return f"{self.name}{JOB_NAME_SEPARATOR}{suffix}"
 
     @property
@@ -936,6 +957,10 @@ class Job:
     @property
     def project_name(self) -> str:
         return self._record.project_name
+
+    @property
+    def org_project_hash(self) -> bytes:
+        return self._record.org_project_hash
 
     @property
     def priority(self) -> JobPriority:

@@ -1663,3 +1663,19 @@ class TestJobsStorage:
             job_filter=job_filter,
         )
         assert jobs == []
+
+    async def test_get_jobs_by_org_project_hash(self, storage: JobsStorage) -> None:
+        job1 = self._create_job(project_name="project1")
+        job2 = self._create_job(project_name="project2")
+        for job in (job1, job2):
+            async with storage.try_create_job(job):
+                pass
+
+        job_filter = JobFilter(org_project_hash=job1.org_project_hash)
+        jobs = await storage.get_jobs_by_ids({job1.id}, job_filter=job_filter)
+        job_ids = [job.id for job in jobs]
+        assert job_ids == [job1.id]
+
+        job_filter = JobFilter(org_project_hash=job1.org_project_hash)
+        jobs = await storage.get_jobs_by_ids(set(), job_filter=job_filter)
+        assert jobs == []

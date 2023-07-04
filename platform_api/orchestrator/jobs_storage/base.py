@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator, Iterable, Set
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Optional, cast
+from typing import Optional, Union, cast
 
 from platform_api.orchestrator.job import JobRecord
 from platform_api.orchestrator.job_request import JobStatus
@@ -52,6 +52,7 @@ class JobFilter:
     fully_billed: Optional[bool] = None
     being_dropped: Optional[bool] = None
     logs_removed: Optional[bool] = None
+    org_project_hash: Union[bytes, str, None] = None
 
     def check(self, job: JobRecord) -> bool:
         if self.statuses and job.status not in self.statuses:
@@ -93,6 +94,8 @@ class JobFilter:
             return self.being_dropped == job.being_dropped
         if self.logs_removed is not None:
             return self.logs_removed == job.logs_removed
+        if self.org_project_hash is not None:
+            return self.org_project_hash == job.org_project_hash
         return True
 
 

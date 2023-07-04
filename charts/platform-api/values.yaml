@@ -40,6 +40,8 @@ postgres:
   dsn: {}
 
 postgres-db-init:
+  extensions: [pgcrypto]
+
   adminDsn: {}
   migrationsRunnerDsn: {}
   serviceDsn: {}
