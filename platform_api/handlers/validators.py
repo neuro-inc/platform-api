@@ -69,6 +69,10 @@ def create_project_name_validator() -> t.Trafaret:
     return t.String(min_length=3, max_length=255) & t.Regexp(PROJECT_NAME_PATTERN)
 
 
+def create_org_project_hash_validator() -> t.Trafaret:
+    return t.String(min_length=10, max_length=10) & t.Regexp(r"\A[0-9a-fA-F]+\Z")
+
+
 def create_job_status_validator() -> t.Trafaret:
     return t.Enum(*JobStatus.values())
 

@@ -243,6 +243,7 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "project_name": "project",
+            "org_project_hash": "0123456789",
             "status": "pending",
             "statuses": [
                 {
@@ -289,6 +290,7 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "project_name": "project",
+            "org_project_hash": "0123456789",
             "status": "pending",
             "statuses": [
                 {
@@ -335,6 +337,7 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "project_name": "project",
+            "org_project_hash": "0123456789",
             "status": "pending",
             "statuses": [
                 {
@@ -381,6 +384,7 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "project_name": "project",
+            "org_project_hash": "0123456789",
             "status": "pending",
             "statuses": [
                 {
@@ -429,6 +433,7 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "project_name": "project",
+            "org_project_hash": "0123456789",
             "status": "pending",
             "statuses": [
                 {
@@ -518,6 +523,7 @@ class TestJobResponseValidator:
             "owner": "tests",
             "cluster_name": "cluster-name",
             "project_name": "project",
+            "org_project_hash": "0123456789",
             "status": "pending",
             "statuses": [
                 {

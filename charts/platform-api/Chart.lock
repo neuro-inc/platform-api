@@ -1,0 +1,9 @@
+dependencies:
+- name: k8s-resources
+  repository: https://neuro-inc.github.io/helm-charts
+  version: 1.0.1
+- name: postgres-db-init
+  repository: https://neuro-inc.github.io/helm-charts
+  version: 1.2.15
+digest: sha256:ee926919dae127766f0d8440efa3f47d463b16f8ae77d13f57936a6ce1473ac5
+generated: "2023-07-03T13:51:02.47582321+03:00"

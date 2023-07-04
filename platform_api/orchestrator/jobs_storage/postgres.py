@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator, Iterable, Mapping, Set
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
@@ -43,6 +43,7 @@ class JobTables:
             sa.Column("cluster_name", sa.String(), nullable=False),
             sa.Column("org_name", sa.String(), nullable=True),
             sa.Column("project_name", sa.String(), nullable=False),
+            sa.Column("org_project_hash", sapg.BYTEA(), nullable=False),
             sa.Column("tags", sapg.JSONB(), nullable=True),
             # Denormalized fields for optimized access/unique constrains checks
             sa.Column("status", sa.String(), nullable=False),
@@ -69,6 +70,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
 
     def _job_to_values(self, job: JobRecord) -> dict[str, Any]:
         payload = job.to_primitive()
+        payload.pop("org_project_hash")
         return {
             "id": payload.pop("id"),
             "owner": payload.pop("owner"),
@@ -76,6 +78,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             "cluster_name": payload.pop("cluster_name"),
             "org_name": payload.pop("org_name", None),
             "project_name": payload.pop("project_name"),
+            "org_project_hash": job.org_project_hash,
             "tags": payload.pop("tags", None),
             "status": job.status_history.current.status,
             "created_at": job.status_history.created_at,
@@ -91,6 +94,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         payload["cluster_name"] = record["cluster_name"]
         payload["org_name"] = record["org_name"]
         payload["project_name"] = record["project_name"]
+        payload["org_project_hash"] = record["org_project_hash"]
         if record["tags"] is not None:
             payload["tags"] = record["tags"]
         return JobRecord.from_primitive(payload)
@@ -426,6 +430,11 @@ class JobFilterClauseBuilder:
     def filter_logs_removed(self, logs_removed: bool) -> None:
         self._filter_bool_from_payload("logs_removed", logs_removed)
 
+    def filter_org_project_hash(self, org_project_hash: Union[bytes, str]) -> None:
+        if isinstance(org_project_hash, str):
+            org_project_hash = bytes.fromhex(org_project_hash)
+        self._clauses.append(self._tables.jobs.c.org_project_hash == org_project_hash)
+
     def build(self) -> sasql.ClauseElement:
         return and_(*self._clauses)
 
@@ -460,6 +469,8 @@ class JobFilterClauseBuilder:
             builder.filter_being_dropped(job_filter.being_dropped)
         if job_filter.logs_removed is not None:
             builder.filter_logs_removed(job_filter.logs_removed)
+        if job_filter.org_project_hash:
+            builder.filter_org_project_hash(job_filter.org_project_hash)
         builder.filter_since(job_filter.since)
         builder.filter_until(job_filter.until)
         return builder.build()

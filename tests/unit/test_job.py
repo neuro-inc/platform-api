@@ -900,6 +900,7 @@ class TestJob:
             "owner": "testuser",
             "cluster_name": "test-cluster",
             "project_name": "testuser",
+            "org_project_hash": "96d4e8e962",
             "request": job_request.to_primitive(),
             "status": "failed",
             "materialized": False,
@@ -946,6 +947,7 @@ class TestJob:
             "owner": "compute",
             "cluster_name": "test-cluster",
             "project_name": "compute",
+            "org_project_hash": "c16d8d755d",
             "request": job_request.to_primitive(),
             "status": "pending",
             "statuses": [
@@ -1049,6 +1051,7 @@ class TestJob:
         assert not job.org_name
         assert job.max_run_time_minutes is None
         assert job.restart_policy == JobRestartPolicy.NEVER
+        assert job.org_project_hash
 
     def test_from_primitive_check_name(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
@@ -1282,6 +1285,23 @@ class TestJob:
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.priority == JobPriority.HIGH
 
+    def test_from_primitive_with_org_project_hash(
+        self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
+    ) -> None:
+        payload = {
+            "id": "testjob",
+            "name": "test-job-name",
+            "owner": "testuser",
+            "request": job_request_payload,
+            "status": "succeeded",
+            "materialized": True,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "max_run_time_minutes": None,
+            "org_project_hash": "0123456789",
+        }
+        job = Job.from_primitive(mock_orchestrator.config, payload)
+        assert job.org_project_hash == bytes.fromhex("0123456789")
+
     def test_to_uri(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
@@ -1341,6 +1361,7 @@ class TestJob:
             "owner": "user",
             "cluster_name": "testcluster",
             "project_name": "project",
+            "org_project_hash": "b75bbeeaca",
             "status": current_status_item["status"],
             "statuses": [current_status_item],
             "materialized": False,
