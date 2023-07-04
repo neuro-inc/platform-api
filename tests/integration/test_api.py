@@ -5126,6 +5126,7 @@ class TestJobs:
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
                 "project_name": regular_user.name,
+                "org_project_hash": mock.ANY,
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "statuses": [
@@ -5173,6 +5174,7 @@ class TestJobs:
                 "price_credits_per_hour": "10",
                 "priority": "normal",
             }
+            assert response_payload["org_project_hash"]
 
         response_payload = await jobs_client.long_polling_by_job_id(
             job_id=job_id, status="succeeded"
@@ -5183,6 +5185,7 @@ class TestJobs:
             "owner": regular_user.name,
             "cluster_name": "test-cluster",
             "project_name": regular_user.name,
+            "org_project_hash": mock.ANY,
             "internal_hostname": f"{job_id}.platformapi-tests",
             "status": "succeeded",
             "statuses": mock.ANY,
@@ -5279,6 +5282,7 @@ class TestJobs:
             "owner": regular_user.name,
             "cluster_name": "test-cluster",
             "project_name": regular_user.name,
+            "org_project_hash": mock.ANY,
             "status": "failed",
             "statuses": mock.ANY,
             "internal_hostname": f"{job_id}.platformapi-tests",
@@ -5403,6 +5407,7 @@ class TestJobs:
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
                 "project_name": regular_user.name,
+                "org_project_hash": mock.ANY,
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "statuses": [
@@ -5511,6 +5516,7 @@ class TestJobs:
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
                 "project_name": regular_user.name,
+                "org_project_hash": mock.ANY,
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "statuses": [
