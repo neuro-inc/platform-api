@@ -94,7 +94,6 @@ async def postgres_dsn(
 
     postgres_dsn = await _make_postgres_dsn(container)
     await _wait_for_postgres_server(postgres_dsn)
-    await _init_postgres_server(postgres_dsn)
     yield postgres_dsn
 
     if not reuse_docker:
@@ -123,13 +122,6 @@ async def _wait_for_postgres_server(
         except Exception:
             pass
         time.sleep(interval_s)
-
-
-async def _init_postgres_server(postgres_dsn: str) -> None:
-    if postgres_dsn.startswith("postgresql+asyncpg://"):
-        postgres_dsn = "postgresql" + postgres_dsn[len("postgresql+asyncpg") :]
-    conn = await asyncpg.connect(postgres_dsn)
-    await conn.execute("CREATE EXTENSION pgcrypto")
 
 
 @pytest.fixture
