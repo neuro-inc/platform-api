@@ -1,7 +1,7 @@
 """add org/project hash column
 
 Revision ID: 631e12f654a4
-Revises: 0c26b76ea170
+Revises: adac6355fbe3
 Create Date: 2023-07-03 13:15:13.812736
 
 """
@@ -12,7 +12,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "631e12f654a4"
-down_revision = "0c26b76ea170"
+down_revision = "adac6355fbe3"
 branch_labels = None
 depends_on = None
 
