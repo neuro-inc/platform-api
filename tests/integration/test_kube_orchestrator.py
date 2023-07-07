@@ -19,7 +19,6 @@ from yarl import URL
 from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import STORAGE_URI_SCHEME, RegistryConfig, StorageConfig
 from platform_api.orchestrator.job import (
-    JOB_NAME_SEPARATOR,
     Job,
     JobRecord,
     JobRestartPolicy,
@@ -90,7 +89,7 @@ class MyJob(Job):
         self._record.internal_hostname = f"{self.id}.{namespace}"
         if self.is_named:
             self._record.internal_hostname_named = (
-                f"{self.name}{JOB_NAME_SEPARATOR}{self.project_name}.{namespace}"
+                f"{self.host_segment_named}.{namespace}"
             )
 
     async def start(self) -> JobStatus:
