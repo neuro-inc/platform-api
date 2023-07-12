@@ -82,18 +82,8 @@ class MyJob(Job):
             record=record,
         )
 
-    def _prepare(self) -> None:
-        assert isinstance(self._orchestrator, KubeOrchestrator)
-        namespace = self._orchestrator.kube_config.namespace
-
-        self._record.internal_hostname = f"{self.id}.{namespace}"
-        if self.is_named:
-            self._record.internal_hostname_named = (
-                f"{self.host_segment_named}.{namespace}"
-            )
-
     async def start(self) -> JobStatus:
-        self._prepare()
+        self.init_job_internal_hostnames()
         status = await self._orchestrator.start_job(self)
         assert status == JobStatus.PENDING
         return status
@@ -1090,6 +1080,133 @@ class TestKubeOrchestrator:
             # NOTE: should be another exception, see issue #792
             with pytest.raises(JobNotFoundException, match="not found"):
                 await kube_client.get_ingress(job.id)
+
+    @pytest.mark.parametrize("job_named", (False, True))
+    async def test_job_service_lifecycle_with_job_name(
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        kube_ingress_ip: str,
+        kube_client: KubeClient,
+        job_named: bool,
+    ) -> None:
+        container = Container(
+            image="python",
+            command="python -m http.server 80",
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+            http_server=ContainerHTTPServer(port=80),
+        )
+        job_name = f"test-job-name-{random_str()}" if job_named else None
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                name=job_name,
+                owner="owner",
+            ),
+        )
+        try:
+            service_name_id = job.id
+            service_name_named = kube_orchestrator._get_service_name_for_named(job)
+
+            with pytest.raises(NotFoundException):
+                await kube_client.get_service(service_name_id)
+            if job_named:
+                with pytest.raises(NotFoundException):
+                    await kube_client.get_service(service_name_named)
+
+            await job.start()
+            assert not (job.requires_http_auth), str(job)
+
+            assert job.http_host is not None
+            assert job.internal_hostname is not None
+            if job_named:
+                assert job.internal_hostname_named is not None
+                assert job.http_host_named is not None
+            else:
+                assert job.internal_hostname_named is None
+                assert job.http_host_named is None
+
+            await self._wait_for_job_service(
+                kube_ingress_ip, host=job.http_host, job_id=job.id
+            )
+            await self._wait_for_job_service(
+                kube_ingress_ip, host=job.internal_hostname, job_id=job.id
+            )
+            if job_named:
+                await self._wait_for_job_service(
+                    kube_ingress_ip, host=job.http_host_named, job_id=job.id
+                )
+                await self._wait_for_job_service(
+                    kube_ingress_ip, host=job.internal_hostname_named, job_id=job.id
+                )
+
+        finally:
+            await job.delete()
+            with pytest.raises(NotFoundException):
+                await kube_client.get_service(service_name_id)
+            if job_named:
+                with pytest.raises(NotFoundException):
+                    await kube_client.get_service(service_name_named)
+
+    async def test_job_named_service_recreated(
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        kube_ingress_ip: str,
+        kube_client: KubeClient,
+    ) -> None:
+        job_name = f"test-job-name-{random_str()}"
+
+        def get_test_job(port: int) -> MyJob:
+            return MyJob(
+                orchestrator=kube_orchestrator,
+                record=JobRecord.create(
+                    request=JobRequest.create(
+                        container=Container(
+                            image="python",
+                            command=f"python -m http.server {port}",
+                            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+                            http_server=ContainerHTTPServer(port=port),
+                        ),
+                    ),
+                    cluster_name="test-cluster",
+                    name=job_name,
+                    owner="owner",
+                ),
+            )
+
+        try:
+            job1 = get_test_job(80)
+            job2 = get_test_job(8000)
+
+            job1_status = await job1.start()
+            await self._wait_for_job_service(
+                kube_ingress_ip, host=job1.http_host_named, job_id=job1.id
+            )
+            await self._wait_for_job_service(
+                kube_ingress_ip, host=job1.internal_hostname_named, job_id=job1.id
+            )
+            job1_status = await job1.delete()
+
+            assert job1.http_host != job2.http_host
+            assert job1.internal_hostname != job2.internal_hostname
+            assert job1.http_host_named == job2.http_host_named
+            assert job1.internal_hostname_named == job2.internal_hostname_named
+
+            job2_status = await job2.start()
+            await self._wait_for_job_service(
+                kube_ingress_ip, host=job2.http_host_named, job_id=job2.id
+            )
+            await self._wait_for_job_service(
+                kube_ingress_ip, host=job2.internal_hostname_named, job_id=job2.id
+            )
+            job2_status = await job2.delete()
+
+        finally:
+            if not job1_status.is_finished:
+                await job1.delete()
+            if not job2_status.is_finished:
+                await job2.delete()
 
     @pytest.fixture
     def create_server_job(
