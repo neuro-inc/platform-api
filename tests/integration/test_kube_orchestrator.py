@@ -1120,10 +1120,7 @@ class TestKubeOrchestrator:
 
             assert job.http_host is not None
             assert job.internal_hostname is not None
-            if job_named:
-                assert job.internal_hostname_named is not None
-                assert job.http_host_named is not None
-            else:
+            if not job_named:
                 assert job.internal_hostname_named is None
                 assert job.http_host_named is None
 
@@ -1134,6 +1131,8 @@ class TestKubeOrchestrator:
                 kube_ingress_ip, host=job.internal_hostname, job_id=job.id
             )
             if job_named:
+                assert job.internal_hostname_named is not None
+                assert job.http_host_named is not None
                 await self._wait_for_job_service(
                     kube_ingress_ip, host=job.http_host_named, job_id=job.id
                 )
@@ -1180,6 +1179,8 @@ class TestKubeOrchestrator:
             job2 = get_test_job(8000)
 
             job1_status = await job1.start()
+            assert job1.http_host_named is not None
+            assert job1.internal_hostname_named is not None
             await self._wait_for_job_service(
                 kube_ingress_ip, host=job1.http_host_named, job_id=job1.id
             )
