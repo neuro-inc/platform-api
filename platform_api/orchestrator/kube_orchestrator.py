@@ -180,7 +180,9 @@ class KubeOrchestrator(Orchestrator):
                 result.append(sc)
         return result
 
-    def register(self, node_watcher: NodeWatcher, pod_watcher: PodWatcher) -> None:
+    def subscribe_to_kube_events(
+        self, node_watcher: NodeWatcher, pod_watcher: PodWatcher
+    ) -> None:
         node_watcher.subscribe(self._nodes_handler)
         pod_watcher.subscribe(self._node_resources_handler)
 
