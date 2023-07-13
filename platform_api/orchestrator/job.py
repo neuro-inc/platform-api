@@ -835,7 +835,7 @@ class Job:
         )
 
     @property
-    def _host_segment_named(self) -> str:
+    def host_segment_named(self) -> str:
         suffix = self._record.org_project_hash.hex()
         return f"{self.name}{JOB_NAME_SEPARATOR}{suffix}"
 
@@ -844,7 +844,7 @@ class Job:
         if not self.is_named:
             return None
         return self._orchestrator_config.jobs_domain_name_template.format(
-            job_id=self._host_segment_named
+            job_id=self.host_segment_named
         )
 
     @property
@@ -886,7 +886,7 @@ class Job:
         if self.is_named:
             self._record.internal_hostname_named = (
                 self._orchestrator_config.jobs_internal_domain_name_template.format(
-                    job_id=self._host_segment_named
+                    job_id=self.host_segment_named
                 )
             )
 
