@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import shlex
+import tempfile
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from pathlib import Path
 from typing import Any
 
+import aiohttp
+import aiohttp.web
 import pytest
 
 from platform_api.config import KubeConfig
@@ -28,7 +33,9 @@ from platform_api.orchestrator.kube_client import (
     StatusException,
     WatchEvent,
 )
+from platform_api.orchestrator.kube_config import KubeClientAuthType
 
+from .api import ApiRunner
 from .conftest import MyKubeClient
 
 PodFactory = Callable[..., Awaitable[PodDescriptor]]
@@ -68,6 +75,65 @@ async def delete_service_later(
             await kube_client.delete_service(service.name)
         except Exception:
             pass
+
+
+class TestKubeClientTokenUpdater:
+    @pytest.fixture
+    async def kube_app(self) -> aiohttp.web.Application:
+        async def _get_nodes(request: aiohttp.web.Request) -> aiohttp.web.Response:
+            auth = request.headers["Authorization"]
+            token = auth.split()[-1]
+            app["token"]["value"] = token
+            return aiohttp.web.json_response({"kind": "NodeList", "items": []})
+
+        app = aiohttp.web.Application()
+        app["token"] = {"value": ""}
+        app.router.add_routes([aiohttp.web.get("/api/v1/nodes", _get_nodes)])
+        return app
+
+    @pytest.fixture
+    async def kube_server(
+        self, kube_app: aiohttp.web.Application, unused_tcp_port_factory: Any
+    ) -> AsyncIterator[str]:
+        runner = ApiRunner(kube_app, port=unused_tcp_port_factory())
+        api_address = await runner.run()
+        yield f"http://{api_address.host}:{api_address.port}"
+        await runner.close()
+
+    @pytest.fixture
+    def kube_token_path(self) -> Iterator[str]:
+        _, path = tempfile.mkstemp()
+        Path(path).write_text("token-1")
+        yield path
+        os.remove(path)
+
+    @pytest.fixture
+    async def kube_client(
+        self, kube_server: str, kube_token_path: str
+    ) -> AsyncIterator[KubeClient]:
+        async with KubeClient(
+            base_url=kube_server,
+            namespace="default",
+            auth_type=KubeClientAuthType.TOKEN,
+            token_path=kube_token_path,
+            token_update_interval_s=1,
+        ) as client:
+            yield client
+
+    async def test_token_periodically_updated(
+        self,
+        kube_app: aiohttp.web.Application,
+        kube_client: KubeClient,
+        kube_token_path: str,
+    ) -> None:
+        await kube_client.get_nodes()
+        assert kube_app["token"]["value"] == "token-1"
+
+        Path(kube_token_path).write_text("token-2")
+        await asyncio.sleep(2)
+
+        await kube_client.get_nodes()
+        assert kube_app["token"]["value"] == "token-2"
 
 
 class TestKubeClient:

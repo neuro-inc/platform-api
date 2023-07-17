@@ -3,11 +3,11 @@ import logging
 import operator
 import secrets
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import PurePath
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import RegistryConfig, StorageConfig
@@ -22,6 +22,7 @@ from .job_request import (
     JobError,
     JobNotFoundException,
     JobStatus,
+    JobUnschedulableException,
 )
 from .kube_client import (
     AlreadyExistsException,
@@ -38,7 +39,6 @@ from .kube_client import (
     NotFoundException,
     PathVolume,
     PodDescriptor,
-    PodExec,
     PodRestartPolicy,
     PodStatus,
     PodWatcher,
@@ -327,15 +327,17 @@ class KubeOrchestrator(Orchestrator):
             await self._client.delete_network_policy(
                 name, namespace_name=self._kube_config.namespace
             )
+        except NotFoundException:
+            logger.info("Network policy %s not found", name)
         except Exception as e:
-            logger.warning(f"Failed to remove network policy {name}: {e}")
+            logger.error(f"Failed to remove network policy {name}: {e}")
 
     def _create_pod_descriptor(
         self, job: Job, tolerate_unreachable_node: bool = False
     ) -> PodDescriptor:
         pool_types = self._get_cheapest_pool_types(job)
         if not pool_types:
-            raise JobError("Job will not fit into cluster")
+            raise JobUnschedulableException("Job will not fit into cluster")
         logger.info(
             "Job %s is scheduled to run in pool types %s",
             job.id,
@@ -788,11 +790,6 @@ class KubeOrchestrator(Orchestrator):
             return True
         except JobNotFoundException:
             return False
-
-    async def exec_pod(
-        self, job_id: str, command: Union[str, Iterable[str]], *, tty: bool
-    ) -> PodExec:
-        return await self._client.exec_pod(job_id, command, tty=tty)
 
     async def _create_service(
         self, pod: PodDescriptor, name: Optional[str] = None

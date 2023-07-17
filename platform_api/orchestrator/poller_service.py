@@ -32,6 +32,7 @@ from .job_request import (
     JobException,
     JobNotFoundException,
     JobStatus,
+    JobUnschedulableException,
 )
 from .jobs_storage import JobStorageTransactionError
 
@@ -583,7 +584,8 @@ class JobsPollerService:
                 status_item = job.status_history.current
                 job.materialized = True
             except JobError as exc:
-                logger.exception("Failed to start job %s. Reason: %s", job.id, exc)
+                if not isinstance(exc, JobUnschedulableException):
+                    logger.exception("Failed to start job %s. Reason: %s", job.id, exc)
                 status_item = JobStatusItem.create(
                     JobStatus.FAILED,
                     reason=str(exc),

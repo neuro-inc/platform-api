@@ -38,6 +38,7 @@ from platform_api.orchestrator.job_request import (
     JobNotFoundException,
     JobRequest,
     JobStatus,
+    JobUnschedulableException,
     Secret,
     SecretContainerVolume,
 )
@@ -770,8 +771,7 @@ class TestKubeOrchestrator:
         assert requested_ingress == expected_ingress
 
         await kube_client.delete_ingress(name)
-        # NOTE: should be another exception, see issue #792
-        with pytest.raises(JobNotFoundException, match="not found"):
+        with pytest.raises(NotFoundException):
             await kube_client.get_ingress(name)
 
     async def test_ingress_add_rules(
@@ -985,8 +985,7 @@ class TestKubeOrchestrator:
 
             # check if ingresses were deleted:
 
-            # NOTE: should be another exception, see issue #792
-            with pytest.raises(JobNotFoundException, match="not found"):
+            with pytest.raises(NotFoundException):
                 await kube_client.get_ingress(job.id)
 
     async def test_job_with_exposed_http_server_with_job_name(
@@ -1034,8 +1033,7 @@ class TestKubeOrchestrator:
 
             # check ingresses were deleted:
 
-            # NOTE: should be another exception, see issue #792
-            with pytest.raises(JobNotFoundException, match="not found"):
+            with pytest.raises(NotFoundException):
                 await kube_client.get_ingress(job.id)
 
     async def test_job_with_exposed_http_server_with_auth_no_job_name(
@@ -1076,8 +1074,7 @@ class TestKubeOrchestrator:
 
             # check ingresses were deleted:
 
-            # NOTE: should be another exception, see issue #792
-            with pytest.raises(JobNotFoundException, match="not found"):
+            with pytest.raises(NotFoundException):
                 await kube_client.get_ingress(job.id)
 
     async def test_job_with_exposed_http_server_with_auth_with_job_name(
@@ -1125,8 +1122,7 @@ class TestKubeOrchestrator:
 
             # check ingresses were deleted:
 
-            # NOTE: should be another exception, see issue #792
-            with pytest.raises(JobNotFoundException, match="not found"):
+            with pytest.raises(NotFoundException):
                 await kube_client.get_ingress(job.id)
 
     @pytest.mark.parametrize("job_named", (False, True))
@@ -2290,7 +2286,7 @@ class TestKubeOrchestrator:
         with pytest.raises(JobNotFoundException):
             await kube_client.get_pod(pod_name)
 
-        with pytest.raises(JobNotFoundException):
+        with pytest.raises(NotFoundException):
             await kube_client.get_ingress(ingress_name)
 
         with pytest.raises(StatusException, match="NotFound"):
@@ -2351,7 +2347,7 @@ class TestKubeOrchestrator:
         await delete_job_later(job3)
         await kube_orchestrator.start_job(job3)
 
-        with pytest.raises(JobNotFoundException):
+        with pytest.raises(NotFoundException):
             await kube_client.get_ingress(job1.id)
         await kube_client.get_ingress(job2.id)
         await kube_client.get_ingress(job3.id)
@@ -2617,7 +2613,9 @@ class TestNodeAffinity:
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
-        with pytest.raises(JobError, match="Job will not fit into cluster"):
+        with pytest.raises(
+            JobUnschedulableException, match="Job will not fit into cluster"
+        ):
             async with start_job(kube_orchestrator, cpu=100, memory=32 * 10**6):
                 pass
 
@@ -2696,7 +2694,9 @@ class TestNodeAffinity:
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
-        with pytest.raises(JobError, match="Job will not fit into cluster"):
+        with pytest.raises(
+            JobUnschedulableException, match="Job will not fit into cluster"
+        ):
             async with start_job(kube_orchestrator, cpu=7, memory=32 * 10**6):
                 pass
 

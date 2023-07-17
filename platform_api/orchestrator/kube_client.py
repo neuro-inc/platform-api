@@ -3,28 +3,21 @@ import asyncio
 import enum
 import json
 import logging
-import re
 import ssl
 from base64 import b64encode
-from collections import defaultdict
-from collections.abc import AsyncIterator, Callable, Iterable, Iterator, Sequence
-from contextlib import contextmanager, suppress
+from collections.abc import AsyncIterator, Callable, Sequence
+from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
 from pathlib import Path, PurePath
-from types import TracebackType
 from typing import Any, ClassVar, NoReturn, Optional, Union
 from urllib.parse import urlsplit
 
 import aiohttp
 import iso8601
-from aiohttp import WSMsgType
 from async_timeout import timeout
-from multidict import MultiDict
 from yarl import URL
-
-from platform_api.utils.stream import Stream
 
 from .job_request import (
     Container,
@@ -32,7 +25,6 @@ from .job_request import (
     ContainerTPUResource,
     ContainerVolume,
     DiskContainerVolume,
-    JobAlreadyExistsException,
     JobError,
     JobNotFoundException,
     JobRequest,
@@ -83,7 +75,6 @@ class ExpiredException(KubeClientException):
 
 
 def _raise_status_job_exception(pod: dict[str, Any], job_id: Optional[str]) -> NoReturn:
-    # TODO (Y.S. 04.2023): Remove it, since status codes are handled by KubeClient
     if pod["code"] == 409:
         raise AlreadyExistsException(pod.get("reason", "job already exists"))
     elif pod["code"] == 404:
@@ -92,18 +83,6 @@ def _raise_status_job_exception(pod: dict[str, Any], job_id: Optional[str]) -> N
         raise JobError(f"cant create job with id {job_id}")
     else:
         raise JobError("unexpected")
-
-
-@contextmanager
-def _reraise_as_job_exceptions() -> Iterator[None]:
-    try:
-        yield
-    except AlreadyExistsException as e:
-        raise JobAlreadyExistsException(str(e))
-    except NotFoundException:
-        raise JobNotFoundException("job was not found")
-    except StatusException as e:
-        raise JobError(f"unexpected: {e}")
 
 
 class GroupVersion(str, Enum):
@@ -633,18 +612,9 @@ class Ingress:
 
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "Ingress":
-        # TODO (A Danshyn 06/13/18): should be refactored along with PodStatus
-        kind = payload["kind"]
-        if kind == "Ingress":
-            if payload["apiVersion"] == GroupVersion.NETWORKING_V1:
-                return cls._from_v1_primitive(payload)
-            return cls._from_v1beta1_primitive(payload)
-        elif kind == "Status":
-            # TODO (A.Yushkovskiy, 28-Jun-2019) patch this method to raise a proper
-            #  error, not always `JobNotFoundException` (see issue #792)
-            _raise_status_job_exception(payload, job_id=None)
-        else:
-            raise ValueError(f"unknown kind: {kind}")
+        if payload["apiVersion"] == GroupVersion.NETWORKING_V1:
+            return cls._from_v1_primitive(payload)
+        return cls._from_v1beta1_primitive(payload)
 
     @classmethod
     def _from_v1beta1_primitive(cls, payload: dict[str, Any]) -> "Ingress":
@@ -1499,105 +1469,6 @@ class PodStatus:
         return cls(payload)
 
 
-class ExecChannel(int, enum.Enum):
-    STDIN = 0
-    STDOUT = 1
-    STDERR = 2
-    ERROR = 3
-    RESIZE = 4
-
-
-class PodExec:
-    RE_EXIT = re.compile(
-        rb"^command terminated with non-zero exit code: "
-        rb"Error executing in Docker Container: (\d+)$"
-    )
-
-    def __init__(self, ws: aiohttp.ClientWebSocketResponse) -> None:
-        self._ws = ws
-        self._channels: defaultdict[ExecChannel, Stream] = defaultdict(Stream)
-        loop = asyncio.get_event_loop()
-        self._reader_task = loop.create_task(self._read_data())
-        self._exit_code = loop.create_future()
-
-    async def _read_data(self) -> None:
-        try:
-            async for msg in self._ws:
-                if msg.type != WSMsgType.BINARY:
-                    # looks weird, but the official client doesn't distinguish TEXT and
-                    # BINARY WS messages
-                    logger.warning("Unknown pod exec mgs type %r", msg)
-                    continue
-                data = msg.data
-                if isinstance(data, str):
-                    bdata = data.encode()
-                else:
-                    bdata = data
-                if not bdata:
-                    # an empty WS message. Have no idea how it can happen.
-                    continue
-                channel = ExecChannel(bdata[0])
-                bdata = bdata[1:]
-                if channel == ExecChannel.ERROR:
-                    match = self.RE_EXIT.match(bdata)
-                    if match is not None:
-                        # exit code received
-                        if not self._exit_code.done():
-                            self._exit_code.set_result(int(match.group(1)))
-                        continue
-                    else:
-                        # redirect internal error channel into stderr
-                        channel = ExecChannel.STDERR
-                stream = self._channels[channel]
-                await stream.feed(bdata)
-
-            await self.close()
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception("PodExec._read_data")
-            await self.close()
-
-    async def close(self) -> None:
-        if not self._exit_code.done():
-            # Don't have exit status yet, assume a normal termination
-            self._exit_code.set_result(0)
-        if not self._reader_task.done():
-            self._reader_task.cancel()
-            for stream in self._channels.values():
-                await stream.close()
-            with suppress(asyncio.CancelledError):
-                await self._reader_task
-        await self._ws.close()
-
-    async def wait(self) -> int:
-        return await self._exit_code
-
-    async def __aenter__(self) -> "PodExec":
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
-    ) -> None:
-        await self.close()
-
-    async def write_stdin(self, data: bytes) -> None:
-        msg = bytes((ExecChannel.STDIN,)) + data
-        await self._ws.send_bytes(msg)
-
-    async def read_stdout(self) -> bytes:
-        return await self._channels[ExecChannel.STDOUT].read()
-
-    async def read_stderr(self) -> bytes:
-        return await self._channels[ExecChannel.STDERR].read()
-
-    async def read_error(self) -> bytes:
-        return await self._channels[ExecChannel.ERROR].read()
-
-
 @dataclass(frozen=True)
 class NodeTaint:
     key: str
@@ -1828,6 +1699,7 @@ class KubeClient:
         auth_cert_key_path: Optional[str] = None,
         token: Optional[str] = None,
         token_path: Optional[str] = None,
+        token_update_interval_s: int = 300,
         conn_timeout_s: int = 300,
         read_timeout_s: int = 100,
         conn_pool_size: int = 100,
@@ -1846,6 +1718,7 @@ class KubeClient:
         self._auth_cert_key_path = auth_cert_key_path
         self._token = token
         self._token_path = token_path
+        self._token_update_interval_s = token_update_interval_s
 
         self._conn_timeout_s = conn_timeout_s
         self._read_timeout_s = read_timeout_s
@@ -1853,8 +1726,7 @@ class KubeClient:
         self._trace_configs = trace_configs
 
         self._client: Optional[aiohttp.ClientSession] = None
-
-        self._kubelet_port = 10255
+        self._token_updater_task: Optional[asyncio.Task[None]] = None
 
     @property
     def _is_ssl(self) -> bool:
@@ -1874,26 +1746,20 @@ class KubeClient:
         return ssl_context
 
     async def init(self) -> None:
-        if self._client and not self._client.closed:
+        if self._client:
             return
         connector = aiohttp.TCPConnector(
             limit=self._conn_pool_size, ssl=self._create_ssl_context()
         )
-        if self._auth_type == KubeClientAuthType.TOKEN:
-            token = self._token
-            if not token:
-                assert self._token_path is not None
-                token = Path(self._token_path).read_text()
-            headers = {"Authorization": "Bearer " + token}
-        else:
-            headers = {}
+        if self._token_path:
+            self._token = Path(self._token_path).read_text()
+            self._token_updater_task = asyncio.create_task(self._start_token_updater())
         timeout = aiohttp.ClientTimeout(
             connect=self._conn_timeout_s, total=self._read_timeout_s
         )
         self._client = aiohttp.ClientSession(
             connector=connector,
             timeout=timeout,
-            headers=headers,
             trace_configs=self._trace_configs,
         )
 
@@ -1905,10 +1771,30 @@ class KubeClient:
                 if ex.status != 404:
                     raise
 
+    async def _start_token_updater(self) -> None:
+        if not self._token_path:
+            return
+        while True:
+            try:
+                token = Path(self._token_path).read_text()
+                if token != self._token:
+                    self._token = token
+                    logger.info("Kube token was refreshed")
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.exception("Failed to update kube token: %s", exc)
+            await asyncio.sleep(self._token_update_interval_s)
+
     async def close(self) -> None:
         if self._client:
             await self._client.close()
             self._client = None
+        if self._token_updater_task:
+            self._token_updater_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._token_updater_task
+            self._token_updater_task = None
 
     async def __aenter__(self) -> "KubeClient":
         await self.init()
@@ -1917,11 +1803,6 @@ class KubeClient:
 
     async def __aexit__(self, *args: Any) -> None:
         await self.close()
-
-    async def _reload_http_client(self) -> None:
-        await self.close()
-        self._token = None
-        await self.init()
 
     @property
     def _api_v1_url(self) -> str:
@@ -2033,23 +1914,25 @@ class KubeClient:
         all_pvcs_url = self._generate_all_pvcs_url(namespace_name)
         return f"{all_pvcs_url}/{pvc_name}"
 
-    async def _request(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        await self.init()
-        assert self._client
-        doing_retry = kwargs.pop("doing_retry", False)
+    def _create_headers(
+        self, headers: Optional[dict[str, Any]] = None
+    ) -> dict[str, Any]:
+        headers = dict(headers) if headers else {}
+        if self._auth_type == KubeClientAuthType.TOKEN and self._token:
+            headers["Authorization"] = "Bearer " + self._token
+        return headers
 
-        async with self._client.request(*args, **kwargs) as response:
+    async def _request(
+        self, *args: Any, check_status_payload: bool = True, **kwargs: Any
+    ) -> dict[str, Any]:
+        headers = self._create_headers(kwargs.pop("headers", None))
+        assert self._client
+        async with self._client.request(*args, headers=headers, **kwargs) as response:
             payload = await response.json()
-            logger.debug("k8s response payload: %s", payload)
-        try:
-            self._check_status_payload(payload)
-        except KubeClientUnauthorizedException:
-            if doing_retry:
-                raise
-            await self._reload_http_client()
-            kwargs["doing_retry"] = True
-            payload = await self._request(*args, **kwargs)
-        return payload
+            logging.debug("k8s response payload: %s", payload)
+            if check_status_payload:
+                self._check_status_payload(payload)
+            return payload
 
     async def _watch(
         self,
@@ -2061,25 +1944,20 @@ class KubeClient:
         params.update(watch="true", allowWatchBookmarks="true")
         if resource_version:
             params["resourceVersion"] = resource_version
-        await self.init()
         assert self._client
         async with self._client.get(
-            url, params=params, timeout=aiohttp.ClientTimeout()
+            url,
+            params=params,
+            headers=self._create_headers(),
+            timeout=aiohttp.ClientTimeout(),
         ) as response:
             if response.status == 410:
                 raise ResourceGoneException
             async for line in response.content:
                 payload = json.loads(line)
-                try:
-                    self._check_status_payload(payload)
-                    if WatchEvent.is_error(payload):
-                        self._check_status_payload(payload["object"])
-                except KubeClientUnauthorizedException:
-                    await self._reload_http_client()
-                    raise
-                except ExpiredException:
-                    await self._reload_http_client()
-                    raise
+                self._check_status_payload(payload)
+                if WatchEvent.is_error(payload):
+                    self._check_status_payload(payload["object"])
                 if WatchBookmarkEvent.is_bookmark(payload):
                     yield WatchBookmarkEvent.from_primitive(payload)
                 else:
@@ -2143,7 +2021,6 @@ class KubeClient:
 
     async def get_node(self, name: str) -> Node:
         payload = await self._request(method="GET", url=self._generate_node_url(name))
-        assert payload["kind"] == "Node"
         return Node.from_primitive(payload)
 
     async def get_raw_nodes(
@@ -2155,7 +2032,6 @@ class KubeClient:
                 "=".join(item) for item in labels.items()
             )
         payload = await self._request(method="GET", url=self._nodes_url, params=params)
-        assert payload["kind"] == "NodeList"
         return ListResult.from_primitive(payload)
 
     async def watch_nodes(
@@ -2172,10 +2048,12 @@ class KubeClient:
             yield event
 
     async def create_pod(self, descriptor: PodDescriptor) -> PodDescriptor:
-        with _reraise_as_job_exceptions():
-            payload = await self._request(
-                method="POST", url=self._pods_url, json=descriptor.to_primitive()
-            )
+        payload = await self._request(
+            method="POST",
+            url=self._pods_url,
+            json=descriptor.to_primitive(),
+            check_status_payload=False,
+        )
         pod = PodDescriptor.from_primitive(payload)
         return pod
 
@@ -2187,8 +2065,11 @@ class KubeClient:
 
     async def get_pod(self, pod_name: str) -> PodDescriptor:
         url = self._generate_pod_url(pod_name)
-        with _reraise_as_job_exceptions():
-            payload = await self._request(method="GET", url=url)
+        payload = await self._request(
+            method="GET",
+            url=url,
+            check_status_payload=False,
+        )
         return PodDescriptor.from_primitive(payload)
 
     async def get_raw_pod(self, name: str) -> dict[str, Any]:
@@ -2209,8 +2090,7 @@ class KubeClient:
             yield event
 
     async def get_pod_status(self, pod_id: str) -> PodStatus:
-        with _reraise_as_job_exceptions():
-            pod = await self.get_pod(pod_id)
+        pod = await self.get_pod(pod_id)
         if pod.status is None:
             raise ValueError("Missing pod status")
         return pod.status
@@ -2224,10 +2104,12 @@ class KubeClient:
                 "kind": "DeleteOptions",
                 "gracePeriodSeconds": 0,
             }
-        with _reraise_as_job_exceptions():
-            payload = await self._request(
-                method="DELETE", url=url, json=request_payload
-            )
+        payload = await self._request(
+            method="DELETE",
+            url=url,
+            json=request_payload,
+            check_status_payload=False,
+        )
         pod = PodDescriptor.from_primitive(payload)
         return pod.status  # type: ignore
 
@@ -2261,16 +2143,14 @@ class KubeClient:
             payload = ingress.to_v1_primitive()
         else:
             payload = ingress.to_v1beta1_primitive()
-        with _reraise_as_job_exceptions():
-            payload = await self._request(
-                method="POST", url=self._ingresses_url, json=payload
-            )
+        payload = await self._request(
+            method="POST", url=self._ingresses_url, json=payload
+        )
         return Ingress.from_primitive(payload)
 
     async def get_ingress(self, name: str) -> Ingress:
         url = self._generate_ingress_url(name)
-        with _reraise_as_job_exceptions():
-            payload = await self._request(method="GET", url=url)
+        payload = await self._request(method="GET", url=url)
         return Ingress.from_primitive(payload)
 
     async def delete_all_ingresses(
@@ -2314,10 +2194,9 @@ class KubeClient:
         else:
             rule_payload = rule.to_v1beta1_primitive()
         patches = [{"op": "add", "path": "/spec/rules/-", "value": rule_payload}]
-        with _reraise_as_job_exceptions():
-            payload = await self._request(
-                method="PATCH", url=url, headers=headers, json=patches
-            )
+        payload = await self._request(
+            method="PATCH", url=url, headers=headers, json=patches
+        )
         return Ingress.from_primitive(payload)
 
     async def remove_ingress_rule(self, name: str, host: str) -> Ingress:
@@ -2419,32 +2298,6 @@ class KubeClient:
         url = f"{self._api_v1_url}/namespaces/{namespace}/events"
         payload = await self._request(method="GET", url=url, params=params)
         return [KubernetesEvent(item) for item in payload.get("items", [])]
-
-    async def exec_pod(
-        self, pod_id: str, command: Union[str, Iterable[str]], *, tty: bool
-    ) -> PodExec:
-        url = URL(self._generate_pod_url(pod_id)) / "exec"
-        s_tty = str(int(tty))  # 0 or 1
-        args = MultiDict(
-            {
-                "container": pod_id,
-                "tty": s_tty,
-                "stdin": "1",
-                "stdout": "1",
-                "stderr": "1",
-            }
-        )
-        if isinstance(command, str):
-            args["command"] = command
-        else:
-            for part in command:
-                args.add("command", part)
-
-        url = url.with_query(args)
-        await self.init()
-        assert self._client
-        ws = await self._client.ws_connect(url, method="POST")
-        return PodExec(ws)
 
     async def wait_pod_is_running(
         self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
@@ -2583,13 +2436,6 @@ class KubeClient:
             params=params,
         )
 
-    def _generate_node_proxy_url(self, name: str, port: int) -> str:
-        return f"{self._api_v1_url}/nodes/{name}:{port}/proxy"
-
-    def _generate_node_stats_summary_url(self, name: str) -> str:
-        proxy_url = self._generate_node_proxy_url(name, self._kubelet_port)
-        return f"{proxy_url}/stats/summary"
-
 
 class EventHandler:
     @abc.abstractmethod
@@ -2644,9 +2490,9 @@ class Watcher(abc.ABC):
                     for handler in self._handlers:
                         await handler.handle(event)
             except KubeClientUnauthorizedException as exc:
-                logger.warning("Kube client unauthorized error", exc_info=exc)
+                logger.info("Kube client unauthorized", exc_info=exc)
             except ExpiredException as exc:
-                logger.warning("Kube token expired error", exc_info=exc)
+                logger.info("Kube token expired", exc_info=exc)
             except ResourceGoneException as exc:
                 logger.warning("Resource gone", exc_info=exc)
             except aiohttp.ClientError as exc:
