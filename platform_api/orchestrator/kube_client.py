@@ -1776,7 +1776,10 @@ class KubeClient:
             return
         while True:
             try:
-                self._token = Path(self._token_path).read_text()
+                token = Path(self._token_path).read_text()
+                if token != self._token:
+                    self._token = token
+                    logger.info("Kube token was refreshed")
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
