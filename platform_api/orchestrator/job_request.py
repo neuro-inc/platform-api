@@ -28,6 +28,10 @@ class JobAlreadyExistsException(JobException):
     pass
 
 
+class JobUnschedulableException(JobError):
+    pass
+
+
 @dataclass(frozen=True)
 class ContainerVolume:
     uri: URL
