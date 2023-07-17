@@ -28,6 +28,7 @@ from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobError
 from .orchestrator.jobs_poller import HttpJobsPollerApi, JobsPoller, JobsPollerService
 from .orchestrator.jobs_storage.base import JobStorageTransactionError
+from .orchestrator.kube_client import KubeClient
 from .orchestrator.poller_service import JobsScheduler
 
 logger = logging.getLogger(__name__)
@@ -46,15 +47,15 @@ class Handler:
 
 
 def create_cluster_factory(
-    config: PollerConfig,
+    config: PollerConfig, kube_client: KubeClient
 ) -> Callable[[ClusterConfig], Cluster]:
     def _create_cluster(cluster_config: ClusterConfig) -> Cluster:
         return KubeCluster(
+            kube_client=kube_client,
+            kube_config=config.kube_config,
             registry_config=config.registry_config,
             storage_configs=config.storage_configs,
             cluster_config=cluster_config,
-            kube_config=config.kube_config,
-            trace_configs=make_tracing_trace_configs(config),
         )
 
     return _create_cluster
@@ -80,6 +81,26 @@ async def create_app(
 
     async def _init_app(app: aiohttp.web.Application) -> AsyncIterator[None]:
         async with AsyncExitStack() as exit_stack:
+            logger.info("Initializing KubeClient")
+            kube_config = config.kube_config
+            kube_client = await exit_stack.enter_async_context(
+                KubeClient(
+                    base_url=kube_config.endpoint_url,
+                    cert_authority_data_pem=kube_config.cert_authority_data_pem,
+                    cert_authority_path=kube_config.cert_authority_path,
+                    auth_type=kube_config.auth_type,
+                    auth_cert_path=kube_config.auth_cert_path,
+                    auth_cert_key_path=kube_config.auth_cert_key_path,
+                    token=kube_config.token,
+                    token_path=kube_config.token_path,
+                    namespace=kube_config.namespace,
+                    conn_timeout_s=kube_config.client_conn_timeout_s,
+                    read_timeout_s=kube_config.client_read_timeout_s,
+                    conn_pool_size=kube_config.client_conn_pool_size,
+                    trace_configs=make_tracing_trace_configs(config),
+                )
+            )
+
             logger.info("Initializing AuthClient")
             auth_client = await exit_stack.enter_async_context(
                 AuthClient(
@@ -102,7 +123,7 @@ async def create_app(
 
             logger.info("Initializing ClusterHolder")
             cluster_holder = await exit_stack.enter_async_context(
-                ClusterHolder(factory=create_cluster_factory(config))
+                ClusterHolder(factory=create_cluster_factory(config, kube_client))
             )
 
             logger.info("Initializing ConfigClient")

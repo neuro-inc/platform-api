@@ -2369,7 +2369,7 @@ class TestKubeOrchestrator:
     ) -> AsyncIterator[None]:
         node_watcher = NodeWatcher(kube_client)
         pod_watcher = PodWatcher(kube_client)
-        kube_orchestrator.register(node_watcher, pod_watcher)
+        kube_orchestrator.subscribe_to_kube_events(node_watcher, pod_watcher)
         exit_stack = AsyncExitStack()
         await exit_stack.enter_async_context(node_watcher)
         await exit_stack.enter_async_context(pod_watcher)
@@ -3308,7 +3308,7 @@ class TestJobsPreemption:
     ) -> AsyncIterator[None]:
         node_watcher = NodeWatcher(kube_client)
         pod_watcher = PodWatcher(kube_client)
-        kube_orchestrator.register(node_watcher, pod_watcher)
+        kube_orchestrator.subscribe_to_kube_events(node_watcher, pod_watcher)
         exit_stack = AsyncExitStack()
         await exit_stack.enter_async_context(node_watcher)
         await exit_stack.enter_async_context(pod_watcher)
