@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout commit
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Install python
       uses: actions/setup-python@v4
       with:
@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout commit
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Install python
       uses: actions/setup-python@v4
       with:
@@ -59,7 +59,7 @@ jobs:
       MINIKUBE_DRIVER: none
     steps:
     - name: Checkout commit
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Install python
       uses: actions/setup-python@v4
       with:
@@ -106,7 +106,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout commit
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Install python
       uses: actions/setup-python@v4
       with:
