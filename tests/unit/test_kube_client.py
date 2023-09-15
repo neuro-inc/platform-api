@@ -582,6 +582,9 @@ class TestNodeResources:
         resources = NodeResources.from_primitive({"cpu": "1", "memory": "4Gi"})
         assert resources == NodeResources(cpu=1, memory=4 * 2**30)
 
+        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4Ti"})
+        assert resources == NodeResources(cpu=1, memory=4 * 2**40)
+
         resources = NodeResources.from_primitive({"cpu": "1", "memory": "4000000k"})
         assert resources == NodeResources(cpu=1, memory=4000000 * 10**3)
 
@@ -591,8 +594,11 @@ class TestNodeResources:
         resources = NodeResources.from_primitive({"cpu": "1", "memory": "4G"})
         assert resources == NodeResources(cpu=1, memory=4 * 10**9)
 
-        with pytest.raises(ValueError, match="'4Ti' memory format is not supported"):
-            NodeResources.from_primitive({"cpu": "1", "memory": "4Ti"})
+        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4T"})
+        assert resources == NodeResources(cpu=1, memory=4 * 10**12)
+
+        with pytest.raises(ValueError, match="'4Pi' memory format is not supported"):
+            NodeResources.from_primitive({"cpu": "1", "memory": "4Pi"})
 
     def test_from_primitive_with_gpu(self) -> None:
         resources = NodeResources.from_primitive(

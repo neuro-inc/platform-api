@@ -380,6 +380,10 @@ class Resources:
                 memory_b = int(memory[:-2]) * 1024**3
             elif memory.endswith("G"):
                 memory_b = int(memory[:-1]) * 1000**3
+            elif memory.endswith("Ti"):
+                memory_b = int(memory[:-2]) * 1024**4
+            elif memory.endswith("T"):
+                memory_b = int(memory[:-1]) * 1000**4
             else:
                 raise ValueError(f"{memory!r} memory format is not supported")
         return memory_b
