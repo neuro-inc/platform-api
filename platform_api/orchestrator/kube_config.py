@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import enum
-from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 class KubeClientAuthType(str, enum.Enum):
@@ -46,8 +45,8 @@ class KubeConfig:
     image_pull_secret_name: str | None = None
 
     external_job_runner_image: str = "ghcr.io/neuro-inc/externaljobrunner:latest"
-    external_job_runner_command: Sequence[str] = ()
-    external_job_runner_args: Sequence[str] = ()
+    external_job_runner_command: list[str] = field(default_factory=list)
+    external_job_runner_args: list[str] = field(default_factory=list)
     external_job_runner_port: int = 8080
 
     def __post_init__(self) -> None:
