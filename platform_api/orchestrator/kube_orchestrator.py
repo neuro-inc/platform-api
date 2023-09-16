@@ -722,6 +722,8 @@ class KubeOrchestrator(Orchestrator):
         if pod_status.is_finished:
             return pod_status
 
+        # Job is in terminating/terminated but pod phase has not moved to
+        # succeeded/failed yet, continue returning running status.
         if job.is_running:
             return job.status_history.last
 
