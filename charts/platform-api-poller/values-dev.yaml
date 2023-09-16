@@ -20,6 +20,11 @@ jobs:
   ingressAuthMiddleware: platform-platform-ingress-auth@kubernetescrd
   ingressErrorPageMiddleware: platform-platform-web-ui-error-pages@kubernetescrd
 
+externalJobRunner:
+  image:
+    repository: ghcr.io/neuro-inc/externaljobrunner
+    tag: latest-dev
+
 storages:
 - type: pvc
   claimName: platform-storage

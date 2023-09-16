@@ -920,6 +920,11 @@ class Job:
     def is_restartable(self) -> bool:
         return self._record.is_restartable
 
+    @property
+    def is_external(self) -> bool:
+        preset = self.preset
+        return False if preset is None else preset.is_external_job
+
     def get_run_time(
         self, only_after: Optional[datetime] = None, now: Optional[datetime] = None
     ) -> timedelta:

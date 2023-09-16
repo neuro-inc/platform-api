@@ -1890,12 +1890,6 @@ class KubeClient:
     def _generate_service_url(self, service_name: str) -> str:
         return f"{self._services_url}/{service_name}"
 
-    def _generate_pod_log_url(self, pod_name: str, container_name: str) -> str:
-        return (
-            f"{self._generate_pod_url(pod_name)}/log"
-            f"?container={pod_name}&follow=true"
-        )
-
     def _generate_all_secrets_url(self, namespace_name: Optional[str] = None) -> str:
         namespace_name = namespace_name or self._namespace
         namespace_url = self._generate_namespace_url(namespace_name)
@@ -1966,6 +1960,9 @@ class KubeClient:
                     yield WatchBookmarkEvent.from_primitive(payload)
                 else:
                     yield WatchEvent.from_primitive(payload)
+
+    async def request(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        return await self._request(*args, check_status_payload=False, **kwargs)
 
     async def get_api_resource(self, group_version: str) -> APIResource:
         url = f"{self._base_url}/apis/{group_version}"
@@ -2330,6 +2327,21 @@ class KubeClient:
             while True:
                 pod_status = await self.get_pod_status(pod_name)
                 if pod_status.is_terminated:
+                    return
+                await asyncio.sleep(interval_s)
+
+    async def wait_pod_is_finished(
+        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+    ) -> None:
+        """Wait until the pod is finished.
+
+        Raise JobError if there is no such pod.
+        Raise asyncio.TimeoutError if it takes too long for the pod.
+        """
+        async with timeout(timeout_s):
+            while True:
+                pod_status = await self.get_pod_status(pod_name)
+                if pod_status.phase in ("Succeeded", "Failed"):
                     return
                 await asyncio.sleep(interval_s)
 

@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import PurePath
 from typing import Any, Optional
 
+import aiohttp
+
 from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import RegistryConfig, StorageConfig
 from platform_api.resource import ResourcePoolType
@@ -393,6 +395,8 @@ class KubeOrchestrator(Orchestrator):
             privileged=job.privileged,
         )
         pod = self._update_pod_container_resources(pod, pool_types)
+        pod = self._update_pod_image(job, pod)
+        pod = self._update_pod_command(job, pod)
         return pod
 
     def _get_cheapest_pool_types(self, job: Job) -> Sequence[ResourcePoolType]:
@@ -465,6 +469,20 @@ class KubeOrchestrator(Orchestrator):
         )  # 1GB
         return replace(pod, resources=new_resources)
 
+    def _update_pod_image(self, job: Job, pod: PodDescriptor) -> PodDescriptor:
+        if job.is_external:
+            return replace(pod, image=self._kube_config.external_job_runner_image)
+        return pod
+
+    def _update_pod_command(self, job: Job, pod: PodDescriptor) -> PodDescriptor:
+        if job.is_external:
+            return replace(
+                pod,
+                command=self._kube_config.external_job_runner_command,
+                args=self._kube_config.external_job_runner_args,
+            )
+        return pod
+
     def _get_user_pod_labels(self, job: Job) -> dict[str, str]:
         return {"platform.neuromation.io/user": job.owner.replace("/", "--")}
 
@@ -480,9 +498,12 @@ class KubeOrchestrator(Orchestrator):
         return {"platform.neuromation.io/job": job.id}
 
     def _get_preset_labels(self, job: Job) -> dict[str, str]:
-        if job.preset_name:
-            return {"platform.neuromation.io/preset": job.preset_name}
-        return {}
+        if not job.preset_name:
+            return {}
+        labels = {"platform.neuromation.io/preset": job.preset_name}
+        if job.is_external:
+            labels["platform.neuromation.io/external"] = "true"
+        return labels
 
     def _get_gpu_labels(self, job: Job) -> dict[str, str]:
         if not job.has_gpu or not job.gpu_model_id:
@@ -579,7 +600,7 @@ class KubeOrchestrator(Orchestrator):
         except AlreadyExistsException as e:
             raise JobAlreadyExistsException(str(e))
 
-        job.status_history.current = await self._get_pod_status(job, pod)
+        job.status_history.current = await self._get_job_status(job, pod)
         return job.status
 
     def _get_pod_tolerations(
@@ -663,11 +684,53 @@ class KubeOrchestrator(Orchestrator):
 
         # handling PENDING/RUNNING jobs
 
-        if job.is_restartable:
-            pod = await self._check_restartable_job_pod(job)
+        # In case this is an external job and node/pod was lost
+        # we need to reschedule external job runner to continue manage
+        # external job state, we treat it as restartable.
+        if job.is_restartable or job.is_external:
+            pod = await self._check_pod_lost(job)
         else:
             pod = await self._client.get_pod(self._get_job_pod_name(job))
-        return await self._get_pod_status(job, pod)
+
+        return await self._get_job_status(job, pod)
+
+    async def _get_job_status(self, job: Job, pod: PodDescriptor) -> JobStatusItem:
+        if job.is_external:
+            return await self._get_external_job_status(job, pod)
+        else:
+            return await self._get_pod_status(job, pod)
+
+    async def _get_external_job_status(
+        self, job: Job, pod: PodDescriptor
+    ) -> JobStatusItem:
+        now = datetime.now(timezone.utc)
+
+        try:
+            port = self._kube_config.external_job_runner_port
+            status_url = f"http://{job.internal_hostname}:{port}/api/v1/status"
+            resp = await self._client.request("GET", status_url, raise_for_status=True)
+            return JobStatusItem.create(
+                JobStatus(resp["status"]),
+                transition_time=now,
+                reason=resp.get("reason"),
+                description=resp.get("description"),
+            )
+        except aiohttp.ClientError:
+            pass
+
+        pod_status = await self._get_pod_status(job, pod)
+        if pod_status.is_finished:
+            return pod_status
+
+        if job.is_running:
+            return job.status_history.last
+
+        return JobStatusItem.create(
+            JobStatus.PENDING,
+            transition_time=now,
+            reason=JobStatusReason.CREATING,
+            description="Starting external job runner",
+        )
 
     async def _get_pod_status(self, job: Job, pod: PodDescriptor) -> JobStatusItem:
         pod_status = pod.status
@@ -745,9 +808,7 @@ class KubeOrchestrator(Orchestrator):
             description="Failed to scale up the cluster to get more resources",
         )
 
-    async def _check_restartable_job_pod(self, job: Job) -> PodDescriptor:
-        assert job.is_restartable
-
+    async def _check_pod_lost(self, job: Job) -> PodDescriptor:
         pod_name = self._get_job_pod_name(job)
         do_recreate_pod = False
         try:

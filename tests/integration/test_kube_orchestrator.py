@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import shlex
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from dataclasses import replace
+from decimal import Decimal
 from pathlib import PurePath
 from typing import Any
 from unittest import mock
@@ -64,10 +66,10 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeConfig,
     KubeOrchestrator,
 )
-from platform_api.resource import GKEGPUModels, ResourcePoolType, TPUResource
+from platform_api.resource import GKEGPUModels, Preset, ResourcePoolType, TPUResource
 
 from tests.conftest import random_str
-from tests.integration.conftest import ApiRunner, MyKubeClient
+from tests.integration.conftest import ApiRunner, MyKubeClient, create_local_app_server
 from tests.integration.test_api import ApiConfig
 
 
@@ -3462,3 +3464,454 @@ class TestJobsPreemption:
         preemptible_pod = await kube_client.get_pod(preemptible_job.id)
         assert preemptible_pod.status
         assert preemptible_pod.status.is_scheduled
+
+
+class TestExternalJobs:
+    UrlFactory = Callable[..., AbstractAsyncContextManager[str]]
+
+    @pytest.fixture(scope="session")
+    def external_job_runner_port(self, unused_tcp_port_factory: Any) -> int:
+        return unused_tcp_port_factory()
+
+    @pytest.fixture(scope="session")
+    async def external_job_runner_url_factory(
+        self, external_job_runner_port: int
+    ) -> UrlFactory:
+        @asynccontextmanager
+        async def _create(status: dict[str, Any]) -> AsyncIterator[str]:
+            app = aiohttp.web.Application()
+
+            async def handle_status(req: aiohttp.web.Request) -> aiohttp.web.Response:
+                return web.json_response(status)
+
+            app.add_routes(
+                [
+                    aiohttp.web.get("/api/v1/status", handle_status),
+                ]
+            )
+
+            async with create_local_app_server(
+                app, port=external_job_runner_port
+            ) as address:
+                yield f"http://{address.host}:{address.port}"
+
+        return _create
+
+    @pytest.fixture(scope="session")
+    async def orchestrator_config(
+        self, orchestrator_config_factory: Callable[..., OrchestratorConfig]
+    ) -> OrchestratorConfig:
+        return orchestrator_config_factory(
+            presets=[
+                Preset(
+                    name="vast-ai",
+                    credits_per_hour=Decimal("0"),
+                    cpu=0.1,
+                    memory=100 * 10**6,
+                    is_external_job=True,
+                ),
+            ]
+        )
+
+    @pytest.fixture(scope="session")
+    async def kube_config(
+        self, kube_config: KubeConfig, external_job_runner_port: int
+    ) -> KubeConfig:
+        return replace(
+            kube_config,
+            external_job_runner_image="ubuntu:20.10",
+            external_job_runner_command=["bash"],
+            external_job_runner_args=shlex.split("-c '${CMD:=sleep 300}'"),
+            external_job_runner_port=external_job_runner_port,
+        )
+
+    async def test_job_pod_updated(
+        self,
+        kube_client: KubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="not-used",
+            command="not-used",
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                preset_name="vast-ai",
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job)
+
+        pod = await kube_client.get_pod(job.id)
+
+        assert pod.image == "ubuntu:20.10"
+        assert pod.command == ["bash"]
+        assert pod.args == ["-c", "${CMD:=sleep 300}"]
+        assert pod.labels["platform.neuromation.io/external"] == "true"
+
+    async def test_job_external_status_fetched(
+        self,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+        external_job_runner_url_factory: UrlFactory,
+    ) -> None:
+        container = Container(
+            image="not-used",
+            command="not-used",
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                preset_name="vast-ai",
+                internal_hostname="0.0.0.0",
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job)
+
+        async with external_job_runner_url_factory({"status": "running"}):
+            job_status = await kube_orchestrator.get_job_status(job)
+
+        assert job_status.status == JobStatus.RUNNING
+        assert job_status.reason is None
+        assert job_status.description is None
+
+        async with external_job_runner_url_factory(
+            {
+                "status": "failed",
+                "reason": "external reason",
+                "description": "external description",
+            }
+        ):
+            job_status = await kube_orchestrator.get_job_status(job)
+
+        assert job_status.status == JobStatus.FAILED
+        assert job_status.reason == "external reason"
+        assert job_status.description == "external description"
+
+    async def test_job_pending(
+        self,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="not-used",
+            command="not-used",
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                preset_name="vast-ai",
+                internal_hostname="0.0.0.0",
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job)
+
+        job_status = await kube_orchestrator.get_job_status(job)
+        assert job_status.status == JobStatus.PENDING
+
+    async def test_job_running_if_pod_is_finishing(
+        self,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+        external_job_runner_url_factory: UrlFactory,
+    ) -> None:
+        container = Container(
+            image="not-used",
+            command="not-used",
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                preset_name="vast-ai",
+                internal_hostname="0.0.0.0",
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job)
+
+        async with external_job_runner_url_factory({"status": "running"}):
+            job_status = await kube_orchestrator.get_job_status(job)
+            assert job_status.status == JobStatus.RUNNING
+            job.status = job_status.status
+
+        # Status endpoint not available, job status should remain running
+        job_status = await kube_orchestrator.get_job_status(job)
+        assert job_status.status == JobStatus.RUNNING
+
+    async def test_job_succeeded(
+        self,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="not-used",
+            command="not-used",
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+            env={"CMD": "true"},
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                preset_name="vast-ai",
+                internal_hostname="0.0.0.0",
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_finished(pod_name)
+
+        job_status = await kube_orchestrator.get_job_status(job)
+        assert job_status.status == JobStatus.SUCCEEDED
+
+    async def test_job_failed(
+        self,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="not-used",
+            command="not-used",
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+            env={"CMD": "false"},
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                preset_name="vast-ai",
+                internal_hostname="0.0.0.0",
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_finished(pod_name)
+
+        job_status = await kube_orchestrator.get_job_status(job)
+        assert job_status.status == JobStatus.FAILED
+
+
+class TestExternalJobsPreemption:
+    @pytest.fixture(scope="session")
+    async def orchestrator_config(
+        self, orchestrator_config_factory: Callable[..., OrchestratorConfig]
+    ) -> OrchestratorConfig:
+        return orchestrator_config_factory(
+            presets=[
+                Preset(
+                    name="vast-ai",
+                    credits_per_hour=Decimal("0"),
+                    cpu=0.1,
+                    memory=100 * 10**6,
+                    is_external_job=True,
+                ),
+            ]
+        )
+
+    @pytest.fixture
+    async def kube_config_node_preemptible(
+        self, kube_config_node_preemptible: KubeConfig
+    ) -> KubeConfig:
+        return replace(
+            kube_config_node_preemptible,
+            external_job_runner_image="ubuntu:20.10",
+            external_job_runner_command=shlex.split("bash -c 'sleep 300'"),
+        )
+
+    @pytest.fixture
+    async def kube_orchestrator(
+        self,
+        kube_orchestrator_factory: Callable[..., KubeOrchestrator],
+        kube_config_node_preemptible: KubeConfig,
+    ) -> KubeOrchestrator:
+        return kube_orchestrator_factory(kube_config=kube_config_node_preemptible)
+
+    async def test_job_lost_running_pod(
+        self,
+        kube_client: KubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+    ) -> None:
+        container = Container(
+            image="ubuntu:20.10",
+            command="bash -c 'sleep infinity'",
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                preset_name="vast-ai",
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+        # triggering pod recreation
+        await kube_client.delete_pod(pod_name, force=True)
+        await kube_orchestrator.get_job_status(job)
+
+        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+
+    async def test_job_lost_node_lost_pod(
+        self,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+        kube_node_preemptible: str,
+    ) -> None:
+        node_name = kube_node_preemptible
+        container = Container(
+            image="ubuntu:20.10",
+            command="bash -c 'sleep infinity'",
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                preset_name="vast-ai",
+                # marking the job as preemptible
+                preemptible_node=True,
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_scheduled(pod_name, node_name)
+
+        await kube_client.delete_node(node_name)
+        # deleting node initiates it's pods deletion
+        await kube_client.wait_pod_non_existent(pod_name, timeout_s=60.0)
+
+        # triggering pod recreation
+        await kube_orchestrator.get_job_status(job)
+        await kube_client.get_pod(pod_name)  # check pod was recreated
+
+    async def test_job_pending_pod_node_not_ready(
+        self,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+        kube_node_preemptible: str,
+    ) -> None:
+        node_name = kube_node_preemptible
+        container = Container(
+            image="ubuntu:20.10",
+            command="bash -c 'sleep infinity'",
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                preset_name="vast-ai",
+                # marking the job as preemptible
+                preemptible_node=True,
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_scheduled(pod_name, node_name)
+
+        raw_pod = await kube_client.get_raw_pod(pod_name)
+
+        raw_pod["status"]["reason"] = "NodeLost"
+        await kube_client.set_raw_pod_status(pod_name, raw_pod)
+
+        raw_pod = await kube_client.get_raw_pod(pod_name)
+        assert raw_pod["status"]["reason"] == "NodeLost"
+
+        # triggering pod recreation
+        await kube_orchestrator.get_job_status(job)
+        await kube_client.wait_pod_scheduled(pod_name, node_name)
+
+        raw_pod = await kube_client.get_raw_pod(pod_name)
+        assert not raw_pod["status"].get("reason")
+
+    async def test_job_pod_recreation_failed(
+        self,
+        kube_client: MyKubeClient,
+        delete_job_later: Callable[[Job], Awaitable[None]],
+        kube_orchestrator: KubeOrchestrator,
+        kube_node_preemptible: str,
+    ) -> None:
+        node_name = kube_node_preemptible
+        container = Container(
+            image="ubuntu:20.10",
+            command="bash -c 'sleep infinity'",
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                preset_name="vast-ai",
+                # marking the job as preemptible
+                preemptible_node=True,
+            ),
+        )
+        await delete_job_later(job)
+        await kube_orchestrator.start_job(job)
+        pod_name = job.id
+
+        await kube_client.wait_pod_scheduled(pod_name, node_name)
+
+        await kube_client.delete_pod(pod_name, force=True)
+
+        # changing the job details to trigger pod creation failure
+        container = Container(
+            image="ubuntu:20.10",
+            command="bash -c 'sleep infinity'",
+            resources=ContainerResources(cpu=0.1, memory=-128),
+        )
+        job = MyJob(
+            orchestrator=kube_orchestrator,
+            record=JobRecord.create(
+                request=JobRequest(job_id=job.id, container=container),
+                cluster_name="test-cluster",
+                preset_name="vast-ai",
+                # marking the job as preemptible
+                preemptible_node=True,
+            ),
+        )
+
+        # triggering pod recreation
+        with pytest.raises(
+            JobNotFoundException, match=f"Pod '{pod_name}' not found. Job '{job.id}'"
+        ):
+            await kube_orchestrator.get_job_status(job)
