@@ -69,7 +69,12 @@ from platform_api.orchestrator.kube_orchestrator import (
 from platform_api.resource import GKEGPUModels, Preset, ResourcePoolType, TPUResource
 
 from tests.conftest import random_str
-from tests.integration.conftest import ApiRunner, MyKubeClient, create_local_app_server
+from tests.integration.conftest import (
+    ApiAddress,
+    ApiRunner,
+    MyKubeClient,
+    create_local_app_server,
+)
 from tests.integration.test_api import ApiConfig
 
 
@@ -3467,18 +3472,18 @@ class TestJobsPreemption:
 
 
 class TestExternalJobs:
-    UrlFactory = Callable[..., AbstractAsyncContextManager[str]]
+    ApiFactory = Callable[..., AbstractAsyncContextManager[ApiAddress]]
 
     @pytest.fixture(scope="session")
     def external_job_runner_port(self, unused_tcp_port_factory: Any) -> int:
         return unused_tcp_port_factory()
 
     @pytest.fixture(scope="session")
-    async def external_job_runner_url_factory(
+    async def external_job_runner_factory(
         self, external_job_runner_port: int
-    ) -> UrlFactory:
+    ) -> ApiFactory:
         @asynccontextmanager
-        async def _create(status: dict[str, Any]) -> AsyncIterator[str]:
+        async def _create(status: dict[str, Any]) -> AsyncIterator[ApiAddress]:
             app = aiohttp.web.Application()
 
             async def handle_status(req: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -3493,7 +3498,7 @@ class TestExternalJobs:
             async with create_local_app_server(
                 app, port=external_job_runner_port
             ) as address:
-                yield f"http://{address.host}:{address.port}"
+                yield address
 
         return _create
 
@@ -3514,15 +3519,12 @@ class TestExternalJobs:
         )
 
     @pytest.fixture(scope="session")
-    async def kube_config(
-        self, kube_config: KubeConfig, external_job_runner_port: int
-    ) -> KubeConfig:
+    async def kube_config(self, kube_config: KubeConfig) -> KubeConfig:
         return replace(
             kube_config,
             external_job_runner_image="ubuntu:20.10",
             external_job_runner_command=["bash"],
             external_job_runner_args=shlex.split("-c '${CMD:=sleep 300}'"),
-            external_job_runner_port=external_job_runner_port,
         )
 
     async def test_job_pod_updated(
@@ -3558,12 +3560,14 @@ class TestExternalJobs:
         self,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
-        external_job_runner_url_factory: UrlFactory,
+        external_job_runner_port: int,
+        external_job_runner_factory: ApiFactory,
     ) -> None:
         container = Container(
             image="not-used",
             command="not-used",
             resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+            env={"EXTERNAL_JOB_RUNNER_PORT": str(external_job_runner_port)},
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -3577,14 +3581,14 @@ class TestExternalJobs:
         await delete_job_later(job)
         await kube_orchestrator.start_job(job)
 
-        async with external_job_runner_url_factory({"status": "running"}):
+        async with external_job_runner_factory({"status": "running"}):
             job_status = await kube_orchestrator.get_job_status(job)
 
         assert job_status.status == JobStatus.RUNNING
         assert job_status.reason is None
         assert job_status.description is None
 
-        async with external_job_runner_url_factory(
+        async with external_job_runner_factory(
             {
                 "status": "failed",
                 "reason": "external reason",
@@ -3626,12 +3630,14 @@ class TestExternalJobs:
         self,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
-        external_job_runner_url_factory: UrlFactory,
+        external_job_runner_port: int,
+        external_job_runner_factory: ApiFactory,
     ) -> None:
         container = Container(
             image="not-used",
             command="not-used",
             resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+            env={"EXTERNAL_JOB_RUNNER_PORT": str(external_job_runner_port)},
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -3645,7 +3651,7 @@ class TestExternalJobs:
         await delete_job_later(job)
         await kube_orchestrator.start_job(job)
 
-        async with external_job_runner_url_factory({"status": "running"}):
+        async with external_job_runner_factory({"status": "running"}):
             job_status = await kube_orchestrator.get_job_status(job)
             assert job_status.status == JobStatus.RUNNING
             job.status = job_status.status

@@ -330,12 +330,6 @@ class EnvironConfigFactory:
                 "NP_KUBE_EXTERNAL_JOB_RUNNER_IMAGE",
                 KubeConfig.external_job_runner_image,
             ),
-            external_job_runner_port=int(
-                self._environ.get(
-                    "NP_KUBE_EXTERNAL_JOB_RUNNER_PORT",
-                    KubeConfig.external_job_runner_port,
-                )
-            ),
         )
 
     def create_registry(self) -> RegistryConfig:

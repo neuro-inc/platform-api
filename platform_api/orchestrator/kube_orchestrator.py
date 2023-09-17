@@ -706,7 +706,7 @@ class KubeOrchestrator(Orchestrator):
         now = datetime.now(timezone.utc)
 
         try:
-            port = self._kube_config.external_job_runner_port
+            port = int(job.env.get("EXTERNAL_JOB_RUNNER_PORT", 8080))
             status_url = f"http://{job.internal_hostname}:{port}/api/v1/status"
             resp = await self._client.request("GET", status_url, raise_for_status=True)
             return JobStatusItem.create(

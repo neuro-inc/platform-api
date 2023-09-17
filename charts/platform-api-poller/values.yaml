@@ -35,7 +35,6 @@ externalJobRunner:
   image:
     repository: ghcr.io/neuro-inc/externaljobrunner
     tag: latest
-  port: 8080
 
 nodeLabels:
   job: platform.neuromation.io/job

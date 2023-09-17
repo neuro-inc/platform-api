@@ -47,7 +47,6 @@ class KubeConfig:
     external_job_runner_image: str = "ghcr.io/neuro-inc/externaljobrunner:latest"
     external_job_runner_command: list[str] = field(default_factory=list)
     external_job_runner_args: list[str] = field(default_factory=list)
-    external_job_runner_port: int = 8080
 
     def __post_init__(self) -> None:
         if not self.endpoint_url:

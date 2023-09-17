@@ -142,8 +142,6 @@ spec:
         {{- with .Values.externalJobRunner }}
         - name: NP_KUBE_EXTERNAL_JOB_RUNNER_IMAGE
           value: {{ .image.repository }}:{{ .image.tag }}
-        - name: NP_KUBE_EXTERNAL_JOB_RUNNER_PORT
-          value: {{ .port | quote }}
         {{- end }}
         - name: NP_REGISTRY_URL
           value: {{ .Values.platform.registryUrl | quote }}
