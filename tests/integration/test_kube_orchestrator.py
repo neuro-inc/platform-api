@@ -3524,7 +3524,7 @@ class TestExternalJobs:
             kube_config,
             external_job_runner_image="ubuntu:20.10",
             external_job_runner_command=["bash"],
-            external_job_runner_args=shlex.split("-c '${CMD:=sleep 300}'"),
+            external_job_runner_args=shlex.split("-c 'eval ${CMD:=sleep 300}'"),
         )
 
     async def test_job_pod_updated(
@@ -3553,7 +3553,7 @@ class TestExternalJobs:
 
         assert pod.image == "ubuntu:20.10"
         assert pod.command == ["bash"]
-        assert pod.args == ["-c", "${CMD:=sleep 300}"]
+        assert pod.args == ["-c", "eval ${CMD:=sleep 300}"]
         assert pod.labels["platform.neuromation.io/external"] == "true"
 
     async def test_job_external_status_fetched(
@@ -3700,7 +3700,7 @@ class TestExternalJobs:
             image="not-used",
             command="not-used",
             resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
-            env={"CMD": "false"},
+            env={"CMD": "echo -n 'custom message' > /dev/termination-log && false"},
         )
         job = MyJob(
             orchestrator=kube_orchestrator,
@@ -3719,6 +3719,9 @@ class TestExternalJobs:
 
         job_status = await kube_orchestrator.get_job_status(job)
         assert job_status.status == JobStatus.FAILED
+        assert job_status.reason == JobStatusReason.ERROR
+        assert job_status.description == "custom message"
+        assert job_status.exit_code == 1
 
 
 class TestExternalJobsPreemption:
@@ -3764,7 +3767,7 @@ class TestExternalJobsPreemption:
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
-            command="bash -c 'sleep infinity'",
+            command="bash -c 'sleep 300'",
             resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
         )
         job = MyJob(
@@ -3797,7 +3800,7 @@ class TestExternalJobsPreemption:
         node_name = kube_node_preemptible
         container = Container(
             image="ubuntu:20.10",
-            command="bash -c 'sleep infinity'",
+            command="bash -c 'sleep 300'",
             resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
         )
         job = MyJob(
@@ -3834,7 +3837,7 @@ class TestExternalJobsPreemption:
         node_name = kube_node_preemptible
         container = Container(
             image="ubuntu:20.10",
-            command="bash -c 'sleep infinity'",
+            command="bash -c 'sleep 300'",
             resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
         )
         job = MyJob(
@@ -3878,7 +3881,7 @@ class TestExternalJobsPreemption:
         node_name = kube_node_preemptible
         container = Container(
             image="ubuntu:20.10",
-            command="bash -c 'sleep infinity'",
+            command="bash -c 'sleep 300'",
             resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
         )
         job = MyJob(
@@ -3902,7 +3905,7 @@ class TestExternalJobsPreemption:
         # changing the job details to trigger pod creation failure
         container = Container(
             image="ubuntu:20.10",
-            command="bash -c 'sleep infinity'",
+            command="bash -c 'sleep 300'",
             resources=ContainerResources(cpu=0.1, memory=-128),
         )
         job = MyJob(
