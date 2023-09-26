@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import enum
 import hashlib
 import logging
@@ -6,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from functools import partial
-from typing import Any, Optional
+from typing import Any
 
 import iso8601
 from yarl import URL
@@ -70,9 +72,9 @@ class JobStatusItem:
     status: JobStatus
     transition_time: datetime = field(compare=False)
     # TODO (A.Yushkovskiy) it's better to have `reason: Optional[JobStatusReason]`
-    reason: Optional[str] = None
-    description: Optional[str] = None
-    exit_code: Optional[int] = None
+    reason: str | None = None
+    description: str | None = None
+    exit_code: int | None = None
 
     @property
     def is_pending(self) -> bool:
@@ -95,15 +97,15 @@ class JobStatusItem:
         cls,
         status: JobStatus,
         *,
-        transition_time: Optional[datetime] = None,
+        transition_time: datetime | None = None,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
         **kwargs: Any,
-    ) -> "JobStatusItem":
+    ) -> JobStatusItem:
         transition_time = transition_time or current_datetime_factory()
         return cls(status=status, transition_time=transition_time, **kwargs)
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "JobStatusItem":
+    def from_primitive(cls, payload: dict[str, Any]) -> JobStatusItem:
         status = JobStatus(payload["status"])
         transition_time = iso8601.parse_date(payload["transition_time"])
         return cls(
@@ -138,18 +140,18 @@ class JobStatusHistory:
     @staticmethod
     def _find_with_status(
         items: Iterable[JobStatusItem], statuses: Sequence[JobStatus]
-    ) -> Optional[JobStatusItem]:
+    ) -> JobStatusItem | None:
         for item in items:
             if item.status in statuses:
                 return item
         return None
 
     @property
-    def _first_running(self) -> Optional[JobStatusItem]:
+    def _first_running(self) -> JobStatusItem | None:
         return self._find_with_status(self._items, (JobStatus.RUNNING,))
 
     @property
-    def _first_finished(self) -> Optional[JobStatusItem]:
+    def _first_finished(self) -> JobStatusItem | None:
         return self._find_with_status(
             self._items, (JobStatus.SUCCEEDED, JobStatus.CANCELLED, JobStatus.FAILED)
         )
@@ -186,7 +188,7 @@ class JobStatusHistory:
         return self.created_at.timestamp()
 
     @property
-    def started_at(self) -> Optional[datetime]:
+    def started_at(self) -> datetime | None:
         """Return a `datetime` when a job became RUNNING.
 
         In case the job terminated instantly without an explicit transition to
@@ -200,8 +202,8 @@ class JobStatusHistory:
         return None
 
     @property
-    def continued_at(self) -> Optional[datetime]:
-        result: Optional[JobStatusItem] = None
+    def continued_at(self) -> datetime | None:
+        result: JobStatusItem | None = None
         for item in reversed(self._items):
             if item.status == JobStatus.RUNNING:
                 result = item
@@ -210,7 +212,7 @@ class JobStatusHistory:
         return None
 
     @property
-    def started_at_str(self) -> Optional[str]:
+    def started_at_str(self) -> str | None:
         if self.started_at:
             return self.started_at.isoformat()
         return None
@@ -228,13 +230,13 @@ class JobStatusHistory:
         return self.last.is_finished
 
     @property
-    def finished_at(self) -> Optional[datetime]:
+    def finished_at(self) -> datetime | None:
         if self.last.is_finished:
             return self.last.transition_time
         return None
 
     @property
-    def finished_at_str(self) -> Optional[str]:
+    def finished_at_str(self) -> str | None:
         if self.finished_at:
             return self.finished_at.isoformat()
         return None
@@ -275,7 +277,7 @@ class JobPriority(enum.IntEnum):
         return self.name.lower()
 
     @classmethod
-    def from_name(cls, name: str) -> "JobPriority":
+    def from_name(cls, name: str) -> JobPriority:
         return cls[name.upper()]
 
 
@@ -287,26 +289,26 @@ class JobRecord:
     cluster_name: str
     project_name: str
     org_project_hash: bytes
-    org_name: Optional[str] = None
-    name: Optional[str] = None
-    preset_name: Optional[str] = None
+    org_name: str | None = None
+    name: str | None = None
+    preset_name: str | None = None
     tags: Sequence[str] = ()
     scheduler_enabled: bool = False
     preemptible_node: bool = False
     pass_config: bool = False
     materialized: bool = False
     privileged: bool = False
-    max_run_time_minutes: Optional[int] = None
-    internal_hostname: Optional[str] = None
-    internal_hostname_named: Optional[str] = None
-    schedule_timeout: Optional[float] = None
+    max_run_time_minutes: int | None = None
+    internal_hostname: str | None = None
+    internal_hostname_named: str | None = None
+    schedule_timeout: float | None = None
     restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER
     priority: JobPriority = JobPriority.NORMAL
     energy_schedule_name: str = DEFAULT_ENERGY_SCHEDULE_NAME
 
     # Billing in credits
     fully_billed: bool = False  # True if job has final price
-    last_billed: Optional[datetime] = None
+    last_billed: datetime | None = None
     total_price_credits: Decimal = Decimal("0")
 
     # Retention (allows other services as platform-monitoring to cleanup jobs resources)
@@ -324,7 +326,7 @@ class JobRecord:
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
         orphaned_job_owner: str = DEFAULT_ORPHANED_JOB_OWNER,
         **kwargs: Any,
-    ) -> "JobRecord":
+    ) -> JobRecord:
         if not kwargs.get("status_history"):
             status_history = JobStatusHistory(
                 [
@@ -344,9 +346,7 @@ class JobRecord:
         return cls(**kwargs)
 
     @classmethod
-    def _create_org_project_hash(
-        cls, org_name: Optional[str], project_name: str
-    ) -> bytes:
+    def _create_org_project_hash(cls, org_name: str | None, project_name: str) -> bytes:
         return cls._create_hash(org_name or NO_ORG, project_name)[:5]
 
     @classmethod
@@ -400,11 +400,11 @@ class JobRecord:
         return self.status_history.is_finished
 
     @property
-    def finished_at(self) -> Optional[datetime]:
+    def finished_at(self) -> datetime | None:
         return self.status_history.finished_at
 
     @property
-    def finished_at_str(self) -> Optional[str]:
+    def finished_at_str(self) -> str | None:
         return self.status_history.finished_at_str
 
     @property
@@ -412,13 +412,13 @@ class JobRecord:
         return bool(self.request.container.resources.gpu)
 
     @property
-    def gpu_model_id(self) -> Optional[str]:
+    def gpu_model_id(self) -> str | None:
         return self.request.container.resources.gpu_model_id
 
     def get_run_time(
         self,
         *,
-        only_after: Optional[datetime] = None,
+        only_after: datetime | None = None,
         current_datetime_factory: Callable[[], datetime] = current_datetime_factory,
     ) -> timedelta:
         def _filter_only_after(begin: datetime, end: datetime) -> timedelta:
@@ -429,7 +429,7 @@ class JobRecord:
             return timedelta()
 
         run_time = timedelta()
-        prev_time: Optional[datetime] = None
+        prev_time: datetime | None = None
         for item in self.status_history.all:
             if prev_time:
                 run_time += _filter_only_after(prev_time, item.transition_time)
@@ -531,7 +531,7 @@ class JobRecord:
         cls,
         payload: dict[str, Any],
         orphaned_job_owner: str = DEFAULT_ORPHANED_JOB_OWNER,
-    ) -> "JobRecord":
+    ) -> JobRecord:
         request = JobRequest.from_primitive(payload["request"])
         status_history = cls.create_status_history_from_primitive(
             request.job_id, payload
@@ -632,19 +632,19 @@ class Job:
         return self._job_request.job_id
 
     @property
-    def description(self) -> Optional[str]:
+    def description(self) -> str | None:
         return self._job_request.description
 
     @property
-    def name(self) -> Optional[str]:
+    def name(self) -> str | None:
         return self._name
 
     @property
-    def preset_name(self) -> Optional[str]:
+    def preset_name(self) -> str | None:
         return self._record.preset_name
 
     @property
-    def preset(self) -> Optional[Preset]:
+    def preset(self) -> Preset | None:
         try:
             return next(
                 preset
@@ -705,6 +705,10 @@ class Job:
         return self._job_request
 
     @property
+    def env(self) -> dict[str, str]:
+        return self._job_request.container.env
+
+    @property
     def volumes(self) -> Sequence[ContainerVolume]:
         return self._job_request.container.volumes
 
@@ -717,7 +721,7 @@ class Job:
         return self._record.has_gpu
 
     @property
-    def gpu_model_id(self) -> Optional[str]:
+    def gpu_model_id(self) -> str | None:
         return self._record.gpu_model_id
 
     @property
@@ -751,7 +755,7 @@ class Job:
         return self._status_history.is_finished
 
     @property
-    def finished_at(self) -> Optional[datetime]:
+    def finished_at(self) -> datetime | None:
         return self._status_history.finished_at
 
     @property
@@ -779,11 +783,11 @@ class Job:
         self._record.logs_removed = value
 
     @property
-    def schedule_timeout(self) -> Optional[float]:
+    def schedule_timeout(self) -> float | None:
         return self._record.schedule_timeout
 
     @property
-    def _collection_reason(self) -> Optional[str]:
+    def _collection_reason(self) -> str | None:
         status_item = self._status_history.current
         if status_item.status == JobStatus.PENDING:
             if status_item.reason == JobStatusReason.INVALID_IMAGE_NAME:
@@ -840,7 +844,7 @@ class Job:
         return f"{self.name}{JOB_NAME_SEPARATOR}{suffix}"
 
     @property
-    def http_host_named(self) -> Optional[str]:
+    def http_host_named(self) -> str | None:
         if not self.is_named:
             return None
         return self._orchestrator_config.jobs_domain_name_template.format(
@@ -859,22 +863,22 @@ class Job:
         return f"{self._http_scheme}://{self.http_host}"
 
     @property
-    def http_url_named(self) -> Optional[str]:
+    def http_url_named(self) -> str | None:
         assert self.has_http_server_exposed
         if host_named := self.http_host_named:
             return f"{self._http_scheme}://{host_named}"
         return None
 
     @property
-    def finished_at_str(self) -> Optional[str]:
+    def finished_at_str(self) -> str | None:
         return self._status_history.finished_at_str
 
     @property
-    def internal_hostname(self) -> Optional[str]:
+    def internal_hostname(self) -> str | None:
         return self._record.internal_hostname
 
     @property
-    def internal_hostname_named(self) -> Optional[str]:
+    def internal_hostname_named(self) -> str | None:
         return self._record.internal_hostname_named
 
     def init_job_internal_hostnames(self) -> None:
@@ -899,7 +903,7 @@ class Job:
         return self._preemptible_node
 
     @property
-    def energy_schedule_name(self) -> Optional[str]:
+    def energy_schedule_name(self) -> str | None:
         if self.scheduler_enabled:
             return self._record.energy_schedule_name
         return None
@@ -920,8 +924,13 @@ class Job:
     def is_restartable(self) -> bool:
         return self._record.is_restartable
 
+    @property
+    def is_external(self) -> bool:
+        preset = self.preset
+        return False if preset is None else preset.is_external_job
+
     def get_run_time(
-        self, only_after: Optional[datetime] = None, now: Optional[datetime] = None
+        self, only_after: datetime | None = None, now: datetime | None = None
     ) -> timedelta:
         def datetime_factory() -> datetime:
             if now:
@@ -935,7 +944,7 @@ class Job:
         )
 
     @property
-    def max_run_time_minutes(self) -> Optional[int]:
+    def max_run_time_minutes(self) -> int | None:
         return self._record.max_run_time_minutes
 
     @property
@@ -943,7 +952,7 @@ class Job:
         return self._record.fully_billed
 
     @property
-    def last_billed(self) -> Optional[datetime]:
+    def last_billed(self) -> datetime | None:
         return self._record.last_billed
 
     @property
@@ -951,7 +960,7 @@ class Job:
         return self._record.total_price_credits
 
     @property
-    def org_name(self) -> Optional[str]:
+    def org_name(self) -> str | None:
         return self._record.org_name
 
     @property
@@ -974,7 +983,7 @@ class Job:
         cls,
         orchestrator_config: OrchestratorConfig,
         payload: dict[str, Any],
-    ) -> "Job":
+    ) -> Job:
         record = JobRecord.from_primitive(payload)
         return cls(
             orchestrator_config=orchestrator_config,

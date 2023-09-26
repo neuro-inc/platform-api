@@ -602,6 +602,9 @@ class TestEnvironConfigFactory:
                 "NP_KUBE_NODE_LABEL_PREEMPTIBLE": "preemptible-label",
                 "NP_KUBE_NODE_LABEL_NODE_POOL": "node-pool-label",
                 "NP_KUBE_IMAGE_PULL_SECRET": "test-secret",
+                "NP_KUBE_EXTERNAL_JOB_RUNNER_IMAGE": (
+                    "custom-external-job-runner:latest"
+                ),
             }
         ).create_kube()
 
@@ -628,6 +631,7 @@ class TestEnvironConfigFactory:
             node_label_preemptible="preemptible-label",
             node_label_node_pool="node-pool-label",
             image_pull_secret_name="test-secret",
+            external_job_runner_image="custom-external-job-runner:latest",
         )
 
     def test_create_zipkin_none(self) -> None:

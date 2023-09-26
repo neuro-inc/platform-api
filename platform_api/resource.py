@@ -43,6 +43,7 @@ class Preset:
     gpu: Optional[int] = None
     gpu_model: Optional[str] = None
     tpu: Optional[TPUPreset] = None
+    is_external_job: bool = False
 
 
 @dataclass(frozen=True)

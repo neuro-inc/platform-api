@@ -139,6 +139,10 @@ spec:
         - name: NP_KUBE_IMAGE_PULL_SECRET
           value: {{ .Values.jobs.imagePullSecret | quote }}
         {{- end }}
+        {{- with .Values.externalJobRunner }}
+        - name: NP_KUBE_EXTERNAL_JOB_RUNNER_IMAGE
+          value: {{ .image.repository }}:{{ .image.tag }}
+        {{- end }}
         - name: NP_REGISTRY_URL
           value: {{ .Values.platform.registryUrl | quote }}
         {{- if .Values.platform.registryEmail }}

@@ -326,6 +326,10 @@ class EnvironConfigFactory:
             node_label_job=self._environ.get("NP_KUBE_NODE_LABEL_JOB"),
             node_label_node_pool=self._environ.get("NP_KUBE_NODE_LABEL_NODE_POOL"),
             image_pull_secret_name=self._environ.get("NP_KUBE_IMAGE_PULL_SECRET"),
+            external_job_runner_image=self._environ.get(
+                "NP_KUBE_EXTERNAL_JOB_RUNNER_IMAGE",
+                KubeConfig.external_job_runner_image,
+            ),
         )
 
     def create_registry(self) -> RegistryConfig:

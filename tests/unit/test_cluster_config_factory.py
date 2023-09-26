@@ -367,6 +367,7 @@ class TestClusterConfigFactory:
                 "memory": 49152 * 10**6,
                 "scheduler_enabled": True,
                 "preemptible_node": True,
+                "is_external_job": True,
             },
         ]
         clusters = factory.create_cluster_configs(clusters_payload)
@@ -379,6 +380,7 @@ class TestClusterConfigFactory:
                 memory=49152 * 10**6,
                 scheduler_enabled=True,
                 preemptible_node=True,
+                is_external_job=True,
             ),
         ]
         assert clusters[0].orchestrator.allow_scheduler_enabled_job is True
