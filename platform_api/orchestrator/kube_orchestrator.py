@@ -150,6 +150,7 @@ class KubeOrchestrator(Orchestrator):
 
         # TODO (A Danshyn 11/16/18): make this configurable at some point
         self._docker_secret_name_prefix = "neurouser-"
+        self._project_prefix = "project--"
 
         self._restart_policy_map = {
             JobRestartPolicy.ALWAYS: PodRestartPolicy.ALWAYS,
@@ -254,24 +255,25 @@ class KubeOrchestrator(Orchestrator):
         name_suffix = str(path).replace("/", "-").replace("_", "-")
         return self._kube_config.storage_volume_name + name_suffix
 
-    @classmethod
-    def create_secret_volume(cls, project_name: str) -> SecretVolume:
-        name = cls._get_k8s_secret_name(project_name)
+    def create_secret_volume(self, project_name: str) -> SecretVolume:
+        name = self._get_k8s_secret_name(project_name)
         if len(name) > 63:
             volume_name = name[:50] + secrets.token_hex(6)
         else:
             volume_name = name
         return SecretVolume(name=volume_name, k8s_secret_name=name)
 
-    @classmethod
-    def _get_k8s_secret_name(cls, project_name: str) -> str:
-        return f"project--{project_name.replace('/', '--')}--secrets"
+    def _get_k8s_secret_name(self, project_name: str) -> str:
+        return f"{self._project_prefix}{project_name.replace('/', '--')}--secrets"
 
     def _get_user_resource_name(self, job: Job) -> str:
         return (self._docker_secret_name_prefix + job.owner.replace("/", "--")).lower()
 
     def _get_docker_secret_name(self, job: Job) -> str:
         return self._get_user_resource_name(job)
+
+    def _get_project_resource_name(self, job: Job) -> str:
+        return (self._project_prefix + job.org_project_hash.hex()).lower()
 
     async def _create_docker_secret(self, job: Job) -> DockerRegistrySecret:
         secret = DockerRegistrySecret(
@@ -296,6 +298,23 @@ class KubeOrchestrator(Orchestrator):
         except AlreadyExistsException:
             logger.info(
                 f"Default network policy for user '{job.owner}' already exists."
+            )
+
+    async def _create_project_network_policy(self, job: Job) -> None:
+        name = self._get_project_resource_name(job)
+        pod_labels = self._get_project_pod_labels(job)
+        pod_labels.update(self._get_org_pod_labels(job))
+
+        project = job.project_name
+        org = job.org_name or "no_org"
+        try:
+            await self._client.create_default_network_policy(
+                name, pod_labels, namespace_name=self.kube_config.namespace
+            )
+            logger.info(f"Created defautl network policy for {org=} {project=}")
+        except AlreadyExistsException:
+            logger.info(
+                f"Defautl network policy for project {org=} {project=} already exists."
             )
 
     async def _create_pod_network_policy(self, job: Job) -> None:
@@ -552,6 +571,7 @@ class KubeOrchestrator(Orchestrator):
 
         await self._create_docker_secret(job)
         await self._create_user_network_policy(job)
+        await self._create_project_network_policy(job)
         try:
             await self._create_pod_network_policy(job)
 
