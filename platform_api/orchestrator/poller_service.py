@@ -25,7 +25,7 @@ from platform_api.config import JobsConfig, JobsSchedulerConfig
 from ..utils.asyncio import run_and_log_exceptions
 from ..utils.retry import retries
 from .base import Orchestrator
-from .job import Job, JobRecord, JobStatusItem, JobStatusReason
+from .job import Job, JobPriority, JobRecord, JobStatusItem, JobStatusReason
 from .job_request import (
     JobAlreadyExistsException,
     JobError,
@@ -199,6 +199,7 @@ class JobsScheduler:
                 continue
             jobs_to_start.append(job)
 
+        max_job_to_start_priority = JobPriority.LOW
         if jobs_to_start:
             max_job_to_start_priority = max(job.priority for job in jobs_to_start)
 
