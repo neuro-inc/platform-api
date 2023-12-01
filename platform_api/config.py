@@ -121,7 +121,7 @@ class RegistryConfig:
     @classmethod
     def ger_registry_host(self, url: URL) -> str:
         """Returns registry hostname with port (if specified)"""
-        port = url.explicit_port  # type: ignore
+        port = url.explicit_port
         suffix = f":{port}" if port is not None else ""
         return f"{url.host}{suffix}"
 
