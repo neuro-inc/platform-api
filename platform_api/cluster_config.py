@@ -133,7 +133,7 @@ class IngressConfig:
     @property
     def registry_host(self) -> str:
         """Returns registry hostname with port (if specified)"""
-        port = self.registry_url.explicit_port  # type: ignore
+        port = self.registry_url.explicit_port
         suffix = f":{port}" if port is not None else ""
         return f"{self.registry_url.host}{suffix}"
 
