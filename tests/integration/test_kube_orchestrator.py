@@ -2660,9 +2660,7 @@ class TestNodeAffinity:
         kube_orchestrator_gpu: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
-        async with start_job(
-            kube_orchestrator_gpu, cpu=0.1, memory=32 * 10**6
-        ) as job:
+        async with start_job(kube_orchestrator_gpu, cpu=0.1, memory=32 * 10**6) as job:
             await kube_client.wait_pod_scheduled(job.id, "gpu-k80")
 
             job_pod = await kube_client.get_raw_pod(job.id)
