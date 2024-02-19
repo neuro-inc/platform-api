@@ -1043,9 +1043,9 @@ class PodDescriptor:
 
         annotations: dict[str, str] = {}
         if container.resources.tpu:
-            annotations[
-                cls.tpu_version_annotation_key
-            ] = container.resources.tpu.software_version
+            annotations[cls.tpu_version_annotation_key] = (
+                container.resources.tpu.software_version
+            )
 
         env = container.env.copy()
         if meta_env:

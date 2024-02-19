@@ -304,9 +304,7 @@ class TestContainerBuilder:
                     read_only=True,
                 )
             ],
-            resources=ContainerResources(
-                cpu=0.1, memory=128 * 2**20, gpu=1, shm=None
-            ),
+            resources=ContainerResources(cpu=0.1, memory=128 * 2**20, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
         )
@@ -344,9 +342,7 @@ class TestContainerBuilder:
                     read_only=True,
                 )
             ],
-            resources=ContainerResources(
-                cpu=0.1, memory=128 * 2**20, gpu=1, shm=None
-            ),
+            resources=ContainerResources(cpu=0.1, memory=128 * 2**20, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
         )
@@ -415,9 +411,7 @@ class TestContainerBuilder:
                     read_only=True,
                 )
             ],
-            resources=ContainerResources(
-                cpu=0.1, memory=128 * 2**20, gpu=1, shm=True
-            ),
+            resources=ContainerResources(cpu=0.1, memory=128 * 2**20, gpu=1, shm=True),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
         )
 
@@ -439,9 +433,7 @@ class TestContainerBuilder:
             command="testcommand",
             env={"TESTVAR": "testvalue"},
             volumes=[],
-            resources=ContainerResources(
-                cpu=0.1, memory=128 * 2**20, gpu=1, shm=None
-            ),
+            resources=ContainerResources(cpu=0.1, memory=128 * 2**20, gpu=1, shm=None),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=True,
         )
