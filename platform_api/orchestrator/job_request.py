@@ -202,9 +202,11 @@ class ContainerResources:
             tpu = ContainerTPUResource.from_primitive(payload["tpu"])
         return cls(
             cpu=payload["cpu"],
-            memory=payload["memory"]
-            if "memory" in payload
-            else payload["memory_mb"] * 2**20,
+            memory=(
+                payload["memory"]
+                if "memory" in payload
+                else payload["memory_mb"] * 2**20
+            ),
             gpu=payload.get("gpu"),
             gpu_model_id=payload.get("gpu_model_id"),
             shm=payload.get("shm"),
