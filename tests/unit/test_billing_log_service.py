@@ -25,13 +25,11 @@ from tests.unit.conftest import MockAdminClient, UserFactory
 
 
 class BillingServiceFactory(Protocol):
-    def __call__(self, **kwargs: Any) -> BillingLogService:
-        ...
+    def __call__(self, **kwargs: Any) -> BillingLogService: ...
 
 
 class BillingWorkerFactory(Protocol):
-    def __call__(self, **kwargs: Any) -> BillingLogWorker:
-        ...
+    def __call__(self, **kwargs: Any) -> BillingLogWorker: ...
 
 
 class TestBillingLogProcessing:
