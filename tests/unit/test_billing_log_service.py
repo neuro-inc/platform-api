@@ -20,18 +20,15 @@ from platform_api.orchestrator.billing_log.storage import (
 from platform_api.orchestrator.job_request import JobRequest
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.utils.update_notifier import InMemoryNotifier, Notifier
-
 from tests.unit.conftest import MockAdminClient, UserFactory
 
 
 class BillingServiceFactory(Protocol):
-    def __call__(self, **kwargs: Any) -> BillingLogService:
-        ...
+    def __call__(self, **kwargs: Any) -> BillingLogService: ...
 
 
 class BillingWorkerFactory(Protocol):
-    def __call__(self, **kwargs: Any) -> BillingLogWorker:
-        ...
+    def __call__(self, **kwargs: Any) -> BillingLogWorker: ...
 
 
 class TestBillingLogProcessing:

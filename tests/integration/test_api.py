@@ -34,7 +34,6 @@ from platform_api.cluster import ClusterConfigRegistry
 from platform_api.cluster_config import ClusterConfig
 from platform_api.config import Config
 from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
-
 from tests.conftest import random_str
 from tests.integration.api import ApiConfig, AuthApiConfig, JobsClient
 from tests.integration.auth import AuthClient, ServiceAccountFactory, UserFactory, _User
@@ -5721,9 +5720,9 @@ class TestBillingEnforcer:
         user_to_charge: dict[str, Decimal] = defaultdict(Decimal)
         for cluster_user in await admin_client.list_cluster_users(cluster_name):
             if cluster_user.org_name == "org":
-                user_to_charge[
-                    cluster_user.user_name
-                ] = cluster_user.balance.spent_credits
+                user_to_charge[cluster_user.user_name] = (
+                    cluster_user.balance.spent_credits
+                )
 
         per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
         second = Decimal("1") / 3600

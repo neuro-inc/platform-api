@@ -38,7 +38,6 @@ from platform_api.orchestrator.job_request import JobRequest, JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.utils.update_notifier import InMemoryNotifier
-
 from tests.unit.conftest import (
     MockAdminClient,
     MockAuthClient,
