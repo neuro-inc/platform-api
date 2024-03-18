@@ -23,7 +23,6 @@ from neuro_auth_client import AuthClient, Permission, User as AuthUser
 from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
-
 from tests.conftest import random_str
 from tests.integration.conftest import _TestConfigClient
 
@@ -166,13 +165,13 @@ class UserFactory(Protocol):
     async def __call__(
         self,
         name: str | None = None,
-        clusters: (list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]])
-        | None = None,
+        clusters: (
+            list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]]
+        ) | None = None,
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
         do_create_project: bool = True,
-    ) -> _User:
-        ...
+    ) -> _User: ...
 
 
 @pytest.fixture
@@ -187,8 +186,9 @@ async def regular_user_factory(
 ) -> UserFactory:
     async def _factory(
         name: str | None = None,
-        clusters: (list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]])
-        | None = None,
+        clusters: (
+            list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]]
+        ) | None = None,
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
         do_create_project: bool = True,
@@ -270,8 +270,7 @@ class ServiceAccountFactory(Protocol):
         self,
         owner: _User,
         name: str | None = None,
-    ) -> _User:
-        ...
+    ) -> _User: ...
 
 
 @pytest.fixture

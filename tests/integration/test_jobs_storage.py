@@ -20,7 +20,6 @@ from platform_api.orchestrator.jobs_storage import (
     JobStorageTransactionError,
 )
 from platform_api.orchestrator.jobs_storage.postgres import PostgresJobsStorage
-
 from tests.conftest import not_raises
 
 
@@ -1364,7 +1363,7 @@ class TestJobsStorage:
         jobs = await storage.get_unfinished_jobs()
         assert len(jobs) == 2
         assert [job.id for job in jobs] == [pending_job.id, running_job.id]
-        assert all([not job.is_finished for job in jobs])
+        assert all(not job.is_finished for job in jobs)
 
     async def test_get_for_deletion_empty(self, storage: JobsStorage) -> None:
         jobs = await storage.get_jobs_for_deletion()

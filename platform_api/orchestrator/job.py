@@ -572,9 +572,11 @@ class JobRecord:
             priority=JobPriority(payload.get("priority", int(cls.priority))),
             fully_billed=payload.get("fully_billed", True),  # Default for old jobs
             total_price_credits=Decimal(payload.get("total_price_credits", "0")),
-            last_billed=datetime.fromisoformat(payload["last_billed"])
-            if "last_billed" in payload
-            else None,
+            last_billed=(
+                datetime.fromisoformat(payload["last_billed"])
+                if "last_billed" in payload
+                else None
+            ),
             being_dropped=payload.get("being_dropped", False),
             logs_removed=payload.get("logs_removed", False),
             energy_schedule_name=payload.get(

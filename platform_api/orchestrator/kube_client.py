@@ -1043,9 +1043,9 @@ class PodDescriptor:
 
         annotations: dict[str, str] = {}
         if container.resources.tpu:
-            annotations[
-                cls.tpu_version_annotation_key
-            ] = container.resources.tpu.software_version
+            annotations[cls.tpu_version_annotation_key] = (
+                container.resources.tpu.software_version
+            )
 
         env = container.env.copy()
         if meta_env:
@@ -1078,7 +1078,7 @@ class PodDescriptor:
 
     @property
     def env_list(self) -> list[dict[str, str]]:
-        return [dict(name=name, value=value) for name, value in self.env.items()]
+        return [{"name": name, "value": value} for name, value in self.env.items()]
 
     def can_be_scheduled(self, node_labels: dict[str, str]) -> bool:
         affinities: list[NodeAffinity] = []
