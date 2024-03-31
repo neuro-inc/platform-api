@@ -108,9 +108,9 @@ class JobsScheduler:
         jobs_to_update: list[JobRecord] = []
 
         # Grouping by (username, cluster_name, org_name):
-        grouped_jobs: dict[
-            tuple[str, str, Optional[str]], list[JobRecord]
-        ] = defaultdict(list)
+        grouped_jobs: dict[tuple[str, str, Optional[str]], list[JobRecord]] = (
+            defaultdict(list)
+        )
         for record in unfinished:
             grouped_jobs[(record.owner, record.cluster_name, record.org_name)].append(
                 record
@@ -139,9 +139,9 @@ class JobsScheduler:
             jobs_to_update.extend(_filter_our_for_quota(quota, jobs))
 
         # Grouping by (cluster_name, org_name):
-        grouped_by_org_jobs: dict[
-            tuple[str, Optional[str]], list[JobRecord]
-        ] = defaultdict(list)
+        grouped_by_org_jobs: dict[tuple[str, Optional[str]], list[JobRecord]] = (
+            defaultdict(list)
+        )
         for record in jobs_to_update:
             grouped_by_org_jobs[(record.cluster_name, record.org_name)].append(record)
         jobs_to_update = []

@@ -733,7 +733,7 @@ class Toleration:
         }
 
 
-class NodeSelectorOperator(str, Enum):
+class SelectorOperator(str, Enum):
     DOES_NOT_EXIST = "DoesNotExist"
     EXISTS = "Exists"
     IN = "In"
@@ -763,9 +763,9 @@ class NodeSelectorOperator(str, Enum):
 
 
 @dataclass(frozen=True)
-class NodeSelectorRequirement:
+class LabelSelectorMatchExpression:
     key: str
-    operator: NodeSelectorOperator
+    operator: SelectorOperator
     values: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -775,24 +775,24 @@ class NodeSelectorRequirement:
             raise ValueError("values must be empty")
 
     @classmethod
-    def create_in(cls, key: str, *values: str) -> "NodeSelectorRequirement":
-        return cls(key=key, operator=NodeSelectorOperator.IN, values=[*values])
+    def create_in(cls, key: str, *values: str) -> "LabelSelectorMatchExpression":
+        return cls(key=key, operator=SelectorOperator.IN, values=[*values])
 
     @classmethod
-    def create_exists(cls, key: str) -> "NodeSelectorRequirement":
-        return cls(key=key, operator=NodeSelectorOperator.EXISTS)
+    def create_exists(cls, key: str) -> "LabelSelectorMatchExpression":
+        return cls(key=key, operator=SelectorOperator.EXISTS)
 
     @classmethod
-    def create_does_not_exist(cls, key: str) -> "NodeSelectorRequirement":
-        return cls(key=key, operator=NodeSelectorOperator.DOES_NOT_EXIST)
+    def create_does_not_exist(cls, key: str) -> "LabelSelectorMatchExpression":
+        return cls(key=key, operator=SelectorOperator.DOES_NOT_EXIST)
 
     @classmethod
-    def create_gt(cls, key: str, value: int) -> "NodeSelectorRequirement":
-        return cls(key=key, operator=NodeSelectorOperator.GT, values=[str(value)])
+    def create_gt(cls, key: str, value: int) -> "LabelSelectorMatchExpression":
+        return cls(key=key, operator=SelectorOperator.GT, values=[str(value)])
 
     @classmethod
-    def create_lt(cls, key: str, value: int) -> "NodeSelectorRequirement":
-        return cls(key=key, operator=NodeSelectorOperator.LT, values=[str(value)])
+    def create_lt(cls, key: str, value: int) -> "LabelSelectorMatchExpression":
+        return cls(key=key, operator=SelectorOperator.LT, values=[str(value)])
 
     def is_satisfied(self, node_labels: dict[str, str]) -> bool:
         label_value = node_labels.get(self.key)
@@ -807,7 +807,7 @@ class NodeSelectorRequirement:
 
 @dataclass(frozen=True)
 class NodeSelectorTerm:
-    match_expressions: list[NodeSelectorRequirement]
+    match_expressions: list[LabelSelectorMatchExpression]
 
     def __post_init__(self) -> None:
         if not self.match_expressions:
@@ -1043,9 +1043,9 @@ class PodDescriptor:
 
         annotations: dict[str, str] = {}
         if container.resources.tpu:
-            annotations[
-                cls.tpu_version_annotation_key
-            ] = container.resources.tpu.software_version
+            annotations[cls.tpu_version_annotation_key] = (
+                container.resources.tpu.software_version
+            )
 
         env = container.env.copy()
         if meta_env:
@@ -1084,7 +1084,7 @@ class PodDescriptor:
         affinities: list[NodeAffinity] = []
         if self.node_selector:
             requirements = [
-                NodeSelectorRequirement.create_in(k, v)
+                LabelSelectorMatchExpression.create_in(k, v)
                 for k, v in self.node_selector.items()
             ]
             affinities.append(NodeAffinity(required=[NodeSelectorTerm(requirements)]))

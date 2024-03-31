@@ -32,10 +32,10 @@ from .kube_client import (
     HostVolume,
     IngressRule,
     KubeClient,
+    LabelSelectorMatchExpression,
     NfsVolume,
     NodeAffinity,
     NodePreferredSchedulingTerm,
-    NodeSelectorRequirement,
     NodeSelectorTerm,
     NodeWatcher,
     NotFoundException,
@@ -683,7 +683,7 @@ class KubeOrchestrator(Orchestrator):
                 required_terms.append(
                     NodeSelectorTerm(
                         [
-                            NodeSelectorRequirement.create_in(
+                            LabelSelectorMatchExpression.create_in(
                                 self._kube_config.node_label_node_pool, pool_type.name
                             )
                         ]

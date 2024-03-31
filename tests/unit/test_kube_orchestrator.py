@@ -42,9 +42,9 @@ from platform_api.orchestrator.kube_orchestrator import (
     IngressRule,
     JobStatusItemFactory,
     KubeOrchestrator,
+    LabelSelectorMatchExpression,
     NfsVolume,
     NodeAffinity,
-    NodeSelectorRequirement,
     NodeSelectorTerm,
     PodDescriptor,
     PodStatus,
@@ -244,7 +244,7 @@ class TestPodDescriptor:
             node_affinity=NodeAffinity(
                 required=[
                     NodeSelectorTerm(
-                        [NodeSelectorRequirement.create_in("node-pool", "cpu")]
+                        [LabelSelectorMatchExpression.create_in("node-pool", "cpu")]
                     )
                 ]
             ),
@@ -272,7 +272,7 @@ class TestPodDescriptor:
             node_affinity=NodeAffinity(
                 required=[
                     NodeSelectorTerm(
-                        [NodeSelectorRequirement.create_in("node-pool", "cpu")]
+                        [LabelSelectorMatchExpression.create_in("node-pool", "cpu")]
                     )
                 ]
             ),
@@ -347,7 +347,9 @@ class TestPodDescriptor:
         ]
         node_affinity = NodeAffinity(
             required=[
-                NodeSelectorTerm([NodeSelectorRequirement.create_exists("testkey")])
+                NodeSelectorTerm(
+                    [LabelSelectorMatchExpression.create_exists("testkey")]
+                )
             ]
         )
         pod = PodDescriptor(

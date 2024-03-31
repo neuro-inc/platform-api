@@ -48,9 +48,9 @@ from platform_api.orchestrator.kube_client import (
     Ingress,
     IngressRule,
     KubeClient,
+    LabelSelectorMatchExpression,
     NodeAffinity,
     NodeResources,
-    NodeSelectorRequirement,
     NodeSelectorTerm,
     NodeWatcher,
     NotFoundException,
@@ -2648,7 +2648,11 @@ class TestNodeAffinity:
                 == NodeAffinity(
                     required=[
                         NodeSelectorTerm(
-                            [NodeSelectorRequirement.create_in("nodepool", "cpu-small")]
+                            [
+                                LabelSelectorMatchExpression.create_in(
+                                    "nodepool", "cpu-small"
+                                )
+                            ]
                         )
                     ]
                 ).to_primitive()
@@ -2660,9 +2664,7 @@ class TestNodeAffinity:
         kube_orchestrator_gpu: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
-        async with start_job(
-            kube_orchestrator_gpu, cpu=0.1, memory=32 * 10**6
-        ) as job:
+        async with start_job(kube_orchestrator_gpu, cpu=0.1, memory=32 * 10**6) as job:
             await kube_client.wait_pod_scheduled(job.id, "gpu-k80")
 
             job_pod = await kube_client.get_raw_pod(job.id)
@@ -2671,7 +2673,11 @@ class TestNodeAffinity:
                 == NodeAffinity(
                     required=[
                         NodeSelectorTerm(
-                            [NodeSelectorRequirement.create_in("nodepool", "gpu-k80")]
+                            [
+                                LabelSelectorMatchExpression.create_in(
+                                    "nodepool", "gpu-k80"
+                                )
+                            ]
                         )
                     ]
                 ).to_primitive()
@@ -2693,7 +2699,7 @@ class TestNodeAffinity:
                     required=[
                         NodeSelectorTerm(
                             [
-                                NodeSelectorRequirement.create_in(
+                                LabelSelectorMatchExpression.create_in(
                                     "nodepool", "cpu-large-tpu"
                                 )
                             ]
@@ -2735,7 +2741,11 @@ class TestNodeAffinity:
                 == NodeAffinity(
                     required=[
                         NodeSelectorTerm(
-                            [NodeSelectorRequirement.create_in("nodepool", "gpu-k80")]
+                            [
+                                LabelSelectorMatchExpression.create_in(
+                                    "nodepool", "gpu-k80"
+                                )
+                            ]
                         )
                     ]
                 ).to_primitive()
@@ -2763,7 +2773,11 @@ class TestNodeAffinity:
                 == NodeAffinity(
                     required=[
                         NodeSelectorTerm(
-                            [NodeSelectorRequirement.create_in("nodepool", "gpu-v100")]
+                            [
+                                LabelSelectorMatchExpression.create_in(
+                                    "nodepool", "gpu-v100"
+                                )
+                            ]
                         ),
                     ],
                     preferred=[],
@@ -2791,7 +2805,7 @@ class TestNodeAffinity:
                     required=[
                         NodeSelectorTerm(
                             [
-                                NodeSelectorRequirement.create_in(
+                                LabelSelectorMatchExpression.create_in(
                                     "nodepool", "cpu-small-p"
                                 )
                             ]
