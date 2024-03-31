@@ -5,7 +5,7 @@ from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
 from functools import partial
 from pathlib import Path
-from typing import Any, Optional, Union, cast
+from typing import Any, Optional, Union
 
 import pytest
 from aiohttp import ClientResponseError
@@ -612,11 +612,9 @@ def user_factory(
         for entry in clusters:
             org_name: Optional[str] = None
             if len(entry) == 3:
-                cluster, balance, quota = cast(tuple[str, Balance, Quota], entry)
+                cluster, balance, quota = entry
             else:
-                cluster, org_name, balance, quota = cast(
-                    tuple[str, str, Balance, Quota], entry
-                )
+                cluster, org_name, balance, quota = entry
             mock_admin_client.cluster_users[name].append(
                 ClusterUser(
                     user_name=name,

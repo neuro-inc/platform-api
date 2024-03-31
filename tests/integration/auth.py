@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Protocol, cast
+from typing import Protocol
 
 import aiodocker
 import pytest
@@ -204,11 +204,9 @@ async def regular_user_factory(
         for entry in clusters:
             org_name: str | None = None
             if len(entry) == 3:
-                cluster, balance, quota = cast(tuple[str, Balance, Quota], entry)
+                cluster, balance, quota = entry
             else:
-                cluster, org_name, balance, quota = cast(
-                    tuple[str, str, Balance, Quota], entry
-                )
+                cluster, org_name, balance, quota = entry
             try:
                 await admin_client.create_cluster(cluster)
             except ClientResponseError:
