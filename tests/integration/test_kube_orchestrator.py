@@ -49,12 +49,15 @@ from platform_api.orchestrator.kube_client import (
     IngressRule,
     KubeClient,
     LabelSelectorMatchExpression,
+    LabelSelectorTerm,
     NodeAffinity,
     NodeResources,
-    NodeSelectorTerm,
     NodeWatcher,
     NotFoundException,
+    PodAffinity,
+    PodAffinityTerm,
     PodDescriptor,
+    PodPreferredSchedulingTerm,
     PodWatcher,
     SecretRef,
     Service,
@@ -2466,7 +2469,7 @@ class TestKubeOrchestrator:
         assert jobs == [job1]
 
 
-class TestNodeAffinity:
+class TestAffinityFixtures:
     @pytest.fixture
     def kube_orchestrator_factory(
         self,
@@ -2622,6 +2625,8 @@ class TestNodeAffinity:
 
         return _create
 
+
+class TestNodeAffinity(TestAffinityFixtures):
     async def test_unschedulable_job(
         self,
         kube_orchestrator: KubeOrchestrator,
@@ -2647,7 +2652,7 @@ class TestNodeAffinity:
                 job_pod["spec"]["affinity"]["nodeAffinity"]
                 == NodeAffinity(
                     required=[
-                        NodeSelectorTerm(
+                        LabelSelectorTerm(
                             [
                                 LabelSelectorMatchExpression.create_in(
                                     "nodepool", "cpu-small"
@@ -2672,7 +2677,7 @@ class TestNodeAffinity:
                 job_pod["spec"]["affinity"]["nodeAffinity"]
                 == NodeAffinity(
                     required=[
-                        NodeSelectorTerm(
+                        LabelSelectorTerm(
                             [
                                 LabelSelectorMatchExpression.create_in(
                                     "nodepool", "gpu-k80"
@@ -2697,7 +2702,7 @@ class TestNodeAffinity:
                 job_pod["spec"]["affinity"]["nodeAffinity"]
                 == NodeAffinity(
                     required=[
-                        NodeSelectorTerm(
+                        LabelSelectorTerm(
                             [
                                 LabelSelectorMatchExpression.create_in(
                                     "nodepool", "cpu-large-tpu"
@@ -2740,7 +2745,7 @@ class TestNodeAffinity:
                 job_pod["spec"]["affinity"]["nodeAffinity"]
                 == NodeAffinity(
                     required=[
-                        NodeSelectorTerm(
+                        LabelSelectorTerm(
                             [
                                 LabelSelectorMatchExpression.create_in(
                                     "nodepool", "gpu-k80"
@@ -2772,7 +2777,7 @@ class TestNodeAffinity:
                 job_pod["spec"]["affinity"]["nodeAffinity"]
                 == NodeAffinity(
                     required=[
-                        NodeSelectorTerm(
+                        LabelSelectorTerm(
                             [
                                 LabelSelectorMatchExpression.create_in(
                                     "nodepool", "gpu-v100"
@@ -2803,7 +2808,7 @@ class TestNodeAffinity:
                 job_pod["spec"]["affinity"]["nodeAffinity"]
                 == NodeAffinity(
                     required=[
-                        NodeSelectorTerm(
+                        LabelSelectorTerm(
                             [
                                 LabelSelectorMatchExpression.create_in(
                                     "nodepool", "cpu-small-p"
@@ -2812,6 +2817,40 @@ class TestNodeAffinity:
                         ),
                     ]
                 ).to_primitive()
+            )
+
+
+class TestPodAffinity(TestAffinityFixtures):
+    async def test_cpu_job(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
+    ) -> None:
+        async with start_job(kube_orchestrator, cpu=0.1, memory=32 * 10**6) as job:
+            await kube_client.wait_pod_scheduled(job.id, "cpu-small")
+
+            job_pod = await kube_client.get_raw_pod(job.id)
+            pod_affinity = PodAffinity(
+                preferred=[
+                    PodPreferredSchedulingTerm(
+                        weight=100,
+                        pod_affinity_term=PodAffinityTerm(
+                            label_selector=LabelSelectorTerm(
+                                match_expressions=[
+                                    LabelSelectorMatchExpression.create_exists(
+                                        "platform.neuromation.io/job"
+                                    )
+                                ]
+                            ),
+                            topologyKey="kubernetes.io/hostname",
+                        ),
+                    )
+                ]
+            )
+            assert (
+                job_pod["spec"]["affinity"]["podAffinity"]
+                == pod_affinity.to_primitive()
             )
 
 

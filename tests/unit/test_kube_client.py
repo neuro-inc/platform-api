@@ -9,17 +9,20 @@ from platform_api.orchestrator.kube_client import (
     KubePreemption,
     KubernetesEvent,
     LabelSelectorMatchExpression,
+    LabelSelectorTerm,
     Node,
     NodeAffinity,
     NodeCondition,
     NodeConditionType,
     NodePreferredSchedulingTerm,
     NodeResources,
-    NodeSelectorTerm,
     NodeStatus,
+    PodAffinity,
+    PodAffinityTerm,
     PodCondition,
     PodConditionType,
     PodDescriptor,
+    PodPreferredSchedulingTerm,
     PodStatus,
     Resources,
     SelectorOperator,
@@ -115,13 +118,13 @@ class TestLabelSelectorMatchExpression:
         assert req.is_satisfied({"testkey2": "1"}) is False
 
 
-class TestNodeSelectorTerm:
+class TestLabelSelectorTerm:
     def test_empty(self) -> None:
         with pytest.raises(ValueError, match="no expressions"):
-            NodeSelectorTerm([])
+            LabelSelectorTerm([])
 
     def test_is_satisfied(self) -> None:
-        term = NodeSelectorTerm(
+        term = LabelSelectorTerm(
             [
                 LabelSelectorMatchExpression.create_exists("job"),
                 LabelSelectorMatchExpression.create_in("zone", "us-east-1a"),
@@ -138,10 +141,10 @@ class TestNodeAffinity:
             NodeAffinity()
 
     def test_is_satisfied(self) -> None:
-        term1 = NodeSelectorTerm(
+        term1 = LabelSelectorTerm(
             [LabelSelectorMatchExpression.create_in("zone", "us-east-1a")]
         )
-        term2 = NodeSelectorTerm(
+        term2 = LabelSelectorTerm(
             [LabelSelectorMatchExpression.create_in("zone", "us-east-1b")]
         )
         node_affinity = NodeAffinity(required=[term1, term2])
@@ -153,13 +156,13 @@ class TestNodeAffinity:
     def test_to_primitive(self) -> None:
         node_affinity = NodeAffinity(
             required=[
-                NodeSelectorTerm(
+                LabelSelectorTerm(
                     [LabelSelectorMatchExpression.create_exists("testkey")]
                 )
             ],
             preferred=[
                 NodePreferredSchedulingTerm(
-                    NodeSelectorTerm(
+                    LabelSelectorTerm(
                         [
                             LabelSelectorMatchExpression.create_does_not_exist(
                                 "anotherkey"
@@ -186,6 +189,43 @@ class TestNodeAffinity:
                 }
             ],
         }
+
+
+class TestPodAffinity:
+    def test_to_privimive(self) -> None:
+        pod_affinity = PodAffinity(
+            preferred=[
+                PodPreferredSchedulingTerm(
+                    PodAffinityTerm(
+                        LabelSelectorTerm(
+                            [
+                                LabelSelectorMatchExpression.create_exists("mylabel"),
+                            ]
+                        )
+                    )
+                )
+            ]
+        )
+
+        assert pod_affinity.to_primitive() == {
+            "preferredDuringSchedulingIgnoredDuringExecution": [
+                {
+                    "podAffinityTerm": {
+                        "labelSelector": {
+                            "matchExpressions": [
+                                {"key": "mylabel", "operator": "Exists"}
+                            ],
+                        },
+                        "topologyKey": "kubernetes.io/hostname",
+                    },
+                    "weight": 100,
+                }
+            ]
+        }
+
+    def test_to_privimive_empty(self) -> None:
+        pod_affinity = PodAffinity()
+        assert pod_affinity.to_primitive() == {}
 
 
 class TestPodStatus:
