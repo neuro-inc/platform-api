@@ -422,7 +422,15 @@ class MyKubeClient(KubeClient):
                 while True:
                     raw_pod = await self.get_raw_pod(pod_name)
                     if node_name:
-                        pod_has_node = raw_pod["spec"].get("nodeName") == node_name
+                        pod_at_node = raw_pod["spec"].get("nodeName")
+                        if pod_at_node == node_name:
+                            pod_has_node = True
+                        else:
+                            pod_has_node = False
+                            print(
+                                f"Pod was scheudled to wrong node: {pod_at_node}, "
+                                f"expected: {node_name}"
+                            )
                     else:
                         pod_has_node = bool(raw_pod["spec"].get("nodeName"))
                     pod_is_scheduled = "PodScheduled" in [
@@ -551,6 +559,35 @@ class MyKubeClient(KubeClient):
         }
 
         await self._request(method="POST", url=url, json=data)
+
+    async def add_node_labels(self, node_name: str, labels: dict[str, Any]) -> None:
+        node = await self.get_node(node_name)
+
+        new_labels = node.labels.copy()
+        new_labels.update(labels)
+
+        await self._request(
+            method="PATCH",
+            url=self._generate_node_url(node_name),
+            headers={"content-type": "application/merge-patch+json"},
+            json={"metadata": {"labels": new_labels}},
+        )
+
+    async def remove_node_labels(self, node_name: str, label_keys: list[str]) -> None:
+        node = await self.get_node(node_name)
+
+        new_labels = {
+            label: value
+            for label, value in node.labels.items()
+            if label not in label_keys
+        }
+
+        await self._request(
+            method="PATCH",
+            url=self._generate_node_url(node_name),
+            headers={"content-type": "application/merge-patch+json"},
+            json={"metadata": {"labels": new_labels}},
+        )
 
 
 @pytest.fixture(scope="session")
