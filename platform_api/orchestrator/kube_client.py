@@ -2361,18 +2361,12 @@ class KubeClient:
         Raise JobError if there is no such pod.
         Raise asyncio.TimeoutError if it takes too long for the pod.
         """
-        raw_pod = None
-        try:
-            async with timeout(timeout_s):
-                while True:
-                    pod_status = await self.get_pod_status(pod_name)
-                    raw_pod = await self.get_raw_pod(pod_name)
-                    if not pod_status.is_waiting:
-                        return
-                    await asyncio.sleep(interval_s)
-        except asyncio.TimeoutError:
-            print(raw_pod)
-            raise
+        async with timeout(timeout_s):
+            while True:
+                pod_status = await self.get_pod_status(pod_name)
+                if not pod_status.is_waiting:
+                    return
+                await asyncio.sleep(interval_s)
 
     async def wait_pod_is_terminated(
         self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
