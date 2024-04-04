@@ -42,11 +42,14 @@ from platform_api.orchestrator.kube_orchestrator import (
     IngressRule,
     JobStatusItemFactory,
     KubeOrchestrator,
+    LabelSelectorMatchExpression,
+    LabelSelectorTerm,
     NfsVolume,
     NodeAffinity,
-    NodeSelectorRequirement,
-    NodeSelectorTerm,
+    PodAffinity,
+    PodAffinityTerm,
     PodDescriptor,
+    PodPreferredSchedulingTerm,
     PodStatus,
     PVCVolume,
     Service,
@@ -243,8 +246,8 @@ class TestPodDescriptor:
             image="testimage",
             node_affinity=NodeAffinity(
                 required=[
-                    NodeSelectorTerm(
-                        [NodeSelectorRequirement.create_in("node-pool", "cpu")]
+                    LabelSelectorTerm(
+                        [LabelSelectorMatchExpression.create_in("node-pool", "cpu")]
                     )
                 ]
             ),
@@ -271,8 +274,8 @@ class TestPodDescriptor:
             node_selector={"job": "true"},
             node_affinity=NodeAffinity(
                 required=[
-                    NodeSelectorTerm(
-                        [NodeSelectorRequirement.create_in("node-pool", "cpu")]
+                    LabelSelectorTerm(
+                        [LabelSelectorMatchExpression.create_in("node-pool", "cpu")]
                     )
                 ]
             ),
@@ -347,7 +350,28 @@ class TestPodDescriptor:
         ]
         node_affinity = NodeAffinity(
             required=[
-                NodeSelectorTerm([NodeSelectorRequirement.create_exists("testkey")])
+                LabelSelectorTerm(
+                    [LabelSelectorMatchExpression.create_exists("testkey")]
+                )
+            ]
+        )
+        pod_affinity = PodAffinity(
+            preferred=[
+                PodPreferredSchedulingTerm(
+                    weight=150,
+                    pod_affinity_term=PodAffinityTerm(
+                        topologyKey="sometopologykey",
+                        namespaces=["some", "namespace"],
+                        label_selector=LabelSelectorTerm(
+                            match_expressions=[
+                                LabelSelectorMatchExpression.create_exists("keya"),
+                                LabelSelectorMatchExpression.create_in(
+                                    "keyb", "v1", "v2"
+                                ),
+                            ]
+                        ),
+                    ),
+                )
             ]
         )
         pod = PodDescriptor(
@@ -360,6 +384,7 @@ class TestPodDescriptor:
             node_selector={"label": "value"},
             tolerations=tolerations,
             node_affinity=node_affinity,
+            pod_affinity=pod_affinity,
             labels={"testlabel": "testvalue"},
             annotations={"testa": "testv"},
             priority_class_name="testpriority",
@@ -418,7 +443,28 @@ class TestPodDescriptor:
                 "affinity": {
                     "nodeAffinity": {
                         "requiredDuringSchedulingIgnoredDuringExecution": mock.ANY
-                    }
+                    },
+                    "podAffinity": {
+                        "preferredDuringSchedulingIgnoredDuringExecution": [
+                            {
+                                "weight": 150,
+                                "podAffinityTerm": {
+                                    "topologyKey": "sometopologykey",
+                                    "namespaces": ["some", "namespace"],
+                                    "labelSelector": {
+                                        "matchExpressions": [
+                                            {"key": "keya", "operator": "Exists"},
+                                            {
+                                                "key": "keyb",
+                                                "operator": "In",
+                                                "values": ["v1", "v2"],
+                                            },
+                                        ]
+                                    },
+                                },
+                            }
+                        ],
+                    },
                 },
                 "priorityClassName": "testpriority",
             },
@@ -603,6 +649,8 @@ class TestPodDescriptor:
         assert pod.resources == Resources(cpu=1, memory=128 * 10**6, gpu=1)
         assert pod.priority_class_name == "testpriority"
         assert pod.working_dir == "/working/dir"
+        assert not pod.node_affinity
+        assert not pod.pod_affinity
 
     def test_from_job_request_tpu(self) -> None:
         container = Container(

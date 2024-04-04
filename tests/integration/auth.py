@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Protocol, cast
+from typing import Protocol
 
 import aiodocker
 import pytest
@@ -166,13 +166,13 @@ class UserFactory(Protocol):
     async def __call__(
         self,
         name: str | None = None,
-        clusters: (list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]])
-        | None = None,
+        clusters: (
+            list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]]
+        ) | None = None,
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
         do_create_project: bool = True,
-    ) -> _User:
-        ...
+    ) -> _User: ...
 
 
 @pytest.fixture
@@ -187,8 +187,9 @@ async def regular_user_factory(
 ) -> UserFactory:
     async def _factory(
         name: str | None = None,
-        clusters: (list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]])
-        | None = None,
+        clusters: (
+            list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]]
+        ) | None = None,
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
         do_create_project: bool = True,
@@ -203,11 +204,9 @@ async def regular_user_factory(
         for entry in clusters:
             org_name: str | None = None
             if len(entry) == 3:
-                cluster, balance, quota = cast(tuple[str, Balance, Quota], entry)
+                cluster, balance, quota = entry
             else:
-                cluster, org_name, balance, quota = cast(
-                    tuple[str, str, Balance, Quota], entry
-                )
+                cluster, org_name, balance, quota = entry
             try:
                 await admin_client.create_cluster(cluster)
             except ClientResponseError:
@@ -270,8 +269,7 @@ class ServiceAccountFactory(Protocol):
         self,
         owner: _User,
         name: str | None = None,
-    ) -> _User:
-        ...
+    ) -> _User: ...
 
 
 @pytest.fixture

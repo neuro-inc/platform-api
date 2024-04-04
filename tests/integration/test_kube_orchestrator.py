@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import os
 import shlex
 import time
 import uuid
@@ -48,13 +49,17 @@ from platform_api.orchestrator.kube_client import (
     Ingress,
     IngressRule,
     KubeClient,
+    LabelSelectorMatchExpression,
+    LabelSelectorTerm,
     NodeAffinity,
     NodeResources,
-    NodeSelectorRequirement,
-    NodeSelectorTerm,
+    NodeTaint,
     NodeWatcher,
     NotFoundException,
+    PodAffinity,
+    PodAffinityTerm,
     PodDescriptor,
+    PodPreferredSchedulingTerm,
     PodWatcher,
     SecretRef,
     Service,
@@ -2466,7 +2471,7 @@ class TestKubeOrchestrator:
         assert jobs == [job1]
 
 
-class TestNodeAffinity:
+class TestAffinityFixtures:
     @pytest.fixture
     def kube_orchestrator_factory(
         self,
@@ -2622,6 +2627,8 @@ class TestNodeAffinity:
 
         return _create
 
+
+class TestNodeAffinity(TestAffinityFixtures):
     async def test_unschedulable_job(
         self,
         kube_orchestrator: KubeOrchestrator,
@@ -2647,8 +2654,12 @@ class TestNodeAffinity:
                 job_pod["spec"]["affinity"]["nodeAffinity"]
                 == NodeAffinity(
                     required=[
-                        NodeSelectorTerm(
-                            [NodeSelectorRequirement.create_in("nodepool", "cpu-small")]
+                        LabelSelectorTerm(
+                            [
+                                LabelSelectorMatchExpression.create_in(
+                                    "nodepool", "cpu-small"
+                                )
+                            ]
                         )
                     ]
                 ).to_primitive()
@@ -2660,9 +2671,7 @@ class TestNodeAffinity:
         kube_orchestrator_gpu: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
-        async with start_job(
-            kube_orchestrator_gpu, cpu=0.1, memory=32 * 10**6
-        ) as job:
+        async with start_job(kube_orchestrator_gpu, cpu=0.1, memory=32 * 10**6) as job:
             await kube_client.wait_pod_scheduled(job.id, "gpu-k80")
 
             job_pod = await kube_client.get_raw_pod(job.id)
@@ -2670,8 +2679,12 @@ class TestNodeAffinity:
                 job_pod["spec"]["affinity"]["nodeAffinity"]
                 == NodeAffinity(
                     required=[
-                        NodeSelectorTerm(
-                            [NodeSelectorRequirement.create_in("nodepool", "gpu-k80")]
+                        LabelSelectorTerm(
+                            [
+                                LabelSelectorMatchExpression.create_in(
+                                    "nodepool", "gpu-k80"
+                                )
+                            ]
                         )
                     ]
                 ).to_primitive()
@@ -2691,9 +2704,9 @@ class TestNodeAffinity:
                 job_pod["spec"]["affinity"]["nodeAffinity"]
                 == NodeAffinity(
                     required=[
-                        NodeSelectorTerm(
+                        LabelSelectorTerm(
                             [
-                                NodeSelectorRequirement.create_in(
+                                LabelSelectorMatchExpression.create_in(
                                     "nodepool", "cpu-large-tpu"
                                 )
                             ]
@@ -2734,8 +2747,12 @@ class TestNodeAffinity:
                 job_pod["spec"]["affinity"]["nodeAffinity"]
                 == NodeAffinity(
                     required=[
-                        NodeSelectorTerm(
-                            [NodeSelectorRequirement.create_in("nodepool", "gpu-k80")]
+                        LabelSelectorTerm(
+                            [
+                                LabelSelectorMatchExpression.create_in(
+                                    "nodepool", "gpu-k80"
+                                )
+                            ]
                         )
                     ]
                 ).to_primitive()
@@ -2762,8 +2779,12 @@ class TestNodeAffinity:
                 job_pod["spec"]["affinity"]["nodeAffinity"]
                 == NodeAffinity(
                     required=[
-                        NodeSelectorTerm(
-                            [NodeSelectorRequirement.create_in("nodepool", "gpu-v100")]
+                        LabelSelectorTerm(
+                            [
+                                LabelSelectorMatchExpression.create_in(
+                                    "nodepool", "gpu-v100"
+                                )
+                            ]
                         ),
                     ],
                     preferred=[],
@@ -2789,15 +2810,49 @@ class TestNodeAffinity:
                 job_pod["spec"]["affinity"]["nodeAffinity"]
                 == NodeAffinity(
                     required=[
-                        NodeSelectorTerm(
+                        LabelSelectorTerm(
                             [
-                                NodeSelectorRequirement.create_in(
+                                LabelSelectorMatchExpression.create_in(
                                     "nodepool", "cpu-small-p"
                                 )
                             ]
                         ),
                     ]
                 ).to_primitive()
+            )
+
+
+class TestPodAffinity(TestAffinityFixtures):
+    async def test_cpu_job(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
+    ) -> None:
+        async with start_job(kube_orchestrator, cpu=0.1, memory=32 * 10**6) as job:
+            await kube_client.wait_pod_scheduled(job.id, "cpu-small")
+
+            job_pod = await kube_client.get_raw_pod(job.id)
+            pod_affinity = PodAffinity(
+                preferred=[
+                    PodPreferredSchedulingTerm(
+                        weight=100,
+                        pod_affinity_term=PodAffinityTerm(
+                            label_selector=LabelSelectorTerm(
+                                match_expressions=[
+                                    LabelSelectorMatchExpression.create_exists(
+                                        "platform.neuromation.io/job"
+                                    )
+                                ]
+                            ),
+                            topologyKey="kubernetes.io/hostname",
+                        ),
+                    )
+                ]
+            )
+            assert (
+                job_pod["spec"]["affinity"]["podAffinity"]
+                == pod_affinity.to_primitive()
             )
 
 
@@ -2932,12 +2987,138 @@ class TestPodContainerDevShmSettings:
 
 class TestPreemption:
     @pytest.fixture
+    async def kube_config(
+        self, kube_config_factory: Callable[..., KubeConfig]
+    ) -> KubeConfig:
+        return kube_config_factory(
+            node_label_node_pool="nodepool",
+            node_label_preemptible="preemptible",
+            jobs_pod_preemptible_toleration_key="preemptible-taint",
+        )
+
+    @pytest.fixture
+    async def kube_client(
+        self,
+        kube_config: KubeConfig,
+    ) -> AsyncIterator[KubeClient]:
+        client = MyKubeClient(
+            base_url=kube_config.endpoint_url,
+            auth_type=kube_config.auth_type,
+            cert_authority_data_pem=kube_config.cert_authority_data_pem,
+            cert_authority_path=kube_config.cert_authority_path,
+            auth_cert_path=kube_config.auth_cert_path,
+            auth_cert_key_path=kube_config.auth_cert_key_path,
+            namespace=kube_config.namespace,
+            conn_timeout_s=kube_config.client_conn_timeout_s,
+            read_timeout_s=kube_config.client_read_timeout_s,
+            conn_pool_size=kube_config.client_conn_pool_size,
+        )
+        async with client as cl:
+            yield cl
+
+    @pytest.fixture
     async def kube_orchestrator(
         self,
+        kube_config: KubeConfig,
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
-        kube_config_node_preemptible: KubeConfig,
+        orchestrator_config_factory: Callable[..., OrchestratorConfig],
     ) -> KubeOrchestrator:
-        return kube_orchestrator_factory(kube_config=kube_config_node_preemptible)
+        resources = [
+            ResourcePoolType(
+                name="cpu-small",
+                available_cpu=2,
+                available_memory=2048 * 10**6,
+                is_preemptible=False,
+            ),
+            ResourcePoolType(
+                name="cpu-small-p",
+                available_cpu=2,
+                available_memory=2048 * 10**6,
+                is_preemptible=True,
+            ),
+        ]
+        orchestrator_config = orchestrator_config_factory(resource_pool_types=resources)
+        return kube_orchestrator_factory(
+            kube_config=kube_config,
+            orchestrator_config=orchestrator_config,
+        )
+
+    @pytest.fixture
+    async def kube_main_node_cpu_regular_labels(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+    ) -> AsyncIterator[None]:
+        assert kube_orchestrator.kube_config.node_label_node_pool
+        labels = {kube_orchestrator.kube_config.node_label_node_pool: "cpu-small"}
+        # driver=docker or driver=none
+        try:
+            node_name = "minikube"
+            await kube_client.get_node(node_name)
+        except NotFoundException:
+            node_name = os.uname()[1]
+
+        await kube_client.add_node_labels(node_name, labels=labels)
+
+        yield
+
+        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
+
+    @pytest.fixture
+    async def kube_main_node_cpu_preemptible_labels(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+    ) -> AsyncIterator[None]:
+        assert kube_orchestrator.kube_config.node_label_node_pool
+        assert kube_orchestrator.kube_config.node_label_preemptible
+
+        labels = {
+            kube_orchestrator.kube_config.node_label_node_pool: "cpu-small-p",
+            kube_orchestrator.kube_config.node_label_preemptible: "true",
+        }
+        # driver=docker or driver=none
+        try:
+            node_name = "minikube"
+            await kube_client.get_node(node_name)
+        except NotFoundException:
+            node_name = os.uname()[1]
+        await kube_client.add_node_labels(node_name, labels=labels)
+
+        yield
+
+        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
+
+    @pytest.fixture
+    async def kube_node_preemptible(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_node_later: Callable[[str], Awaitable[None]],
+        default_node_capacity: dict[str, Any],
+    ) -> AsyncIterator[str]:
+        node_name = str(uuid.uuid4())
+        kube_config = kube_orchestrator.kube_config
+
+        assert kube_config.node_label_node_pool
+        assert kube_config.node_label_preemptible
+        assert kube_config.jobs_pod_preemptible_toleration_key
+
+        await delete_node_later(node_name)
+
+        labels = {
+            kube_config.node_label_preemptible: "true",
+            kube_config.node_label_node_pool: "cpu-small-p",
+        }
+        taints = [
+            NodeTaint(
+                key=kube_config.jobs_pod_preemptible_toleration_key, value="present"
+            )
+        ]
+        await kube_client.create_node(
+            node_name, capacity=default_node_capacity, labels=labels, taints=taints
+        )
+        yield node_name
 
     async def test_non_preemptible_job(
         self,
@@ -2945,6 +3126,8 @@ class TestPreemption:
         kube_client: KubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        kube_main_node_cpu_regular_labels: str,
+        kube_node_preemptible: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -2977,6 +3160,8 @@ class TestPreemption:
         kube_client: KubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        kube_main_node_cpu_regular_labels: str,
+        kube_node_preemptible: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -3016,6 +3201,7 @@ class TestPreemption:
         kube_client: KubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        kube_main_node_cpu_preemptible_labels: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -3055,6 +3241,7 @@ class TestPreemption:
         kube_client: MyKubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        kube_main_node_cpu_regular_labels: str,
         kube_node_preemptible: str,
     ) -> None:
         node_name = kube_node_preemptible
@@ -3092,6 +3279,7 @@ class TestPreemption:
         kube_client: MyKubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        kube_main_node_cpu_regular_labels: str,
         kube_node_preemptible: str,
     ) -> None:
         node_name = kube_node_preemptible
@@ -3138,6 +3326,7 @@ class TestPreemption:
         kube_client: MyKubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        kube_main_node_cpu_regular_labels: str,
         kube_node_preemptible: str,
     ) -> None:
         node_name = kube_node_preemptible
@@ -3732,39 +3921,131 @@ class TestExternalJobs:
 
 
 class TestExternalJobsPreemption:
-    @pytest.fixture(scope="session")
-    async def orchestrator_config(
-        self, orchestrator_config_factory: Callable[..., OrchestratorConfig]
-    ) -> OrchestratorConfig:
-        return orchestrator_config_factory(
-            presets=[
-                Preset(
-                    name="vast-ai",
-                    credits_per_hour=Decimal("0"),
-                    cpu=0.1,
-                    memory=100 * 10**6,
-                    is_external_job=True,
-                ),
-            ]
-        )
-
     @pytest.fixture
-    async def kube_config_node_preemptible(
-        self, kube_config_node_preemptible: KubeConfig
+    async def kube_config(
+        self, kube_config_factory: Callable[..., KubeConfig]
     ) -> KubeConfig:
-        return replace(
-            kube_config_node_preemptible,
+        return kube_config_factory(
+            node_label_node_pool="nodepool",
+            node_label_preemptible="preemptible",
+            jobs_pod_preemptible_toleration_key="preemptible-taint",
             external_job_runner_image="ubuntu:20.10",
             external_job_runner_command=shlex.split("bash -c 'sleep 300'"),
         )
 
     @pytest.fixture
+    async def kube_client(
+        self,
+        kube_config: KubeConfig,
+    ) -> AsyncIterator[KubeClient]:
+        client = MyKubeClient(
+            base_url=kube_config.endpoint_url,
+            auth_type=kube_config.auth_type,
+            cert_authority_data_pem=kube_config.cert_authority_data_pem,
+            cert_authority_path=kube_config.cert_authority_path,
+            auth_cert_path=kube_config.auth_cert_path,
+            auth_cert_key_path=kube_config.auth_cert_key_path,
+            namespace=kube_config.namespace,
+            conn_timeout_s=kube_config.client_conn_timeout_s,
+            read_timeout_s=kube_config.client_read_timeout_s,
+            conn_pool_size=kube_config.client_conn_pool_size,
+        )
+        async with client as cl:
+            yield cl
+
+    @pytest.fixture
     async def kube_orchestrator(
         self,
+        kube_config: KubeConfig,
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
-        kube_config_node_preemptible: KubeConfig,
+        orchestrator_config_factory: Callable[..., OrchestratorConfig],
     ) -> KubeOrchestrator:
-        return kube_orchestrator_factory(kube_config=kube_config_node_preemptible)
+        resources = [
+            ResourcePoolType(
+                name="cpu-small",
+                available_cpu=2,
+                available_memory=2048 * 10**6,
+                is_preemptible=False,
+            ),
+            ResourcePoolType(
+                name="cpu-small-p",
+                available_cpu=2,
+                available_memory=2048 * 10**6,
+                is_preemptible=True,
+            ),
+        ]
+        presets = [
+            Preset(
+                name="vast-ai",
+                credits_per_hour=Decimal("0"),
+                cpu=0.1,
+                memory=100 * 10**6,
+                is_external_job=True,
+            ),
+        ]
+        orchestrator_config = orchestrator_config_factory(
+            resource_pool_types=resources, presets=presets
+        )
+        return kube_orchestrator_factory(
+            kube_config=kube_config,
+            orchestrator_config=orchestrator_config,
+        )
+
+    @pytest.fixture
+    async def kube_main_node_cpu_preemptible_labels(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+    ) -> AsyncIterator[None]:
+        assert kube_orchestrator.kube_config.node_label_node_pool
+        assert kube_orchestrator.kube_config.node_label_preemptible
+
+        labels = {
+            kube_orchestrator.kube_config.node_label_node_pool: "cpu-small-p",
+            kube_orchestrator.kube_config.node_label_preemptible: "true",
+        }
+        # driver=docker or driver=none
+        try:
+            node_name = "minikube"
+            await kube_client.get_node(node_name)
+        except NotFoundException:
+            node_name = os.uname()[1]
+        await kube_client.add_node_labels(node_name, labels=labels)
+
+        yield
+
+        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
+
+    @pytest.fixture
+    async def kube_node_preemptible(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_node_later: Callable[[str], Awaitable[None]],
+        default_node_capacity: dict[str, Any],
+    ) -> AsyncIterator[str]:
+        node_name = str(uuid.uuid4())
+        kube_config = kube_orchestrator.kube_config
+
+        assert kube_config.node_label_node_pool
+        assert kube_config.node_label_preemptible
+        assert kube_config.jobs_pod_preemptible_toleration_key
+
+        await delete_node_later(node_name)
+
+        labels = {
+            kube_config.node_label_preemptible: "true",
+            kube_config.node_label_node_pool: "cpu-small-p",
+        }
+        taints = [
+            NodeTaint(
+                key=kube_config.jobs_pod_preemptible_toleration_key, value="present"
+            )
+        ]
+        await kube_client.create_node(
+            node_name, capacity=default_node_capacity, labels=labels, taints=taints
+        )
+        yield node_name
 
     async def test_job_lost_running_pod(
         self,

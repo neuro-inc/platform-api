@@ -8,39 +8,42 @@ import pytest
 from platform_api.orchestrator.kube_client import (
     KubePreemption,
     KubernetesEvent,
+    LabelSelectorMatchExpression,
+    LabelSelectorTerm,
     Node,
     NodeAffinity,
     NodeCondition,
     NodeConditionType,
     NodePreferredSchedulingTerm,
     NodeResources,
-    NodeSelectorOperator,
-    NodeSelectorRequirement,
-    NodeSelectorTerm,
     NodeStatus,
+    PodAffinity,
+    PodAffinityTerm,
     PodCondition,
     PodConditionType,
     PodDescriptor,
+    PodPreferredSchedulingTerm,
     PodStatus,
     Resources,
+    SelectorOperator,
 )
 
 
-class TestNodeSelectorRequirement:
+class TestLabelSelectorMatchExpression:
     def test_blank_key(self) -> None:
         with pytest.raises(ValueError, match="blank key"):
-            NodeSelectorRequirement("", operator=NodeSelectorOperator.EXISTS)
+            LabelSelectorMatchExpression("", operator=SelectorOperator.EXISTS)
 
     def test_non_empty_values_with_exists(self) -> None:
         with pytest.raises(ValueError, match="values must be empty"):
-            NodeSelectorRequirement(
-                "key", operator=NodeSelectorOperator.EXISTS, values=["value"]
+            LabelSelectorMatchExpression(
+                "key", operator=SelectorOperator.EXISTS, values=["value"]
             )
 
     def test_create_in(self) -> None:
-        req = NodeSelectorRequirement.create_in("testkey", "testvalue")
-        assert req == NodeSelectorRequirement(
-            key="testkey", operator=NodeSelectorOperator.IN, values=["testvalue"]
+        req = LabelSelectorMatchExpression.create_in("testkey", "testvalue")
+        assert req == LabelSelectorMatchExpression(
+            key="testkey", operator=SelectorOperator.IN, values=["testvalue"]
         )
         assert req.to_primitive() == {
             "key": "testkey",
@@ -49,23 +52,23 @@ class TestNodeSelectorRequirement:
         }
 
     def test_create_exists(self) -> None:
-        req = NodeSelectorRequirement.create_exists("testkey")
-        assert req == NodeSelectorRequirement(
-            key="testkey", operator=NodeSelectorOperator.EXISTS
+        req = LabelSelectorMatchExpression.create_exists("testkey")
+        assert req == LabelSelectorMatchExpression(
+            key="testkey", operator=SelectorOperator.EXISTS
         )
         assert req.to_primitive() == {"key": "testkey", "operator": "Exists"}
 
     def test_create_does_not_exist(self) -> None:
-        req = NodeSelectorRequirement.create_does_not_exist("testkey")
-        assert req == NodeSelectorRequirement(
-            key="testkey", operator=NodeSelectorOperator.DOES_NOT_EXIST
+        req = LabelSelectorMatchExpression.create_does_not_exist("testkey")
+        assert req == LabelSelectorMatchExpression(
+            key="testkey", operator=SelectorOperator.DOES_NOT_EXIST
         )
         assert req.to_primitive() == {"key": "testkey", "operator": "DoesNotExist"}
 
     def test_create_gt(self) -> None:
-        req = NodeSelectorRequirement.create_gt("testkey", 1)
-        assert req == NodeSelectorRequirement(
-            key="testkey", operator=NodeSelectorOperator.GT, values=["1"]
+        req = LabelSelectorMatchExpression.create_gt("testkey", 1)
+        assert req == LabelSelectorMatchExpression(
+            key="testkey", operator=SelectorOperator.GT, values=["1"]
         )
         assert req.to_primitive() == {
             "key": "testkey",
@@ -74,9 +77,9 @@ class TestNodeSelectorRequirement:
         }
 
     def test_create_lt(self) -> None:
-        req = NodeSelectorRequirement.create_lt("testkey", 1)
-        assert req == NodeSelectorRequirement(
-            key="testkey", operator=NodeSelectorOperator.LT, values=["1"]
+        req = LabelSelectorMatchExpression.create_lt("testkey", 1)
+        assert req == LabelSelectorMatchExpression(
+            key="testkey", operator=SelectorOperator.LT, values=["1"]
         )
         assert req.to_primitive() == {
             "key": "testkey",
@@ -85,46 +88,46 @@ class TestNodeSelectorRequirement:
         }
 
     def test_in_requirement_is_satisfied(self) -> None:
-        req = NodeSelectorRequirement.create_in("testkey", "testvalue")
+        req = LabelSelectorMatchExpression.create_in("testkey", "testvalue")
 
         assert req.is_satisfied({"testkey": "testvalue"}) is True
         assert req.is_satisfied({"testkey": "testvalue2"}) is False
 
     def test_exists_requirement_is_satisfied(self) -> None:
-        req = NodeSelectorRequirement.create_exists("testkey")
+        req = LabelSelectorMatchExpression.create_exists("testkey")
 
         assert req.is_satisfied({"testkey": "testvalue"}) is True
         assert req.is_satisfied({"testkey2": "testvalue"}) is False
 
     def test_does_not_exist_requirement_is_satisfied(self) -> None:
-        req = NodeSelectorRequirement.create_does_not_exist("testkey2")
+        req = LabelSelectorMatchExpression.create_does_not_exist("testkey2")
 
         assert req.is_satisfied({"testkey": "testvalue"}) is True
         assert req.is_satisfied({"testkey2": "testvalue"}) is False
 
     def test_gt_requirement_is_satisfied(self) -> None:
-        req = NodeSelectorRequirement.create_gt("testkey", 1)
+        req = LabelSelectorMatchExpression.create_gt("testkey", 1)
 
         assert req.is_satisfied({"testkey": "2"}) is True
         assert req.is_satisfied({"testkey2": "1"}) is False
 
     def test_lt_requirement_is_satisfied(self) -> None:
-        req = NodeSelectorRequirement.create_lt("testkey", 1)
+        req = LabelSelectorMatchExpression.create_lt("testkey", 1)
 
         assert req.is_satisfied({"testkey": "0"}) is True
         assert req.is_satisfied({"testkey2": "1"}) is False
 
 
-class TestNodeSelectorTerm:
+class TestLabelSelectorTerm:
     def test_empty(self) -> None:
         with pytest.raises(ValueError, match="no expressions"):
-            NodeSelectorTerm([])
+            LabelSelectorTerm([])
 
     def test_is_satisfied(self) -> None:
-        term = NodeSelectorTerm(
+        term = LabelSelectorTerm(
             [
-                NodeSelectorRequirement.create_exists("job"),
-                NodeSelectorRequirement.create_in("zone", "us-east-1a"),
+                LabelSelectorMatchExpression.create_exists("job"),
+                LabelSelectorMatchExpression.create_in("zone", "us-east-1a"),
             ]
         )
 
@@ -138,11 +141,11 @@ class TestNodeAffinity:
             NodeAffinity()
 
     def test_is_satisfied(self) -> None:
-        term1 = NodeSelectorTerm(
-            [NodeSelectorRequirement.create_in("zone", "us-east-1a")]
+        term1 = LabelSelectorTerm(
+            [LabelSelectorMatchExpression.create_in("zone", "us-east-1a")]
         )
-        term2 = NodeSelectorTerm(
-            [NodeSelectorRequirement.create_in("zone", "us-east-1b")]
+        term2 = LabelSelectorTerm(
+            [LabelSelectorMatchExpression.create_in("zone", "us-east-1b")]
         )
         node_affinity = NodeAffinity(required=[term1, term2])
 
@@ -153,12 +156,18 @@ class TestNodeAffinity:
     def test_to_primitive(self) -> None:
         node_affinity = NodeAffinity(
             required=[
-                NodeSelectorTerm([NodeSelectorRequirement.create_exists("testkey")])
+                LabelSelectorTerm(
+                    [LabelSelectorMatchExpression.create_exists("testkey")]
+                )
             ],
             preferred=[
                 NodePreferredSchedulingTerm(
-                    NodeSelectorTerm(
-                        [NodeSelectorRequirement.create_does_not_exist("anotherkey")]
+                    LabelSelectorTerm(
+                        [
+                            LabelSelectorMatchExpression.create_does_not_exist(
+                                "anotherkey"
+                            )
+                        ]
                     )
                 )
             ],
@@ -180,6 +189,43 @@ class TestNodeAffinity:
                 }
             ],
         }
+
+
+class TestPodAffinity:
+    def test_to_privimive(self) -> None:
+        pod_affinity = PodAffinity(
+            preferred=[
+                PodPreferredSchedulingTerm(
+                    PodAffinityTerm(
+                        LabelSelectorTerm(
+                            [
+                                LabelSelectorMatchExpression.create_exists("mylabel"),
+                            ]
+                        )
+                    )
+                )
+            ]
+        )
+
+        assert pod_affinity.to_primitive() == {
+            "preferredDuringSchedulingIgnoredDuringExecution": [
+                {
+                    "podAffinityTerm": {
+                        "labelSelector": {
+                            "matchExpressions": [
+                                {"key": "mylabel", "operator": "Exists"}
+                            ],
+                        },
+                        "topologyKey": "kubernetes.io/hostname",
+                    },
+                    "weight": 100,
+                }
+            ]
+        }
+
+    def test_to_privimive_empty(self) -> None:
+        pod_affinity = PodAffinity()
+        assert pod_affinity.to_primitive() == {}
 
 
 class TestPodStatus:

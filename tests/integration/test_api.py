@@ -5721,9 +5721,9 @@ class TestBillingEnforcer:
         user_to_charge: dict[str, Decimal] = defaultdict(Decimal)
         for cluster_user in await admin_client.list_cluster_users(cluster_name):
             if cluster_user.org_name == "org":
-                user_to_charge[
-                    cluster_user.user_name
-                ] = cluster_user.balance.spent_credits
+                user_to_charge[cluster_user.user_name] = (
+                    cluster_user.balance.spent_credits
+                )
 
         per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
         second = Decimal("1") / 3600

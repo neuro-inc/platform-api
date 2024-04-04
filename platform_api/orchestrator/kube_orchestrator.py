@@ -32,15 +32,18 @@ from .kube_client import (
     HostVolume,
     IngressRule,
     KubeClient,
+    LabelSelectorMatchExpression,
+    LabelSelectorTerm,
     NfsVolume,
     NodeAffinity,
     NodePreferredSchedulingTerm,
-    NodeSelectorRequirement,
-    NodeSelectorTerm,
     NodeWatcher,
     NotFoundException,
     PathVolume,
+    PodAffinity,
+    PodAffinityTerm,
     PodDescriptor,
+    PodPreferredSchedulingTerm,
     PodRestartPolicy,
     PodStatus,
     PodWatcher,
@@ -61,6 +64,9 @@ from .kube_orchestrator_scheduler import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+JOB_LABEL_KEY = "platform.neuromation.io/job"
 
 
 class JobStatusItemFactory:
@@ -368,6 +374,7 @@ class KubeOrchestrator(Orchestrator):
             job, pool_types, tolerate_unreachable_node=tolerate_unreachable_node
         )
         node_affinity = self._get_pod_node_affinity(pool_types)
+        pod_affinity = self._get_job_pod_pod_affinity()
         labels = self._get_pod_labels(job)
         # NOTE: both node selector and affinity must be satisfied for the pod
         # to be scheduled onto a node.
@@ -407,6 +414,7 @@ class KubeOrchestrator(Orchestrator):
             image_pull_secret_names=pull_secrets,
             tolerations=tolerations,
             node_affinity=node_affinity,
+            pod_affinity=pod_affinity,
             labels=labels,
             priority_class_name=self._kube_config.jobs_pod_priority_class_name,
             restart_policy=self._get_pod_restart_policy(job),
@@ -514,7 +522,7 @@ class KubeOrchestrator(Orchestrator):
         return {"platform.neuromation.io/project": job.project_name}
 
     def _get_job_labels(self, job: Job) -> dict[str, str]:
-        return {"platform.neuromation.io/job": job.id}
+        return {JOB_LABEL_KEY: job.id}
 
     def _get_preset_labels(self, job: Job) -> dict[str, str]:
         if not job.preset_name:
@@ -672,18 +680,18 @@ class KubeOrchestrator(Orchestrator):
     ) -> Optional[NodeAffinity]:
         # NOTE:
         # The pod is scheduled onto a node only if at least one of
-        # `NodeSelectorTerm`s is satisfied.
-        # `NodeSelectorTerm` is satisfied only if its `match_expressions` are
+        # `LabelSelectorTerm`s is satisfied.
+        # `LabelSelectorTerm` is satisfied only if its `match_expressions` are
         # satisfied.
-        required_terms: list[NodeSelectorTerm] = []
+        required_terms: list[LabelSelectorTerm] = []
         preferred_terms: list[NodePreferredSchedulingTerm] = []
 
         if self._kube_config.node_label_node_pool:
             for pool_type in pool_types:
                 required_terms.append(
-                    NodeSelectorTerm(
+                    LabelSelectorTerm(
                         [
-                            NodeSelectorRequirement.create_in(
+                            LabelSelectorMatchExpression.create_in(
                                 self._kube_config.node_label_node_pool, pool_type.name
                             )
                         ]
@@ -692,6 +700,23 @@ class KubeOrchestrator(Orchestrator):
         if not required_terms:
             return None
         return NodeAffinity(required=required_terms, preferred=preferred_terms)
+
+    def _get_job_pod_pod_affinity(self) -> PodAffinity:
+        return PodAffinity(
+            preferred=[
+                PodPreferredSchedulingTerm(
+                    PodAffinityTerm(
+                        LabelSelectorTerm(
+                            [
+                                LabelSelectorMatchExpression.create_exists(
+                                    JOB_LABEL_KEY
+                                ),
+                            ]
+                        )
+                    )
+                )
+            ]
+        )
 
     def _get_job_pod_name(self, job: Job) -> str:
         # TODO (A Danshyn 11/15/18): we will need to start storing jobs'
@@ -977,7 +1002,7 @@ class KubeOrchestrator(Orchestrator):
             logger.warning(f"Failed to remove ingress {name}: {e}")
 
     async def delete_all_job_resources(self, job_id: str) -> None:
-        labels = {"platform.neuromation.io/job": job_id}
+        labels = {JOB_LABEL_KEY: job_id}
         await self._client.delete_all_pods(labels=labels)
         await self._client.delete_all_ingresses(labels=labels)
         await self._client.delete_all_services(labels=labels)

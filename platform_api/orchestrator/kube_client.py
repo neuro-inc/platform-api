@@ -733,7 +733,7 @@ class Toleration:
         }
 
 
-class NodeSelectorOperator(str, Enum):
+class SelectorOperator(str, Enum):
     DOES_NOT_EXIST = "DoesNotExist"
     EXISTS = "Exists"
     IN = "In"
@@ -763,9 +763,9 @@ class NodeSelectorOperator(str, Enum):
 
 
 @dataclass(frozen=True)
-class NodeSelectorRequirement:
+class LabelSelectorMatchExpression:
     key: str
-    operator: NodeSelectorOperator
+    operator: SelectorOperator
     values: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -775,24 +775,24 @@ class NodeSelectorRequirement:
             raise ValueError("values must be empty")
 
     @classmethod
-    def create_in(cls, key: str, *values: str) -> "NodeSelectorRequirement":
-        return cls(key=key, operator=NodeSelectorOperator.IN, values=[*values])
+    def create_in(cls, key: str, *values: str) -> "LabelSelectorMatchExpression":
+        return cls(key=key, operator=SelectorOperator.IN, values=[*values])
 
     @classmethod
-    def create_exists(cls, key: str) -> "NodeSelectorRequirement":
-        return cls(key=key, operator=NodeSelectorOperator.EXISTS)
+    def create_exists(cls, key: str) -> "LabelSelectorMatchExpression":
+        return cls(key=key, operator=SelectorOperator.EXISTS)
 
     @classmethod
-    def create_does_not_exist(cls, key: str) -> "NodeSelectorRequirement":
-        return cls(key=key, operator=NodeSelectorOperator.DOES_NOT_EXIST)
+    def create_does_not_exist(cls, key: str) -> "LabelSelectorMatchExpression":
+        return cls(key=key, operator=SelectorOperator.DOES_NOT_EXIST)
 
     @classmethod
-    def create_gt(cls, key: str, value: int) -> "NodeSelectorRequirement":
-        return cls(key=key, operator=NodeSelectorOperator.GT, values=[str(value)])
+    def create_gt(cls, key: str, value: int) -> "LabelSelectorMatchExpression":
+        return cls(key=key, operator=SelectorOperator.GT, values=[str(value)])
 
     @classmethod
-    def create_lt(cls, key: str, value: int) -> "NodeSelectorRequirement":
-        return cls(key=key, operator=NodeSelectorOperator.LT, values=[str(value)])
+    def create_lt(cls, key: str, value: int) -> "LabelSelectorMatchExpression":
+        return cls(key=key, operator=SelectorOperator.LT, values=[str(value)])
 
     def is_satisfied(self, node_labels: dict[str, str]) -> bool:
         label_value = node_labels.get(self.key)
@@ -806,8 +806,8 @@ class NodeSelectorRequirement:
 
 
 @dataclass(frozen=True)
-class NodeSelectorTerm:
-    match_expressions: list[NodeSelectorRequirement]
+class LabelSelectorTerm:
+    match_expressions: list[LabelSelectorMatchExpression]
 
     def __post_init__(self) -> None:
         if not self.match_expressions:
@@ -824,7 +824,7 @@ class NodeSelectorTerm:
 
 @dataclass(frozen=True)
 class NodePreferredSchedulingTerm:
-    preference: NodeSelectorTerm
+    preference: LabelSelectorTerm
     weight: int = 100
 
     def to_primitive(self) -> dict[str, Any]:
@@ -833,7 +833,7 @@ class NodePreferredSchedulingTerm:
 
 @dataclass(frozen=True)
 class NodeAffinity:
-    required: list[NodeSelectorTerm] = field(default_factory=list)
+    required: list[LabelSelectorTerm] = field(default_factory=list)
     preferred: list[NodePreferredSchedulingTerm] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -849,6 +849,50 @@ class NodeAffinity:
             payload["requiredDuringSchedulingIgnoredDuringExecution"] = {
                 "nodeSelectorTerms": [term.to_primitive() for term in self.required]
             }
+        if self.preferred:
+            payload["preferredDuringSchedulingIgnoredDuringExecution"] = [
+                term.to_primitive() for term in self.preferred
+            ]
+        return payload
+
+
+@dataclass(frozen=True)
+class PodAffinityTerm:
+    label_selector: LabelSelectorTerm
+    topologyKey: str = "kubernetes.io/hostname"
+    namespaces: list[str] = field(default_factory=list)
+
+    def is_satisfied(self, pod_labels: dict[str, str]) -> bool:
+        return self.label_selector.is_satisfied(pod_labels)
+
+    def to_primitive(self) -> dict[str, Any]:
+        result = {
+            "labelSelector": self.label_selector.to_primitive(),
+            "topologyKey": self.topologyKey,
+        }
+        if self.namespaces:
+            result["namespaces"] = self.namespaces.copy()
+        return result
+
+
+@dataclass(frozen=True)
+class PodPreferredSchedulingTerm:
+    pod_affinity_term: PodAffinityTerm
+    weight: int = 100
+
+    def to_primitive(self) -> dict[str, Any]:
+        return {
+            "podAffinityTerm": self.pod_affinity_term.to_primitive(),
+            "weight": self.weight,
+        }
+
+
+@dataclass(frozen=True)
+class PodAffinity:
+    preferred: list[PodPreferredSchedulingTerm] = field(default_factory=list)
+
+    def to_primitive(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
         if self.preferred:
             payload["preferredDuringSchedulingIgnoredDuringExecution"] = [
                 term.to_primitive() for term in self.preferred
@@ -885,6 +929,7 @@ class PodDescriptor:
     node_selector: dict[str, str] = field(default_factory=dict)
     tolerations: list[Toleration] = field(default_factory=list)
     node_affinity: Optional[NodeAffinity] = None
+    pod_affinity: Optional[PodAffinity] = None
     labels: dict[str, str] = field(default_factory=dict)
     annotations: dict[str, str] = field(default_factory=dict)
 
@@ -995,6 +1040,7 @@ class PodDescriptor:
         node_selector: Optional[dict[str, str]] = None,
         tolerations: Optional[list[Toleration]] = None,
         node_affinity: Optional[NodeAffinity] = None,
+        pod_affinity: Optional[PodAffinity] = None,
         labels: Optional[dict[str, str]] = None,
         priority_class_name: Optional[str] = None,
         restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER,
@@ -1043,9 +1089,9 @@ class PodDescriptor:
 
         annotations: dict[str, str] = {}
         if container.resources.tpu:
-            annotations[
-                cls.tpu_version_annotation_key
-            ] = container.resources.tpu.software_version
+            annotations[cls.tpu_version_annotation_key] = (
+                container.resources.tpu.software_version
+            )
 
         env = container.env.copy()
         if meta_env:
@@ -1069,6 +1115,7 @@ class PodDescriptor:
             node_selector=node_selector or {},
             tolerations=tolerations or [],
             node_affinity=node_affinity,
+            pod_affinity=pod_affinity,
             labels=labels or {},
             annotations=annotations,
             priority_class_name=priority_class_name,
@@ -1084,10 +1131,10 @@ class PodDescriptor:
         affinities: list[NodeAffinity] = []
         if self.node_selector:
             requirements = [
-                NodeSelectorRequirement.create_in(k, v)
+                LabelSelectorMatchExpression.create_in(k, v)
                 for k, v in self.node_selector.items()
             ]
-            affinities.append(NodeAffinity(required=[NodeSelectorTerm(requirements)]))
+            affinities.append(NodeAffinity(required=[LabelSelectorTerm(requirements)]))
         if self.node_affinity:
             affinities.append(self.node_affinity)
         return all(a.is_satisfied(node_labels) for a in affinities)
@@ -1151,10 +1198,16 @@ class PodDescriptor:
             payload["metadata"]["annotations"] = self.annotations.copy()
         if self.node_selector:
             payload["spec"]["nodeSelector"] = self.node_selector.copy()
+        if self.node_affinity or self.pod_affinity:
+            payload["spec"]["affinity"] = {}
         if self.node_affinity:
-            payload["spec"]["affinity"] = {
-                "nodeAffinity": self.node_affinity.to_primitive()
-            }
+            payload["spec"]["affinity"][
+                "nodeAffinity"
+            ] = self.node_affinity.to_primitive()
+        if self.pod_affinity:
+            payload["spec"]["affinity"][
+                "podAffinity"
+            ] = self.pod_affinity.to_primitive()
         if self.priority_class_name:
             payload["spec"]["priorityClassName"] = self.priority_class_name
         return payload
