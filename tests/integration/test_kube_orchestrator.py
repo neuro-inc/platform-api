@@ -3992,27 +3992,6 @@ class TestExternalJobsPreemption:
         )
 
     @pytest.fixture
-    async def kube_main_node_cpu_regular_labels(
-        self,
-        kube_client: MyKubeClient,
-        kube_orchestrator: KubeOrchestrator,
-    ) -> AsyncIterator[None]:
-        assert kube_orchestrator.kube_config.node_label_node_pool
-        labels = {kube_orchestrator.kube_config.node_label_node_pool: "cpu-small"}
-        # driver=docker or driver=none
-        try:
-            node_name = "minikube"
-            await kube_client.get_node(node_name)
-        except NotFoundException:
-            node_name = os.uname()[1]
-
-        await kube_client.add_node_labels(node_name, labels=labels)
-
-        yield
-
-        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
-
-    @pytest.fixture
     async def kube_main_node_cpu_preemptible_labels(
         self,
         kube_client: MyKubeClient,
