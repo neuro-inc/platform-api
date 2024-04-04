@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import os
 import shlex
 import time
 import uuid
@@ -3043,21 +3044,28 @@ class TestPreemption:
         )
 
     @pytest.fixture
-    async def kube_minikube_cpu_regular_labels(
+    async def kube_main_node_cpu_regular_labels(
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
     ) -> AsyncIterator[None]:
         assert kube_orchestrator.kube_config.node_label_node_pool
         labels = {kube_orchestrator.kube_config.node_label_node_pool: "cpu-small"}
-        await kube_client.add_node_labels("minikube", labels=labels)
+        # driver=docker or driver=none
+        try:
+            node_name = "minikube"
+            await kube_client.get_node(node_name)
+        except NotFoundException:
+            node_name = os.uname()[1]
+
+        await kube_client.add_node_labels(node_name, labels=labels)
 
         yield
 
-        await kube_client.remove_node_labels("minikube", label_keys=list(labels.keys()))
+        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
 
     @pytest.fixture
-    async def kube_minikube_cpu_preemptible_labels(
+    async def kube_main_node_cpu_preemptible_labels(
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
@@ -3069,11 +3077,17 @@ class TestPreemption:
             kube_orchestrator.kube_config.node_label_node_pool: "cpu-small-p",
             kube_orchestrator.kube_config.node_label_preemptible: "true",
         }
-        await kube_client.add_node_labels("minikube", labels=labels)
+        # driver=docker or driver=none
+        try:
+            node_name = "minikube"
+            await kube_client.get_node(node_name)
+        except NotFoundException:
+            node_name = os.uname()[1]
+        await kube_client.add_node_labels(node_name, labels=labels)
 
         yield
 
-        await kube_client.remove_node_labels("minikube", label_keys=list(labels.keys()))
+        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
 
     @pytest.fixture
     async def kube_node_preemptible(
@@ -3112,7 +3126,7 @@ class TestPreemption:
         kube_client: KubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
-        kube_minikube_cpu_regular_labels: str,
+        kube_main_node_cpu_regular_labels: str,
         kube_node_preemptible: str,
     ) -> None:
         container = Container(
@@ -3146,7 +3160,7 @@ class TestPreemption:
         kube_client: KubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
-        kube_minikube_cpu_regular_labels: str,
+        kube_main_node_cpu_regular_labels: str,
         kube_node_preemptible: str,
     ) -> None:
         container = Container(
@@ -3187,7 +3201,7 @@ class TestPreemption:
         kube_client: KubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
-        kube_minikube_cpu_preemptible_labels: str,
+        kube_main_node_cpu_preemptible_labels: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -3227,7 +3241,7 @@ class TestPreemption:
         kube_client: MyKubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
-        kube_minikube_cpu_regular_labels: str,
+        kube_main_node_cpu_regular_labels: str,
         kube_node_preemptible: str,
     ) -> None:
         node_name = kube_node_preemptible
@@ -3265,7 +3279,7 @@ class TestPreemption:
         kube_client: MyKubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
-        kube_minikube_cpu_regular_labels: str,
+        kube_main_node_cpu_regular_labels: str,
         kube_node_preemptible: str,
     ) -> None:
         node_name = kube_node_preemptible
@@ -3312,7 +3326,7 @@ class TestPreemption:
         kube_client: MyKubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
-        kube_minikube_cpu_regular_labels: str,
+        kube_main_node_cpu_regular_labels: str,
         kube_node_preemptible: str,
     ) -> None:
         node_name = kube_node_preemptible
