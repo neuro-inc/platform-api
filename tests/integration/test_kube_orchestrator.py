@@ -3921,39 +3921,152 @@ class TestExternalJobs:
 
 
 class TestExternalJobsPreemption:
-    @pytest.fixture(scope="session")
-    async def orchestrator_config(
-        self, orchestrator_config_factory: Callable[..., OrchestratorConfig]
-    ) -> OrchestratorConfig:
-        return orchestrator_config_factory(
-            presets=[
-                Preset(
-                    name="vast-ai",
-                    credits_per_hour=Decimal("0"),
-                    cpu=0.1,
-                    memory=100 * 10**6,
-                    is_external_job=True,
-                ),
-            ]
-        )
-
     @pytest.fixture
-    async def kube_config_node_preemptible(
-        self, kube_config_node_preemptible: KubeConfig
+    async def kube_config(
+        self, kube_config_factory: Callable[..., KubeConfig]
     ) -> KubeConfig:
-        return replace(
-            kube_config_node_preemptible,
+        return kube_config_factory(
+            node_label_node_pool="nodepool",
+            node_label_preemptible="preemptible",
+            jobs_pod_preemptible_toleration_key="preemptible-taint",
             external_job_runner_image="ubuntu:20.10",
             external_job_runner_command=shlex.split("bash -c 'sleep 300'"),
         )
 
     @pytest.fixture
+    async def kube_client(
+        self,
+        kube_config: KubeConfig,
+    ) -> AsyncIterator[KubeClient]:
+        client = MyKubeClient(
+            base_url=kube_config.endpoint_url,
+            auth_type=kube_config.auth_type,
+            cert_authority_data_pem=kube_config.cert_authority_data_pem,
+            cert_authority_path=kube_config.cert_authority_path,
+            auth_cert_path=kube_config.auth_cert_path,
+            auth_cert_key_path=kube_config.auth_cert_key_path,
+            namespace=kube_config.namespace,
+            conn_timeout_s=kube_config.client_conn_timeout_s,
+            read_timeout_s=kube_config.client_read_timeout_s,
+            conn_pool_size=kube_config.client_conn_pool_size,
+        )
+        async with client as cl:
+            yield cl
+
+    @pytest.fixture
     async def kube_orchestrator(
         self,
+        kube_config: KubeConfig,
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
-        kube_config_node_preemptible: KubeConfig,
+        orchestrator_config_factory: Callable[..., OrchestratorConfig],
     ) -> KubeOrchestrator:
-        return kube_orchestrator_factory(kube_config=kube_config_node_preemptible)
+        resources = [
+            ResourcePoolType(
+                name="cpu-small",
+                available_cpu=2,
+                available_memory=2048 * 10**6,
+                is_preemptible=False,
+            ),
+            ResourcePoolType(
+                name="cpu-small-p",
+                available_cpu=2,
+                available_memory=2048 * 10**6,
+                is_preemptible=True,
+            ),
+        ]
+        presets = [
+            Preset(
+                name="vast-ai",
+                credits_per_hour=Decimal("0"),
+                cpu=0.1,
+                memory=100 * 10**6,
+                is_external_job=True,
+            ),
+        ]
+        orchestrator_config = orchestrator_config_factory(
+            resource_pool_types=resources, presets=presets
+        )
+        return kube_orchestrator_factory(
+            kube_config=kube_config,
+            orchestrator_config=orchestrator_config,
+        )
+
+    @pytest.fixture
+    async def kube_main_node_cpu_regular_labels(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+    ) -> AsyncIterator[None]:
+        assert kube_orchestrator.kube_config.node_label_node_pool
+        labels = {kube_orchestrator.kube_config.node_label_node_pool: "cpu-small"}
+        # driver=docker or driver=none
+        try:
+            node_name = "minikube"
+            await kube_client.get_node(node_name)
+        except NotFoundException:
+            node_name = os.uname()[1]
+
+        await kube_client.add_node_labels(node_name, labels=labels)
+
+        yield
+
+        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
+
+    @pytest.fixture
+    async def kube_main_node_cpu_preemptible_labels(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+    ) -> AsyncIterator[None]:
+        assert kube_orchestrator.kube_config.node_label_node_pool
+        assert kube_orchestrator.kube_config.node_label_preemptible
+
+        labels = {
+            kube_orchestrator.kube_config.node_label_node_pool: "cpu-small-p",
+            kube_orchestrator.kube_config.node_label_preemptible: "true",
+        }
+        # driver=docker or driver=none
+        try:
+            node_name = "minikube"
+            await kube_client.get_node(node_name)
+        except NotFoundException:
+            node_name = os.uname()[1]
+        await kube_client.add_node_labels(node_name, labels=labels)
+
+        yield
+
+        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
+
+    @pytest.fixture
+    async def kube_node_preemptible(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        delete_node_later: Callable[[str], Awaitable[None]],
+        default_node_capacity: dict[str, Any],
+    ) -> AsyncIterator[str]:
+        node_name = str(uuid.uuid4())
+        kube_config = kube_orchestrator.kube_config
+
+        assert kube_config.node_label_node_pool
+        assert kube_config.node_label_preemptible
+        assert kube_config.jobs_pod_preemptible_toleration_key
+
+        await delete_node_later(node_name)
+
+        labels = {
+            kube_config.node_label_preemptible: "true",
+            kube_config.node_label_node_pool: "cpu-small-p",
+        }
+        taints = [
+            NodeTaint(
+                key=kube_config.jobs_pod_preemptible_toleration_key, value="present"
+            )
+        ]
+        await kube_client.create_node(
+            node_name, capacity=default_node_capacity, labels=labels, taints=taints
+        )
+        yield node_name
 
     async def test_job_lost_running_pod(
         self,
