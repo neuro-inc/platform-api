@@ -1125,7 +1125,7 @@ class PodDescriptor:
 
     @property
     def env_list(self) -> list[dict[str, str]]:
-        return [dict(name=name, value=value) for name, value in self.env.items()]
+        return [{"name": name, "value": value} for name, value in self.env.items()]
 
     def can_be_scheduled(self, node_labels: dict[str, str]) -> bool:
         affinities: list[NodeAffinity] = []

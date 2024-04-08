@@ -72,7 +72,6 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeOrchestrator,
 )
 from platform_api.resource import GKEGPUModels, Preset, ResourcePoolType, TPUResource
-
 from tests.conftest import random_str
 from tests.integration.conftest import (
     ApiAddress,
