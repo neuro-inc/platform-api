@@ -34,7 +34,6 @@ from platform_api.cluster import ClusterConfigRegistry
 from platform_api.cluster_config import ClusterConfig
 from platform_api.config import Config
 from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
-
 from tests.conftest import random_str
 from tests.integration.api import ApiConfig, AuthApiConfig, JobsClient
 from tests.integration.auth import AuthClient, ServiceAccountFactory, UserFactory, _User

@@ -17,7 +17,6 @@ from neuro_logging import make_request_logging_trace_config
 from yarl import URL
 
 from platform_api.config import AuthConfig
-
 from tests.integration.conftest import ApiRunner, _TestConfigClient
 from tests.integration.notifications import NotificationsServer
 

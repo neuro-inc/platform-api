@@ -153,10 +153,10 @@ def registry_config(token_factory: Callable[[str], str]) -> RegistryConfig:
 @pytest.fixture(scope="session")
 def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]:
     def _f(**kwargs: Any) -> OrchestratorConfig:
-        defaults = dict(
-            jobs_domain_name_template="{job_id}.jobs.neu.ro",
-            jobs_internal_domain_name_template="{job_id}.platformapi-tests",
-            resource_pool_types=[
+        defaults = {
+            "jobs_domain_name_template": "{job_id}.jobs.neu.ro",
+            "jobs_internal_domain_name_template": "{job_id}.platformapi-tests",
+            "resource_pool_types": [
                 ResourcePoolType(
                     cpu=1.0,
                     available_cpu=1.0,
@@ -196,7 +196,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     gpu_model="gpumodel",
                 ),
             ],
-            presets=[
+            "presets": [
                 Preset(
                     name="gpu-small",
                     credits_per_hour=Decimal("10"),
@@ -249,10 +249,10 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),
                 ),
             ],
-            job_schedule_scaleup_timeout=5,
-            allow_privileged_mode=True,
-            allow_job_priority=True,
-        )
+            "job_schedule_scaleup_timeout": 5,
+            "allow_privileged_mode": True,
+            "allow_job_priority": True,
+        }
         kwargs = {**defaults, **kwargs}
         return OrchestratorConfig(**kwargs)
 
@@ -276,17 +276,17 @@ def kube_config_factory(
     user = kube_config_user_payload
 
     def _f(**kwargs: Any) -> KubeConfig:
-        defaults = dict(
-            jobs_ingress_class="nginx",
-            endpoint_url=cluster["server"],
-            auth_type=KubeClientAuthType.CERTIFICATE,
-            cert_authority_data_pem=cert_authority_data_pem,
-            cert_authority_path=None,  # disable, only `cert_authority_data_pem` works
-            auth_cert_path=user["client-certificate"],
-            auth_cert_key_path=user["client-key"],
-            node_label_gpu="gpu",
-            namespace="platformapi-tests",
-        )
+        defaults = {
+            "jobs_ingress_class": "nginx",
+            "endpoint_url": cluster["server"],
+            "auth_type": KubeClientAuthType.CERTIFICATE,
+            "cert_authority_data_pem": cert_authority_data_pem,
+            "cert_authority_path": None,  # disable, only `cert_authority_data_pem` works
+            "auth_cert_path": user["client-certificate"],
+            "auth_cert_key_path": user["client-key"],
+            "node_label_gpu": "gpu",
+            "namespace": "platformapi-tests",
+        }
         kwargs = {**defaults, **kwargs}
         return KubeConfig(**kwargs)
 
@@ -642,14 +642,14 @@ async def kube_orchestrator_factory(
     kube_client: KubeClient,
 ) -> Callable[..., KubeOrchestrator]:
     def _f(**kwargs: Any) -> KubeOrchestrator:
-        defaults = dict(
-            cluster_name="default",
-            storage_configs=[storage_config_host],
-            registry_config=registry_config,
-            orchestrator_config=orchestrator_config,
-            kube_config=kube_config,
-            kube_client=kube_client,
-        )
+        defaults = {
+            "cluster_name": "default",
+            "storage_configs": [storage_config_host],
+            "registry_config": registry_config,
+            "orchestrator_config": orchestrator_config,
+            "kube_config": kube_config,
+            "kube_client": kube_client,
+        }
         kwargs = {**defaults, **kwargs}
         return KubeOrchestrator(**kwargs)
 
