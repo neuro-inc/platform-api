@@ -281,7 +281,8 @@ def kube_config_factory(
             "endpoint_url": cluster["server"],
             "auth_type": KubeClientAuthType.CERTIFICATE,
             "cert_authority_data_pem": cert_authority_data_pem,
-            "cert_authority_path": None,  # disable, only `cert_authority_data_pem` works
+            # disable, only `cert_authority_data_pem` works
+            "cert_authority_path": None,
             "auth_cert_path": user["client-certificate"],
             "auth_cert_key_path": user["client-key"],
             "node_label_gpu": "gpu",

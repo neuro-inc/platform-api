@@ -350,9 +350,19 @@ class TestKubeClient:
         name = str(uuid.uuid4())
         await delete_network_policy_later(name)
         payload = await kube_client.create_default_network_policy(
-            name, {"testlabel": name}, namespace_name=kube_config.namespace
+            name,
+            pod_labels={"testlabel": name},
+            org_project_labels={"testlabel": name},
+            namespace_name=kube_config.namespace,
         )
+
         assert payload["metadata"]["name"] == name
+        assert len(payload["spec"]["egress"]) == 3
+        egress_via_labels = payload["spec"]["egress"][2]["to"]
+        egress_pod_selectors = egress_via_labels[0]["podSelector"]
+        egress_ns_selectors = egress_via_labels[1]["namespaceSelector"]
+        assert egress_pod_selectors == {"matchLabels": {"testlabel": name}}
+        assert egress_ns_selectors == {"matchLabels": {"testlabel": name}}
 
     async def test_create_default_network_policy_twice(
         self,
@@ -363,12 +373,18 @@ class TestKubeClient:
         name = str(uuid.uuid4())
         await delete_network_policy_later(name)
         payload = await kube_client.create_default_network_policy(
-            name, {"testlabel": name}, namespace_name=kube_config.namespace
+            name,
+            pod_labels={"testlabel": name},
+            org_project_labels={"testlabel": name},
+            namespace_name=kube_config.namespace,
         )
         assert payload["metadata"]["name"] == name
         with pytest.raises(AlreadyExistsException):
             await kube_client.create_default_network_policy(
-                name, {"testlabel": name}, namespace_name=kube_config.namespace
+                name,
+                {"testlabel": name},
+                {"testlabel": name},
+                namespace_name=kube_config.namespace,
             )
 
     async def test_get_network_policy_not_found(self, kube_client: KubeClient) -> None:
