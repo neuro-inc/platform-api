@@ -357,7 +357,7 @@ class TestKubeClient:
         )
 
         assert payload["metadata"]["name"] == name
-        assert len(payload["spect"]["egress"]) == 3
+        assert len(payload["spec"]["egress"]) == 3
         egress_via_labels = payload["spec"]["egress"][2]["to"]
         egress_pod_selectors = egress_via_labels[0]["podSelector"]
         egress_ns_selectors = egress_via_labels[1]["namespaceSelector"]
