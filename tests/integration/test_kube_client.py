@@ -375,7 +375,10 @@ class TestKubeClient:
         assert payload["metadata"]["name"] == name
         with pytest.raises(AlreadyExistsException):
             await kube_client.create_default_network_policy(
-                name, {"testlabel": name}, namespace_name=kube_config.namespace
+                name,
+                {"testlabel": name},
+                {"testlabel": name},
+                namespace_name=kube_config.namespace,
             )
 
     async def test_get_network_policy_not_found(self, kube_client: KubeClient) -> None:
