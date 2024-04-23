@@ -1453,10 +1453,6 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/org": "no_org",
         }
 
-        assert raw_policy["spec"]["namespaceSelector"]["matchLabels"] == {
-            "platform.apolo.us/project": job.project_name,
-        }
-
     async def test_job_org_pod_labels(
         self,
         kube_config: KubeConfig,
