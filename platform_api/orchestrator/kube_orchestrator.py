@@ -67,6 +67,8 @@ logger = logging.getLogger(__name__)
 
 
 JOB_LABEL_KEY = "platform.neuromation.io/job"
+PROJECT_LABEL_KEY = "platform.apolo.us/project"
+ORG_LABEL_KEY = "platform.apolo.us/org"
 
 
 class JobStatusItemFactory:
@@ -300,9 +302,13 @@ class KubeOrchestrator(Orchestrator):
     async def _create_user_network_policy(self, job: Job) -> None:
         name = self._get_user_resource_name(job)
         pod_labels = self._get_user_pod_labels(job)
+        org_project_labels = self._get_org_project_labels(job)
         try:
             await self._client.create_default_network_policy(
-                name, pod_labels, namespace_name=self._kube_config.namespace
+                name,
+                pod_labels=pod_labels,
+                org_project_labels=org_project_labels,
+                namespace_name=self._kube_config.namespace,
             )
             logger.info(f"Created default network policy for user '{job.owner}'")
         except AlreadyExistsException:
@@ -314,12 +320,16 @@ class KubeOrchestrator(Orchestrator):
         name = self._get_project_resource_name(job)
         pod_labels = self._get_project_pod_labels(job)
         pod_labels.update(self._get_org_pod_labels(job))
+        org_project_labels = self._get_org_project_labels(job)
 
         project = job.project_name
         org = job.org_name or "no_org"
         try:
             await self._client.create_default_network_policy(
-                name, pod_labels, namespace_name=self.kube_config.namespace
+                name,
+                pod_labels=pod_labels,
+                org_project_labels=org_project_labels,
+                namespace_name=self.kube_config.namespace,
             )
             logger.info(f"Created defautl network policy for {org=} {project=}")
         except AlreadyExistsException:
@@ -512,6 +522,14 @@ class KubeOrchestrator(Orchestrator):
 
     def _get_user_pod_labels(self, job: Job) -> dict[str, str]:
         return {"platform.neuromation.io/user": job.owner.replace("/", "--")}
+
+    def _get_org_project_labels(self, job: Job) -> dict[str, str]:
+        labels = {
+            PROJECT_LABEL_KEY: job.project_name,
+        }
+        if job.org_name:
+            labels[ORG_LABEL_KEY] = job.org_name
+        return labels
 
     def _get_org_pod_labels(self, job: Job) -> dict[str, str]:
         # Org label must always be set. Prometheus doesn't return empty labels

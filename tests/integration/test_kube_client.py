@@ -350,8 +350,12 @@ class TestKubeClient:
         name = str(uuid.uuid4())
         await delete_network_policy_later(name)
         payload = await kube_client.create_default_network_policy(
-            name, {"testlabel": name}, namespace_name=kube_config.namespace
+            name,
+            pod_labels={"testlabel": name},
+            org_project_labels={"testlabel": name},
+            namespace_name=kube_config.namespace,
         )
+
         assert payload["metadata"]["name"] == name
 
     async def test_create_default_network_policy_twice(
@@ -363,7 +367,10 @@ class TestKubeClient:
         name = str(uuid.uuid4())
         await delete_network_policy_later(name)
         payload = await kube_client.create_default_network_policy(
-            name, {"testlabel": name}, namespace_name=kube_config.namespace
+            name,
+            pod_labels={"testlabel": name},
+            org_project_labels={"testlabel": name},
+            namespace_name=kube_config.namespace,
         )
         assert payload["metadata"]["name"] == name
         with pytest.raises(AlreadyExistsException):

@@ -2413,6 +2413,7 @@ class KubeClient:
         self,
         name: str,
         pod_labels: dict[str, str],
+        org_project_labels: dict[str, str],
         namespace_name: Optional[str] = None,
     ) -> dict[str, Any]:
         assert pod_labels
@@ -2443,8 +2444,14 @@ class KubeClient:
                     {"port": 53, "protocol": "TCP"},
                 ],
             },
-            # allowing labeled pods to connect to each other
-            {"to": [{"podSelector": {"matchLabels": pod_labels}}]},
+            {
+                "to": [
+                    # allowing labeled pods to connect to each other
+                    {"podSelector": {"matchLabels": pod_labels}},
+                    # allow connect to namespaces with same project labels
+                    {"namespaceSelector": {"matchLabels": org_project_labels}},
+                ]
+            },
         ]
         return await self.create_egress_network_policy(
             name, pod_labels=pod_labels, rules=rules, namespace_name=namespace_name
