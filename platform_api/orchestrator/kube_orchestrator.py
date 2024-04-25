@@ -377,6 +377,7 @@ class KubeOrchestrator(Orchestrator):
         ):
             raise JobUnschedulableException("Job cannot be scheduled")
 
+        # NOTE: empty pool_types means job could be scheduled on any node
         pool_types = self._get_job_resource_pool_types(job)
         node_affinity = self._get_job_pod_node_affinity(pool_types)
         pod_affinity = self._get_job_pod_pod_affinity()
@@ -448,7 +449,7 @@ class KubeOrchestrator(Orchestrator):
     def _update_pod_container_resources(
         self, pod: PodDescriptor, pool_types: Sequence[ResourcePoolType]
     ) -> PodDescriptor:
-        if not pod.resources:
+        if not pod.resources or not pool_types:
             return pod
         max_node_cpu = max(p.available_cpu or 0 for p in pool_types)
         max_node_memory = max(p.available_memory or 0 for p in pool_types)

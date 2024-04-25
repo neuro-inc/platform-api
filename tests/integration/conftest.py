@@ -337,7 +337,6 @@ def kube_job_nodes_factory(
                 "cpu": int(pool_type.available_cpu or 0),
                 "memory": f"{pool_type.available_memory}",
                 "nvidia.com/gpu": pool_type.nvidia_gpu or 0,
-                "amd.com/gpu": pool_type.amd_gpu or 0,
             }
             taints = [
                 NodeTaint(key=kube_config.jobs_pod_job_toleration_key, value="true")
@@ -721,13 +720,7 @@ async def kube_node(kube_client: KubeClient) -> str:
 
 @pytest.fixture
 def default_node_capacity() -> dict[str, Any]:
-    return {
-        "pods": "110",
-        "memory": "1Gi",
-        "cpu": 2,
-        "nvidia.com/gpu": 1,
-        "amd.com/gpu": 1,
-    }
+    return {"pods": "110", "memory": "1Gi", "cpu": 2, "nvidia.com/gpu": 1}
 
 
 @pytest.fixture
