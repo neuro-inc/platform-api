@@ -159,7 +159,7 @@ def create_mount_path_validator() -> t.Trafaret:
 
 
 def _validate_unique_volume_paths(
-    volumes: Sequence[dict[str, Any]]
+    volumes: Sequence[dict[str, Any]],
 ) -> Sequence[dict[str, Any]]:
     paths: set[str] = set()
     for volume in volumes:
@@ -199,8 +199,6 @@ def create_volumes_validator(
 
 def create_resources_validator(
     *,
-    allow_any_gpu_models: bool = False,
-    allowed_gpu_models: Optional[Sequence[str]] = None,
     allow_any_tpu: bool = False,
     allowed_tpu_resources: Sequence[TPUResource] = (),
 ) -> t.Trafaret:
@@ -222,19 +220,15 @@ def create_resources_validator(
         allow_any=allow_any_tpu, allowed=allowed_tpu_resources
     )
 
-    gpu_validator = t.Int(gte=0)
-    if allow_any_gpu_models:
-        gpu_model_validator = t.String
-    else:
-        gpu_model_validator = t.Enum(*(allowed_gpu_models or []))
-
     validators = [
         common_resources_validator,
         common_resources_validator
         + t.Dict(
             {
-                "gpu": gpu_validator,
-                t.Key("gpu_model", optional=True): gpu_model_validator,
+                t.Key("gpu", optional=True): t.Int(gte=0),  # TODO: deprecated, remove
+                t.Key("nvidia_gpu", optional=True): t.Int(gte=0),
+                t.Key("amd_gpu", optional=True): t.Int(gte=0),
+                t.Key("gpu_model", optional=True): t.String,
             }
         ),
     ]
@@ -270,8 +264,6 @@ def create_tpu_validator(
 def create_container_validator(
     *,
     allow_volumes: bool = False,
-    allow_any_gpu_models: bool = False,
-    allowed_gpu_models: Optional[Sequence[str]] = None,
     allow_any_tpu: bool = False,
     allowed_tpu_resources: Sequence[TPUResource] = (),
     allow_any_command: bool = False,
@@ -298,8 +290,6 @@ def create_container_validator(
                 t.String, t.String(allow_blank=True)
             ),
             "resources": create_resources_validator(
-                allow_any_gpu_models=allow_any_gpu_models,
-                allowed_gpu_models=allowed_gpu_models,
                 allow_any_tpu=allow_any_tpu,
                 allowed_tpu_resources=allowed_tpu_resources,
             ),
@@ -361,7 +351,6 @@ def create_container_validator(
 def create_container_request_validator(
     *,
     allow_volumes: bool = False,
-    allowed_gpu_models: Optional[Sequence[str]] = None,
     allow_any_tpu: bool = False,
     allowed_tpu_resources: Sequence[TPUResource] = (),
     storage_scheme: str = "storage",
@@ -369,7 +358,6 @@ def create_container_request_validator(
 ) -> t.Trafaret:
     return create_container_validator(
         allow_volumes=allow_volumes,
-        allowed_gpu_models=allowed_gpu_models,
         allow_any_tpu=allow_any_tpu,
         allowed_tpu_resources=allowed_tpu_resources,
         storage_scheme=storage_scheme,
@@ -381,7 +369,6 @@ def create_container_request_validator(
 def create_container_response_validator() -> t.Trafaret:
     return create_container_validator(
         allow_volumes=True,
-        allow_any_gpu_models=True,
         allow_any_tpu=True,
         allow_any_command=True,
         check_cluster=False,

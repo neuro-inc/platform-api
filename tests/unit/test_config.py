@@ -598,7 +598,6 @@ class TestEnvironConfigFactory:
                 "NP_KUBE_POD_PREEMPTIBLE_TOLERATION_KEY": "preemptible",
                 "NP_KUBE_POD_PRIORITY_CLASS_NAME": "job-priority",
                 "NP_KUBE_NODE_LABEL_JOB": "job-label",
-                "NP_KUBE_NODE_LABEL_GPU": "gpu-label",
                 "NP_KUBE_NODE_LABEL_PREEMPTIBLE": "preemptible-label",
                 "NP_KUBE_NODE_LABEL_NODE_POOL": "node-pool-label",
                 "NP_KUBE_IMAGE_PULL_SECRET": "test-secret",
@@ -627,7 +626,6 @@ class TestEnvironConfigFactory:
             jobs_pod_preemptible_toleration_key="preemptible",
             jobs_pod_priority_class_name="job-priority",
             node_label_job="job-label",
-            node_label_gpu="gpu-label",
             node_label_preemptible="preemptible-label",
             node_label_node_pool="node-pool-label",
             image_pull_secret_name="test-secret",
@@ -734,6 +732,5 @@ class TestKubeConfig:
                 token="value",
                 token_path="value",
                 namespace="value",
-                node_label_gpu="value",
                 node_label_preemptible="value",
             )

@@ -193,7 +193,8 @@ class KubeOrchestratorScheduler:
                         scheduled[node.name] += NodeResources(
                             cpu=pod.resources.cpu,
                             memory=pod.resources.memory,
-                            gpu=pod.resources.gpu or 0,
+                            nvidia_gpu=pod.resources.nvidia_gpu or 0,
+                            amd_gpu=pod.resources.amd_gpu or 0,
                         )
                     break
                 logger.debug(
@@ -255,11 +256,11 @@ class KubeOrchestratorPreemption:
     def _get_pods_to_schedule(
         self, pods: Iterable[PodDescriptor]
     ) -> list[PodDescriptor]:
-        def _create_key(pod: PodDescriptor) -> tuple[int, int, float]:
+        def _create_key(pod: PodDescriptor) -> tuple[int, int, int, float]:
             r = pod.resources
             if not r:
-                return (0, 0, 0.0)
-            return (r.gpu or 0, r.memory, r.cpu)
+                return (0, 0, 0, 0.0)
+            return (r.nvidia_gpu or 0, r.amd_gpu or 0, r.memory, r.cpu)
 
         pods_to_schedule = []
         for pod in pods:
@@ -305,12 +306,12 @@ class KubeOrchestratorPreemption:
         return None, []
 
     def _get_nodes(self, exclude: Iterable[Node]) -> list[Node]:
-        def _create_key(node: Node) -> tuple[int, int, float]:
+        def _create_key(node: Node) -> tuple[int, int, int, float]:
             requested = self._node_resources_handler.get_resource_requests(node.name)
             free = node.get_free_resources(requested)
             if not free:
-                return (0, 0, 0.0)
-            return (free.gpu or 0, free.memory, free.cpu)
+                return (0, 0, 0, 0.0)
+            return (free.nvidia_gpu or 0, free.amd_gpu or 0, free.memory, free.cpu)
 
         nodes = self._nodes_handler.get_ready_nodes()
         nodes = [n for n in nodes if n not in exclude]
@@ -328,5 +329,5 @@ class KubeOrchestratorPreemption:
         return NodeResources(
             cpu=max(0, required.cpu - free.cpu),
             memory=max(0, required.memory - free.memory),
-            gpu=max(0, (required.gpu or 0) - free.gpu),
+            nvidia_gpu=max(0, (required.nvidia_gpu or 0) - free.nvidia_gpu),
         )

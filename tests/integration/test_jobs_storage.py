@@ -33,7 +33,10 @@ class TestJobsStorage:
     def _create_job_request(self, with_gpu: bool = False) -> JobRequest:
         if with_gpu:
             resources = ContainerResources(
-                cpu=0.1, memory=256 * 10**6, gpu=1, gpu_model_id="nvidia-tesla-k80"
+                cpu=0.1,
+                memory=256 * 10**6,
+                nvidia_gpu=1,
+                gpu_model_id="nvidia-tesla-k80",
             )
         else:
             resources = ContainerResources(cpu=0.1, memory=256 * 10**6)

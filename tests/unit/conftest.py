@@ -382,8 +382,7 @@ def job_request_factory() -> Callable[[], JobRequest]:
     ) -> JobRequest:
         cont_kwargs: dict[str, Any] = {"cpu": cpu, "memory": memory}
         if with_gpu:
-            cont_kwargs["gpu"] = 1
-            cont_kwargs["gpu_model_id"] = "nvidia-tesla-k80"
+            cont_kwargs["nvidia_gpu"] = 1
 
         return JobRequest.create(
             Container(image="testimage", resources=ContainerResources(**cont_kwargs))

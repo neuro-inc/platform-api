@@ -190,8 +190,9 @@ class ContainerTPUResource:
 class ContainerResources:
     cpu: float
     memory: int
-    gpu: Optional[int] = None
-    gpu_model_id: Optional[str] = None
+    nvidia_gpu: Optional[int] = None
+    amd_gpu: Optional[int] = None
+    gpu_model_id: Optional[str] = None  # TODO: deprecated, remove
     shm: Optional[bool] = None
     tpu: Optional[ContainerTPUResource] = None
 
@@ -207,7 +208,8 @@ class ContainerResources:
                 if "memory" in payload
                 else payload["memory_mb"] * 2**20
             ),
-            gpu=payload.get("gpu"),
+            nvidia_gpu=payload.get("nvidia_gpu") or payload.get("gpu"),
+            amd_gpu=payload.get("amd_gpu"),
             gpu_model_id=payload.get("gpu_model_id"),
             shm=payload.get("shm"),
             tpu=tpu,
@@ -215,8 +217,12 @@ class ContainerResources:
 
     def to_primitive(self) -> dict[str, Any]:
         payload: dict[str, Any] = {"cpu": self.cpu, "memory": self.memory}
-        if self.gpu is not None:
-            payload["gpu"] = self.gpu
+        if self.nvidia_gpu is not None:
+            payload["nvidia_gpu"] = self.nvidia_gpu
+            payload["gpu"] = self.nvidia_gpu
+        if self.amd_gpu is not None:
+            payload["amd_gpu"] = self.amd_gpu
+        if self.gpu_model_id:
             payload["gpu_model_id"] = self.gpu_model_id
         if self.shm is not None:
             payload["shm"] = self.shm
@@ -243,25 +249,23 @@ class ContainerResources:
         )
 
     def _check_gpu(self, entry: Union[ResourcePoolType, Preset]) -> bool:
-        if not self.gpu:
+        if not self.nvidia_gpu and not self.amd_gpu:
             # container does not need GPU. we are good regardless of presence
             # of GPU in the pool type.
             return True
 
         # container needs GPU
 
-        if not entry.gpu:
+        if not entry.nvidia_gpu and not entry.amd_gpu:
             return False
 
-        if entry.gpu < self.gpu:
+        if (entry.nvidia_gpu or 0) < (self.nvidia_gpu or 0):
             return False
 
-        if not self.gpu_model_id:
-            # container needs any GPU model
-            return True
+        if (entry.amd_gpu or 0) < (self.amd_gpu or 0):
+            return False
 
-        assert entry.gpu_model
-        return self.gpu_model_id == entry.gpu_model
+        return True
 
     def _check_tpu(self, pool_type: ResourcePoolType) -> bool:
         if not self.tpu:

@@ -76,7 +76,6 @@ logger = logging.getLogger(__name__)
 def create_job_request_validator(
     *,
     allow_flat_structure: bool = False,
-    allowed_gpu_models: Sequence[str],
     allowed_tpu_resources: Sequence[TPUResource],
     cluster_name: str,
     org_name: Optional[str],
@@ -84,14 +83,14 @@ def create_job_request_validator(
     allowed_energy_schedule_names: Sequence[str] = (),
 ) -> t.Trafaret:
     def _check_no_schedule_timeout_for_scheduled_jobs(
-        payload: dict[str, Any]
+        payload: dict[str, Any],
     ) -> dict[str, Any]:
         if "schedule_timeout" in payload and payload["scheduler_enabled"]:
             raise t.DataError("schedule_timeout is not allowed for scheduled jobs")
         return payload
 
     def _check_scheduler_enabled_for_energy_schedule_name(
-        payload: dict[str, Any]
+        payload: dict[str, Any],
     ) -> dict[str, Any]:
         if payload.get("energy_schedule_name") and not payload["scheduler_enabled"]:
             raise t.DataError("energy_schedule_name requires scheduler_enabled")
@@ -99,7 +98,6 @@ def create_job_request_validator(
 
     container_validator = create_container_request_validator(
         allow_volumes=True,
-        allowed_gpu_models=allowed_gpu_models,
         allowed_tpu_resources=allowed_tpu_resources,
         storage_scheme=storage_scheme,
         cluster_name=cluster_name,
@@ -216,8 +214,11 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
             "memory": preset.memory,
             "shm": shm,
         }
-        if preset.gpu:
-            container_resources["gpu"] = preset.gpu
+        if preset.nvidia_gpu:
+            container_resources["nvidia_gpu"] = preset.nvidia_gpu
+        if preset.amd_gpu:
+            container_resources["amd_gpu"] = preset.amd_gpu
+        if preset.gpu_model:
             container_resources["gpu_model"] = preset.gpu_model
         if preset.tpu:
             container_resources["tpu"] = {
@@ -380,8 +381,11 @@ def convert_job_container_to_json(container: Container) -> dict[str, Any]:
         "memory": container.resources.memory,
         "memory_mb": container.resources.memory // 2**20,
     }
-    if container.resources.gpu is not None:
-        resources["gpu"] = container.resources.gpu
+    if container.resources.nvidia_gpu is not None:
+        resources["nvidia_gpu"] = container.resources.nvidia_gpu
+        resources["gpu"] = container.resources.nvidia_gpu
+    if container.resources.amd_gpu is not None:
+        resources["amd_gpu"] = container.resources.amd_gpu
     if container.resources.gpu_model_id:
         resources["gpu_model"] = container.resources.gpu_model_id
     if container.resources.shm is not None:
@@ -627,13 +631,8 @@ class JobsHandler:
         allow_flat_structure: bool = False,
         org_name: Optional[str] = None,
     ) -> t.Trafaret:
-        resource_pool_types = cluster_config.orchestrator.resource_pool_types
-        gpu_models = list(
-            {rpt.gpu_model for rpt in resource_pool_types if rpt.gpu_model}
-        )
         return create_job_request_validator(
             allow_flat_structure=allow_flat_structure,
-            allowed_gpu_models=gpu_models,
             allowed_tpu_resources=cluster_config.orchestrator.tpu_resources,
             cluster_name=cluster_config.name,
             org_name=org_name,

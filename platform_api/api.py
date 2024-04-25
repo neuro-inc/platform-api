@@ -201,8 +201,11 @@ class ConfigApiHandler:
             "is_preemptible": preset.scheduler_enabled,
             "is_preemptible_node_required": preset.preemptible_node,
         }
-        if preset.gpu is not None:
-            payload["gpu"] = preset.gpu
+        if preset.nvidia_gpu is not None:
+            payload["nvidia_gpu"] = preset.nvidia_gpu
+            payload["gpu"] = preset.nvidia_gpu
+        if preset.amd_gpu is not None:
+            payload["amd_gpu"] = preset.amd_gpu
         if preset.gpu_model is not None:
             payload["gpu_model"] = preset.gpu_model
 

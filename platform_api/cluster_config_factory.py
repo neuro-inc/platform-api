@@ -80,7 +80,8 @@ class ClusterConfigFactory:
                     or preset.get("is_preemptible", False),
                     preemptible_node=preset.get("preemptible_node")
                     or preset.get("is_preemptible_node_required", False),
-                    gpu=preset.get("gpu"),
+                    nvidia_gpu=preset.get("nvidia_gpu"),
+                    amd_gpu=preset.get("amd_gpu"),
                     gpu_model=preset.get("gpu_model"),
                     tpu=self._create_tpu_preset(preset.get("tpu")),
                     is_external_job=preset.get("is_external_job", False),
@@ -135,8 +136,8 @@ class ClusterConfigFactory:
         available_memory = _get_memory_with_deprecated_mb(payload, "available_memory")
         return ResourcePoolType(
             name=payload["name"],
-            gpu=payload.get("gpu"),
-            gpu_model=payload.get("gpu_model"),
+            nvidia_gpu=payload.get("nvidia_gpu"),
+            amd_gpu=payload.get("amd_gpu"),
             is_preemptible=payload.get("is_preemptible"),
             cpu=cpu,
             available_cpu=payload.get("available_cpu") or cpu,

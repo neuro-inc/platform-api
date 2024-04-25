@@ -2,7 +2,6 @@ import asyncio
 import logging
 import operator
 import secrets
-from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -372,22 +371,21 @@ class KubeOrchestrator(Orchestrator):
     def _create_pod_descriptor(
         self, job: Job, tolerate_unreachable_node: bool = False
     ) -> PodDescriptor:
-        pool_types = self._get_cheapest_pool_types(job)
-        if not pool_types:
-            raise JobUnschedulableException("Job will not fit into cluster")
-        logger.info(
-            "Job %s is scheduled to run in pool types %s",
-            job.id,
-            ", ".join(p.name for p in pool_types),
-        )
-        tolerations = self._get_pod_tolerations(
-            job, pool_types, tolerate_unreachable_node=tolerate_unreachable_node
-        )
-        node_affinity = self._get_pod_node_affinity(pool_types)
+        job_preset = job.preset
+        if job.preset_name is not None and (
+            job_preset is None or not job_preset.available_resource_pool_names
+        ):
+            raise JobUnschedulableException("Job cannot be scheduled")
+
+        pool_types = self._get_job_resource_pool_types(job)
+        node_affinity = self._get_job_pod_node_affinity(pool_types)
         pod_affinity = self._get_job_pod_pod_affinity()
+        tolerations = self._get_pod_tolerations(
+            job,
+            pool_types=pool_types,
+            tolerate_unreachable_node=tolerate_unreachable_node,
+        )
         labels = self._get_pod_labels(job)
-        # NOTE: both node selector and affinity must be satisfied for the pod
-        # to be scheduled onto a node.
 
         def _to_env_str(value: Any) -> str:
             if value:
@@ -436,47 +434,17 @@ class KubeOrchestrator(Orchestrator):
         pod = self._update_pod_command(job, pod)
         return pod
 
-    def _get_cheapest_pool_types(self, job: Job) -> Sequence[ResourcePoolType]:
-        # NOTE:
-        # Config service exposes resource_affinity field in preset.
-        # But currently it cannot be used in case of restartable jobs
-        # because during job lifetime node pools, presets can change and
-        # node affinity assigned to the job won't be valid anymore.
-        container_resources = job.request.container.resources
-        TKey = tuple[int, float, int]
-        pool_types: dict[TKey, list[ResourcePoolType]] = defaultdict(list)
-        has_cpu_pools = any(
-            not p.gpu for p in self._orchestrator_config.resource_pool_types
-        )
-
-        for pool_type in self._orchestrator_config.resource_pool_types:
-            # Schedule jobs only on preemptible nodes if such node specified
-            if job.preemptible_node and not pool_type.is_preemptible:
-                continue
-            if not job.preemptible_node and pool_type.is_preemptible:
-                continue
-
-            # Do not schedule cpu jobs on gpu nodes if cluster has
-            # cpu only nodes.
-            if has_cpu_pools and not container_resources.gpu and pool_type.gpu:
-                continue
-
-            if not container_resources.check_fit_into_pool_type(pool_type):
-                continue
-
-            key = (
-                pool_type.gpu or 0,
-                pool_type.available_cpu or 0,
-                pool_type.available_memory or 0,
-            )
-            pool_types[key].append(pool_type)
-
-        if not pool_types:
+    def _get_job_resource_pool_types(self, job: Job) -> list[ResourcePoolType]:
+        job_preset = job.preset
+        if not job_preset:
             return []
+        return [
+            p
+            for p in self._orchestrator_config.resource_pool_types
+            if p.name in job_preset.available_resource_pool_names
+        ]
 
-        sorted_pool_types = sorted(pool_types.items(), key=lambda x: x[0])
-        return sorted_pool_types[0][1]
-
+    # TODO: remove after cluster resources monitoring process is released
     def _update_pod_container_resources(
         self, pod: PodDescriptor, pool_types: Sequence[ResourcePoolType]
     ) -> PodDescriptor:
@@ -484,12 +452,15 @@ class KubeOrchestrator(Orchestrator):
             return pod
         max_node_cpu = max(p.available_cpu or 0 for p in pool_types)
         max_node_memory = max(p.available_memory or 0 for p in pool_types)
-        max_node_gpu = max(p.gpu or 0 for p in pool_types)
-        pod_gpu = pod.resources.gpu or 0
+        max_node_nvidia_gpu = max(p.nvidia_gpu or 0 for p in pool_types)
+        max_node_amd_gpu = max(p.amd_gpu or 0 for p in pool_types)
+        pod_nvidia_gpu = pod.resources.nvidia_gpu or 0
+        pod_amd_gpu = pod.resources.amd_gpu or 0
         if (
             max_node_cpu > pod.resources.cpu
             or max_node_memory > pod.resources.memory
-            or max_node_gpu > pod_gpu
+            or max_node_nvidia_gpu > pod_nvidia_gpu
+            or max_node_amd_gpu > pod_amd_gpu
         ):
             # Ignore pods that don't require all node's resources
             return pod
@@ -550,17 +521,11 @@ class KubeOrchestrator(Orchestrator):
             labels["platform.neuromation.io/external"] = "true"
         return labels
 
-    def _get_gpu_labels(self, job: Job) -> dict[str, str]:
-        if not job.has_gpu or not job.gpu_model_id:
-            return {}
-        return {"platform.neuromation.io/gpu-model": job.gpu_model_id}
-
     def _get_pod_labels(self, job: Job) -> dict[str, str]:
         labels = self._get_job_labels(job)
         labels.update(self._get_user_pod_labels(job))
         labels.update(self._get_org_pod_labels(job))
         labels.update(self._get_project_pod_labels(job))
-        labels.update(self._get_gpu_labels(job))
         labels.update(self._get_preset_labels(job))
         return labels
 
@@ -652,6 +617,7 @@ class KubeOrchestrator(Orchestrator):
     def _get_pod_tolerations(
         self,
         job: Job,
+        *,
         pool_types: Sequence[ResourcePoolType],
         tolerate_unreachable_node: bool = False,
     ) -> list[Toleration]:
@@ -662,10 +628,18 @@ class KubeOrchestrator(Orchestrator):
                 effect="NoSchedule",
             )
         ]
-        if job.has_gpu or any(p.gpu for p in pool_types):
+        if job.has_nvidia_gpu or any(p.nvidia_gpu for p in pool_types):
             tolerations.append(
                 Toleration(
-                    key=Resources.gpu_key,
+                    key=Resources.nvidia_gpu_key,
+                    operator="Exists",
+                    effect="NoSchedule",
+                )
+            )
+        if job.has_amd_gpu or any(p.amd_gpu for p in pool_types):
+            tolerations.append(
+                Toleration(
+                    key=Resources.amd_gpu_key,
                     operator="Exists",
                     effect="NoSchedule",
                 )
@@ -693,7 +667,7 @@ class KubeOrchestrator(Orchestrator):
             )
         return tolerations
 
-    def _get_pod_node_affinity(
+    def _get_job_pod_node_affinity(
         self, pool_types: Sequence[ResourcePoolType]
     ) -> Optional[NodeAffinity]:
         # NOTE:

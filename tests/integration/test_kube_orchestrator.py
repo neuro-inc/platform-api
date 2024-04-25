@@ -71,7 +71,7 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeConfig,
     KubeOrchestrator,
 )
-from platform_api.resource import GKEGPUModels, Preset, ResourcePoolType, TPUResource
+from platform_api.resource import Preset, ResourcePoolType, TPUResource
 from tests.conftest import random_str
 from tests.integration.conftest import (
     ApiAddress,
@@ -1487,46 +1487,6 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/project": job.owner,
         }
 
-    async def test_gpu_job_pod_labels(
-        self,
-        kube_config: KubeConfig,
-        kube_client: MyKubeClient,
-        delete_job_later: Callable[[Job], Awaitable[None]],
-        kube_orchestrator: KubeOrchestrator,
-        kube_node_gpu: str,
-    ) -> None:
-        node_name = kube_node_gpu
-        container = Container(
-            image="ubuntu:20.10",
-            command="true",
-            resources=ContainerResources(
-                cpu=0.1, memory=128 * 10**6, gpu=1, gpu_model_id="gpumodel"
-            ),
-        )
-        job = MyJob(
-            orchestrator=kube_orchestrator,
-            record=JobRecord.create(
-                request=JobRequest.create(container), cluster_name="test-cluster"
-            ),
-        )
-        await delete_job_later(job)
-        await job.start()
-
-        pod_name = job.id
-
-        await kube_client.wait_pod_scheduled(
-            pod_name=pod_name, node_name=node_name, timeout_s=60.0
-        )
-        raw_pod = await kube_client.get_raw_pod(pod_name)
-
-        assert raw_pod["metadata"]["labels"] == {
-            "platform.neuromation.io/job": job.id,
-            "platform.neuromation.io/user": job.owner,
-            "platform.neuromation.io/org": "no_org",
-            "platform.neuromation.io/gpu-model": job.gpu_model_id,
-            "platform.neuromation.io/project": job.owner,
-        }
-
     async def test_job_resource_labels(
         self,
         kube_config: KubeConfig,
@@ -2486,7 +2446,6 @@ class TestAffinityFixtures:
         kube_config = replace(
             kube_config,
             node_label_job="job",
-            node_label_gpu="gpu",
             node_label_node_pool="nodepool",
             node_label_preemptible="preemptible",
         )
@@ -2538,25 +2497,22 @@ class TestAffinityFixtures:
                     ),
                 ),
                 ResourcePoolType(
-                    name="gpu-k80",
+                    name="nvidia-gpu",
                     available_cpu=7,
                     available_memory=61440 * 10**6,
-                    gpu=8,
-                    gpu_model=GKEGPUModels.K80.value.id,
+                    nvidia_gpu=8,
                 ),
                 ResourcePoolType(
-                    name="gpu-v100",
+                    name="amd-gpu",
                     available_cpu=7,
                     available_memory=61440 * 10**6,
-                    gpu=8,
-                    gpu_model=GKEGPUModels.V100.value.id,
+                    amd_gpu=8,
                 ),
                 ResourcePoolType(
-                    name="gpu-v100-p",
+                    name="nvidia-gpu-p",
                     available_cpu=7,
                     available_memory=61440 * 10**6,
-                    gpu=8,
-                    gpu_model=GKEGPUModels.V100.value.id,
+                    nvidia_gpu=8,
                     is_preemptible=True,
                 ),
             ],
@@ -2572,11 +2528,16 @@ class TestAffinityFixtures:
         return await kube_orchestrator_factory(
             [
                 ResourcePoolType(
-                    name="gpu-k80",
+                    name="nvidia-gpu",
                     available_cpu=7,
                     available_memory=61440 * 10**6,
-                    gpu=8,
-                    gpu_model=GKEGPUModels.K80.value.id,
+                    nvidia_gpu=8,
+                ),
+                ResourcePoolType(
+                    name="amd-gpu",
+                    available_cpu=7,
+                    available_memory=61440 * 10**6,
+                    amd_gpu=8,
                 ),
             ],
         )
@@ -2590,8 +2551,8 @@ class TestAffinityFixtures:
             kube_orchestrator: KubeOrchestrator,
             cpu: float,
             memory: int,
-            gpu: int | None = None,
-            gpu_model: str | None = None,
+            nvidia_gpu: int | None = None,
+            amd_gpu: int | None = None,
             scheduler_enabled: bool = False,
             preemptible_node: bool = False,
         ) -> AsyncIterator[MyJob]:
@@ -2601,8 +2562,8 @@ class TestAffinityFixtures:
                 resources=ContainerResources(
                     cpu=cpu,
                     memory=memory,
-                    gpu=gpu,
-                    gpu_model_id=gpu_model,
+                    nvidia_gpu=nvidia_gpu,
+                    amd_gpu=amd_gpu,
                 ),
             )
             job = MyJob(
@@ -2671,7 +2632,7 @@ class TestNodeAffinity(TestAffinityFixtures):
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
         async with start_job(kube_orchestrator_gpu, cpu=0.1, memory=32 * 10**6) as job:
-            await kube_client.wait_pod_scheduled(job.id, "gpu-k80")
+            await kube_client.wait_pod_scheduled(job.id, "nvidia-gpu")
 
             job_pod = await kube_client.get_raw_pod(job.id)
             assert (
@@ -2681,7 +2642,7 @@ class TestNodeAffinity(TestAffinityFixtures):
                         LabelSelectorTerm(
                             [
                                 LabelSelectorMatchExpression.create_in(
-                                    "nodepool", "gpu-k80"
+                                    "nodepool", "nvidia-gpu"
                                 )
                             ]
                         )
@@ -2726,7 +2687,7 @@ class TestNodeAffinity(TestAffinityFixtures):
             async with start_job(kube_orchestrator, cpu=7, memory=32 * 10**6):
                 pass
 
-    async def test_gpu_job(
+    async def test_nvidia_gpu_job(
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
@@ -2736,10 +2697,9 @@ class TestNodeAffinity(TestAffinityFixtures):
             kube_orchestrator,
             cpu=0.1,
             memory=32 * 10**6,
-            gpu=1,
-            gpu_model="nvidia-tesla-k80",
+            nvidia_gpu=1,
         ) as job:
-            await kube_client.wait_pod_scheduled(job.id, "gpu-k80")
+            await kube_client.wait_pod_scheduled(job.id, "nvidia-gpu")
 
             job_pod = await kube_client.get_raw_pod(job.id)
             assert (
@@ -2749,7 +2709,37 @@ class TestNodeAffinity(TestAffinityFixtures):
                         LabelSelectorTerm(
                             [
                                 LabelSelectorMatchExpression.create_in(
-                                    "nodepool", "gpu-k80"
+                                    "nodepool", "nvidia-gpu"
+                                )
+                            ]
+                        )
+                    ]
+                ).to_primitive()
+            )
+
+    async def test_amd_gpu_job(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
+    ) -> None:
+        async with start_job(
+            kube_orchestrator,
+            cpu=0.1,
+            memory=32 * 10**6,
+            amd_gpu=1,
+        ) as job:
+            await kube_client.wait_pod_scheduled(job.id, "amd-gpu")
+
+            job_pod = await kube_client.get_raw_pod(job.id)
+            assert (
+                job_pod["spec"]["affinity"]["nodeAffinity"]
+                == NodeAffinity(
+                    required=[
+                        LabelSelectorTerm(
+                            [
+                                LabelSelectorMatchExpression.create_in(
+                                    "nodepool", "amd-gpu"
                                 )
                             ]
                         )
@@ -2767,11 +2757,10 @@ class TestNodeAffinity(TestAffinityFixtures):
             kube_orchestrator,
             cpu=0.1,
             memory=32 * 10**6,
-            gpu=1,
-            gpu_model="nvidia-tesla-v100",
+            nvidia_gpu=1,
             scheduler_enabled=True,
         ) as job:
-            await kube_client.wait_pod_scheduled(job.id, "gpu-v100")
+            await kube_client.wait_pod_scheduled(job.id, "nvidia-gpu")
 
             job_pod = await kube_client.get_raw_pod(job.id)
             assert (
@@ -2781,7 +2770,7 @@ class TestNodeAffinity(TestAffinityFixtures):
                         LabelSelectorTerm(
                             [
                                 LabelSelectorMatchExpression.create_in(
-                                    "nodepool", "gpu-v100"
+                                    "nodepool", "nvidia-gpu"
                                 )
                             ]
                         ),
