@@ -2533,12 +2533,6 @@ class TestAffinityFixtures:
                     available_memory=61440 * 10**6,
                     nvidia_gpu=8,
                 ),
-                ResourcePoolType(
-                    name="amd-gpu",
-                    available_cpu=7,
-                    available_memory=61440 * 10**6,
-                    amd_gpu=8,
-                ),
             ],
         )
 
@@ -2675,19 +2669,7 @@ class TestNodeAffinity(TestAffinityFixtures):
                 ).to_primitive()
             )
 
-    async def test_cpu_job_not_scheduled_on_gpu_node(
-        self,
-        kube_client: MyKubeClient,
-        kube_orchestrator: KubeOrchestrator,
-        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
-    ) -> None:
-        with pytest.raises(
-            JobUnschedulableException, match="Job will not fit into cluster"
-        ):
-            async with start_job(kube_orchestrator, cpu=7, memory=32 * 10**6):
-                pass
-
-    async def test_nvidia_gpu_job(
+    async def test_gpu_job(
         self,
         kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,

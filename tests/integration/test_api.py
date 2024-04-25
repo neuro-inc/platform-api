@@ -263,6 +263,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "amd-gpu-small",
@@ -275,6 +276,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large",
@@ -289,6 +291,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large-p",
@@ -303,6 +306,7 @@ class TestApi:
                         "preemptible_node": True,
                         "is_preemptible": True,
                         "is_preemptible_node_required": True,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "cpu-micro",
@@ -314,6 +318,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-small",
@@ -325,6 +330,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-large",
@@ -336,6 +342,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "tpu",
@@ -348,6 +355,7 @@ class TestApi:
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
+                        "available_resource_pool_names": ["cpu"],
                     },
                 ],
                 "timezone": "UTC",
@@ -507,6 +515,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "amd-gpu-small",
@@ -519,6 +528,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large",
@@ -533,6 +543,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large-p",
@@ -547,6 +558,7 @@ class TestApi:
                         "preemptible_node": True,
                         "is_preemptible": True,
                         "is_preemptible_node_required": True,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "cpu-micro",
@@ -558,6 +570,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-small",
@@ -569,6 +582,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-large",
@@ -580,6 +594,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "tpu",
@@ -592,6 +607,7 @@ class TestApi:
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
+                        "available_resource_pool_names": ["cpu"],
                     },
                 ],
                 "timezone": "UTC",
@@ -685,6 +701,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "amd-gpu-small",
@@ -697,6 +714,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large",
@@ -711,6 +729,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large-p",
@@ -725,6 +744,7 @@ class TestApi:
                         "preemptible_node": True,
                         "is_preemptible": True,
                         "is_preemptible_node_required": True,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "cpu-micro",
@@ -736,6 +756,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-small",
@@ -747,6 +768,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-large",
@@ -758,6 +780,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "tpu",
@@ -770,6 +793,7 @@ class TestApi:
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
+                        "available_resource_pool_names": ["cpu"],
                     },
                 ],
                 "timezone": "UTC",

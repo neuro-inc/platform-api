@@ -210,6 +210,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     cpu=7,
                     memory=30720 * 10**6,
                     gpu_model=GKEGPUModels.K80.value.id,
+                    available_resource_pool_names=["gpu"],
                 ),
                 Preset(
                     name="amd-gpu-small",
@@ -217,6 +218,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     amd_gpu=1,
                     cpu=7,
                     memory=30720 * 10**6,
+                    available_resource_pool_names=["gpu"],
                 ),
                 Preset(
                     name="gpu-large",
@@ -225,6 +227,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     cpu=7,
                     memory=61440 * 10**6,
                     gpu_model=GKEGPUModels.V100.value.id,
+                    available_resource_pool_names=["gpu"],
                 ),
                 Preset(
                     name="gpu-large-p",
@@ -235,24 +238,28 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     gpu_model=GKEGPUModels.V100.value.id,
                     scheduler_enabled=True,
                     preemptible_node=True,
+                    available_resource_pool_names=["gpu"],
                 ),
                 Preset(
                     name="cpu-micro",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
                     memory=100 * 10**6,
+                    available_resource_pool_names=["cpu"],
                 ),
                 Preset(
                     name="cpu-small",
                     credits_per_hour=Decimal("10"),
                     cpu=2,
                     memory=2048 * 10**6,
+                    available_resource_pool_names=["cpu"],
                 ),
                 Preset(
                     name="cpu-large",
                     credits_per_hour=Decimal("10"),
                     cpu=3,
                     memory=14336 * 10**6,
+                    available_resource_pool_names=["cpu"],
                 ),
                 Preset(
                     name="tpu",
@@ -260,6 +267,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     cpu=3,
                     memory=14336 * 10**6,
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),
+                    available_resource_pool_names=["cpu"],
                 ),
             ],
             "job_schedule_scaleup_timeout": 5,

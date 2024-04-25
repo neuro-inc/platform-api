@@ -377,9 +377,8 @@ class KubeOrchestrator(Orchestrator):
         ):
             raise JobUnschedulableException("Job cannot be scheduled")
 
-        # NOTE: empty pool_types means job could be scheduled on any node
         pool_types = self._get_job_resource_pool_types(job)
-        node_affinity = self._get_job_pod_node_affinity(pool_types)
+        node_affinity = self._get_pod_node_affinity(pool_types)
         pod_affinity = self._get_job_pod_pod_affinity()
         tolerations = self._get_pod_tolerations(
             job,
@@ -435,10 +434,10 @@ class KubeOrchestrator(Orchestrator):
         pod = self._update_pod_command(job, pod)
         return pod
 
-    def _get_job_resource_pool_types(self, job: Job) -> list[ResourcePoolType]:
+    def _get_job_resource_pool_types(self, job: Job) -> Sequence[ResourcePoolType]:
         job_preset = job.preset
         if not job_preset:
-            return []
+            return self._orchestrator_config.resource_pool_types
         return [
             p
             for p in self._orchestrator_config.resource_pool_types
@@ -449,7 +448,7 @@ class KubeOrchestrator(Orchestrator):
     def _update_pod_container_resources(
         self, pod: PodDescriptor, pool_types: Sequence[ResourcePoolType]
     ) -> PodDescriptor:
-        if not pod.resources or not pool_types:
+        if not pod.resources:
             return pod
         max_node_cpu = max(p.available_cpu or 0 for p in pool_types)
         max_node_memory = max(p.available_memory or 0 for p in pool_types)
@@ -668,7 +667,7 @@ class KubeOrchestrator(Orchestrator):
             )
         return tolerations
 
-    def _get_job_pod_node_affinity(
+    def _get_pod_node_affinity(
         self, pool_types: Sequence[ResourcePoolType]
     ) -> Optional[NodeAffinity]:
         # NOTE:
