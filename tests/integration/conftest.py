@@ -721,7 +721,13 @@ async def kube_node(kube_client: KubeClient) -> str:
 
 @pytest.fixture
 def default_node_capacity() -> dict[str, Any]:
-    return {"pods": "110", "memory": "1Gi", "cpu": 2, "nvidia.com/gpu": 1}
+    return {
+        "pods": "110",
+        "memory": "1Gi",
+        "cpu": 2,
+        "nvidia.com/gpu": 1,
+        "amd.com/gpu": 1,
+    }
 
 
 @pytest.fixture
