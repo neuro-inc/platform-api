@@ -5384,39 +5384,7 @@ class TestJobs:
             "priority": "normal",
         }
 
-    async def test_job_create_unknown_gpu_model(
-        self,
-        jobs_client: JobsClient,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        regular_user: _User,
-        kube_node_gpu: str,
-    ) -> None:
-        request_payload = {
-            "container": {
-                "image": "ubuntu:20.10",
-                "command": "true",
-                "resources": {
-                    "cpu": 0.1,
-                    "memory_mb": 32,
-                    "gpu": 1,
-                    "gpu_model": "unknown",
-                },
-            }
-        }
-
-        async with client.post(
-            api.jobs_base_url, headers=regular_user.headers, json=request_payload
-        ) as response:
-            response_text = await response.text()
-            assert response.status == HTTPBadRequest.status_code, response_text
-            data = await response.json()
-            assert re.search(
-                r"\\*'gpu_model\\*': DataError\(\"value doesn\\*'t match",
-                data["error"],
-            ), data
-
-    async def test_create_gpu_model(
+    async def test_create_gpu(
         self,
         jobs_client: JobsClient,
         api: ApiConfig,
@@ -5433,8 +5401,7 @@ class TestJobs:
                     "cpu": 0.1,
                     "memory_mb": 32,
                     "memory": 32 * 2**20,
-                    "gpu": 1,
-                    "gpu_model": "gpumodel",
+                    "nvidia_gpu": 1,
                 },
             }
         }
@@ -5479,7 +5446,7 @@ class TestJobs:
                         "memory": 32 * 2**20,
                         "memory_mb": 32,
                         "gpu": 1,
-                        "gpu_model": "gpumodel",
+                        "nvidia_gpu": 1,
                     },
                     "volumes": [],
                 },
