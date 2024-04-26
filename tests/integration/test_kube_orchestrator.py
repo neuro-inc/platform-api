@@ -1429,9 +1429,7 @@ class TestKubeOrchestrator:
         await delete_job_later(job)
         await job.start()
 
-        pod_name = job.id
-        await kube_client.wait_pod_scheduled(pod_name=pod_name, timeout_s=60.0)
-        raw_pod = await kube_client.get_raw_pod(pod_name)
+        raw_pod = await kube_client.get_raw_pod(job.id)
         assert raw_pod["metadata"]["labels"] == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/preset": job.preset_name,
@@ -2503,12 +2501,6 @@ class TestAffinityFixtures:
                     nvidia_gpu=8,
                 ),
                 ResourcePoolType(
-                    name="amd-gpu",
-                    available_cpu=7,
-                    available_memory=61440 * 10**6,
-                    amd_gpu=8,
-                ),
-                ResourcePoolType(
                     name="nvidia-gpu-p",
                     available_cpu=7,
                     available_memory=61440 * 10**6,
@@ -2612,7 +2604,21 @@ class TestNodeAffinity(TestAffinityFixtures):
                                     "nodepool", "cpu-small"
                                 )
                             ]
-                        )
+                        ),
+                        LabelSelectorTerm(
+                            [
+                                LabelSelectorMatchExpression.create_in(
+                                    "nodepool", "cpu-small-p"
+                                )
+                            ]
+                        ),
+                        LabelSelectorTerm(
+                            [
+                                LabelSelectorMatchExpression.create_in(
+                                    "nodepool", "cpu-large-tpu"
+                                )
+                            ]
+                        ),
                     ]
                 ).to_primitive()
             )
@@ -2635,31 +2641,6 @@ class TestNodeAffinity(TestAffinityFixtures):
                             [
                                 LabelSelectorMatchExpression.create_in(
                                     "nodepool", "nvidia-gpu"
-                                )
-                            ]
-                        )
-                    ]
-                ).to_primitive()
-            )
-
-    async def test_cpu_job_on_tpu_node(
-        self,
-        kube_client: MyKubeClient,
-        kube_orchestrator: KubeOrchestrator,
-        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
-    ) -> None:
-        async with start_job(kube_orchestrator, cpu=3, memory=32 * 10**6) as job:
-            await kube_client.wait_pod_scheduled(job.id, "cpu-large-tpu")
-
-            job_pod = await kube_client.get_raw_pod(job.id)
-            assert (
-                job_pod["spec"]["affinity"]["nodeAffinity"]
-                == NodeAffinity(
-                    required=[
-                        LabelSelectorTerm(
-                            [
-                                LabelSelectorMatchExpression.create_in(
-                                    "nodepool", "cpu-large-tpu"
                                 )
                             ]
                         )
