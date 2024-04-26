@@ -2456,7 +2456,7 @@ class TestAffinityFixtures:
                 orchestrator_config, resource_pool_types=resource_pool_types
             )
             if presets is not None:
-                orchestrator = replace(orchestrator_config, presets=presets)
+                orchestrator = replace(orchestrator, presets=presets)
             await kube_job_nodes_factory(orchestrator, kube_config)
             return KubeOrchestrator(
                 cluster_name="default",
