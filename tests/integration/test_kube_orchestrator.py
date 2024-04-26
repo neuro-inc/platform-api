@@ -2591,7 +2591,7 @@ class TestNodeAffinity(TestAffinityFixtures):
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
         async with start_job(kube_orchestrator, cpu=0.1, memory=32 * 10**6) as job:
-            await kube_client.wait_pod_scheduled(job.id, "cpu-small")
+            await kube_client.wait_pod_scheduled(job.id)
 
             job_pod = await kube_client.get_raw_pod(job.id)
             assert (
@@ -2602,13 +2602,6 @@ class TestNodeAffinity(TestAffinityFixtures):
                             [
                                 LabelSelectorMatchExpression.create_in(
                                     "nodepool", "cpu-small"
-                                )
-                            ]
-                        ),
-                        LabelSelectorTerm(
-                            [
-                                LabelSelectorMatchExpression.create_in(
-                                    "nodepool", "cpu-small-p"
                                 )
                             ]
                         ),
@@ -3903,6 +3896,15 @@ class TestExternalJobsPreemption:
                 is_external_job=True,
                 available_resource_pool_names=["cpu-small"],
             ),
+            Preset(
+                name="vast-ai-p",
+                credits_per_hour=Decimal("0"),
+                cpu=0.1,
+                memory=100 * 10**6,
+                is_external_job=True,
+                preemptible_node=True,
+                available_resource_pool_names=["cpu-small-p"],
+            ),
         ]
         orchestrator_config = orchestrator_config_factory(
             resource_pool_types=resources, presets=presets
@@ -4017,9 +4019,7 @@ class TestExternalJobsPreemption:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                preset_name="vast-ai",
-                # marking the job as preemptible
-                preemptible_node=True,
+                preset_name="vast-ai-p",
             ),
         )
         await delete_job_later(job)
@@ -4054,9 +4054,7 @@ class TestExternalJobsPreemption:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                preset_name="vast-ai",
-                # marking the job as preemptible
-                preemptible_node=True,
+                preset_name="vast-ai-p",
             ),
         )
         await delete_job_later(job)
@@ -4098,9 +4096,7 @@ class TestExternalJobsPreemption:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                preset_name="vast-ai",
-                # marking the job as preemptible
-                preemptible_node=True,
+                preset_name="vast-ai-p",
             ),
         )
         await delete_job_later(job)
@@ -4122,9 +4118,7 @@ class TestExternalJobsPreemption:
             record=JobRecord.create(
                 request=JobRequest(job_id=job.id, container=container),
                 cluster_name="test-cluster",
-                preset_name="vast-ai",
-                # marking the job as preemptible
-                preemptible_node=True,
+                preset_name="vast-ai-p",
             ),
         )
 
