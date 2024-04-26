@@ -45,6 +45,7 @@ class Preset:
     gpu_model: Optional[str] = None  # TODO: deprecated
     tpu: Optional[TPUPreset] = None
     is_external_job: bool = False
+    resource_pool_names: Sequence[str] = ()
     available_resource_pool_names: Sequence[str] = ()
 
 

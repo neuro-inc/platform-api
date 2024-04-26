@@ -85,6 +85,7 @@ class ClusterConfigFactory:
                     gpu_model=preset.get("gpu_model"),
                     tpu=self._create_tpu_preset(preset.get("tpu")),
                     is_external_job=preset.get("is_external_job", False),
+                    resource_pool_names=preset.get("resource_pool_names", ()),
                     available_resource_pool_names=preset.get(
                         "available_resource_pool_names", ()
                     ),
