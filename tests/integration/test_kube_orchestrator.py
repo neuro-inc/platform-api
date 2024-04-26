@@ -2450,10 +2450,13 @@ class TestAffinityFixtures:
 
         async def _create(
             resource_pool_types: Sequence[ResourcePoolType],
+            presets: Sequence[Preset] | None = None,
         ) -> KubeOrchestrator:
             orchestrator = replace(
                 orchestrator_config, resource_pool_types=resource_pool_types
             )
+            if presets is not None:
+                orchestrator = replace(orchestrator_config, presets=presets)
             await kube_job_nodes_factory(orchestrator, kube_config)
             return KubeOrchestrator(
                 cluster_name="default",
@@ -2469,9 +2472,7 @@ class TestAffinityFixtures:
     @pytest.fixture
     async def kube_orchestrator(
         self,
-        kube_orchestrator_factory: Callable[
-            [Sequence[ResourcePoolType]], Awaitable[KubeOrchestrator]
-        ],
+        kube_orchestrator_factory: Callable[..., Awaitable[KubeOrchestrator]],
     ) -> KubeOrchestrator:
         return await kube_orchestrator_factory(
             [
@@ -2508,6 +2509,22 @@ class TestAffinityFixtures:
                     is_preemptible=True,
                 ),
             ],
+            [
+                Preset(
+                    name="cpu",
+                    credits_per_hour=Decimal("0"),
+                    cpu=0.1,
+                    memory=100 * 10**6,
+                    available_resource_pool_names=["cpu-small"],
+                ),
+                Preset(
+                    name="unschedulable",
+                    credits_per_hour=Decimal("0"),
+                    cpu=0.1,
+                    memory=100 * 10**6,
+                    available_resource_pool_names=[],
+                ),
+            ],
         )
 
     @pytest.fixture
@@ -2535,12 +2552,13 @@ class TestAffinityFixtures:
         @asynccontextmanager
         async def _create(
             kube_orchestrator: KubeOrchestrator,
-            cpu: float,
-            memory: int,
+            cpu: float = 0.1,
+            memory: int = 128 * 10**6,
             nvidia_gpu: int | None = None,
             amd_gpu: int | None = None,
             scheduler_enabled: bool = False,
             preemptible_node: bool = False,
+            preset_name: str | None = None,
         ) -> AsyncIterator[MyJob]:
             container = Container(
                 image="ubuntu:20.10",
@@ -2561,6 +2579,7 @@ class TestAffinityFixtures:
                     cluster_name="test-cluster",
                     scheduler_enabled=scheduler_enabled,
                     preemptible_node=preemptible_node,
+                    preset_name=preset_name,
                 ),
             )
             await kube_orchestrator.start_job(job, tolerate_unreachable_node=True)
@@ -2575,6 +2594,51 @@ class TestAffinityFixtures:
 
 
 class TestNodeAffinity(TestAffinityFixtures):
+    async def test_unschedulable_job_with_preset(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
+    ) -> None:
+        with pytest.raises(JobUnschedulableException, match="Job cannot be scheduled"):
+            async with start_job(kube_orchestrator, preset_name="unschedulable"):
+                pass
+
+    async def test_job_with_unknown_preset(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
+    ) -> None:
+        with pytest.raises(JobUnschedulableException, match="Job cannot be scheduled"):
+            async with start_job(kube_orchestrator, preset_name="unknown"):
+                pass
+
+    async def test_job_with_preset(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+        start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
+    ) -> None:
+        async with start_job(kube_orchestrator, preset_name="cpu") as job:
+            await kube_client.wait_pod_scheduled(job.id)
+
+            job_pod = await kube_client.get_raw_pod(job.id)
+            assert (
+                job_pod["spec"]["affinity"]["nodeAffinity"]
+                == NodeAffinity(
+                    required=[
+                        LabelSelectorTerm(
+                            [
+                                LabelSelectorMatchExpression.create_in(
+                                    "nodepool", "cpu-small"
+                                )
+                            ]
+                        )
+                    ]
+                ).to_primitive()
+            )
+
     async def test_unschedulable_job(
         self,
         kube_orchestrator: KubeOrchestrator,
