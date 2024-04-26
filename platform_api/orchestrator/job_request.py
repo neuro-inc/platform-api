@@ -230,6 +230,10 @@ class ContainerResources:
             payload["tpu"] = self.tpu.to_primitive()
         return payload
 
+    @property
+    def require_gpu(self) -> bool:
+        return bool(self.nvidia_gpu or self.amd_gpu)
+
     def check_fit_into_pool_type(self, pool_type: ResourcePoolType) -> bool:
         if not pool_type.available_cpu or not pool_type.available_memory:
             return False
@@ -249,7 +253,7 @@ class ContainerResources:
         )
 
     def _check_gpu(self, entry: Union[ResourcePoolType, Preset]) -> bool:
-        if not self.nvidia_gpu and not self.amd_gpu:
+        if not self.require_gpu:
             # container does not need GPU. we are good regardless of presence
             # of GPU in the pool type.
             return True

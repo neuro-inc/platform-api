@@ -158,12 +158,14 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
             "jobs_internal_domain_name_template": "{job_id}.platformapi-tests",
             "resource_pool_types": [
                 ResourcePoolType(
+                    name="cpu",
                     cpu=1.0,
                     available_cpu=1.0,
                     memory=2048 * 10**6,
                     available_memory=2048 * 10**6,
                 ),
                 ResourcePoolType(
+                    name="cpu-p",
                     cpu=1.0,
                     available_cpu=1.0,
                     memory=2048 * 10**6,
@@ -177,6 +179,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     available_memory=500_000 * 10**6,
                 ),
                 ResourcePoolType(
+                    name="tpu",
                     cpu=1.0,
                     available_cpu=1.0,
                     memory=2048 * 10**6,
@@ -188,18 +191,12 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     ),
                 ),
                 ResourcePoolType(
+                    name="gpu",
                     cpu=1.0,
                     available_cpu=1.0,
                     memory=2048 * 10**6,
                     available_memory=2048 * 10**6,
                     nvidia_gpu=1,
-                ),
-                ResourcePoolType(
-                    cpu=1.0,
-                    available_cpu=1.0,
-                    memory=2048 * 10**6,
-                    available_memory=2048 * 10**6,
-                    amd_gpu=1,
                 ),
             ],
             "presets": [
@@ -267,7 +264,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     cpu=3,
                     memory=14336 * 10**6,
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),
-                    available_resource_pool_names=["cpu"],
+                    available_resource_pool_names=["tpu"],
                 ),
             ],
             "job_schedule_scaleup_timeout": 5,

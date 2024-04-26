@@ -73,3 +73,7 @@ class ResourcePoolType:
     min_size: Optional[int] = None
     max_size: Optional[int] = None
     tpu: Optional[TPUResource] = None
+
+    @property
+    def has_gpu(self) -> bool:
+        return bool(self.nvidia_gpu or self.amd_gpu)

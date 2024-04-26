@@ -371,13 +371,15 @@ class KubeOrchestrator(Orchestrator):
     def _create_pod_descriptor(
         self, job: Job, tolerate_unreachable_node: bool = False
     ) -> PodDescriptor:
-        job_preset = job.preset
-        if job.preset_name is not None and (
-            job_preset is None or not job_preset.available_resource_pool_names
-        ):
-            raise JobUnschedulableException("Job cannot be scheduled")
-
         pool_types = self._get_job_resource_pool_types(job)
+        if not pool_types:
+            raise JobUnschedulableException("Job cannot be scheduled")
+        logger.info(
+            "Job %s is scheduled to run in pool types %s",
+            job.id,
+            ", ".join(p.name for p in pool_types),
+        )
+
         node_affinity = self._get_pod_node_affinity(pool_types)
         pod_affinity = self._get_job_pod_pod_affinity()
         tolerations = self._get_pod_tolerations(
@@ -436,13 +438,42 @@ class KubeOrchestrator(Orchestrator):
 
     def _get_job_resource_pool_types(self, job: Job) -> Sequence[ResourcePoolType]:
         job_preset = job.preset
-        if not job_preset:
-            return self._orchestrator_config.resource_pool_types
-        return [
-            p
-            for p in self._orchestrator_config.resource_pool_types
-            if p.name in job_preset.available_resource_pool_names
-        ]
+        if job.preset_name and job_preset is None:
+            return []
+        if job_preset:
+            return [
+                p
+                for p in self._orchestrator_config.resource_pool_types
+                if p.name in job_preset.available_resource_pool_names
+            ]
+
+        job_resources = job.request.container.resources
+        has_cpu_pools = any(
+            not p.has_gpu for p in self._orchestrator_config.resource_pool_types
+        )
+        pool_types = []
+
+        for pool_type in self._orchestrator_config.resource_pool_types:
+            # Schedule jobs only on preemptible nodes if such node specified
+            if job.preemptible_node and not pool_type.is_preemptible:
+                continue
+            if not job.preemptible_node and pool_type.is_preemptible:
+                continue
+
+            # Do not schedule cpu jobs on gpu nodes if cluster has
+            # cpu only nodes.
+            if has_cpu_pools and not job_resources.require_gpu and pool_type.has_gpu:
+                continue
+
+            if not job_resources.check_fit_into_pool_type(pool_type):
+                continue
+
+            pool_types.append(pool_type)
+
+        if not pool_types:
+            return []
+
+        return pool_types
 
     # TODO: remove after cluster resources monitoring process is released
     def _update_pod_container_resources(
