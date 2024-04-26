@@ -380,13 +380,11 @@ class KubeOrchestrator(Orchestrator):
             ", ".join(p.name for p in pool_types),
         )
 
+        tolerations = self._get_pod_tolerations(
+            job, pool_types, tolerate_unreachable_node=tolerate_unreachable_node
+        )
         node_affinity = self._get_pod_node_affinity(pool_types)
         pod_affinity = self._get_job_pod_pod_affinity()
-        tolerations = self._get_pod_tolerations(
-            job,
-            pool_types=pool_types,
-            tolerate_unreachable_node=tolerate_unreachable_node,
-        )
         labels = self._get_pod_labels(job)
 
         def _to_env_str(value: Any) -> str:
@@ -648,7 +646,6 @@ class KubeOrchestrator(Orchestrator):
     def _get_pod_tolerations(
         self,
         job: Job,
-        *,
         pool_types: Sequence[ResourcePoolType],
         tolerate_unreachable_node: bool = False,
     ) -> list[Toleration]:

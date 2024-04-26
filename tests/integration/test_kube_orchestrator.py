@@ -1423,14 +1423,14 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                preset_name="preseet",
+                preset_name="cpu-micro",
             ),
         )
         await delete_job_later(job)
         await job.start()
 
         pod_name = job.id
-        await kube_client.wait_pod_is_running(pod_name=pod_name, timeout_s=60.0)
+        await kube_client.wait_pod_scheduled(pod_name=pod_name, timeout_s=60.0)
         raw_pod = await kube_client.get_raw_pod(pod_name)
         assert raw_pod["metadata"]["labels"] == {
             "platform.neuromation.io/job": job.id,
@@ -2588,9 +2588,7 @@ class TestNodeAffinity(TestAffinityFixtures):
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
-        with pytest.raises(
-            JobUnschedulableException, match="Job will not fit into cluster"
-        ):
+        with pytest.raises(JobUnschedulableException, match="Job cannot be scheduled"):
             async with start_job(kube_orchestrator, cpu=100, memory=32 * 10**6):
                 pass
 
@@ -3650,6 +3648,7 @@ class TestExternalJobs:
                     cpu=0.1,
                     memory=100 * 10**6,
                     is_external_job=True,
+                    available_resource_pool_names=["cpu"],
                 ),
             ]
         )
@@ -3921,6 +3920,7 @@ class TestExternalJobsPreemption:
                 cpu=0.1,
                 memory=100 * 10**6,
                 is_external_job=True,
+                available_resource_pool_names=["cpu-small"],
             ),
         ]
         orchestrator_config = orchestrator_config_factory(
