@@ -672,9 +672,8 @@ class KubeOrchestrator(Orchestrator):
                     effect="NoSchedule",
                 )
             )
-        if (
-            self._kube_config.jobs_pod_preemptible_toleration_key
-            and job.preemptible_node
+        if self._kube_config.jobs_pod_preemptible_toleration_key and (
+            job.preemptible_node or any(p.is_preemptible for p in pool_types)
         ):
             tolerations.append(
                 Toleration(
