@@ -252,6 +252,8 @@ class TestApi:
                 "resource_pool_types": [
                     {
                         "name": "cpu",
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 1.0,
                         "available_cpu": 1.0,
                         "memory": 2048 * 10**6,
@@ -260,6 +262,8 @@ class TestApi:
                     },
                     {
                         "name": "cpu-p",
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 1.0,
                         "available_cpu": 1.0,
                         "memory": 2048 * 10**6,
@@ -269,6 +273,8 @@ class TestApi:
                     },
                     {
                         "name": mock.ANY,
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 100,
                         "available_cpu": 100,
                         "memory": 500_000 * 10**6,
@@ -277,6 +283,8 @@ class TestApi:
                     },
                     {
                         "name": "tpu",
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 1.0,
                         "available_cpu": 1.0,
                         "memory": 2048 * 10**6,
@@ -290,6 +298,8 @@ class TestApi:
                     },
                     {
                         "name": "gpu",
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 1.0,
                         "available_cpu": 1.0,
                         "memory": 2048 * 10**6,
@@ -554,6 +564,8 @@ class TestApi:
                 "resource_pool_types": [
                     {
                         "name": "cpu",
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 1.0,
                         "available_cpu": 1.0,
                         "memory": 2048 * 10**6,
@@ -562,6 +574,8 @@ class TestApi:
                     },
                     {
                         "name": "cpu-p",
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 1.0,
                         "available_cpu": 1.0,
                         "memory": 2048 * 10**6,
@@ -571,6 +585,8 @@ class TestApi:
                     },
                     {
                         "name": mock.ANY,
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 100,
                         "available_cpu": 100,
                         "memory": 500_000 * 10**6,
@@ -579,6 +595,8 @@ class TestApi:
                     },
                     {
                         "name": "tpu",
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 1.0,
                         "available_cpu": 1.0,
                         "memory": 2048 * 10**6,
@@ -592,6 +610,8 @@ class TestApi:
                     },
                     {
                         "name": "gpu",
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 1.0,
                         "available_cpu": 1.0,
                         "memory": 2048 * 10**6,
@@ -790,6 +810,8 @@ class TestApi:
                 "resource_pool_types": [
                     {
                         "name": "cpu",
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 1.0,
                         "available_cpu": 1.0,
                         "memory": 2048 * 10**6,
@@ -798,6 +820,8 @@ class TestApi:
                     },
                     {
                         "name": "cpu-p",
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 1.0,
                         "available_cpu": 1.0,
                         "memory": 2048 * 10**6,
@@ -807,6 +831,8 @@ class TestApi:
                     },
                     {
                         "name": mock.ANY,
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 100,
                         "available_cpu": 100,
                         "memory": 500_000 * 10**6,
@@ -815,6 +841,8 @@ class TestApi:
                     },
                     {
                         "name": "tpu",
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 1.0,
                         "available_cpu": 1.0,
                         "memory": 2048 * 10**6,
@@ -828,6 +856,8 @@ class TestApi:
                     },
                     {
                         "name": "gpu",
+                        "min_size": 1,
+                        "max_size": 2,
                         "cpu": 1.0,
                         "available_cpu": 1.0,
                         "memory": 2048 * 10**6,

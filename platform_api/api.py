@@ -206,7 +206,6 @@ class ConfigApiHandler:
             "memory": resource_pool_type.memory,
             "available_memory": resource_pool_type.available_memory,
             "disk_size": resource_pool_type.disk_size,
-            "is_preemptible": resource_pool_type.is_preemptible,
         }
         if resource_pool_type.nvidia_gpu is not None:
             payload["nvidia_gpu"] = resource_pool_type.nvidia_gpu
@@ -218,6 +217,8 @@ class ConfigApiHandler:
                 "software_versions": resource_pool_type.tpu.software_versions,
                 "ipv4_cidr_block": resource_pool_type.tpu.ipv4_cidr_block,
             }
+        if resource_pool_type.is_preemptible:
+            payload["is_preemptible"] = resource_pool_type.is_preemptible
         return payload
 
     def _convert_preset_to_payload(self, preset: Preset) -> dict[str, Any]:
