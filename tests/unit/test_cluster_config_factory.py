@@ -258,10 +258,8 @@ class TestClusterConfigFactory:
 
         assert len(orchestrator.resource_pool_types) == 5
         assert orchestrator.resource_pool_types[0].name == "n1-highmem-8"
-        assert orchestrator.resource_pool_types[0].cpu == 8.0
-        assert orchestrator.resource_pool_types[0].available_cpu == 7.0
-        assert orchestrator.resource_pool_types[0].memory == 53248 * 10**6
-        assert orchestrator.resource_pool_types[0].available_memory == 49152 * 10**6
+        assert orchestrator.resource_pool_types[0].cpu == 7.0
+        assert orchestrator.resource_pool_types[0].memory == 49152 * 10**6
         assert orchestrator.resource_pool_types[0].disk_size == 150 * 10**9
         assert orchestrator.resource_pool_types[0].nvidia_gpu is None
         assert orchestrator.resource_pool_types[0].tpu == TPUResource(
@@ -271,9 +269,7 @@ class TestClusterConfigFactory:
         )
 
         assert orchestrator.resource_pool_types[1].cpu == 31.0
-        assert orchestrator.resource_pool_types[1].available_cpu == 31.0
         assert orchestrator.resource_pool_types[1].memory == 204800 * 10**6
-        assert orchestrator.resource_pool_types[1].available_memory == 204800 * 10**6
         assert orchestrator.resource_pool_types[1].nvidia_gpu == 4
         assert orchestrator.resource_pool_types[1].amd_gpu == 4
 

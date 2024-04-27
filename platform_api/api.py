@@ -202,9 +202,7 @@ class ConfigApiHandler:
             "min_size": resource_pool_type.min_size,
             "max_size": resource_pool_type.max_size,
             "cpu": resource_pool_type.cpu,
-            "available_cpu": resource_pool_type.available_cpu,
             "memory": resource_pool_type.memory,
-            "available_memory": resource_pool_type.available_memory,
             "disk_size": resource_pool_type.disk_size,
         }
         if resource_pool_type.nvidia_gpu is not None:

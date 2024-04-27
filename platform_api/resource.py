@@ -63,10 +63,8 @@ class ResourcePoolType:
     # default_factory is used only in tests
     name: str = field(default_factory=lambda: str(uuid.uuid4()))
     is_preemptible: Optional[bool] = False
-    cpu: Optional[float] = None
-    available_cpu: Optional[float] = None
-    memory: Optional[int] = None
-    available_memory: Optional[int] = None
+    cpu: Optional[float] = None  # TODO: deprecated, use cpu
+    memory: Optional[int] = None  # TODO: deprecated, use memory
     nvidia_gpu: Optional[int] = None
     amd_gpu: Optional[int] = None
     disk_size: Optional[int] = None

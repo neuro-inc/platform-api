@@ -134,19 +134,13 @@ class ClusterConfigFactory:
         )
 
     def _create_resource_pool_type(self, payload: dict[str, Any]) -> ResourcePoolType:
-        cpu = payload.get("cpu")
-
-        memory = _get_memory_with_deprecated_mb(payload, "memory")
-        available_memory = _get_memory_with_deprecated_mb(payload, "available_memory")
         return ResourcePoolType(
             name=payload["name"],
             nvidia_gpu=payload.get("nvidia_gpu"),
             amd_gpu=payload.get("amd_gpu"),
             is_preemptible=payload.get("is_preemptible"),
-            cpu=cpu,
-            available_cpu=payload.get("available_cpu") or cpu,
-            memory=memory,
-            available_memory=available_memory or memory,
+            cpu=payload.get("available_cpu") or payload.get("cpu"),
+            memory=payload.get("available_memory") or payload.get("memory"),
             disk_size=payload.get("disk_size"),
             min_size=payload.get("min_size"),
             max_size=payload.get("max_size"),
