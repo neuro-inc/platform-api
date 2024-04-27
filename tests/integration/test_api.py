@@ -292,8 +292,8 @@ class TestApi:
                         "disk_size": 150 * 10**9,
                         "tpu": {
                             "ipv4_cidr_block": "1.1.1.1/32",
-                            "types": ("v2-8",),
-                            "software_versions": ("1.14",),
+                            "types": ["v2-8"],
+                            "software_versions": ["1.14"],
                         },
                     },
                     {
@@ -604,8 +604,8 @@ class TestApi:
                         "disk_size": 150 * 10**9,
                         "tpu": {
                             "ipv4_cidr_block": "1.1.1.1/32",
-                            "types": ("v2-8",),
-                            "software_versions": ("1.14",),
+                            "types": ["v2-8"],
+                            "software_versions": ["1.14"],
                         },
                     },
                     {
@@ -850,8 +850,8 @@ class TestApi:
                         "disk_size": 150 * 10**9,
                         "tpu": {
                             "ipv4_cidr_block": "1.1.1.1/32",
-                            "types": ("v2-8",),
-                            "software_versions": ("1.14",),
+                            "types": ["v2-8"],
+                            "software_versions": ["1.14"],
                         },
                     },
                     {
