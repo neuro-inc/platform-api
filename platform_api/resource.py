@@ -69,7 +69,7 @@ class ResourcePoolType:
     available_memory: Optional[int] = None
     nvidia_gpu: Optional[int] = None
     amd_gpu: Optional[int] = None
-    disk_gb: Optional[int] = None
+    disk_size: Optional[int] = None
     min_size: Optional[int] = None
     max_size: Optional[int] = None
     tpu: Optional[TPUResource] = None

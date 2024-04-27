@@ -163,6 +163,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     available_cpu=1.0,
                     memory=2048 * 10**6,
                     available_memory=2048 * 10**6,
+                    disk_size=150 * 10**9,
                 ),
                 ResourcePoolType(
                     name="cpu-p",
@@ -170,6 +171,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     available_cpu=1.0,
                     memory=2048 * 10**6,
                     available_memory=2048 * 10**6,
+                    disk_size=150 * 10**9,
                     is_preemptible=True,
                 ),
                 ResourcePoolType(
@@ -177,6 +179,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     available_cpu=100,
                     memory=500_000 * 10**6,
                     available_memory=500_000 * 10**6,
+                    disk_size=150 * 10**9,
                 ),
                 ResourcePoolType(
                     name="tpu",
@@ -184,6 +187,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     available_cpu=1.0,
                     memory=2048 * 10**6,
                     available_memory=2048 * 10**6,
+                    disk_size=150 * 10**9,
                     tpu=TPUResource(
                         ipv4_cidr_block="1.1.1.1/32",
                         types=("v2-8",),
@@ -196,7 +200,9 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     available_cpu=1.0,
                     memory=2048 * 10**6,
                     available_memory=2048 * 10**6,
+                    disk_size=150 * 10**9,
                     nvidia_gpu=1,
+                    amd_gpu=2,
                 ),
             ],
             "presets": [

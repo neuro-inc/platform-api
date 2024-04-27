@@ -134,7 +134,7 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
                         "available_cpu": 7.0,
                         "memory": 53248 * 10**6,
                         "available_memory": 49152 * 10**6,
-                        "disk_size_gb": 150,
+                        "disk_size": 150 * 10**9,
                         "tpu": {
                             "ipv4_cidr_block": "1.1.1.1/32",
                             "types": ["v2-8", "v3-8"],
@@ -148,7 +148,7 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
                         "max_size": 16,
                         "cpu": 31.0,
                         "memory": 204800 * 10**6,
-                        "disk_size_gb": 150,
+                        "disk_size_gb": 150 * 10**9,
                         "nvidia_gpu": 4,
                         "amd_gpu": 4,
                     },
@@ -161,7 +161,7 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
                         "available_cpu": 31.0,
                         "memory": 212992 * 10**6,
                         "available_memory": 204800 * 10**6,
-                        "disk_size_gb": 150,
+                        "disk_size_gb": 150 * 10**9,
                         "nvidia_gpu": 4,
                         "amd_gpu": 4,
                     },
@@ -174,7 +174,7 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
                         "available_cpu": 7.0,
                         "memory": 53248 * 10**6,
                         "available_memory": 49152 * 10**6,
-                        "disk_size_gb": 150,
+                        "disk_size_gb": 150 * 10**9,
                         "nvidia_gpu": 1,
                         "amd_gpu": 1,
                     },
@@ -187,7 +187,7 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
                         "available_cpu": 7.0,
                         "memory": 53248 * 10**6,
                         "available_memory": 49152 * 10**6,
-                        "disk_size_gb": 150,
+                        "disk_size_gb": 150 * 10**9,
                         "nvidia_gpu": 1,
                         "amd_gpu": 1,
                     },
@@ -262,7 +262,7 @@ class TestClusterConfigFactory:
         assert orchestrator.resource_pool_types[0].available_cpu == 7.0
         assert orchestrator.resource_pool_types[0].memory == 53248 * 10**6
         assert orchestrator.resource_pool_types[0].available_memory == 49152 * 10**6
-        assert orchestrator.resource_pool_types[0].disk_gb == 150
+        assert orchestrator.resource_pool_types[0].disk_size == 150 * 10**9
         assert orchestrator.resource_pool_types[0].nvidia_gpu is None
         assert orchestrator.resource_pool_types[0].tpu == TPUResource(
             ipv4_cidr_block="1.1.1.1/32",

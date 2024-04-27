@@ -147,7 +147,7 @@ class ClusterConfigFactory:
             available_cpu=payload.get("available_cpu") or cpu,
             memory=memory,
             available_memory=available_memory or memory,
-            disk_gb=payload.get("disk_size_gb"),
+            disk_size=payload.get("disk_size"),
             min_size=payload.get("min_size"),
             max_size=payload.get("max_size"),
             tpu=self._create_tpu_resource(payload.get("tpu")),
