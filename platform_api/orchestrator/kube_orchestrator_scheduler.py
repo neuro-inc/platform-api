@@ -256,11 +256,11 @@ class KubeOrchestratorPreemption:
     def _get_pods_to_schedule(
         self, pods: Iterable[PodDescriptor]
     ) -> list[PodDescriptor]:
-        def _create_key(pod: PodDescriptor) -> tuple[int, int, int, float]:
+        def _create_key(pod: PodDescriptor) -> tuple[int, int, float]:
             r = pod.resources
             if not r:
-                return (0, 0, 0, 0.0)
-            return (r.nvidia_gpu or 0, r.amd_gpu or 0, r.memory, r.cpu)
+                return (0, 0, 0.0)
+            return ((r.nvidia_gpu or 0) + (r.amd_gpu or 0), r.memory, r.cpu)
 
         pods_to_schedule = []
         for pod in pods:
@@ -330,4 +330,5 @@ class KubeOrchestratorPreemption:
             cpu=max(0, required.cpu - free.cpu),
             memory=max(0, required.memory - free.memory),
             nvidia_gpu=max(0, (required.nvidia_gpu or 0) - free.nvidia_gpu),
+            amd_gpu=max(0, (required.amd_gpu or 0) - free.amd_gpu),
         )

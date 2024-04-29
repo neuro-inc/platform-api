@@ -1577,7 +1577,12 @@ class NodeResources:
 
     @property
     def any(self) -> bool:
-        return self.cpu_mcores > 0 or self.memory > 0 or self.nvidia_gpu > 0
+        return (
+            self.cpu_mcores > 0
+            or self.memory > 0
+            or self.nvidia_gpu > 0
+            or self.amd_gpu > 0
+        )
 
     @property
     def cpu_mcores(self) -> int:
@@ -1591,6 +1596,7 @@ class NodeResources:
             self.cpu_mcores >= r.cpu_mcores
             and self.memory >= r.memory
             and self.nvidia_gpu >= (r.nvidia_gpu or 0)
+            and self.amd_gpu >= (r.amd_gpu or 0)
         )
 
     def __add__(self, other: "NodeResources") -> "NodeResources":
@@ -2650,12 +2656,14 @@ class KubePreemption:
     ) -> list[PodDescriptor]:
         if resources.nvidia_gpu:
             pods = [p for p in pods if p.resources and p.resources.nvidia_gpu]
+        if resources.amd_gpu:
+            pods = [p for p in pods if p.resources and p.resources.amd_gpu]
         pods_to_preempt: list[PodDescriptor] = []
         while pods and resources.any:
             logger.debug("Pods left: %d", len(pods))
             logger.debug("Resources left: %s", resources)
-            #  max distance for a single resource is 1, 3 resources total
-            best_dist = 4.0
+            # max distance for a single resource is 1, 4 resources total
+            best_dist = 5.0
             best_resources: Resources = pods[0].resources  # type: ignore
             best_pod_index = 0
             for i, pod in enumerate(pods):
@@ -2668,7 +2676,7 @@ class KubePreemption:
                     and cls._has_less_resources(pod.resources, best_resources)
                 ):
                     logger.debug(
-                        "Chose new best pod: name=%s, dist=%f", pods[i].name, dist
+                        "New best pod selected: name=%s, dist=%f", pods[i].name, dist
                     )
                     best_dist = dist
                     best_resources = pod.resources
@@ -2712,12 +2720,12 @@ class KubePreemption:
         dist += _dist(resources.memory, pod.resources.memory)
         if resources.nvidia_gpu:
             dist += _dist(resources.nvidia_gpu or 0, pod.resources.nvidia_gpu or 0)
+        if resources.amd_gpu:
+            dist += _dist(resources.amd_gpu or 0, pod.resources.amd_gpu or 0)
         return dist
 
     @classmethod
     def _has_less_resources(cls, r1: Resources, r2: Resources) -> bool:
-        return ((r1.nvidia_gpu or 0), r1.memory, r1.cpu_mcores) < (
-            (r2.nvidia_gpu or 0),
-            r2.memory,
-            r2.cpu_mcores,
-        )
+        key1 = ((r1.nvidia_gpu or 0) + (r1.amd_gpu or 0), r1.memory, r1.cpu_mcores)
+        key2 = ((r2.nvidia_gpu or 0) + (r2.amd_gpu or 0), r2.memory, r2.cpu_mcores)
+        return key1 < key2

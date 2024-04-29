@@ -437,7 +437,7 @@ class KubeOrchestrator(Orchestrator):
     def _get_job_resource_pool_types(self, job: Job) -> Sequence[ResourcePoolType]:
         job_preset = job.preset
         if job.preset_name and job_preset is None:
-            logger.info("Preset %s not found", job.preset_name)
+            logger.info("Preset %s not found for job %s", job.preset_name, job.id)
             return []
         if job_preset:
             return [
