@@ -651,28 +651,30 @@ class TestNodeResources:
             {"cpu": "1", "memory": "4096Mi", "nvidia.com/gpu": "1"}
         )
 
-        assert resources == NodeResources(cpu=1, memory=4096 * 2**20, gpu=1)
+        assert resources == NodeResources(cpu=1, memory=4096 * 2**20, nvidia_gpu=1)
 
     def test_invalid_cpu(self) -> None:
         with pytest.raises(ValueError, match="Invalid cpu"):
-            NodeResources(cpu=-1, memory=4096, gpu=1)
+            NodeResources(cpu=-1, memory=4096, nvidia_gpu=1)
 
     def test_invalid_memory(self) -> None:
         with pytest.raises(ValueError, match="Invalid memory"):
-            NodeResources(cpu=1, memory=-4096, gpu=1)
+            NodeResources(cpu=1, memory=-4096, nvidia_gpu=1)
 
     def test_invalid_gpu(self) -> None:
         with pytest.raises(ValueError, match="Invalid gpu"):
-            NodeResources(cpu=1, memory=4096, gpu=-1)
+            NodeResources(cpu=1, memory=4096, nvidia_gpu=-1)
 
     def test_are_sufficient(self) -> None:
-        r = NodeResources(cpu=1, memory=4096, gpu=1)
+        r = NodeResources(cpu=1, memory=4096, nvidia_gpu=1)
 
         pod = PodDescriptor(name="job", image="job")
         assert r.are_sufficient(pod) is True
 
         pod = PodDescriptor(
-            name="job", image="job", resources=Resources(cpu=1, memory=4096, gpu=1)
+            name="job",
+            image="job",
+            resources=Resources(cpu=1, memory=4096, nvidia_gpu=1),
         )
         assert r.are_sufficient(pod) is True
 
@@ -692,7 +694,9 @@ class TestNodeResources:
         assert r.are_sufficient(pod) is False
 
         pod = PodDescriptor(
-            name="job", image="job", resources=Resources(cpu=0.1, memory=128, gpu=2)
+            name="job",
+            image="job",
+            resources=Resources(cpu=0.1, memory=128, nvidia_gpu=2),
         )
         assert r.are_sufficient(pod) is False
 
@@ -729,19 +733,19 @@ class TestNode:
         node = Node(
             name="minikube",
             status=NodeStatus(
-                allocatable_resources=NodeResources(cpu=1, memory=1024, gpu=1)
+                allocatable_resources=NodeResources(cpu=1, memory=1024, nvidia_gpu=1)
             ),
         )
 
         free = node.get_free_resources(NodeResources(cpu=0.1, memory=128))
 
-        assert free == NodeResources(cpu=0.9, memory=896, gpu=1)
+        assert free == NodeResources(cpu=0.9, memory=896, nvidia_gpu=1)
 
     def test_get_free_resources_error(self) -> None:
         node = Node(
             name="minikube",
             status=NodeStatus(
-                allocatable_resources=NodeResources(cpu=1, memory=1024, gpu=1)
+                allocatable_resources=NodeResources(cpu=1, memory=1024, nvidia_gpu=1)
             ),
         )
 
@@ -769,7 +773,7 @@ async def pod_factory() -> PodFactory:
             name=name or f"pod-{uuid.uuid4()}",
             labels=labels,
             image="gcr.io/google_containers/pause:3.1",
-            resources=Resources(cpu=cpu, memory=memory, gpu=gpu),
+            resources=Resources(cpu=cpu, memory=memory, nvidia_gpu=gpu),
         )
         return pod
 

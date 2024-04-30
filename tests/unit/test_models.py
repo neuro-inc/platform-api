@@ -75,7 +75,7 @@ class TestContainerRequestValidator:
     def payload_with_zero_gpu(self) -> dict[str, Any]:
         return {
             "image": "testimage",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 0},
+            "resources": {"cpu": 0.1, "memory_mb": 16, "nvidia_gpu": 0, "amd_gpu": 0},
             "volumes": [
                 {
                     "src_storage_uri": "storage://test-cluster/",
@@ -88,7 +88,7 @@ class TestContainerRequestValidator:
     def payload_with_negative_gpu(self) -> dict[str, Any]:
         return {
             "image": "testimage",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": -1},
+            "resources": {"cpu": 0.1, "memory_mb": 16, "nvidia_gpu": -1, "amd_gpu": -1},
             "volumes": [
                 {
                     "src_storage_uri": "storage://test-cluster/",
@@ -101,7 +101,7 @@ class TestContainerRequestValidator:
     def payload_with_one_gpu(self) -> dict[str, Any]:
         return {
             "image": "testimage",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 1},
+            "resources": {"cpu": 0.1, "memory_mb": 16, "nvidia_gpu": 1, "amd_gpu": 1},
             "volumes": [
                 {
                     "src_storage_uri": "storage://test-cluster/",
@@ -114,7 +114,12 @@ class TestContainerRequestValidator:
     def payload_with_too_many_gpu(self) -> dict[str, Any]:
         return {
             "image": "testimage",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "gpu": 130},
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 16,
+                "nvidia_gpu": 130,
+                "amd_gpu": 130,
+            },
             "volumes": [
                 {
                     "src_storage_uri": "storage://test-cluster/",
@@ -164,47 +169,25 @@ class TestContainerRequestValidator:
             allow_volumes=True, cluster_name="test-cluster"
         )
         result = validator.check(payload_with_zero_gpu)
-        assert result["resources"]["gpu"] == 0
+        assert result["resources"]["nvidia_gpu"] == 0
+        assert result["resources"]["amd_gpu"] == 0
 
     def test_with_one_gpu(self, payload_with_one_gpu: dict[str, Any]) -> None:
         validator = create_container_request_validator(
             allow_volumes=True, cluster_name="test-cluster"
         )
         result = validator.check(payload_with_one_gpu)
-        assert result["resources"]["gpu"]
-        assert result["resources"]["gpu"] == 1
+        assert result["resources"]["nvidia_gpu"]
+        assert result["resources"]["nvidia_gpu"] == 1
+        assert result["resources"]["amd_gpu"]
+        assert result["resources"]["amd_gpu"] == 1
 
     def test_with_negative_gpu(self, payload_with_negative_gpu: dict[str, Any]) -> None:
         validator = create_container_request_validator(
             allow_volumes=True, cluster_name="test-cluster"
         )
-        with pytest.raises(ValueError, match="gpu"):
+        with pytest.raises(ValueError, match="nvidia_gpu.*amd_gpu"):
             validator.check(payload_with_negative_gpu)
-
-    def test_gpu_model_but_no_gpu(self) -> None:
-        cluster = "test-cluster"
-        payload = {
-            "image": "testimage",
-            "resources": {"cpu": 0.1, "memory_mb": 16, "gpu_model": "unknown"},
-        }
-        validator = create_container_request_validator(cluster_name=cluster)
-        with pytest.raises(ValueError, match="gpu_model is not allowed key"):
-            validator.check(payload)
-
-    def test_gpu_model_unknown(self) -> None:
-        cluster = "test-cluster"
-        payload = {
-            "image": "testimage",
-            "resources": {
-                "cpu": 0.1,
-                "memory_mb": 16,
-                "gpu": 1,
-                "gpu_model": "unknown",
-            },
-        }
-        validator = create_container_request_validator(cluster_name=cluster)
-        with pytest.raises(ValueError, match=r"value doesn\\+'t match any variant"):
-            validator.check(payload)
 
     def test_gpu_model(self) -> None:
         cluster = "test-cluster"
@@ -213,15 +196,11 @@ class TestContainerRequestValidator:
             "resources": {
                 "cpu": 0.1,
                 "memory_mb": 16,
-                "gpu": 1,
                 "gpu_model": "unknown",
             },
         }
-        validator = create_container_request_validator(
-            allowed_gpu_models=["unknown"], cluster_name=cluster
-        )
+        validator = create_container_request_validator(cluster_name=cluster)
         result = validator.check(payload)
-        assert result["resources"]["gpu"] == 1
         assert result["resources"]["gpu_model"] == "unknown"
 
     def test_gpu_tpu_conflict(self) -> None:
@@ -231,7 +210,7 @@ class TestContainerRequestValidator:
             "resources": {
                 "cpu": 0.1,
                 "memory_mb": 16,
-                "gpu": 1,
+                "nvidia_gpu": 1,
                 "tpu": {"type": "v2-8", "software_version": "1.14"},
             },
         }
@@ -313,12 +292,14 @@ class TestContainerResponseValidator:
             "resources": {
                 "cpu": 0.1,
                 "memory_mb": 16,
+                "nvidia_gpu": 1,
                 "gpu": 1,
                 "gpu_model": "unknown",
             },
         }
         validator = create_container_response_validator()
         result = validator.check(payload)
+        assert result["resources"]["nvidia_gpu"] == 1
         assert result["resources"]["gpu"] == 1
         assert result["resources"]["gpu_model"] == "unknown"
 
@@ -642,7 +623,8 @@ class TestJobPresetValidator:
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
                     memory=100 * 10**6,
-                    gpu=1,
+                    nvidia_gpu=1,
+                    amd_gpu=1,
                     gpu_model="nvidia-tesla-k80",
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),
                     scheduler_enabled=True,
@@ -659,7 +641,8 @@ class TestJobPresetValidator:
                     "cpu": 0.1,
                     "memory": 100 * 10**6,
                     "shm": True,
-                    "gpu": 1,
+                    "nvidia_gpu": 1,
+                    "amd_gpu": 1,
                     "gpu_model": "nvidia-tesla-k80",
                     "tpu": {
                         "type": "v2-8",
@@ -683,7 +666,6 @@ class TestJobRequestValidator:
             "container": container,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(),
             allowed_tpu_resources=(),
             cluster_name="testcluster",
             org_name=None,
@@ -704,7 +686,6 @@ class TestJobRequestValidator:
             "scheduler_enabled": True,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(),
             allowed_tpu_resources=(),
             cluster_name="testcluster",
             org_name=None,
@@ -722,7 +703,6 @@ class TestJobRequestValidator:
         }
         validator = create_job_request_validator(
             allow_flat_structure=True,
-            allowed_gpu_models=(),
             allowed_tpu_resources=(),
             cluster_name="testcluster",
             org_name=None,
@@ -742,7 +722,6 @@ class TestJobRequestValidator:
             "cluster_name": "testcluster",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(),
             allowed_tpu_resources=(),
             cluster_name="testcluster",
             org_name=None,
@@ -761,7 +740,6 @@ class TestJobRequestValidator:
             "cluster_name": "testcluster",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(),
             allowed_tpu_resources=(),
             cluster_name="another",
             org_name=None,
@@ -781,7 +759,6 @@ class TestJobRequestValidator:
             "max_run_time_minutes": limit_minutes,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(),
             allowed_tpu_resources=(),
             cluster_name="test-cluster",
             org_name=None,
@@ -800,7 +777,6 @@ class TestJobRequestValidator:
             "max_run_time_minutes": limit_minutes,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(),
             allowed_tpu_resources=(),
             cluster_name="test-cluster",
             org_name=None,
@@ -851,7 +827,6 @@ class TestJobRequestValidator:
             "restart_policy": "unknown",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(),
             allowed_tpu_resources=(),
             cluster_name="testcluster",
             org_name=None,
@@ -872,7 +847,6 @@ class TestJobRequestValidator:
             "container": container,
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(),
             allowed_tpu_resources=(),
             cluster_name="clustername",
             org_name=None,
@@ -896,7 +870,6 @@ class TestJobRequestValidator:
         }
         request = {"container": container}
         validator = create_job_request_validator(
-            allowed_gpu_models=(),
             allowed_tpu_resources=(),
             cluster_name="clustername",
             org_name=None,
@@ -915,7 +888,6 @@ class TestJobRequestValidator:
             "energy_schedule_name": "default",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(),
             allowed_tpu_resources=(),
             cluster_name="testcluster",
             org_name=None,
@@ -935,7 +907,6 @@ class TestJobRequestValidator:
             "energy_schedule_name": "default",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(),
             allowed_tpu_resources=(),
             cluster_name="testcluster",
             org_name=None,
@@ -955,7 +926,6 @@ class TestJobRequestValidator:
             "energy_schedule_name": "default",
         }
         validator = create_job_request_validator(
-            allowed_gpu_models=(),
             allowed_tpu_resources=(),
             cluster_name="testcluster",
             org_name=None,
@@ -1001,7 +971,14 @@ class TestJobContainerToJson:
     def test_gpu_and_shm_resources(self) -> None:
         container = Container(
             image="image",
-            resources=ContainerResources(cpu=0.1, memory=16 * 10**6, gpu=1, shm=True),
+            resources=ContainerResources(
+                cpu=0.1,
+                memory=16 * 10**6,
+                nvidia_gpu=1,
+                amd_gpu=2,
+                gpu_model_id="gpu-model",
+                shm=True,
+            ),
         )
         assert convert_job_container_to_json(container) == {
             "env": {},
@@ -1011,6 +988,9 @@ class TestJobContainerToJson:
                 "memory": 16 * 10**6,
                 "memory_mb": 15,
                 "gpu": 1,
+                "nvidia_gpu": 1,
+                "amd_gpu": 2,
+                "gpu_model": "gpu-model",
                 "shm": True,
             },
             "volumes": [],
@@ -1753,7 +1733,8 @@ async def test_parse_response(mock_orchestrator: MockOrchestrator) -> None:
                     resources=ContainerResources(
                         cpu=1,
                         memory=128 * 10**6,
-                        gpu=1,
+                        nvidia_gpu=1,
+                        amd_gpu=2,
                         gpu_model_id="nvidia-tesla-k80",
                         shm=True,
                         tpu=ContainerTPUResource(type="type", software_version="1.0"),
@@ -2115,4 +2096,5 @@ async def test_job_to_job_response__energy_schedule_name(
     )
     payload = convert_job_to_job_response(job)
 
+    assert payload["energy_schedule_name"] == "green"
     assert payload["energy_schedule_name"] == "green"

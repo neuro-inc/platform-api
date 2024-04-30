@@ -378,7 +378,7 @@ class TestPodDescriptor:
             name="testname",
             image="testimage",
             env={"TESTVAR": "testvalue"},
-            resources=Resources(cpu=0.5, memory=1024 * 10**6, gpu=1),
+            resources=Resources(cpu=0.5, memory=1024 * 10**6, nvidia_gpu=1),
             port=1234,
             tty=True,
             node_selector={"label": "value"},
@@ -475,7 +475,7 @@ class TestPodDescriptor:
             name="testname",
             image="testimage",
             env={"TESTVAR": "testvalue"},
-            resources=Resources(cpu=0.5, memory=1024 * 10**6, gpu=1),
+            resources=Resources(cpu=0.5, memory=1024 * 10**6, nvidia_gpu=1),
             port=1234,
             readiness_probe=True,
         )
@@ -528,7 +528,7 @@ class TestPodDescriptor:
             name="testname",
             image="testimage",
             env={"TESTVAR": "testvalue"},
-            resources=Resources(cpu=0.5, memory=1024 * 10**6, gpu=1),
+            resources=Resources(cpu=0.5, memory=1024 * 10**6, nvidia_gpu=1),
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
@@ -578,7 +578,7 @@ class TestPodDescriptor:
             name="testname",
             image="testimage",
             env={"TESTVAR": "testvalue"},
-            resources=Resources(cpu=0.5, memory=1024 * 10**6, gpu=1),
+            resources=Resources(cpu=0.5, memory=1024 * 10**6, nvidia_gpu=1),
             port=1234,
             volumes=[dev_shm],
             volume_mounts=[dev_shm.create_mount(container_volume)],
@@ -635,7 +635,9 @@ class TestPodDescriptor:
             command="testcommand 123",
             working_dir="/working/dir",
             env={"TESTVAR": "testvalue"},
-            resources=ContainerResources(cpu=1, memory=128 * 10**6, gpu=1),
+            resources=ContainerResources(
+                cpu=1, memory=128 * 10**6, nvidia_gpu=1, amd_gpu=2
+            ),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
@@ -646,7 +648,9 @@ class TestPodDescriptor:
         assert pod.args == ["testcommand", "123"]
         assert pod.env == {"TESTVAR": "testvalue"}
         assert pod.env_list == [{"name": "TESTVAR", "value": "testvalue"}]
-        assert pod.resources == Resources(cpu=1, memory=128 * 10**6, gpu=1)
+        assert pod.resources == Resources(
+            cpu=1, memory=128 * 10**6, nvidia_gpu=1, amd_gpu=2
+        )
         assert pod.priority_class_name == "testpriority"
         assert pod.working_dir == "/working/dir"
         assert not pod.node_affinity
@@ -691,7 +695,7 @@ class TestPodDescriptor:
         container = Container(
             image="testimage",
             command="testcommand 123",
-            resources=ContainerResources(cpu=1, memory=128 * 10**6, gpu=1),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://cluster/user1"),
@@ -979,7 +983,7 @@ class TestResources:
         }
 
     def test_to_primitive_gpu(self) -> None:
-        resources = Resources(cpu=0.5, memory=1024 * 10**6, gpu=2)
+        resources = Resources(cpu=0.5, memory=1024 * 10**6, nvidia_gpu=2)
         assert resources.to_primitive() == {
             "requests": {"cpu": "500m", "memory": "1024000000", "nvidia.com/gpu": 2},
             "limits": {"cpu": "500m", "memory": "1024000000", "nvidia.com/gpu": 2},
@@ -1021,9 +1025,13 @@ class TestResources:
         }
 
     def test_from_container_resources(self) -> None:
-        container_resources = ContainerResources(cpu=1, memory=128 * 10**6, gpu=1)
+        container_resources = ContainerResources(
+            cpu=1, memory=128 * 10**6, nvidia_gpu=1, amd_gpu=2
+        )
         resources = Resources.from_container_resources(container_resources)
-        assert resources == Resources(cpu=1, memory=128 * 10**6, gpu=1)
+        assert resources == Resources(
+            cpu=1, memory=128 * 10**6, nvidia_gpu=1, amd_gpu=2
+        )
 
     def test_from_container_resources_tpu(self) -> None:
         container_resources = ContainerResources(
@@ -1105,7 +1113,7 @@ class TestResources:
             {"requests": {"cpu": "1", "memory": "4096Mi", "nvidia.com/gpu": "1"}}
         )
 
-        assert resources == Resources(cpu=1, memory=4096 * 2**20, gpu=1)
+        assert resources == Resources(cpu=1, memory=4096 * 2**20, nvidia_gpu=1)
 
     def test_from_primitive_tpu(self) -> None:
         resources = Resources.from_primitive(

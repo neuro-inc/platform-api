@@ -71,7 +71,8 @@ def create_resources_from_payload(payload: dict[str, Any]) -> ContainerResources
         memory=(
             payload["memory"] if "memory" in payload else payload["memory_mb"] * 2**20
         ),
-        gpu=payload.get("gpu"),
+        nvidia_gpu=payload.get("nvidia_gpu"),
+        amd_gpu=payload.get("amd_gpu"),
         gpu_model_id=payload.get("gpu_model"),
         shm=payload.get("shm"),
         tpu=tpu,

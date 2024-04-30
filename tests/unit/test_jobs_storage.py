@@ -29,7 +29,11 @@ class TestInMemoryJobsStorage:
                 image="testimage",
                 resources=(
                     ContainerResources(
-                        cpu=1, memory=128, gpu=1, gpu_model_id="nvidia-tesla-k80"
+                        cpu=1,
+                        memory=128,
+                        nvidia_gpu=1,
+                        amd_gpu=1,
+                        gpu_model_id="nvidia-tesla-k80",
                     )
                     if is_gpu_job
                     else ContainerResources(cpu=1, memory=128)

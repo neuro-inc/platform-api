@@ -280,7 +280,12 @@ class TestContainerBuilder:
             "command": "testcommand",
             "working_dir": "/working/dir",
             "env": {"TESTVAR": "testvalue"},
-            "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 128,
+                "nvidia_gpu": 1,
+                "amd_gpu": 2,
+            },
             "http": {"port": 80},
             "volumes": [
                 {
@@ -304,7 +309,9 @@ class TestContainerBuilder:
                     read_only=True,
                 )
             ],
-            resources=ContainerResources(cpu=0.1, memory=128 * 2**20, gpu=1, shm=None),
+            resources=ContainerResources(
+                cpu=0.1, memory=128 * 2**20, nvidia_gpu=1, amd_gpu=2, shm=None
+            ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
         )
@@ -317,7 +324,12 @@ class TestContainerBuilder:
                 "command": "testcommand",
                 "working_dir": "/working/dir",
                 "env": {"TESTVAR": "testvalue"},
-                "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 128,
+                    "nvidia_gpu": 1,
+                    "amd_gpu": 2,
+                },
                 "http": {"port": 80},
                 "volumes": [
                     {
@@ -342,7 +354,9 @@ class TestContainerBuilder:
                     read_only=True,
                 )
             ],
-            resources=ContainerResources(cpu=0.1, memory=128 * 2**20, gpu=1, shm=None),
+            resources=ContainerResources(
+                cpu=0.1, memory=128 * 2**20, nvidia_gpu=1, amd_gpu=2, shm=None
+            ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
         )
@@ -353,7 +367,8 @@ class TestContainerBuilder:
             "resources": {
                 "cpu": 0.1,
                 "memory_mb": 128,
-                "gpu": 1,
+                "nvidia_gpu": 1,
+                "amd_gpu": 2,
                 "gpu_model": "gpumodel",
             },
         }
@@ -361,7 +376,11 @@ class TestContainerBuilder:
         assert container == Container(
             image="testimage",
             resources=ContainerResources(
-                cpu=0.1, memory=128 * 2**20, gpu=1, gpu_model_id="gpumodel"
+                cpu=0.1,
+                memory=128 * 2**20,
+                nvidia_gpu=1,
+                amd_gpu=2,
+                gpu_model_id="gpumodel",
             ),
         )
 
@@ -389,7 +408,7 @@ class TestContainerBuilder:
             "image": "testimage",
             "command": "testcommand",
             "env": {"TESTVAR": "testvalue"},
-            "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1, "shm": True},
+            "resources": {"cpu": 0.1, "memory_mb": 128, "shm": False},
             "http": {"port": 80},
             "volumes": [
                 {
@@ -411,7 +430,7 @@ class TestContainerBuilder:
                     read_only=True,
                 )
             ],
-            resources=ContainerResources(cpu=0.1, memory=128 * 2**20, gpu=1, shm=True),
+            resources=ContainerResources(cpu=0.1, memory=128 * 2**20, shm=False),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
         )
 
@@ -421,7 +440,7 @@ class TestContainerBuilder:
             "entrypoint": "testentrypoint",
             "command": "testcommand",
             "env": {"TESTVAR": "testvalue"},
-            "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
+            "resources": {"cpu": 0.1, "memory_mb": 128},
             "http": {"port": 80},
             "volumes": [],
             "tty": True,
@@ -433,7 +452,7 @@ class TestContainerBuilder:
             command="testcommand",
             env={"TESTVAR": "testvalue"},
             volumes=[],
-            resources=ContainerResources(cpu=0.1, memory=128 * 2**20, gpu=1, shm=None),
+            resources=ContainerResources(cpu=0.1, memory=128 * 2**20),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=True,
         )
@@ -519,7 +538,11 @@ class TestJob:
         container = Container(
             image="testimage",
             resources=ContainerResources(
-                cpu=1, memory=64 * 10**6, gpu=1, gpu_model_id="nvidia-tesla-k80"
+                cpu=1,
+                memory=64 * 10**6,
+                nvidia_gpu=1,
+                amd_gpu=2,
+                gpu_model_id="nvidia-tesla-k80",
             ),
         )
         return JobRequest(
@@ -599,7 +622,8 @@ class TestJob:
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
-        assert not job.has_gpu
+        assert not job.has_nvidia_gpu
+        assert not job.has_amd_gpu
 
     def test_job_has_gpu_true(
         self, mock_orchestrator: MockOrchestrator, job_request_with_gpu: JobRequest
@@ -610,30 +634,11 @@ class TestJob:
                 request=job_request_with_gpu, cluster_name="test-cluster"
             ),
         )
-        assert job.has_gpu
+        assert job.has_nvidia_gpu
+        assert job.has_amd_gpu
 
     def _mocked_datetime_factory(self) -> datetime:
         return datetime(year=2019, month=1, day=1)
-
-    def test_job_gpu_model_id(
-        self, mock_orchestrator: MockOrchestrator, job_request_with_gpu: JobRequest
-    ) -> None:
-        job = Job(
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request_with_gpu, cluster_name="test-cluster"
-            ),
-        )
-        assert job.gpu_model_id == "nvidia-tesla-k80"
-
-    def test_job_gpu_model_id_none(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
-    ) -> None:
-        job = Job(
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
-        )
-        assert job.gpu_model_id is None
 
     @pytest.fixture
     def job_factory(

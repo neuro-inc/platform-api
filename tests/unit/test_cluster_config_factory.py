@@ -70,12 +70,14 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
                         "credits_per_hour": "10",
                         "cpu": 1,
                         "memory": 2048 * 10**6,
+                        "available_resource_pool_names": ["n1-highmem-8"],
                     },
                     {
                         "name": "cpu-large",
                         "credits_per_hour": "10",
                         "cpu": 7,
                         "memory": 49152 * 10**6,
+                        "available_resource_pool_names": ["n1-highmem-8"],
                     },
                     {
                         "name": "tpu",
@@ -83,38 +85,43 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
                         "cpu": 7,
                         "memory": 49152 * 10**6,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
+                        "available_resource_pool_names": ["n1-highmem-8"],
                     },
                     {
                         "name": "gpu-small-p",
                         "credits_per_hour": "10",
                         "cpu": 7.0,
                         "memory": 52224 * 10**6,
-                        "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
+                        "available_resource_pool_names": ["n1-highmem-8"],
                     },
                     {
                         "name": "gpu-small",
                         "credits_per_hour": "10",
                         "cpu": 7.0,
                         "memory": 52224 * 10**6,
-                        "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
+                        "available_resource_pool_names": ["n1-highmem-8"],
                     },
                     {
                         "name": "gpu-large-p",
                         "credits_per_hour": "10",
                         "cpu": 7.0,
                         "memory": 52224 * 10**6,
-                        "gpu": 1,
-                        "gpu_model": "nvidia-tesla-v100",
+                        "nvidia_gpu": 1,
+                        "amd_gpu": 1,
+                        "available_resource_pool_names": ["n1-highmem-8"],
                     },
                     {
                         "name": "gpu-large",
                         "credits_per_hour": "10",
                         "cpu": 0.1,
                         "memory": 52224 * 10**6,
-                        "gpu": 1,
-                        "gpu_model": "nvidia-tesla-v100",
+                        "nvidia_gpu": 1,
+                        "amd_gpu": 1,
+                        "available_resource_pool_names": ["n1-highmem-8"],
                     },
                 ],
                 "resource_pool_types": [
@@ -135,18 +142,18 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
                         },
                     },
                     {
-                        "name": "n1-highmem-32-1xk80-preemptible",
+                        "name": "n1-highmem-32-preemptible",
                         "is_preemptible": True,
                         "min_size": 1,
                         "max_size": 16,
                         "cpu": 31.0,
                         "memory": 204800 * 10**6,
                         "disk_size_gb": 150,
-                        "gpu": 4,
-                        "gpu_model": "nvidia-tesla-k80",
+                        "nvidia_gpu": 4,
+                        "amd_gpu": 4,
                     },
                     {
-                        "name": "n1-highmem-32-1xk80",
+                        "name": "n1-highmem-32",
                         "is_preemptible": False,
                         "min_size": 1,
                         "max_size": 8,
@@ -155,11 +162,11 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
                         "memory": 212992 * 10**6,
                         "available_memory": 204800 * 10**6,
                         "disk_size_gb": 150,
-                        "gpu": 4,
-                        "gpu_model": "nvidia-tesla-k80",
+                        "nvidia_gpu": 4,
+                        "amd_gpu": 4,
                     },
                     {
-                        "name": "n1-highmem-8-1xv100-preemptible",
+                        "name": "n1-highmem-8-preemptible",
                         "is_preemptible": True,
                         "min_size": 0,
                         "max_size": 5,
@@ -168,11 +175,11 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
                         "memory": 53248 * 10**6,
                         "available_memory": 49152 * 10**6,
                         "disk_size_gb": 150,
-                        "gpu": 1,
-                        "gpu_model": "nvidia-tesla-v100",
+                        "nvidia_gpu": 1,
+                        "amd_gpu": 1,
                     },
                     {
-                        "name": "n1-highmem-8-1xv100",
+                        "name": "n1-highmem-8",
                         "is_preemptible": False,
                         "min_size": 0,
                         "max_size": 2,
@@ -181,8 +188,8 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
                         "memory": 53248 * 10**6,
                         "available_memory": 49152 * 10**6,
                         "disk_size_gb": 150,
-                        "gpu": 1,
-                        "gpu_model": "nvidia-tesla-v100",
+                        "nvidia_gpu": 1,
+                        "amd_gpu": 1,
                     },
                 ],
             },
@@ -256,8 +263,7 @@ class TestClusterConfigFactory:
         assert orchestrator.resource_pool_types[0].memory == 53248 * 10**6
         assert orchestrator.resource_pool_types[0].available_memory == 49152 * 10**6
         assert orchestrator.resource_pool_types[0].disk_gb == 150
-        assert orchestrator.resource_pool_types[0].gpu is None
-        assert orchestrator.resource_pool_types[0].gpu_model is None
+        assert orchestrator.resource_pool_types[0].nvidia_gpu is None
         assert orchestrator.resource_pool_types[0].tpu == TPUResource(
             ipv4_cidr_block="1.1.1.1/32",
             types=("v2-8", "v3-8"),
@@ -268,36 +274,36 @@ class TestClusterConfigFactory:
         assert orchestrator.resource_pool_types[1].available_cpu == 31.0
         assert orchestrator.resource_pool_types[1].memory == 204800 * 10**6
         assert orchestrator.resource_pool_types[1].available_memory == 204800 * 10**6
-        assert orchestrator.resource_pool_types[1].gpu == 4
-        assert (
-            orchestrator.resource_pool_types[1].gpu_model == GKEGPUModels.K80.value.id
-        )
+        assert orchestrator.resource_pool_types[1].nvidia_gpu == 4
+        assert orchestrator.resource_pool_types[1].amd_gpu == 4
 
-        assert orchestrator.resource_pool_types[3].gpu == 1
-        assert (
-            orchestrator.resource_pool_types[3].gpu_model == GKEGPUModels.V100.value.id
-        )
+        assert orchestrator.resource_pool_types[3].nvidia_gpu == 1
+        assert orchestrator.resource_pool_types[3].amd_gpu == 1
 
         assert orchestrator.presets is not None
         assert orchestrator.presets[1].cpu == 7.0
         assert orchestrator.presets[1].memory == 49152 * 10**6
         assert orchestrator.presets[1].gpu_model is None
+        assert orchestrator.presets[1].available_resource_pool_names == ["n1-highmem-8"]
         assert orchestrator.presets[2] == Preset(
             name="tpu",
             credits_per_hour=Decimal("10"),
             cpu=7.0,
             memory=49152 * 10**6,
             tpu=TPUPreset(type="v2-8", software_version="1.14"),
+            available_resource_pool_names=["n1-highmem-8"],
         )
 
         assert orchestrator.presets[3].gpu_model == GKEGPUModels.K80.value.id
 
         assert orchestrator.presets[4].cpu == 7.0
-        assert orchestrator.presets[4].gpu == 1
+        assert orchestrator.presets[4].nvidia_gpu == 1
         assert orchestrator.presets[4].gpu_model == GKEGPUModels.K80.value.id
         assert orchestrator.presets[4].memory == 52224 * 10**6
 
         assert orchestrator.presets[6].cpu == 0.1
+        assert orchestrator.presets[6].nvidia_gpu == 1
+        assert orchestrator.presets[6].amd_gpu == 1
 
         assert orchestrator.tpu_resources == (
             TPUResource(

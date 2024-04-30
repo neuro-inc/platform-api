@@ -123,10 +123,6 @@ spec:
         - name: NP_KUBE_NODE_LABEL_JOB
           value: {{ .Values.nodeLabels.job | quote }}
         {{- end }}
-        {{- if .Values.nodeLabels.gpu }}
-        - name: NP_KUBE_NODE_LABEL_GPU
-          value: {{ .Values.nodeLabels.gpu | quote }}
-        {{- end }}
         {{- if .Values.nodeLabels.preemptible }}
         - name: NP_KUBE_NODE_LABEL_PREEMPTIBLE
           value: {{ .Values.nodeLabels.preemptible | quote }}

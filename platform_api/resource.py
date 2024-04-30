@@ -40,10 +40,13 @@ class Preset:
     memory: int
     scheduler_enabled: bool = False
     preemptible_node: bool = False
-    gpu: Optional[int] = None
-    gpu_model: Optional[str] = None
+    nvidia_gpu: Optional[int] = None
+    amd_gpu: Optional[int] = None
+    gpu_model: Optional[str] = None  # TODO: deprecated
     tpu: Optional[TPUPreset] = None
     is_external_job: bool = False
+    resource_pool_names: Sequence[str] = ()
+    available_resource_pool_names: Sequence[str] = ()
 
 
 @dataclass(frozen=True)
@@ -64,13 +67,13 @@ class ResourcePoolType:
     available_cpu: Optional[float] = None
     memory: Optional[int] = None
     available_memory: Optional[int] = None
-    gpu: Optional[int] = None
-    gpu_model: Optional[str] = None
+    nvidia_gpu: Optional[int] = None
+    amd_gpu: Optional[int] = None
     disk_gb: Optional[int] = None
     min_size: Optional[int] = None
     max_size: Optional[int] = None
     tpu: Optional[TPUResource] = None
 
-    def __post_init__(self) -> None:
-        if self.gpu and not self.gpu_model:
-            raise ValueError("GPU model unspecified")
+    @property
+    def has_gpu(self) -> bool:
+        return bool(self.nvidia_gpu or self.amd_gpu)

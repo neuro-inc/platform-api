@@ -408,12 +408,12 @@ class JobRecord:
         return self.status_history.finished_at_str
 
     @property
-    def has_gpu(self) -> bool:
-        return bool(self.request.container.resources.gpu)
+    def has_nvidia_gpu(self) -> bool:
+        return bool(self.request.container.resources.nvidia_gpu)
 
     @property
-    def gpu_model_id(self) -> str | None:
-        return self.request.container.resources.gpu_model_id
+    def has_amd_gpu(self) -> bool:
+        return bool(self.request.container.resources.amd_gpu)
 
     def get_run_time(
         self,
@@ -719,12 +719,12 @@ class Job:
         return self._job_request.container.resources
 
     @property
-    def has_gpu(self) -> bool:
-        return self._record.has_gpu
+    def has_nvidia_gpu(self) -> bool:
+        return self._record.has_nvidia_gpu
 
     @property
-    def gpu_model_id(self) -> str | None:
-        return self._record.gpu_model_id
+    def has_amd_gpu(self) -> bool:
+        return self._record.has_amd_gpu
 
     @property
     def status(self) -> JobStatus:

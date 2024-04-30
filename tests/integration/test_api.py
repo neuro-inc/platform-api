@@ -66,8 +66,8 @@ def cluster_configs_payload() -> list[dict[str, Any]]:
                 "job_internal_hostname_template": "{job_id}.platformapi-tests",
                 "resource_pool_types": [
                     {"name": "node-pool1"},
-                    {"name": "node-pool1", "gpu": 0},
-                    {"name": "node-pool1", "gpu": 1, "gpu_model": "nvidia-tesla-v100"},
+                    {"name": "node-pool1", "nvidia_gpu": 0},
+                    {"name": "node-pool1", "nvidia_gpu": 1},
                 ],
                 "is_http_ingress_secure": True,
             },
@@ -257,11 +257,26 @@ class TestApi:
                         "memory": 30720 * 10**6,
                         "memory_mb": 29296,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
+                    },
+                    {
+                        "name": "amd-gpu-small",
+                        "credits_per_hour": "10",
+                        "cpu": 7,
+                        "memory": 30720 * 10**6,
+                        "memory_mb": 29296,
+                        "amd_gpu": 1,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large",
@@ -270,11 +285,13 @@ class TestApi:
                         "memory": 61440000000,
                         "memory_mb": 58593,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large-p",
@@ -283,11 +300,13 @@ class TestApi:
                         "memory": 61440000000,
                         "memory_mb": 58593,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": True,
                         "preemptible_node": True,
                         "is_preemptible": True,
                         "is_preemptible_node_required": True,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "cpu-micro",
@@ -299,6 +318,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-small",
@@ -310,6 +330,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-large",
@@ -321,6 +342,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "tpu",
@@ -333,6 +355,7 @@ class TestApi:
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
+                        "available_resource_pool_names": ["tpu"],
                     },
                 ],
                 "timezone": "UTC",
@@ -486,11 +509,26 @@ class TestApi:
                         "memory": 30720 * 10**6,
                         "memory_mb": 29296,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
+                    },
+                    {
+                        "name": "amd-gpu-small",
+                        "credits_per_hour": "10",
+                        "cpu": 7,
+                        "memory": 30720 * 10**6,
+                        "memory_mb": 29296,
+                        "amd_gpu": 1,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large",
@@ -499,11 +537,13 @@ class TestApi:
                         "memory": 61440000000,
                         "memory_mb": 58593,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large-p",
@@ -512,11 +552,13 @@ class TestApi:
                         "memory": 61440000000,
                         "memory_mb": 58593,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": True,
                         "preemptible_node": True,
                         "is_preemptible": True,
                         "is_preemptible_node_required": True,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "cpu-micro",
@@ -528,6 +570,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-small",
@@ -539,6 +582,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-large",
@@ -550,6 +594,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "tpu",
@@ -562,6 +607,7 @@ class TestApi:
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
+                        "available_resource_pool_names": ["tpu"],
                     },
                 ],
                 "timezone": "UTC",
@@ -649,11 +695,26 @@ class TestApi:
                         "memory": 30720 * 10**6,
                         "memory_mb": 29296,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
+                    },
+                    {
+                        "name": "amd-gpu-small",
+                        "credits_per_hour": "10",
+                        "cpu": 7,
+                        "memory": 30720 * 10**6,
+                        "memory_mb": 29296,
+                        "amd_gpu": 1,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large",
@@ -662,11 +723,13 @@ class TestApi:
                         "memory": 61440000000,
                         "memory_mb": 58593,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large-p",
@@ -675,11 +738,13 @@ class TestApi:
                         "memory": 61440000000,
                         "memory_mb": 58593,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": True,
                         "preemptible_node": True,
                         "is_preemptible": True,
                         "is_preemptible_node_required": True,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "cpu-micro",
@@ -691,6 +756,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-small",
@@ -702,6 +768,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-large",
@@ -713,6 +780,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "tpu",
@@ -725,6 +793,7 @@ class TestApi:
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
+                        "available_resource_pool_names": ["tpu"],
                     },
                 ],
                 "timezone": "UTC",
@@ -5339,39 +5408,7 @@ class TestJobs:
             "priority": "normal",
         }
 
-    async def test_job_create_unknown_gpu_model(
-        self,
-        jobs_client: JobsClient,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        regular_user: _User,
-        kube_node_gpu: str,
-    ) -> None:
-        request_payload = {
-            "container": {
-                "image": "ubuntu:20.10",
-                "command": "true",
-                "resources": {
-                    "cpu": 0.1,
-                    "memory_mb": 32,
-                    "gpu": 1,
-                    "gpu_model": "unknown",
-                },
-            }
-        }
-
-        async with client.post(
-            api.jobs_base_url, headers=regular_user.headers, json=request_payload
-        ) as response:
-            response_text = await response.text()
-            assert response.status == HTTPBadRequest.status_code, response_text
-            data = await response.json()
-            assert re.search(
-                r"\\*'gpu_model\\*': DataError\(\"value doesn\\*'t match",
-                data["error"],
-            ), data
-
-    async def test_create_gpu_model(
+    async def test_create_gpu(
         self,
         jobs_client: JobsClient,
         api: ApiConfig,
@@ -5388,8 +5425,7 @@ class TestJobs:
                     "cpu": 0.1,
                     "memory_mb": 32,
                     "memory": 32 * 2**20,
-                    "gpu": 1,
-                    "gpu_model": "gpumodel",
+                    "nvidia_gpu": 1,
                 },
             }
         }
@@ -5434,7 +5470,7 @@ class TestJobs:
                         "memory": 32 * 2**20,
                         "memory_mb": 32,
                         "gpu": 1,
-                        "gpu_model": "gpumodel",
+                        "nvidia_gpu": 1,
                     },
                     "volumes": [],
                 },

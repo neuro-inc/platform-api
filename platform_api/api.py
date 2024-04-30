@@ -201,16 +201,24 @@ class ConfigApiHandler:
             "is_preemptible": preset.scheduler_enabled,
             "is_preemptible_node_required": preset.preemptible_node,
         }
-        if preset.gpu is not None:
-            payload["gpu"] = preset.gpu
+        if preset.nvidia_gpu is not None:
+            payload["nvidia_gpu"] = preset.nvidia_gpu
+            payload["gpu"] = preset.nvidia_gpu
+        if preset.amd_gpu is not None:
+            payload["amd_gpu"] = preset.amd_gpu
         if preset.gpu_model is not None:
             payload["gpu_model"] = preset.gpu_model
-
         if preset.tpu:
             payload["tpu"] = {
                 "type": preset.tpu.type,
                 "software_version": preset.tpu.software_version,
             }
+        if preset.resource_pool_names:
+            payload["resource_pool_names"] = preset.resource_pool_names
+        if preset.available_resource_pool_names:
+            payload["available_resource_pool_names"] = (
+                preset.available_resource_pool_names
+            )
         return payload
 
     def _convert_energy_schedule_to_payload(

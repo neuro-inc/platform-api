@@ -102,7 +102,7 @@ async def kube_config_cluster_payload(kube_config_payload: dict[str, Any]) -> An
 
 @pytest.fixture(scope="session")
 def cert_authority_data_pem(
-    kube_config_cluster_payload: dict[str, Any]
+    kube_config_cluster_payload: dict[str, Any],
 ) -> Optional[str]:
     if "certificate-authority" in kube_config_cluster_payload:
         ca_path = kube_config_cluster_payload["certificate-authority"]
@@ -158,12 +158,14 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
             "jobs_internal_domain_name_template": "{job_id}.platformapi-tests",
             "resource_pool_types": [
                 ResourcePoolType(
+                    name="cpu",
                     cpu=1.0,
                     available_cpu=1.0,
                     memory=2048 * 10**6,
                     available_memory=2048 * 10**6,
                 ),
                 ResourcePoolType(
+                    name="cpu-p",
                     cpu=1.0,
                     available_cpu=1.0,
                     memory=2048 * 10**6,
@@ -177,6 +179,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     available_memory=500_000 * 10**6,
                 ),
                 ResourcePoolType(
+                    name="tpu",
                     cpu=1.0,
                     available_cpu=1.0,
                     memory=2048 * 10**6,
@@ -188,58 +191,72 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     ),
                 ),
                 ResourcePoolType(
+                    name="gpu",
                     cpu=1.0,
                     available_cpu=1.0,
                     memory=2048 * 10**6,
                     available_memory=2048 * 10**6,
-                    gpu=1,
-                    gpu_model="gpumodel",
+                    nvidia_gpu=1,
                 ),
             ],
             "presets": [
                 Preset(
                     name="gpu-small",
                     credits_per_hour=Decimal("10"),
-                    gpu=1,
+                    nvidia_gpu=1,
                     cpu=7,
                     memory=30720 * 10**6,
                     gpu_model=GKEGPUModels.K80.value.id,
+                    available_resource_pool_names=["gpu"],
+                ),
+                Preset(
+                    name="amd-gpu-small",
+                    credits_per_hour=Decimal("10"),
+                    amd_gpu=1,
+                    cpu=7,
+                    memory=30720 * 10**6,
+                    available_resource_pool_names=["gpu"],
                 ),
                 Preset(
                     name="gpu-large",
                     credits_per_hour=Decimal("10"),
-                    gpu=1,
+                    nvidia_gpu=1,
                     cpu=7,
                     memory=61440 * 10**6,
                     gpu_model=GKEGPUModels.V100.value.id,
+                    available_resource_pool_names=["gpu"],
                 ),
                 Preset(
                     name="gpu-large-p",
                     credits_per_hour=Decimal("10"),
-                    gpu=1,
+                    nvidia_gpu=1,
                     cpu=7,
                     memory=61440 * 10**6,
                     gpu_model=GKEGPUModels.V100.value.id,
                     scheduler_enabled=True,
                     preemptible_node=True,
+                    available_resource_pool_names=["gpu"],
                 ),
                 Preset(
                     name="cpu-micro",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
                     memory=100 * 10**6,
+                    available_resource_pool_names=["cpu"],
                 ),
                 Preset(
                     name="cpu-small",
                     credits_per_hour=Decimal("10"),
                     cpu=2,
                     memory=2048 * 10**6,
+                    available_resource_pool_names=["cpu"],
                 ),
                 Preset(
                     name="cpu-large",
                     credits_per_hour=Decimal("10"),
                     cpu=3,
                     memory=14336 * 10**6,
+                    available_resource_pool_names=["cpu"],
                 ),
                 Preset(
                     name="tpu",
@@ -247,6 +264,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     cpu=3,
                     memory=14336 * 10**6,
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),
+                    available_resource_pool_names=["tpu"],
                 ),
             ],
             "job_schedule_scaleup_timeout": 5,
@@ -261,7 +279,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
 
 @pytest.fixture(scope="session")
 async def orchestrator_config(
-    orchestrator_config_factory: Callable[..., OrchestratorConfig]
+    orchestrator_config_factory: Callable[..., OrchestratorConfig],
 ) -> OrchestratorConfig:
     return orchestrator_config_factory()
 
@@ -285,7 +303,6 @@ def kube_config_factory(
             "cert_authority_path": None,
             "auth_cert_path": user["client-certificate"],
             "auth_cert_key_path": user["client-key"],
-            "node_label_gpu": "gpu",
             "namespace": "platformapi-tests",
         }
         kwargs = {**defaults, **kwargs}
@@ -324,13 +341,15 @@ def kube_job_nodes_factory(
                 "pods": "110",
                 "cpu": int(pool_type.available_cpu or 0),
                 "memory": f"{pool_type.available_memory}",
-                "nvidia.com/gpu": pool_type.gpu or 0,
+                "nvidia.com/gpu": pool_type.nvidia_gpu or 0,
             }
             taints = [
                 NodeTaint(key=kube_config.jobs_pod_job_toleration_key, value="true")
             ]
-            if pool_type.gpu:
-                taints.append(NodeTaint(key=Resources.gpu_key, value="present"))
+            if pool_type.nvidia_gpu:
+                taints.append(NodeTaint(key=Resources.nvidia_gpu_key, value="present"))
+            if pool_type.amd_gpu:
+                taints.append(NodeTaint(key=Resources.amd_gpu_key, value="present"))
             try:
                 await kube_client.create_node(
                     pool_type.name, capacity=capacity, labels=labels, taints=taints
@@ -614,7 +633,7 @@ async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeCl
 
 @pytest.fixture(scope="session")
 async def kube_client(
-    kube_client_factory: Callable[..., MyKubeClient]
+    kube_client_factory: Callable[..., MyKubeClient],
 ) -> AsyncIterator[KubeClient]:
     async with kube_client_factory() as kube_client:
         yield kube_client
@@ -711,7 +730,6 @@ def default_node_capacity() -> dict[str, Any]:
 
 @pytest.fixture
 async def kube_node_gpu(
-    kube_config: KubeConfig,
     kube_client: MyKubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
     default_node_capacity: dict[str, Any],
@@ -719,11 +737,9 @@ async def kube_node_gpu(
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)
 
-    assert kube_config.node_label_gpu is not None
-    labels = {kube_config.node_label_gpu: "gpumodel"}
-    taints = [NodeTaint(key=Resources.gpu_key, value="present")]
+    taints = [NodeTaint(key=Resources.nvidia_gpu_key, value="present")]
     await kube_client.create_node(
-        node_name, capacity=default_node_capacity, labels=labels, taints=taints
+        node_name, capacity=default_node_capacity, taints=taints
     )
 
     yield node_name
@@ -752,7 +768,7 @@ async def kube_node_tpu(
 
 @pytest.fixture
 def kube_config_node_preemptible(
-    kube_config_factory: Callable[..., KubeConfig]
+    kube_config_factory: Callable[..., KubeConfig],
 ) -> KubeConfig:
     return kube_config_factory(
         node_label_preemptible="preemptible",
@@ -918,7 +934,7 @@ def cluster_config_factory(
 
 @pytest.fixture
 def cluster_config(
-    cluster_config_factory: Callable[..., ClusterConfig]
+    cluster_config_factory: Callable[..., ClusterConfig],
 ) -> ClusterConfig:
     return cluster_config_factory()
 
