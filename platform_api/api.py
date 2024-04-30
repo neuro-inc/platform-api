@@ -51,7 +51,7 @@ from .orchestrator.jobs_service import (
 from .orchestrator.jobs_storage import JobsStorage, PostgresJobsStorage
 from .orchestrator.jobs_storage.base import JobStorageTransactionError
 from .postgres import make_async_engine
-from .resource import Preset
+from .resource import Preset, ResourcePoolType
 from .user import authorized_user, untrusted_user
 from .utils.update_notifier import (
     Notifier,
@@ -164,6 +164,10 @@ class ConfigApiHandler:
     ) -> dict[str, Any]:
         cluster_config = user_cluster_config.config
         orgs = user_cluster_config.orgs
+        resource_pool_types = [
+            self._convert_resource_pool_type_to_payload(r)
+            for r in cluster_config.orchestrator.resource_pool_types
+        ]
         presets = [
             self._convert_preset_to_payload(preset)
             for preset in cluster_config.orchestrator.presets
@@ -177,6 +181,7 @@ class ConfigApiHandler:
             "metrics_url": str(cluster_config.ingress.metrics_url),
             "disks_url": str(cluster_config.ingress.disks_url),
             "buckets_url": str(cluster_config.ingress.buckets_url),
+            "resource_pool_types": resource_pool_types,
             "resource_presets": presets,
             "orgs": orgs,
             "timezone": str(cluster_config.timezone),
@@ -188,6 +193,31 @@ class ConfigApiHandler:
         if self._config.auth.public_endpoint_url:
             result["users_url"] = str(self._config.auth.public_endpoint_url)
         return result
+
+    def _convert_resource_pool_type_to_payload(
+        self, resource_pool_type: ResourcePoolType
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "name": resource_pool_type.name,
+            "min_size": resource_pool_type.min_size,
+            "max_size": resource_pool_type.max_size,
+            "cpu": resource_pool_type.cpu,
+            "memory": resource_pool_type.memory,
+            "disk_size": resource_pool_type.disk_size,
+        }
+        if resource_pool_type.nvidia_gpu is not None:
+            payload["nvidia_gpu"] = resource_pool_type.nvidia_gpu
+        if resource_pool_type.amd_gpu is not None:
+            payload["amd_gpu"] = resource_pool_type.amd_gpu
+        if resource_pool_type.tpu:
+            payload["tpu"] = {
+                "types": resource_pool_type.tpu.types,
+                "software_versions": resource_pool_type.tpu.software_versions,
+                "ipv4_cidr_block": resource_pool_type.tpu.ipv4_cidr_block,
+            }
+        if resource_pool_type.is_preemptible:
+            payload["is_preemptible"] = resource_pool_type.is_preemptible
+        return payload
 
     def _convert_preset_to_payload(self, preset: Preset) -> dict[str, Any]:
         payload: dict[str, Any] = {
