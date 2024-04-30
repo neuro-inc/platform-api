@@ -159,31 +159,35 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
             "resource_pool_types": [
                 ResourcePoolType(
                     name="cpu",
+                    min_size=1,
+                    max_size=2,
                     cpu=1.0,
-                    available_cpu=1.0,
                     memory=2048 * 10**6,
-                    available_memory=2048 * 10**6,
+                    disk_size=150 * 10**9,
                 ),
                 ResourcePoolType(
                     name="cpu-p",
+                    min_size=1,
+                    max_size=2,
                     cpu=1.0,
-                    available_cpu=1.0,
                     memory=2048 * 10**6,
-                    available_memory=2048 * 10**6,
+                    disk_size=150 * 10**9,
                     is_preemptible=True,
                 ),
                 ResourcePoolType(
+                    min_size=1,
+                    max_size=2,
                     cpu=100,
-                    available_cpu=100,
                     memory=500_000 * 10**6,
-                    available_memory=500_000 * 10**6,
+                    disk_size=150 * 10**9,
                 ),
                 ResourcePoolType(
                     name="tpu",
+                    min_size=1,
+                    max_size=2,
                     cpu=1.0,
-                    available_cpu=1.0,
                     memory=2048 * 10**6,
-                    available_memory=2048 * 10**6,
+                    disk_size=150 * 10**9,
                     tpu=TPUResource(
                         ipv4_cidr_block="1.1.1.1/32",
                         types=("v2-8",),
@@ -192,11 +196,13 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                 ),
                 ResourcePoolType(
                     name="gpu",
+                    min_size=1,
+                    max_size=2,
                     cpu=1.0,
-                    available_cpu=1.0,
                     memory=2048 * 10**6,
-                    available_memory=2048 * 10**6,
+                    disk_size=150 * 10**9,
                     nvidia_gpu=1,
+                    amd_gpu=2,
                 ),
             ],
             "presets": [
@@ -339,8 +345,8 @@ def kube_job_nodes_factory(
                 labels[kube_config.node_label_preemptible] = "true"
             capacity = {
                 "pods": "110",
-                "cpu": int(pool_type.available_cpu or 0),
-                "memory": f"{pool_type.available_memory}",
+                "cpu": int(pool_type.cpu or 0),
+                "memory": f"{pool_type.memory}",
                 "nvidia.com/gpu": pool_type.nvidia_gpu or 0,
             }
             taints = [

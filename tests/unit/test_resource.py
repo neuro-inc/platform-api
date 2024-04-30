@@ -11,9 +11,9 @@ class TestContainerResourcesFit:
     @pytest.mark.parametrize(
         "pool_type",
         (
-            ResourcePoolType(available_cpu=1.0, available_memory=32),
-            ResourcePoolType(available_cpu=1.0, available_memory=32, nvidia_gpu=1),
-            ResourcePoolType(available_cpu=1.0, available_memory=32, amd_gpu=1),
+            ResourcePoolType(cpu=1.0, memory=32),
+            ResourcePoolType(cpu=1.0, memory=32, nvidia_gpu=1),
+            ResourcePoolType(cpu=1.0, memory=32, amd_gpu=1),
         ),
     )
     def test_container_requires_no_gpu(self, pool_type: ResourcePoolType) -> None:
@@ -21,53 +21,49 @@ class TestContainerResourcesFit:
         assert resources.check_fit_into_pool_type(pool_type)
 
     def test_container_too_much_cpu(self) -> None:
-        pool_type = ResourcePoolType(available_cpu=1.0, available_memory=32)
+        pool_type = ResourcePoolType(cpu=1.0, memory=32)
         resources = ContainerResources(cpu=1.1, memory=32)
         assert not resources.check_fit_into_pool_type(pool_type)
 
     def test_container_no_cpu_in_pool_type(self) -> None:
-        pool_type = ResourcePoolType(available_memory=32)
+        pool_type = ResourcePoolType(memory=32)
         resources = ContainerResources(cpu=1, memory=32)
         assert not resources.check_fit_into_pool_type(pool_type)
 
     def test_container_too_much_memory(self) -> None:
-        pool_type = ResourcePoolType(available_cpu=1.0, available_memory=32)
+        pool_type = ResourcePoolType(cpu=1.0, memory=32)
         resources = ContainerResources(cpu=1, memory=33)
         assert not resources.check_fit_into_pool_type(pool_type)
 
     def test_container_no_memory_in_pool_type(self) -> None:
-        pool_type = ResourcePoolType(available_cpu=1)
+        pool_type = ResourcePoolType(cpu=1)
         resources = ContainerResources(cpu=1, memory=32)
         assert not resources.check_fit_into_pool_type(pool_type)
 
     def test_container_requires_any_nvidia_gpu_no_nvidia_gpu_in_pool_type(self) -> None:
-        pool_type = ResourcePoolType(available_cpu=1.0, available_memory=32)
+        pool_type = ResourcePoolType(cpu=1.0, memory=32)
         resources = ContainerResources(cpu=1, memory=32, nvidia_gpu=1)
         assert not resources.check_fit_into_pool_type(pool_type)
 
     def test_container_requires_too_many_nvidia_gpu(self) -> None:
-        pool_type = ResourcePoolType(
-            available_cpu=1.0, available_memory=32 * 10**6, nvidia_gpu=1
-        )
+        pool_type = ResourcePoolType(cpu=1.0, memory=32 * 10**6, nvidia_gpu=1)
         resources = ContainerResources(cpu=1, memory=32 * 10**6, nvidia_gpu=2)
         assert not resources.check_fit_into_pool_type(pool_type)
 
     def test_container_requires_any_amd_gpu_no_amd_gpu_in_pool_type(self) -> None:
-        pool_type = ResourcePoolType(available_cpu=1.0, available_memory=32)
+        pool_type = ResourcePoolType(cpu=1.0, memory=32)
         resources = ContainerResources(cpu=1, memory=32, nvidia_gpu=1)
         assert not resources.check_fit_into_pool_type(pool_type)
 
     def test_container_requires_too_many_amd_gpu(self) -> None:
-        pool_type = ResourcePoolType(
-            available_cpu=1.0, available_memory=32 * 10**6, amd_gpu=1
-        )
+        pool_type = ResourcePoolType(cpu=1.0, memory=32 * 10**6, amd_gpu=1)
         resources = ContainerResources(cpu=1, memory=32 * 10**6, amd_gpu=2)
         assert not resources.check_fit_into_pool_type(pool_type)
 
     def test_container_requires_tpu(self) -> None:
         pool_type = ResourcePoolType(
-            available_cpu=1.0,
-            available_memory=32 * 10**6,
+            cpu=1.0,
+            memory=32 * 10**6,
             tpu=TPUResource(types=("v2-8",), software_versions=("1.14",)),
         )
         resources = ContainerResources(
@@ -88,8 +84,8 @@ class TestContainerResourcesFit:
         self, container_tpu_resource: ContainerTPUResource
     ) -> None:
         pool_type = ResourcePoolType(
-            available_cpu=1.0,
-            available_memory=32 * 10**6,
+            cpu=1.0,
+            memory=32 * 10**6,
             tpu=TPUResource(types=("v2-8",), software_versions=("1.14",)),
         )
         resources = ContainerResources(

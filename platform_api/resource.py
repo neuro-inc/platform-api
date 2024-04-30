@@ -64,12 +64,10 @@ class ResourcePoolType:
     name: str = field(default_factory=lambda: str(uuid.uuid4()))
     is_preemptible: Optional[bool] = False
     cpu: Optional[float] = None
-    available_cpu: Optional[float] = None
     memory: Optional[int] = None
-    available_memory: Optional[int] = None
     nvidia_gpu: Optional[int] = None
     amd_gpu: Optional[int] = None
-    disk_gb: Optional[int] = None
+    disk_size: Optional[int] = None
     min_size: Optional[int] = None
     max_size: Optional[int] = None
     tpu: Optional[TPUResource] = None
