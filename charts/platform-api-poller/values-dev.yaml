@@ -18,7 +18,7 @@ platform:
 
 jobs:
   ingressAuthMiddleware: platform-platform-ingress-auth@kubernetescrd
-  ingressErrorPageMiddleware: platform-platform-web-ui-error-pages@kubernetescrd
+  ingressErrorPageMiddleware: platform-platform-ingress-fallback-error-page@kubernetescrd
 
 externalJobRunner:
   image:
