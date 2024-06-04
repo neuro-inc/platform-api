@@ -53,6 +53,8 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
     return [
         {
             "name": "cluster_name",
+            "location": "eu-west-4",
+            "logo_url": "https://logo.url",
             "registry": {
                 "url": "https://registry-dev.neu.ro",
                 "email": "registry@neuromation.io",
@@ -228,6 +230,8 @@ class TestClusterConfigFactory:
         cluster = clusters[0]
 
         assert cluster.name == clusters_payload[0]["name"]
+        assert cluster.location == clusters_payload[0]["location"]
+        assert cluster.logo_url == URL(clusters_payload[0]["logo_url"])
 
         ingress = cluster.ingress
         assert ingress.registry_url == URL(registry_payload["url"])

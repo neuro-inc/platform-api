@@ -42,8 +42,11 @@ class ClusterConfigFactory:
         try:
             _cluster_config_validator.check(payload)
             timezone = self._create_timezone(payload.get("timezone"))
+            logo_url = payload.get("logo_url")
             return ClusterConfig(
                 name=payload["name"],
+                location=payload.get("location"),
+                logo_url=URL(logo_url) if logo_url else None,
                 orchestrator=self._create_orchestrator_config(payload),
                 ingress=self._create_ingress_config(payload),
                 timezone=timezone,

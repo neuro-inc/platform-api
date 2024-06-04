@@ -145,3 +145,5 @@ class ClusterConfig:
     ingress: IngressConfig
     timezone: tzinfo = UTC
     energy: EnergyConfig = EnergyConfig()
+    location: Optional[str] = None
+    logo_url: Optional[URL] = None
