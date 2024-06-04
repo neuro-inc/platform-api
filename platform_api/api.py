@@ -193,7 +193,7 @@ class ConfigApiHandler:
         if cluster_config.location:
             result["location"] = cluster_config.location
         if cluster_config.logo_url:
-            result["logo_url"] = cluster_config.logo_url
+            result["logo_url"] = str(cluster_config.logo_url)
         if self._config.auth.public_endpoint_url:
             result["users_url"] = str(self._config.auth.public_endpoint_url)
         return result
