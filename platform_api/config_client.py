@@ -56,8 +56,8 @@ class ConfigClient:
             trace_configs=list(self._trace_configs),
         )
 
-    def _generate_headers(self, token: Optional[str] = None) -> "CIMultiDict[str]":
-        headers: "CIMultiDict[str]" = CIMultiDict()
+    def _generate_headers(self, token: Optional[str] = None) -> CIMultiDict[str]:
+        headers: CIMultiDict[str] = CIMultiDict()
         if token:
             headers["Authorization"] = f"Bearer {token}"
         return headers

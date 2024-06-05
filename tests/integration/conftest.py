@@ -924,6 +924,8 @@ def cluster_config_factory(
         )
         return ClusterConfig(
             name=cluster_name,
+            location="eu-west-4",
+            logo_url=URL("https://logo.url"),
             orchestrator=orchestrator_config,
             ingress=ingress_config,
             timezone=UTC,
