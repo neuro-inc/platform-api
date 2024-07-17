@@ -1558,13 +1558,13 @@ class NodeResources:
 
     def __post_init__(self) -> None:
         if self.cpu < 0:
-            raise ValueError("Invalid cpu")
+            raise ValueError(f"Invalid cpu: {self.cpu}")
         if self.memory < 0:
-            raise ValueError("Invalid memory")
+            raise ValueError(f"Invalid memory: {self.memory}")
         if self.nvidia_gpu < 0:
-            raise ValueError("Invalid gpu")
+            raise ValueError(f"Invalid nvidia gpu: {self.nvidia_gpu}")
         if self.amd_gpu < 0:
-            raise ValueError("Invalid gpu")
+            raise ValueError(f"Invalid amd gpu:  {self.amd_gpu}")
 
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "NodeResources":
@@ -1617,6 +1617,9 @@ class NodeResources:
 
     def __str__(self) -> str:
         return f"cpu={self.cpu_mcores}m, memory={self.memory}Mi, gpu={self.nvidia_gpu}"
+
+    def __bool__(self) -> bool:
+        return self.any
 
 
 class NodeConditionType(enum.Enum):
@@ -1702,7 +1705,13 @@ class Node:
         )
 
     def get_free_resources(self, resource_requests: NodeResources) -> NodeResources:
-        return self.status.allocatable_resources - resource_requests
+        try:
+            return self.status.allocatable_resources - resource_requests
+        except ValueError:
+            logger.warning(
+                f"Failed to compute free resources for {self=}: {resource_requests=}"
+            )
+            raise
 
 
 @dataclass(frozen=True)
