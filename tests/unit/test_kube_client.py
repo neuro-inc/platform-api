@@ -654,15 +654,15 @@ class TestNodeResources:
         assert resources == NodeResources(cpu=1, memory=4096 * 2**20, nvidia_gpu=1)
 
     def test_invalid_cpu(self) -> None:
-        with pytest.raises(ValueError, match="Invalid cpu"):
+        with pytest.raises(ValueError, match="Invalid cpu: -1"):
             NodeResources(cpu=-1, memory=4096, nvidia_gpu=1)
 
     def test_invalid_memory(self) -> None:
-        with pytest.raises(ValueError, match="Invalid memory"):
+        with pytest.raises(ValueError, match="Invalid memory: -4096"):
             NodeResources(cpu=1, memory=-4096, nvidia_gpu=1)
 
     def test_invalid_gpu(self) -> None:
-        with pytest.raises(ValueError, match="Invalid gpu"):
+        with pytest.raises(ValueError, match="Invalid nvidia gpu: -1"):
             NodeResources(cpu=1, memory=4096, nvidia_gpu=-1)
 
     def test_are_sufficient(self) -> None:

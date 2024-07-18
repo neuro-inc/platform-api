@@ -176,7 +176,9 @@ class KubeOrchestratorScheduler:
             for node in self._nodes_handler.get_ready_nodes():
                 if not pod.can_be_scheduled(node.labels):
                     logger.debug(
-                        "Pod %r cannot be scheduled onto node %r", pod.name, node.name
+                        "Pod %r cannot be scheduled to node %r due to labels mismatch",
+                        pod.name,
+                        node.name,
                     )
                     continue
                 requested = self._node_resources_handler.get_resource_requests(
@@ -186,7 +188,7 @@ class KubeOrchestratorScheduler:
                 free = node.get_free_resources(requested)
                 if free.are_sufficient(pod):
                     logger.debug(
-                        "Pod %r can be scheduled onto node %r", node.name, pod.name
+                        "Pod %r can be scheduled onto node %r", pod.name, node.name
                     )
                     schedulable_pods.append(pod)
                     if pod.resources:
