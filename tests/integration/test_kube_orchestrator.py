@@ -445,7 +445,7 @@ class TestKubeOrchestrator:
             t1 = time.time()
             assert t1 - t0 < 30, (
                 f"Wait for job failure is timed out "
-                f"after {t1-t0} secs [{status_item}]"
+                f"after {t1 - t0} secs [{status_item}]"
             )
             status_item = await kube_orchestrator.get_job_status(job)
 
@@ -488,7 +488,7 @@ class TestKubeOrchestrator:
                 assert status_item.reason == JobStatusReason.SCHEDULING
             assert t1 - t0 < 30, (
                 f"Wait for job failure is timed out "
-                f"after {t1-t0} secs [{status_item}]"
+                f"after {t1 - t0} secs [{status_item}]"
             )
             status_item = await kube_orchestrator.get_job_status(job)
 
