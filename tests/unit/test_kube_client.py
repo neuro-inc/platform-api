@@ -662,7 +662,7 @@ class TestNodeResources:
             NodeResources(cpu=1, memory=-4096, nvidia_gpu=1)
 
     def test_invalid_gpu(self) -> None:
-        with pytest.raises(ValueError, match="Invalid gpu"):
+        with pytest.raises(ValueError, match="Invalid nvidia gpu: -1"):
             NodeResources(cpu=1, memory=4096, nvidia_gpu=-1)
 
     def test_are_sufficient(self) -> None:
