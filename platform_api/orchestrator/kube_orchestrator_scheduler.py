@@ -103,6 +103,7 @@ class NodeResourcesHandler(EventHandler):
                 not pod.is_idle
                 and pod.status.is_scheduled
                 and not pod.status.is_terminated
+                and not pod.status.is_phase_failed
             ):
                 self._add_pod(pod)
 
