@@ -1709,13 +1709,7 @@ class Node:
         )
 
     def get_free_resources(self, resource_requests: NodeResources) -> NodeResources:
-        try:
-            return self.status.allocatable_resources - resource_requests
-        except ValueError:
-            logger.warning(
-                f"Failed to compute free resources for {self=}: {resource_requests=}"
-            )
-            raise
+        return self.status.allocatable_resources - resource_requests
 
 
 @dataclass(frozen=True)
