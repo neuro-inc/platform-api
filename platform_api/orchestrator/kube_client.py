@@ -1485,6 +1485,10 @@ class PodStatus:
         return self.phase == "Pending"
 
     @property
+    def is_phase_failed(self) -> bool:
+        return self.phase == "Failed"
+
+    @property
     def is_scheduled(self) -> bool:
         if not self.is_phase_pending:
             return True
