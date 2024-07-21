@@ -65,6 +65,7 @@ def create_pod() -> PodFactory:
         is_scheduled: bool = False,
         is_running: bool = False,
         is_terminated: bool = False,
+        is_failed: bool = False,
     ) -> dict[str, Any]:
         pod = PodDescriptor(
             name or f"pod-{uuid.uuid4()}",
@@ -102,6 +103,11 @@ def create_pod() -> PodFactory:
                 "conditions": [scheduled_condition],
             }
             raw_pod["spec"]["nodeName"] = node_name
+        if is_failed:
+            raw_pod["status"] = {
+                "phase": "Failed",
+                "reason": "OutOfcpu",
+            }
         return raw_pod
 
     return _create
@@ -344,6 +350,23 @@ class TestNodeResourcesHandler:
             PodWatchEvent.create_deleted(create_pod(is_terminated=True))
         )
 
+        resources = handler.get_resource_requests("minikube")
+        assert resources == NodeResources()
+
+    async def test_handle_failed(
+        self, handler: NodeResourcesHandler, create_pod: PodFactory
+    ) -> None:
+        await handler.handle(
+            PodWatchEvent.create_added(create_pod("job", is_scheduled=True))
+        )
+
+        await handler.handle(
+            PodWatchEvent.create_modified(
+                create_pod("job", is_scheduled=True, is_failed=True)
+            )
+        )
+
+        assert handler.get_pod_node_name("job") is None
         resources = handler.get_resource_requests("minikube")
         assert resources == NodeResources()
 

@@ -1485,6 +1485,10 @@ class PodStatus:
         return self.phase == "Pending"
 
     @property
+    def is_phase_failed(self) -> bool:
+        return self.phase == "Failed"
+
+    @property
     def is_scheduled(self) -> bool:
         if not self.is_phase_pending:
             return True
@@ -1705,13 +1709,7 @@ class Node:
         )
 
     def get_free_resources(self, resource_requests: NodeResources) -> NodeResources:
-        try:
-            return self.status.allocatable_resources - resource_requests
-        except ValueError:
-            logger.warning(
-                f"Failed to compute free resources for {self=}: {resource_requests=}"
-            )
-            raise
+        return self.status.allocatable_resources - resource_requests
 
 
 @dataclass(frozen=True)

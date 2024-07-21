@@ -103,6 +103,7 @@ class NodeResourcesHandler(EventHandler):
                 not pod.is_idle
                 and pod.status.is_scheduled
                 and not pod.status.is_terminated
+                and not pod.status.is_phase_failed
             ):
                 self._add_pod(pod)
 
@@ -110,7 +111,11 @@ class NodeResourcesHandler(EventHandler):
         pod = _Pod(event.resource)
         if pod.is_idle or not pod.status.is_scheduled:
             return
-        if event.type == WatchEventType.DELETED or pod.status.is_terminated:
+        if (
+            event.type == WatchEventType.DELETED
+            or pod.status.is_terminated
+            or pod.status.is_phase_failed
+        ):
             self._remove_pod(pod)
         else:
             self._add_pod(pod)
