@@ -40,10 +40,6 @@ class ContainerVolume:
 
     @property
     def src_path(self) -> PurePath:
-        print(str(self.uri))
-        print(self.uri.human_repr())
-        print(URL(self.uri).path)
-        print(URL(self.uri).raw_path)
         return PurePath(URL(self.uri).path)
 
     @classmethod
