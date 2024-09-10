@@ -35,7 +35,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
 )
 
 from .cluster import ClusterConfig, ClusterConfigRegistry, ClusterUpdater
-from .cluster_config import EnergySchedule, EnergySchedulePeriod
+from .cluster_config import EnergySchedule, EnergySchedulePeriod, VolumeConfig
 from .config import Config, CORSConfig
 from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
@@ -189,6 +189,10 @@ class ConfigApiHandler:
                 self._convert_energy_schedule_to_payload(schedule)
                 for schedule in cluster_config.energy.schedules
             ],
+            "storage_volumes": [
+                self._convert_storage_volume_to_payload(volume)
+                for volume in cluster_config.storage.volumes
+            ],
         }
         if cluster_config.location:
             result["location"] = cluster_config.location
@@ -209,6 +213,8 @@ class ConfigApiHandler:
             "memory": resource_pool_type.memory,
             "disk_size": resource_pool_type.disk_size,
         }
+        if resource_pool_type.idle_size:
+            payload["idle_size"] = resource_pool_type.idle_size
         if resource_pool_type.nvidia_gpu is not None:
             payload["nvidia_gpu"] = resource_pool_type.nvidia_gpu
         if resource_pool_type.amd_gpu is not None:
@@ -221,6 +227,10 @@ class ConfigApiHandler:
             }
         if resource_pool_type.is_preemptible:
             payload["is_preemptible"] = resource_pool_type.is_preemptible
+        if resource_pool_type.cpu_min_watts:
+            payload["cpu_min_watts"] = resource_pool_type.cpu_min_watts
+        if resource_pool_type.cpu_max_watts:
+            payload["cpu_max_watts"] = resource_pool_type.cpu_max_watts
         return payload
 
     def _convert_preset_to_payload(self, preset: Preset) -> dict[str, Any]:
@@ -287,6 +297,14 @@ class ConfigApiHandler:
             "role": str(project_user.role),
             "cluster_name": project_user.cluster_name,
             "org_name": project_user.org_name,
+        }
+
+    def _convert_storage_volume_to_payload(
+        self, volume: VolumeConfig
+    ) -> dict[str, Any]:
+        return {
+            "name": volume.name,
+            "credits_per_hour_per_gb": str(volume.credits_per_hour_per_gb),
         }
 
 

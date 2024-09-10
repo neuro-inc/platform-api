@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, time, tzinfo
+from decimal import Decimal
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -139,9 +140,21 @@ class IngressConfig:
 
 
 @dataclass(frozen=True)
+class VolumeConfig:
+    name: str
+    credits_per_hour_per_gb: Decimal
+
+
+@dataclass(frozen=True)
+class StorageConfig:
+    volumes: Sequence[VolumeConfig]
+
+
+@dataclass(frozen=True)
 class ClusterConfig:
     name: str
     orchestrator: OrchestratorConfig
+    storage: StorageConfig
     ingress: IngressConfig
     timezone: tzinfo = UTC
     energy: EnergyConfig = EnergyConfig()
