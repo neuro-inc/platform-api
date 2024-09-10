@@ -46,7 +46,11 @@ class ContainerVolume:
     def create(
         cls, uri: str, dst_path: PurePath, read_only: bool = False
     ) -> "ContainerVolume":
-        return cls(uri=URL(uri), dst_path=dst_path, read_only=read_only)
+        return cls(
+            uri=URL(uri.replace("%2f", "/").replace("%2F", "/")),
+            dst_path=dst_path,
+            read_only=read_only,
+        )
 
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "ContainerVolume":

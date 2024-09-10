@@ -70,7 +70,10 @@ class ResourcePoolType:
     disk_size: Optional[int] = None
     min_size: Optional[int] = None
     max_size: Optional[int] = None
+    idle_size: Optional[int] = None
     tpu: Optional[TPUResource] = None
+    cpu_min_watts: Optional[float] = None
+    cpu_max_watts: Optional[float] = None
 
     @property
     def has_gpu(self) -> bool:

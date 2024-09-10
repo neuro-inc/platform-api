@@ -16,6 +16,8 @@ from .cluster_config import (
     EnergySchedulePeriod,
     IngressConfig,
     OrchestratorConfig,
+    StorageConfig,
+    VolumeConfig,
 )
 from .resource import Preset, ResourcePoolType, TPUPreset, TPUResource
 
@@ -51,6 +53,7 @@ class ClusterConfigFactory:
                 ingress=self._create_ingress_config(payload),
                 timezone=timezone,
                 energy=self._create_energy_config(payload, timezone=timezone),
+                storage=self._create_storage_config(payload),
             )
         except t.DataError as err:
             logging.warning(f"failed to parse cluster config: {err}")
@@ -147,7 +150,10 @@ class ClusterConfigFactory:
             disk_size=payload.get("disk_size"),
             min_size=payload.get("min_size"),
             max_size=payload.get("max_size"),
+            idle_size=payload.get("idle_size"),
             tpu=self._create_tpu_resource(payload.get("tpu")),
+            cpu_min_watts=payload.get("cpu_min_watts"),
+            cpu_max_watts=payload.get("cpu_max_watts"),
         )
 
     def _create_tpu_resource(
@@ -204,3 +210,14 @@ class ClusterConfigFactory:
             timezone=timezone
         )
         return EnergyConfig(schedules=list(schedules.values()))
+
+    def _create_storage_config(self, payload: dict[str, Any]) -> StorageConfig:
+        return StorageConfig(
+            volumes=[
+                VolumeConfig(
+                    name=p["name"],
+                    credits_per_hour_per_gb=Decimal(p["credits_per_hour_per_gb"]),
+                )
+                for p in payload["storage"].get("volumes", ())
+            ]
+        )

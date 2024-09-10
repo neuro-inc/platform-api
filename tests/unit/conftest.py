@@ -39,6 +39,7 @@ from platform_api.cluster_config import (
     EnergySchedulePeriod,
     IngressConfig,
     OrchestratorConfig,
+    StorageConfig,
 )
 from platform_api.config import JobsConfig, JobsSchedulerConfig, RegistryConfig
 from platform_api.orchestrator.base import Orchestrator
@@ -469,6 +470,7 @@ def cluster_config() -> ClusterConfig:
                 )
             ]
         ),
+        storage=StorageConfig(volumes=()),
     )
 
 

@@ -256,9 +256,12 @@ class TestApi:
                         "name": "cpu",
                         "min_size": 1,
                         "max_size": 2,
+                        "idle_size": 1,
                         "cpu": 1.0,
                         "memory": 2048 * 10**6,
                         "disk_size": 150 * 10**9,
+                        "cpu_min_watts": 1,
+                        "cpu_max_watts": 2,
                     },
                     {
                         "name": "cpu-p",
@@ -493,6 +496,12 @@ class TestApi:
                         ],
                     },
                 ],
+                "storage_volumes": [
+                    {
+                        "name": "default",
+                        "credits_per_hour_per_gb": "100",
+                    }
+                ],
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -560,9 +569,12 @@ class TestApi:
                         "name": "cpu",
                         "min_size": 1,
                         "max_size": 2,
+                        "idle_size": 1,
                         "cpu": 1.0,
                         "memory": 2048 * 10**6,
                         "disk_size": 150 * 10**9,
+                        "cpu_min_watts": 1,
+                        "cpu_max_watts": 2,
                     },
                     {
                         "name": "cpu-p",
@@ -716,6 +728,7 @@ class TestApi:
                 ],
                 "timezone": "UTC",
                 "energy_schedules": mock.ANY,
+                "storage_volumes": mock.ANY,
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -798,9 +811,12 @@ class TestApi:
                         "name": "cpu",
                         "min_size": 1,
                         "max_size": 2,
+                        "idle_size": 1,
                         "cpu": 1.0,
                         "memory": 2048 * 10**6,
                         "disk_size": 150 * 10**9,
+                        "cpu_min_watts": 1,
+                        "cpu_max_watts": 2,
                     },
                     {
                         "name": "cpu-p",
@@ -954,6 +970,7 @@ class TestApi:
                 ],
                 "timezone": "UTC",
                 "energy_schedules": mock.ANY,
+                "storage_volumes": mock.ANY,
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
