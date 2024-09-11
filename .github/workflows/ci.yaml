@@ -2,12 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [master, eng-292-apolo-dev]
+    branches: [master]
     tags: ['v*']
   pull_request:
-    branches: [master, eng-292-apolo-dev]
+    branches: [master]
   pull_request_target:
-    branches: [master, eng-292-apolo-dev]
+    branches: [master]
   schedule:
   - cron: 0 4 * * *
 
