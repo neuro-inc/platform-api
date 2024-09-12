@@ -127,7 +127,7 @@ jobs:
     - name: Build Docker image
       run: make docker_build
     - name: Upload image artifact
-      uses: neuro-inc/upload-image-action@v24.4.0
+      uses: neuro-inc/upload-image-action@v21.9.2
       with:
         image: platformapi
         token: ${{ github.token }}
