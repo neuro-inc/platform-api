@@ -942,7 +942,11 @@ def cluster_config_factory(
             ),
             storage=ClusterStorageConfig(
                 volumes=[
-                    VolumeConfig(name="default", credits_per_hour_per_gb=Decimal("100"))
+                    VolumeConfig(
+                        name="default",
+                        path=None,
+                        credits_per_hour_per_gb=Decimal("100"),
+                    )
                 ]
             ),
         )
