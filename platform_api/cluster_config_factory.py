@@ -216,7 +216,10 @@ class ClusterConfigFactory:
             volumes=[
                 VolumeConfig(
                     name=p["name"],
-                    credits_per_hour_per_gb=Decimal(p["credits_per_hour_per_gb"]),
+                    path=p.get("path"),
+                    credits_per_hour_per_gb=Decimal(
+                        p.get("credits_per_hour_per_gb", 0)
+                    ),
                 )
                 for p in payload["storage"].get("volumes", ())
             ]

@@ -28,7 +28,7 @@ from neuro_notifications_client import (
 from yarl import URL
 
 from platform_api.cluster import ClusterConfig, ClusterConfigRegistry, ClusterNotFound
-from platform_api.cluster_config import OrchestratorConfig
+from platform_api.cluster_config import OrchestratorConfig, VolumeConfig
 from platform_api.config import JobsConfig
 from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
@@ -464,15 +464,16 @@ class JobsService:
 
     async def get_user_config(self, user: AuthUser) -> UserConfig:
         response = await self._get_admin_user(user)
+        clusters = await self._get_user_cluster_configs(response)
         return UserConfig(
             orgs=response.orgs,
-            clusters=self._get_user_cluster_configs(response),
+            clusters=clusters,
             projects=response.projects,
         )
 
     async def get_user_cluster_configs(self, user: AuthUser) -> list[UserClusterConfig]:
         response = await self._get_admin_user(user)
-        return self._get_user_cluster_configs(response)
+        return await self._get_user_cluster_configs(response)
 
     async def _get_admin_user(self, user: AuthUser) -> GetUserResponse:
         try:
@@ -487,25 +488,80 @@ class JobsService:
                 raise
             return GetUserResponse(user=AdminUser(name=user.name, email=""))
 
-    def _get_user_cluster_configs(
+    async def _get_user_cluster_configs(
         self, response: GetUserResponse
     ) -> list[UserClusterConfig]:
         configs = []
+        cluster_configs = await self._get_user_cluster_configs_by_name(response)
         cluster_to_orgs = defaultdict(list)
         for user_cluster in response.clusters:
             cluster_to_orgs[user_cluster.cluster_name].append(user_cluster.org_name)
         for cluster_name, orgs in cluster_to_orgs.items():
+            if cluster_config := cluster_configs.get(cluster_name):
+                configs.append(UserClusterConfig(config=cluster_config, orgs=orgs))
+        return configs
+
+    async def _get_user_cluster_configs_by_name(
+        self, response: GetUserResponse
+    ) -> dict[str, ClusterConfig]:
+        cluster_configs = self._get_cluster_configs_by_name(response)
+        volumes_by_cluster = await self._get_user_storage_volumes_by_cluster_name(
+            response.user.name, list(cluster_configs.values())
+        )
+        for cluster_name, volumes in volumes_by_cluster.items():
+            cluster_configs[cluster_name] = cluster_configs[
+                cluster_name
+            ].with_storage_volumes(volumes)
+        return cluster_configs
+
+    def _get_cluster_configs_by_name(
+        self, response: GetUserResponse
+    ) -> dict[str, ClusterConfig]:
+        cluster_configs: dict[str, ClusterConfig] = {}
+        for cluster in response.clusters:
             try:
-                cluster_config = self._cluster_registry.get(cluster_name)
-                configs.append(
-                    UserClusterConfig(
-                        config=cluster_config,
-                        orgs=orgs,
-                    )
+                cluster_configs[cluster.cluster_name] = self._cluster_registry.get(
+                    cluster.cluster_name
                 )
             except ClusterNotFound:
                 pass
-        return configs
+        return cluster_configs
+
+    async def _get_user_storage_volumes_by_cluster_name(
+        self, user_name: str, cluster_configs: Sequence[ClusterConfig]
+    ) -> dict[str, list[VolumeConfig]]:
+        missing_storage_uris = await self._get_user_storage_volume_missing_storage_uris(
+            user_name, cluster_configs
+        )
+        volumes_by_cluster: dict[str, list[VolumeConfig]] = defaultdict(list)
+        for cluster_config in cluster_configs:
+            for volume in cluster_config.storage.volumes:
+                if not volume.path or (
+                    volume.path
+                    and f"storage://{cluster_config.name}{volume.path}"
+                    not in missing_storage_uris
+                ):
+                    volumes_by_cluster[cluster_config.name].append(volume)
+        return volumes_by_cluster
+
+    async def _get_user_storage_volume_missing_storage_uris(
+        self, user_name: str, cluster_configs: Sequence[ClusterConfig]
+    ) -> set[str]:
+        permissions = []
+        for cluster_config in cluster_configs:
+            for volume in cluster_config.storage.volumes:
+                if volume.path:
+                    permissions.append(
+                        Permission(
+                            f"storage://{cluster_config.name}{volume.path}", "read"
+                        )
+                    )
+        if not permissions:
+            return set()
+        missing_permissions = await self._auth_client.get_missing_permissions(
+            user_name, permissions
+        )
+        return {p.uri for p in missing_permissions}
 
     @asynccontextmanager
     async def _create_job_in_storage(

@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, time, tzinfo
 from decimal import Decimal
 from typing import Optional
@@ -142,12 +142,16 @@ class IngressConfig:
 @dataclass(frozen=True)
 class VolumeConfig:
     name: str
+    path: Optional[str]
     credits_per_hour_per_gb: Decimal
 
 
 @dataclass(frozen=True)
 class StorageConfig:
     volumes: Sequence[VolumeConfig]
+
+    def with_volumes(self, value: Sequence[VolumeConfig]) -> "StorageConfig":
+        return replace(self, volumes=value)
 
 
 @dataclass(frozen=True)
@@ -160,3 +164,6 @@ class ClusterConfig:
     energy: EnergyConfig = EnergyConfig()
     location: Optional[str] = None
     logo_url: Optional[URL] = None
+
+    def with_storage_volumes(self, value: Sequence[VolumeConfig]) -> "ClusterConfig":
+        return replace(self, storage=self.storage.with_volumes(value))

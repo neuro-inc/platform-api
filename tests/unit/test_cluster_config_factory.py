@@ -13,43 +13,33 @@ from platform_api.cluster_config import (
     EnergyConfig,
     EnergySchedule,
     EnergySchedulePeriod,
+    VolumeConfig,
 )
 from platform_api.cluster_config_factory import ClusterConfigFactory
 from platform_api.resource import GKEGPUModels, Preset, TPUPreset, TPUResource
 
 
 @pytest.fixture
-def host_storage_payload() -> dict[str, Any]:
+def storage_payload() -> dict[str, Any]:
     return {
         "storage": {
-            "host": {"mount_path": "/host/mount/path"},
             "url": "https://dev.neu.ro/api/v1/storage",
+            "volumes": [
+                {
+                    "name": "default",
+                },
+                {
+                    "name": "org",
+                    "path": "/org",
+                    "credits_per_hour_per_gb": "100",
+                },
+            ],
         }
     }
 
 
 @pytest.fixture
-def nfs_storage_payload() -> dict[str, Any]:
-    return {
-        "storage": {
-            "nfs": {"server": "127.0.0.1", "export_path": "/nfs/export/path"},
-            "url": "https://dev.neu.ro/api/v1/storage",
-        }
-    }
-
-
-@pytest.fixture
-def pvc_storage_payload() -> dict[str, Any]:
-    return {
-        "storage": {
-            "pvc": {"name": "platform-storage"},
-            "url": "https://dev.neu.ro/api/v1/storage",
-        }
-    }
-
-
-@pytest.fixture
-def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]]:
+def clusters_payload(storage_payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         {
             "name": "cluster_name",
@@ -201,7 +191,7 @@ def clusters_payload(nfs_storage_payload: dict[str, Any]) -> list[dict[str, Any]
             "disks": {"url": "https://dev.neu.ro/api/v1/disk"},
             "buckets": {"url": "https://dev.neu.ro/api/v1/buckets"},
             "blob_storage": {"url": "https://dev.neu.ro/api/v1/blob"},
-            **nfs_storage_payload,
+            **storage_payload,
         }
     ]
 
@@ -318,6 +308,11 @@ class TestClusterConfigFactory:
         assert cluster.energy == EnergyConfig(
             schedules=[EnergySchedule.create_default(timezone=UTC)]
         )
+
+        assert cluster.storage.volumes == [
+            VolumeConfig(name="default", path=None, credits_per_hour_per_gb=Decimal(0)),
+            VolumeConfig(name="org", path="/org", credits_per_hour_per_gb=Decimal(100)),
+        ]
 
     def test_orchestrator_resource_presets_default(
         self, clusters_payload: Sequence[dict[str, Any]]
