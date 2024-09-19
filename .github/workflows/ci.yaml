@@ -54,14 +54,6 @@ jobs:
       image: platformapi
       helm_charts: platform-api platform-api-poller
 
-  depl1oy_dev:
-    name: Deploy on dev
-    needs: release
-    uses: neuro-inc/reuse/.github/workflows/deploy-dev.yaml@v24.9.0
-    with:
-      helm_charts: platform-api platform-api-poller
-      version: ${{ needs.release.outputs.version }}
-
   deploy_dev:
     name: Deploy on dev
     runs-on: ubuntu-latest
