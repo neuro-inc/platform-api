@@ -54,10 +54,25 @@ jobs:
       image: platformapi
       helm_charts: platform-api platform-api-poller
 
-  deploy_dev:
+  depl1oy_dev:
     name: Deploy on dev
     needs: release
     uses: neuro-inc/reuse/.github/workflows/deploy-dev.yaml@v24.9.0
     with:
       helm_charts: platform-api platform-api-poller
       version: ${{ needs.release.outputs.version }}
+
+  deploy_dev:
+    name: Deploy on dev
+    runs-on: ubuntu-latest
+    needs: release
+    permissions:
+      contents: read
+    steps:
+    - name: Create Terraform Cloud run
+      uses: neuro-inc/terraform-cloud-run-action@v24.7.0
+      with:
+        token: ${{ secrets.TF_API_TOKEN }}
+        workspace: control-plane-apps-dev-421920
+        variables: |
+          platform_api_version=${{ needs.release.outputs.version }}
