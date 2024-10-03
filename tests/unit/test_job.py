@@ -2,6 +2,7 @@ import dataclasses
 import hashlib
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import PurePath
 from typing import Any, Optional
 from unittest import mock
@@ -872,6 +873,24 @@ class TestJob:
         assert job.http_url == "http://testjob.jobs"
         assert job.http_url_named == f"http://test-job-name--{suffix}.jobs"
 
+    def test_job__get_total_price_credits(
+        self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+
+        started_ago_delta = timedelta(hours=1)  # job started 1 hour ago: pending
+        pending_delta = timedelta(minutes=15)  # after 15 min: running (still running)
+
+        pending_at = time_now - started_ago_delta
+        running_at = pending_at + pending_delta
+        items = [
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running_at),
+        ]
+        job = job_factory(JobStatusHistory(items))
+
+        assert job.get_total_price_credits() == Decimal("7.5")
+
     def test_to_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
@@ -901,7 +920,6 @@ class TestJob:
             "request": job_request.to_primitive(),
             "status": "failed",
             "materialized": False,
-            "fully_billed": False,
             "finished_at": expected_finished_at,
             "statuses": [
                 {
@@ -923,7 +941,6 @@ class TestJob:
             "schedule_timeout": 15,
             "restart_policy": "never",
             "privileged": False,
-            "total_price_credits": "0",
             "priority": 0,
             "energy_schedule_name": "default",
         }
@@ -956,7 +973,6 @@ class TestJob:
                 }
             ],
             "materialized": False,
-            "fully_billed": False,
             "finished_at": None,
             "scheduler_enabled": False,
             "preemptible_node": False,
@@ -964,7 +980,6 @@ class TestJob:
             "max_run_time_minutes": 500,
             "restart_policy": "never",
             "privileged": False,
-            "total_price_credits": "0",
             "priority": 0,
             "energy_schedule_name": "default",
         }
@@ -1362,14 +1377,12 @@ class TestJob:
             "status": current_status_item["status"],
             "statuses": [current_status_item],
             "materialized": False,
-            "fully_billed": False,
             "finished_at": finished_at_str,
             "scheduler_enabled": False,
             "preemptible_node": False,
             "pass_config": False,
             "restart_policy": str(JobRestartPolicy.ALWAYS),
             "privileged": False,
-            "total_price_credits": "0",
             "priority": 0,
             "energy_schedule_name": "green",
         }

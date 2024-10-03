@@ -49,7 +49,6 @@ class JobFilter:
     since: datetime = datetime(1, 1, 1, tzinfo=timezone.utc)
     until: datetime = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc)
     materialized: Optional[bool] = None
-    fully_billed: Optional[bool] = None
     being_dropped: Optional[bool] = None
     logs_removed: Optional[bool] = None
     org_project_hash: Union[bytes, str, None] = None
@@ -88,8 +87,6 @@ class JobFilter:
             return False
         if self.materialized is not None:
             return self.materialized == job.materialized
-        if self.fully_billed is not None:
-            return self.fully_billed == job.fully_billed
         if self.being_dropped is not None:
             return self.being_dropped == job.being_dropped
         if self.logs_removed is not None:

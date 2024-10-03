@@ -1152,19 +1152,6 @@ class TestJobsStorage:
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == set()
 
-    async def test_get_all_filter_by_fully_billed(self, storage: JobsStorage) -> None:
-        jobs = [
-            self._create_job(fully_billed=True),
-            self._create_job(fully_billed=False),
-            self._create_job(fully_billed=True),
-        ]
-        for job in jobs:
-            async with storage.try_create_job(job):
-                pass
-        job_filter = JobFilter(fully_billed=True)
-        job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
-        assert job_ids == [jobs[0].id, jobs[2].id]
-
     async def test_get_all_filter_by_being_dropped(self, storage: JobsStorage) -> None:
         jobs = [
             self._create_job(being_dropped=True),
@@ -1402,22 +1389,14 @@ class TestJobsStorage:
         now_f = lambda: now  # noqa
         f1 = lambda: now - timedelta(days=1)  # noqa
         f2 = lambda: now - timedelta(days=2)  # noqa
-        f3 = lambda: now - timedelta(days=3)  # noqa
 
         deleted_job_1 = self._create_succeeded_job(
             materialized=False,
-            fully_billed=True,
             current_datetime_factory=f1,
         )
         deleted_job_2 = self._create_succeeded_job(
             materialized=False,
-            fully_billed=True,
             current_datetime_factory=f2,
-        )
-        deleted_job_3 = self._create_succeeded_job(
-            materialized=False,
-            fully_billed=False,
-            current_datetime_factory=f3,
         )
         for job in [
             pending_job,
@@ -1425,7 +1404,6 @@ class TestJobsStorage:
             succeeded_job,
             deleted_job_1,
             deleted_job_2,
-            deleted_job_3,
         ]:
             await storage.set_job(job)
 

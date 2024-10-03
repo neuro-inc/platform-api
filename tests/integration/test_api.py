@@ -1,7 +1,6 @@
 import asyncio
 import json
 import re
-from collections import defaultdict
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import AbstractAsyncContextManager
 from decimal import Decimal
@@ -31,7 +30,6 @@ from neuro_auth_client import Permission
 from yarl import URL
 
 from platform_api.cluster import ClusterConfigRegistry
-from platform_api.cluster_config import ClusterConfig
 from platform_api.config import Config
 from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
 from tests.conftest import random_str
@@ -5830,121 +5828,6 @@ class TestRuntimeLimitEnforcer:
 
         await user_jobs_client.delete_job(job_2["id"], assert_success=False)
         await user_jobs_client.delete_job(job_3["id"], assert_success=False)
-
-
-class TestBillingEnforcer:
-    async def test_enforce_billing(
-        self,
-        api: ApiConfig,
-        config: Config,
-        cluster_config: ClusterConfig,
-        client: aiohttp.ClientSession,
-        job_submit: dict[str, Any],
-        jobs_client_factory: Callable[[_User], JobsClient],
-        regular_user_factory: Callable[[], Awaitable[_User]],
-        admin_client: AdminClient,
-        cluster_name: str,
-    ) -> None:
-        durations = [30, 25, 20, 15, 10, 5]
-
-        test_jobs: list[tuple[dict[str, Any], _User, JobsClient, int]] = []
-        for duration in durations:
-            job_submit["container"]["command"] = f"sleep {duration}s"
-            user = await regular_user_factory()
-            user_jobs_client = jobs_client_factory(user)
-            test_jobs.append(
-                (
-                    await user_jobs_client.create_job(job_submit),
-                    user,
-                    user_jobs_client,
-                    duration,
-                )
-            )
-
-        for job, _, user_jobs_client, _ in test_jobs:
-            await user_jobs_client.long_polling_by_job_id(
-                job_id=job["id"],
-                status="succeeded",
-            )
-
-        # Wait for 7 ticks for jobs to become charged
-        await asyncio.sleep(config.job_policy_enforcer.interval_sec * 7)
-
-        user_to_charge: dict[str, Decimal] = defaultdict(Decimal)
-        for cluster_user in await admin_client.list_cluster_users(cluster_name):
-            user_to_charge[cluster_user.user_name] = cluster_user.balance.spent_credits
-
-        per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
-        second = Decimal("1") / 3600
-        for _, user, _, duration in test_jobs:
-            real_charge = user_to_charge[user.name]
-            expected_charge = duration * second * per_hour
-            # As we track runtime using jobs poller, the tracked runtime
-            # will have some drift from real value
-            allowed_drift = 8 * second * per_hour
-            assert abs(expected_charge - real_charge) < allowed_drift, (
-                f"Wrong charge for duration {duration}: "
-                f"delta from right value is {expected_charge - real_charge}"
-            )
-
-    async def test_enforce_billing_with_org(
-        self,
-        api: ApiConfig,
-        config: Config,
-        cluster_config: ClusterConfig,
-        client: aiohttp.ClientSession,
-        job_submit: dict[str, Any],
-        jobs_client_factory: Callable[[_User], JobsClient],
-        regular_user_factory: UserFactory,
-        admin_client: AdminClient,
-        cluster_name: str,
-    ) -> None:
-        durations = [30, 25, 20, 15, 10, 5]
-
-        test_jobs: list[tuple[dict[str, Any], _User, JobsClient, int]] = []
-        for duration in durations:
-            job_submit["container"]["command"] = f"sleep {duration}s"
-            user = await regular_user_factory(
-                clusters=[(cluster_name, "org", Balance(), Quota())]
-            )
-            user_jobs_client = jobs_client_factory(user)
-            test_jobs.append(
-                (
-                    await user_jobs_client.create_job(job_submit),
-                    user,
-                    user_jobs_client,
-                    duration,
-                )
-            )
-
-        for job, _, user_jobs_client, _ in test_jobs:
-            await user_jobs_client.long_polling_by_job_id(
-                job_id=job["id"],
-                status="succeeded",
-            )
-
-        # Wait for 7 ticks for jobs to become charged
-        await asyncio.sleep(config.job_policy_enforcer.interval_sec * 7)
-
-        user_to_charge: dict[str, Decimal] = defaultdict(Decimal)
-        for cluster_user in await admin_client.list_cluster_users(cluster_name):
-            if cluster_user.org_name == "org":
-                user_to_charge[cluster_user.user_name] = (
-                    cluster_user.balance.spent_credits
-                )
-
-        per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
-        second = Decimal("1") / 3600
-        for _, user, _, duration in test_jobs:
-            real_charge = user_to_charge[user.name]
-            expected_charge = duration * second * per_hour
-            # As we track runtime using jobs poller, the tracked runtime
-            # will have some drift from real value
-            allowed_drift = 5 * second * per_hour
-            assert abs(expected_charge - real_charge) < allowed_drift, (
-                f"Wrong charge for duration {duration}: "
-                f"delta from right value is {expected_charge - real_charge}"
-            )
 
 
 class TestRetentionEnforcer:
