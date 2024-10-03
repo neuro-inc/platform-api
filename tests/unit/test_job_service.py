@@ -1621,64 +1621,6 @@ class TestJobsService:
             request, user=user, cluster_name=test_cluster, wait_for_jobs_quota=True
         )
 
-    async def test_job_billing_defaults(
-        self,
-        jobs_service: JobsService,
-        mock_job_request: JobRequest,
-        test_user: AuthUser,
-        test_cluster: str,
-    ) -> None:
-        job, _ = await jobs_service.create_job(
-            job_request=mock_job_request, user=test_user, cluster_name=test_cluster
-        )
-        assert not job.fully_billed
-        assert job.last_billed is None
-        assert job.total_price_credits == Decimal("0")
-
-    async def test_job_update_billing(
-        self,
-        jobs_service: JobsService,
-        mock_job_request: JobRequest,
-        test_user: AuthUser,
-        test_cluster: str,
-    ) -> None:
-        job, _ = await jobs_service.create_job(
-            job_request=mock_job_request, user=test_user, cluster_name=test_cluster
-        )
-        now = datetime.now(timezone.utc)
-        await jobs_service.update_job_billing(
-            job.id, last_billed=now, fully_billed=False, new_charge=Decimal("5.00")
-        )
-
-        await jobs_service.update_job_billing(
-            job.id, last_billed=now, fully_billed=True, new_charge=Decimal("6.11")
-        )
-        job = await jobs_service.get_job(job.id)
-        assert job.fully_billed
-        assert job.last_billed == now
-        assert job.total_price_credits == Decimal("11.11")
-
-    async def test_get_not_billed_jobs(
-        self,
-        jobs_service: JobsService,
-        job_request_factory: Callable[..., JobRequest],
-        test_user: AuthUser,
-        test_cluster: str,
-    ) -> None:
-        job1, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
-        )
-        job2, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
-        )
-        now = datetime.now(timezone.utc)
-        await jobs_service.update_job_billing(
-            job1.id, last_billed=now, fully_billed=True, new_charge=Decimal("5.00")
-        )
-        async with jobs_service.get_not_billed_jobs() as it:
-            job_ids = [job.id async for job in it]
-        assert job_ids == [job2.id]
-
 
 class TestJobsServiceCluster:
     @pytest.fixture

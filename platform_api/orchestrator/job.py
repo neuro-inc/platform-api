@@ -306,11 +306,6 @@ class JobRecord:
     priority: JobPriority = JobPriority.NORMAL
     energy_schedule_name: str = DEFAULT_ENERGY_SCHEDULE_NAME
 
-    # Billing in credits
-    fully_billed: bool = False  # True if job has final price
-    last_billed: datetime | None = None
-    total_price_credits: Decimal = Decimal("0")
-
     # Retention (allows other services as platform-monitoring to cleanup jobs resources)
     being_dropped: bool = False
     logs_removed: bool = False
@@ -496,8 +491,6 @@ class JobRecord:
             "pass_config": self.pass_config,
             "privileged": self.privileged,
             "restart_policy": str(self.restart_policy),
-            "fully_billed": self.fully_billed,
-            "total_price_credits": str(self.total_price_credits),
             "priority": int(self.priority),
         }
         if self.schedule_timeout:
@@ -514,8 +507,6 @@ class JobRecord:
             result["preset_name"] = self.preset_name
         if self.tags:
             result["tags"] = self.tags
-        if self.last_billed:
-            result["last_billed"] = self.last_billed.isoformat()
         if self.being_dropped:
             result["being_dropped"] = self.being_dropped
         if self.logs_removed:
@@ -570,13 +561,6 @@ class JobRecord:
                 payload.get("restart_policy", str(cls.restart_policy))
             ),
             priority=JobPriority(payload.get("priority", int(cls.priority))),
-            fully_billed=payload.get("fully_billed", True),  # Default for old jobs
-            total_price_credits=Decimal(payload.get("total_price_credits", "0")),
-            last_billed=(
-                datetime.fromisoformat(payload["last_billed"])
-                if "last_billed" in payload
-                else None
-            ),
             being_dropped=payload.get("being_dropped", False),
             logs_removed=payload.get("logs_removed", False),
             energy_schedule_name=payload.get(
@@ -949,17 +933,11 @@ class Job:
     def max_run_time_minutes(self) -> int | None:
         return self._record.max_run_time_minutes
 
-    @property
-    def fully_billed(self) -> bool:
-        return self._record.fully_billed
-
-    @property
-    def last_billed(self) -> datetime | None:
-        return self._record.last_billed
-
-    @property
-    def total_price_credits(self) -> Decimal:
-        return self._record.total_price_credits
+    def get_total_price_credits(self) -> Decimal:
+        runtime = self.get_run_time()
+        runtime_microseconds = int(runtime.total_seconds() * 1e6)
+        runtime_hours = Decimal(runtime_microseconds) / int(1e6) / 3600
+        return runtime_hours * self.price_credits_per_hour
 
     @property
     def org_name(self) -> str | None:

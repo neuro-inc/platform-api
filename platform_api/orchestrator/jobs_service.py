@@ -5,8 +5,7 @@ from collections import defaultdict
 from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
-from decimal import Decimal
+from datetime import timedelta
 from typing import Optional, Union
 
 from aiohttp import ClientResponseError
@@ -606,26 +605,6 @@ class JobsService:
     @property
     def jobs_storage(self) -> JobsStorage:
         return self._jobs_storage
-
-    async def update_job_billing(
-        self,
-        job_id: str,
-        last_billed: datetime,
-        fully_billed: bool,
-        new_charge: Decimal,
-    ) -> None:
-        async with self._jobs_storage.try_update_job(job_id) as record:
-            record.total_price_credits += new_charge
-            record.last_billed = last_billed
-            record.fully_billed = fully_billed
-
-    @asyncgeneratorcontextmanager
-    async def get_not_billed_jobs(self) -> AsyncIterator[Job]:
-        async with self._jobs_storage.iter_all_jobs(
-            JobFilter(fully_billed=False)
-        ) as it:
-            async for record in it:
-                yield await self._get_cluster_job(record)
 
     async def get_job_ids_for_drop(
         self, *, delay: timedelta, limit: Optional[int] = None

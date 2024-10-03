@@ -482,7 +482,7 @@ def convert_job_to_job_response(job: Job) -> dict[str, Any]:
         "materialized": job.materialized,
         "being_dropped": job.being_dropped,
         "logs_removed": job.logs_removed,
-        "total_price_credits": str(job.total_price_credits),
+        "total_price_credits": str(job.get_total_price_credits()),
         "price_credits_per_hour": str(job.price_credits_per_hour),
         "priority": job.priority.to_name(),
     }

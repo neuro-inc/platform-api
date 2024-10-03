@@ -2,10 +2,9 @@ import abc
 import asyncio
 import contextlib
 import logging
-import uuid
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any, Optional, TypeVar
 
@@ -20,8 +19,6 @@ from neuro_notifications_client import (
 
 from platform_api.cluster import ClusterConfigRegistry
 from platform_api.config import JobPolicyEnforcerConfig
-from platform_api.orchestrator.billing_log.service import BillingLogService
-from platform_api.orchestrator.billing_log.storage import BillingLogEntry
 from platform_api.orchestrator.job import Job, JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_request import JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
@@ -223,51 +220,6 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
         if org_cluster is None or org_cluster.balance.is_non_positive:
             for job in org_cluster_jobs:
                 await self._service.cancel_job(job.id, JobStatusReason.QUOTA_EXHAUSTED)
-
-
-class BillingEnforcer(JobPolicyEnforcer):
-    def __init__(
-        self,
-        jobs_service: JobsService,
-        billing_service: BillingLogService,
-        proceed_wait_timeout_s: float = 15,
-    ):
-        self._jobs_service = jobs_service
-        self._billing_service = billing_service
-        self._proceed_wait_timeout_s = proceed_wait_timeout_s
-
-    @trace
-    async def enforce(self) -> None:
-        async with self._jobs_service.get_not_billed_jobs() as it:
-            not_billed_jobs = [job.id async for job in it]
-        for job_id in not_billed_jobs:
-            await self._bill_single(job_id)
-
-    async def _bill_single(self, job_id: str) -> None:
-        async with self._billing_service.entries_inserter() as inserter:
-            last_id = await self._billing_service.get_last_entry_id(job_id)
-            await asyncio.wait_for(
-                self._billing_service.wait_until_processed(last_entry_id=last_id),
-                timeout=self._proceed_wait_timeout_s,
-            )
-
-            job = await self._jobs_service.get_job(job_id)
-            now = datetime.now(timezone.utc)
-            new_runtime = job.get_run_time(only_after=job.last_billed, now=now)
-            microseconds = int(new_runtime.total_seconds() * 1e6)
-            hours = Decimal(microseconds) / int(1e6) / 3600
-            charge = hours * job.price_credits_per_hour
-            await inserter.insert(
-                [
-                    BillingLogEntry(
-                        idempotency_key=str(uuid.uuid4()),
-                        job_id=job.id,
-                        last_billed=now,
-                        charge=charge,
-                        fully_billed=job.status.is_finished,
-                    )
-                ]
-            )
 
 
 class StopOnClusterRemoveEnforcer(JobPolicyEnforcer):

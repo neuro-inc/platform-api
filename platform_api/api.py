@@ -25,7 +25,6 @@ from neuro_logging import (
 from neuro_notifications_client import Client as NotificationsClient
 
 from platform_api.orchestrator.job_policy_enforcer import (
-    BillingEnforcer,
     CreditsLimitEnforcer,
     CreditsNotificationsEnforcer,
     JobPolicyEnforcePoller,
@@ -40,8 +39,6 @@ from .config import Config, CORSConfig
 from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
-from .orchestrator.billing_log.service import BillingLogService, BillingLogWorker
-from .orchestrator.billing_log.storage import PostgresBillingLogStorage
 from .orchestrator.job_request import JobError, JobException
 from .orchestrator.jobs_service import (
     JobsService,
@@ -477,46 +474,12 @@ async def create_app(
 
             logger.info("Initializing JobPolicyEnforcePoller")
 
-            logger.info("Initializing BillingLogStorage")
-            billing_log_storage = PostgresBillingLogStorage(engine)
-
-            billing_log_new_entry_notifier = ResubscribingNotifier(
-                PostgresChannelNotifier(engine, "billing_log_new_entry"),
-                check_interval=15,
-            )
-
-            billing_log_entry_done_notifier = ResubscribingNotifier(
-                PostgresChannelNotifier(engine, "billing_log_entry_done_notifier"),
-                check_interval=15,
-            )
-
-            logger.info("Initializing BillingLogService")
-            billing_log_service = await exit_stack.enter_async_context(
-                BillingLogService(
-                    storage=billing_log_storage,
-                    new_entry=billing_log_new_entry_notifier,
-                    entry_done=billing_log_entry_done_notifier,
-                )
-            )
-
-            logger.info("Initializing BillingLogWorker")
-            await exit_stack.enter_async_context(
-                BillingLogWorker(
-                    storage=billing_log_storage,
-                    new_entry=billing_log_new_entry_notifier,
-                    entry_done=billing_log_entry_done_notifier,
-                    admin_client=admin_client,
-                    jobs_service=jobs_service,
-                )
-            )
-
             await exit_stack.enter_async_context(
                 JobPolicyEnforcePoller(
                     config.job_policy_enforcer,
                     enforcers=[
                         RuntimeLimitEnforcer(jobs_service),
                         CreditsLimitEnforcer(jobs_service, admin_client),
-                        BillingEnforcer(jobs_service, billing_log_service),
                         CreditsNotificationsEnforcer(
                             jobs_service=jobs_service,
                             admin_client=admin_client,

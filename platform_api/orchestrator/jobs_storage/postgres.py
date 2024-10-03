@@ -300,7 +300,6 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         job_filter = JobFilter(
             statuses={JobStatus(item) for item in JobStatus.finished_values()},
             materialized=False,
-            fully_billed=True,
         )
         now = datetime.now(timezone.utc)
         query = (
@@ -421,9 +420,6 @@ class JobFilterClauseBuilder:
     def filter_materialized(self, materialized: bool) -> None:
         self._filter_bool_from_payload("materialized", materialized)
 
-    def filter_fully_billed(self, fully_billed: bool) -> None:
-        self._filter_bool_from_payload("fully_billed", fully_billed)
-
     def filter_being_dropped(self, being_dropped: bool) -> None:
         self._filter_bool_from_payload("being_dropped", being_dropped)
 
@@ -463,8 +459,6 @@ class JobFilterClauseBuilder:
             builder.filter_tags(job_filter.tags)
         if job_filter.materialized is not None:
             builder.filter_materialized(job_filter.materialized)
-        if job_filter.fully_billed is not None:
-            builder.filter_fully_billed(job_filter.fully_billed)
         if job_filter.being_dropped is not None:
             builder.filter_being_dropped(job_filter.being_dropped)
         if job_filter.logs_removed is not None:
