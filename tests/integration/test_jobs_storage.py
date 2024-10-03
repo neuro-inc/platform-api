@@ -1389,7 +1389,6 @@ class TestJobsStorage:
         now_f = lambda: now  # noqa
         f1 = lambda: now - timedelta(days=1)  # noqa
         f2 = lambda: now - timedelta(days=2)  # noqa
-        f3 = lambda: now - timedelta(days=3)  # noqa
 
         deleted_job_1 = self._create_succeeded_job(
             materialized=False,
@@ -1399,17 +1398,12 @@ class TestJobsStorage:
             materialized=False,
             current_datetime_factory=f2,
         )
-        deleted_job_3 = self._create_succeeded_job(
-            materialized=False,
-            current_datetime_factory=f3,
-        )
         for job in [
             pending_job,
             running_job,
             succeeded_job,
             deleted_job_1,
             deleted_job_2,
-            deleted_job_3,
         ]:
             await storage.set_job(job)
 
