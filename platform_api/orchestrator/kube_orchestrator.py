@@ -484,13 +484,16 @@ class KubeOrchestrator(Orchestrator):
         max_node_memory = max(p.memory or 0 for p in pool_types)
         max_node_nvidia_gpu = max(p.nvidia_gpu or 0 for p in pool_types)
         max_node_amd_gpu = max(p.amd_gpu or 0 for p in pool_types)
+        max_node_intel_gpu = max(p.intel_gpu or 0 for p in pool_types)
         pod_nvidia_gpu = pod.resources.nvidia_gpu or 0
         pod_amd_gpu = pod.resources.amd_gpu or 0
+        pod_intel_gpu = pod.resources.intel_gpu or 0
         if (
             max_node_cpu > pod.resources.cpu
             or max_node_memory > pod.resources.memory
             or max_node_nvidia_gpu > pod_nvidia_gpu
             or max_node_amd_gpu > pod_amd_gpu
+            or max_node_intel_gpu > pod_intel_gpu
         ):
             # Ignore pods that don't require all node's resources
             return pod
@@ -669,6 +672,14 @@ class KubeOrchestrator(Orchestrator):
             tolerations.append(
                 Toleration(
                     key=Resources.amd_gpu_key,
+                    operator="Exists",
+                    effect="NoSchedule",
+                )
+            )
+        if job.has_intel_gpu or any(p.intel_gpu for p in pool_types):
+            tolerations.append(
+                Toleration(
+                    key=Resources.intel_gpu_key,
                     operator="Exists",
                     effect="NoSchedule",
                 )

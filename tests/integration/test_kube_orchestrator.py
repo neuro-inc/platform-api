@@ -2547,6 +2547,7 @@ class TestAffinityFixtures:
             memory: int = 128 * 10**6,
             nvidia_gpu: int | None = None,
             amd_gpu: int | None = None,
+            intel_gpu: int | None = None,
             scheduler_enabled: bool = False,
             preemptible_node: bool = False,
             preset_name: str | None = None,
@@ -2559,6 +2560,7 @@ class TestAffinityFixtures:
                     memory=memory,
                     nvidia_gpu=nvidia_gpu,
                     amd_gpu=amd_gpu,
+                    intel_gpu=intel_gpu,
                 ),
             )
             job = MyJob(
