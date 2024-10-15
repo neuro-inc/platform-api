@@ -208,6 +208,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     disk_size=150 * 10**9,
                     nvidia_gpu=1,
                     amd_gpu=2,
+                    intel_gpu=3,
                 ),
             ],
             "presets": [
@@ -361,6 +362,8 @@ def kube_job_nodes_factory(
                 taints.append(NodeTaint(key=Resources.nvidia_gpu_key, value="present"))
             if pool_type.amd_gpu:
                 taints.append(NodeTaint(key=Resources.amd_gpu_key, value="present"))
+            if pool_type.intel_gpu:
+                taints.append(NodeTaint(key=Resources.intel_gpu_key, value="present"))
             try:
                 await kube_client.create_node(
                     pool_type.name, capacity=capacity, labels=labels, taints=taints

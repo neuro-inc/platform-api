@@ -216,6 +216,14 @@ class ConfigApiHandler:
             payload["nvidia_gpu"] = resource_pool_type.nvidia_gpu
         if resource_pool_type.amd_gpu is not None:
             payload["amd_gpu"] = resource_pool_type.amd_gpu
+        if resource_pool_type.intel_gpu is not None:
+            payload["intel_gpu"] = resource_pool_type.intel_gpu
+        if resource_pool_type.nvidia_gpu_model is not None:
+            payload["nvidia_gpu_model"] = resource_pool_type.nvidia_gpu_model
+        if resource_pool_type.amd_gpu_model is not None:
+            payload["amd_gpu_model"] = resource_pool_type.amd_gpu_model
+        if resource_pool_type.intel_gpu_model is not None:
+            payload["intel_gpu_model"] = resource_pool_type.intel_gpu_model
         if resource_pool_type.tpu:
             payload["tpu"] = {
                 "types": resource_pool_type.tpu.types,
@@ -247,8 +255,16 @@ class ConfigApiHandler:
             payload["gpu"] = preset.nvidia_gpu
         if preset.amd_gpu is not None:
             payload["amd_gpu"] = preset.amd_gpu
-        if preset.gpu_model is not None:
-            payload["gpu_model"] = preset.gpu_model
+        if preset.intel_gpu is not None:
+            payload["intel_gpu"] = preset.intel_gpu
+        nvidia_gpu_model = preset.nvidia_gpu_model or preset.gpu_model
+        if nvidia_gpu_model is not None:
+            payload["gpu_model"] = nvidia_gpu_model
+            payload["nvidia_gpu_model"] = nvidia_gpu_model
+        if preset.amd_gpu_model is not None:
+            payload["amd_gpu_model"] = preset.amd_gpu_model
+        if preset.intel_gpu_model is not None:
+            payload["intel_gpu_model"] = preset.intel_gpu_model
         if preset.tpu:
             payload["tpu"] = {
                 "type": preset.tpu.type,

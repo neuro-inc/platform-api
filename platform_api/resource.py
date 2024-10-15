@@ -42,6 +42,10 @@ class Preset:
     preemptible_node: bool = False
     nvidia_gpu: Optional[int] = None
     amd_gpu: Optional[int] = None
+    intel_gpu: Optional[int] = None
+    nvidia_gpu_model: Optional[str] = None
+    amd_gpu_model: Optional[str] = None
+    intel_gpu_model: Optional[str] = None
     gpu_model: Optional[str] = None  # TODO: deprecated
     tpu: Optional[TPUPreset] = None
     is_external_job: bool = False
@@ -67,6 +71,10 @@ class ResourcePoolType:
     memory: Optional[int] = None
     nvidia_gpu: Optional[int] = None
     amd_gpu: Optional[int] = None
+    intel_gpu: Optional[int] = None
+    nvidia_gpu_model: Optional[str] = None
+    amd_gpu_model: Optional[str] = None
+    intel_gpu_model: Optional[str] = None
     disk_size: Optional[int] = None
     min_size: Optional[int] = None
     max_size: Optional[int] = None
@@ -77,4 +85,4 @@ class ResourcePoolType:
 
     @property
     def has_gpu(self) -> bool:
-        return bool(self.nvidia_gpu or self.amd_gpu)
+        return bool(self.nvidia_gpu or self.amd_gpu or self.intel_gpu)

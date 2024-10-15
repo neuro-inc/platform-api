@@ -76,6 +76,7 @@ class ClusterConfigFactory:
             memory = _get_memory_with_deprecated_mb(preset, "memory")
             if memory is None:
                 raise ValueError("memory is not set for resource preset")
+            nvidia_gpu_model = preset.get("nvidia_gpu_model") or preset.get("gpu_model")
             result.append(
                 Preset(
                     name=preset["name"],
@@ -88,7 +89,11 @@ class ClusterConfigFactory:
                     or preset.get("is_preemptible_node_required", False),
                     nvidia_gpu=preset.get("nvidia_gpu"),
                     amd_gpu=preset.get("amd_gpu"),
-                    gpu_model=preset.get("gpu_model"),
+                    intel_gpu=preset.get("intel_gpu"),
+                    gpu_model=nvidia_gpu_model,
+                    nvidia_gpu_model=nvidia_gpu_model,
+                    amd_gpu_model=preset.get("amd_gpu_model"),
+                    intel_gpu_model=preset.get("intel_gpu_model"),
                     tpu=self._create_tpu_preset(preset.get("tpu")),
                     is_external_job=preset.get("is_external_job", False),
                     resource_pool_names=preset.get("resource_pool_names", ()),
@@ -144,6 +149,11 @@ class ClusterConfigFactory:
             name=payload["name"],
             nvidia_gpu=payload.get("nvidia_gpu"),
             amd_gpu=payload.get("amd_gpu"),
+            intel_gpu=payload.get("intel_gpu"),
+            nvidia_gpu_model=(
+                payload.get("nvidia_gpu_model") or payload.get("nvidia_gpu")),
+            amd_gpu_model=payload.get("amd_gpu_model"),
+            intel_gpu_model=payload.get("intel_gpu_model"),
             is_preemptible=payload.get("is_preemptible"),
             cpu=payload.get("available_cpu") or payload.get("cpu"),
             memory=payload.get("available_memory") or payload.get("memory"),

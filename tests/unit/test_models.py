@@ -119,6 +119,7 @@ class TestContainerRequestValidator:
                 "memory_mb": 16,
                 "nvidia_gpu": 130,
                 "amd_gpu": 130,
+                "intel_gpu": 130,
             },
             "volumes": [
                 {
@@ -201,7 +202,7 @@ class TestContainerRequestValidator:
         }
         validator = create_container_request_validator(cluster_name=cluster)
         result = validator.check(payload)
-        assert result["resources"]["gpu_model"] == "unknown"
+        assert result["resources"]["nvidia_gpu_model"] == "unknown"
 
     def test_gpu_tpu_conflict(self) -> None:
         cluster = "test-cluster"
@@ -300,8 +301,7 @@ class TestContainerResponseValidator:
         validator = create_container_response_validator()
         result = validator.check(payload)
         assert result["resources"]["nvidia_gpu"] == 1
-        assert result["resources"]["gpu"] == 1
-        assert result["resources"]["gpu_model"] == "unknown"
+        assert result["resources"]["nvidia_gpu_model"] == "unknown"
 
     def test_tpu(self) -> None:
         payload = {
@@ -625,6 +625,7 @@ class TestJobPresetValidator:
                     memory=100 * 10**6,
                     nvidia_gpu=1,
                     amd_gpu=1,
+                    intel_gpu=1,
                     gpu_model="nvidia-tesla-k80",
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),
                     scheduler_enabled=True,
@@ -643,7 +644,9 @@ class TestJobPresetValidator:
                     "shm": True,
                     "nvidia_gpu": 1,
                     "amd_gpu": 1,
+                    "intel_gpu": 1,
                     "gpu_model": "nvidia-tesla-k80",
+                    "nvidia_gpu_model": "nvidia-tesla-k80",
                     "tpu": {
                         "type": "v2-8",
                         "software_version": "1.14",
@@ -976,7 +979,8 @@ class TestJobContainerToJson:
                 memory=16 * 10**6,
                 nvidia_gpu=1,
                 amd_gpu=2,
-                gpu_model_id="gpu-model",
+                intel_gpu=3,
+                nvidia_gpu_model="gpu-model",
                 shm=True,
             ),
         )
@@ -990,7 +994,9 @@ class TestJobContainerToJson:
                 "gpu": 1,
                 "nvidia_gpu": 1,
                 "amd_gpu": 2,
+                "intel_gpu": 3,
                 "gpu_model": "gpu-model",
+                "nvidia_gpu_model": "gpu-model",
                 "shm": True,
             },
             "volumes": [],

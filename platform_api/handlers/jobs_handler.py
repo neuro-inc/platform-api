@@ -218,8 +218,16 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
             container_resources["nvidia_gpu"] = preset.nvidia_gpu
         if preset.amd_gpu:
             container_resources["amd_gpu"] = preset.amd_gpu
-        if preset.gpu_model:
-            container_resources["gpu_model"] = preset.gpu_model
+        if preset.intel_gpu:
+            container_resources["intel_gpu"] = preset.intel_gpu
+        nvidia_gpu_model = preset.nvidia_gpu_model or preset.gpu_model
+        if nvidia_gpu_model:
+            container_resources["gpu_model"] = nvidia_gpu_model
+            container_resources["nvidia_gpu_model"] = nvidia_gpu_model
+        if preset.amd_gpu_model:
+            container_resources["amd_gpu_model"] = preset.amd_gpu_model
+        if preset.intel_gpu_model:
+            container_resources["intel_gpu_model"] = preset.intel_gpu_model
         if preset.tpu:
             container_resources["tpu"] = {
                 "type": preset.tpu.type,
@@ -386,8 +394,17 @@ def convert_job_container_to_json(container: Container) -> dict[str, Any]:
         resources["gpu"] = container.resources.nvidia_gpu
     if container.resources.amd_gpu is not None:
         resources["amd_gpu"] = container.resources.amd_gpu
-    if container.resources.gpu_model_id:
-        resources["gpu_model"] = container.resources.gpu_model_id
+    if container.resources.intel_gpu is not None:
+        resources["intel_gpu"] = container.resources.intel_gpu
+    nvidia_gpu_model = (
+        container.resources.gpu_model_id or container.resources.nvidia_gpu_model)
+    if nvidia_gpu_model:
+        resources["gpu_model"] = nvidia_gpu_model
+        resources["nvidia_gpu_model"] = nvidia_gpu_model
+    if container.resources.amd_gpu_model:
+        resources["amd_gpu_model"] = container.resources.amd_gpu_model
+    if container.resources.intel_gpu_model:
+        resources["intel_gpu_model"] = container.resources.intel_gpu_model
     if container.resources.shm is not None:
         resources["shm"] = container.resources.shm
     if container.resources.tpu:
