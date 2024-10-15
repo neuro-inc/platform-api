@@ -218,7 +218,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     nvidia_gpu=1,
                     cpu=7,
                     memory=30720 * 10**6,
-                    gpu_model=GKEGPUModels.K80.value.id,
+                    nvidia_gpu_model=GKEGPUModels.K80.value.id,
                     available_resource_pool_names=["gpu"],
                 ),
                 Preset(
@@ -235,7 +235,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     nvidia_gpu=1,
                     cpu=7,
                     memory=61440 * 10**6,
-                    gpu_model=GKEGPUModels.V100.value.id,
+                    nvidia_gpu_model=GKEGPUModels.V100.value.id,
                     available_resource_pool_names=["gpu"],
                 ),
                 Preset(
@@ -244,7 +244,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     nvidia_gpu=1,
                     cpu=7,
                     memory=61440 * 10**6,
-                    gpu_model=GKEGPUModels.V100.value.id,
+                    nvidia_gpu_model=GKEGPUModels.V100.value.id,
                     scheduler_enabled=True,
                     preemptible_node=True,
                     available_resource_pool_names=["gpu"],

@@ -36,7 +36,7 @@ class TestJobsStorage:
                 cpu=0.1,
                 memory=256 * 10**6,
                 nvidia_gpu=1,
-                gpu_model_id="nvidia-tesla-k80",
+                nvidia_gpu_model="nvidia-tesla-k80",
             )
         else:
             resources = ContainerResources(cpu=0.1, memory=256 * 10**6)
