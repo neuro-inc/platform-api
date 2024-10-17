@@ -6,17 +6,11 @@ on:
     tags: ['v*']
   pull_request:
     branches: [master]
-  pull_request_target:
-    branches: [master]
   schedule:
   - cron: 0 4 * * *
 
 jobs:
   test:
-    if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
-      (github.event_name != 'pull_request_target' && !endsWith(github.actor, '[bot]')) ||
-      (github.event_name == 'pull_request_target' && endsWith(github.actor, '[bot]'))
     name: All checks are passed
     uses: ./.github/workflows/test.yaml
 
@@ -48,16 +42,22 @@ jobs:
   release:
     name: Create release
     needs: test
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    uses: neuro-inc/reuse/.github/workflows/release-service.yaml@v24.9.0
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+    uses: neuro-inc/reuse/.github/workflows/release-service.yaml@v24.10.0
     with:
       image: platformapi
       helm_charts: platform-api platform-api-poller
 
-  deploy_dev:
-    name: Deploy on dev
+  deploy:
+    name: Deploy
     needs: release
-    uses: neuro-inc/reuse/.github/workflows/deploy-dev.yaml@v24.9.0
+    uses: neuro-inc/reuse/.github/workflows/deploy-service.yaml@v24.10.0
+    secrets:
+      tf_api_token: ${{ secrets.TF_API_TOKEN }}
     with:
-      helm_charts: platform-api platform-api-poller
-      version: ${{ needs.release.outputs.version }}
+      environment: ${{ needs.release.outputs.prerelease == 'true' && 'dev' || 'prod' }}
+      dev_workspace: ${{ vars.DEV_TFC_WORKSPACE_JSON }}
+      prod_workspaces: ${{ vars.PROD_TFC_WORKSPACES_JSON }}
+      variables: |
+        platform_api_version=${{ needs.release.outputs.version }}
+        platform_api_poller_version=${{ needs.release.outputs.version }}
