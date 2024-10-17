@@ -60,4 +60,3 @@ jobs:
       prod_workspaces: ${{ vars.PROD_TFC_WORKSPACES_JSON }}
       variables: |
         platform_api_version=${{ needs.release.outputs.version }}
-        platform_api_poller_version=${{ needs.release.outputs.version }}
