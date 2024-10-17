@@ -79,7 +79,6 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
             nvidia_gpu=data.get("nvidia_gpu"),
             amd_gpu=data.get("amd_gpu"),
             intel_gpu=data.get("intel_gpu"),
-            gpu_model_id=data.get("gpu_model"),
             nvidia_gpu_model=data.get("nvidia_gpu_model") or data.get("gpu_model"),
             amd_gpu_model=data.get("amd_gpu_model"),
             intel_gpu_model=data.get("intel_gpu_model"),

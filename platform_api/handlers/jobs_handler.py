@@ -396,11 +396,9 @@ def convert_job_container_to_json(container: Container) -> dict[str, Any]:
         resources["amd_gpu"] = container.resources.amd_gpu
     if container.resources.intel_gpu is not None:
         resources["intel_gpu"] = container.resources.intel_gpu
-    nvidia_gpu_model = (
-        container.resources.gpu_model_id or container.resources.nvidia_gpu_model)
-    if nvidia_gpu_model:
-        resources["gpu_model"] = nvidia_gpu_model
-        resources["nvidia_gpu_model"] = nvidia_gpu_model
+    if container.resources.nvidia_gpu_model:
+        resources["gpu_model"] = container.resources.nvidia_gpu_model
+        resources["nvidia_gpu_model"] = container.resources.nvidia_gpu_model
     if container.resources.amd_gpu_model:
         resources["amd_gpu_model"] = container.resources.amd_gpu_model
     if container.resources.intel_gpu_model:

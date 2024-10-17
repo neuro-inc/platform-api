@@ -197,7 +197,6 @@ class ContainerResources:
     nvidia_gpu: Optional[int] = None
     amd_gpu: Optional[int] = None
     intel_gpu: Optional[int] = None
-    gpu_model_id: Optional[str] = None  # TODO: deprecated, remove
     nvidia_gpu_model: Optional[str] = None
     amd_gpu_model: Optional[str] = None
     intel_gpu_model: Optional[str] = None
@@ -236,10 +235,10 @@ class ContainerResources:
             payload["amd_gpu"] = self.amd_gpu
         if self.intel_gpu is not None:
             payload["intel_gpu"] = self.intel_gpu
-        nvidia_gpu_model = self.nvidia_gpu_model or self.gpu_model_id
-        if nvidia_gpu_model:
-            payload["gpu_model_id"] = nvidia_gpu_model
-            payload["nvidia_gpu_model"] = nvidia_gpu_model
+        if self.nvidia_gpu_model:
+            # todo: gpu_model_id is deprecated. it is here for a backward compatability
+            payload["gpu_model_id"] = self.nvidia_gpu_model
+            payload["nvidia_gpu_model"] = self.nvidia_gpu_model
         if self.amd_gpu_model:
             payload["amd_gpu_model"] = self.amd_gpu_model
         if self.intel_gpu_model:
@@ -279,13 +278,11 @@ class ContainerResources:
             return True
 
         # container needs GPU
-        nvidia_gpu_model = self.nvidia_gpu_model or self.gpu_model_id
-
         if self.nvidia_gpu and not self._gpu_match(
             resources_gpu=self.nvidia_gpu,
             resources_gpu_model=self.nvidia_gpu_model,
             entry_gpu=entry.nvidia_gpu,
-            entry_gpu_model=nvidia_gpu_model,
+            entry_gpu_model=entry.nvidia_gpu_model,
         ):
             return False
 
@@ -309,8 +306,8 @@ class ContainerResources:
 
     def _check_tpu(self, pool_type: ResourcePoolType) -> bool:
         if not self.tpu:
-            # container does not need TPU. we are good regardless of presence
-            # of TPU in the pool type.
+            # container does not need TPU.
+            # we are good regardless of the presence of TPU in the pool type.
             return True
 
         # container needs TPU

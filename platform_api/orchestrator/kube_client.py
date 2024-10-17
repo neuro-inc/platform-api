@@ -306,7 +306,7 @@ class Resources:
 
     nvidia_gpu_key: ClassVar[str] = "nvidia.com/gpu"
     amd_gpu_key: ClassVar[str] = "amd.com/gpu"
-    intel_gpu_key: ClassVar[str] = "intel.com/gpu"
+    intel_gpu_key: ClassVar[str] = "gpu.intel.com/i915"
     tpu_key_prefix: ClassVar[str] = "cloud-tpus.google.com/"
 
     def __post_init__(self) -> None:
@@ -1570,7 +1570,7 @@ class NodeResources:
 
     nvidia_gpu_key: ClassVar[str] = "nvidia.com/gpu"
     amd_gpu_key: ClassVar[str] = "amd.com/gpu"
-    intl_gpu_key: ClassVar[str] = "intel.com/gpu"
+    intel_gpu_key: ClassVar[str] = "gpu.intel.com/i915"
 
     def __post_init__(self) -> None:
         if self.cpu < 0:
@@ -1591,7 +1591,7 @@ class NodeResources:
             memory=Resources.parse_memory(payload.get("memory", "0Mi")),
             nvidia_gpu=int(payload.get(cls.nvidia_gpu_key, 0)),
             amd_gpu=int(payload.get(cls.amd_gpu_key, 0)),
-            intel_gpu=int(payload.get(cls.intl_gpu_key, 0)),
+            intel_gpu=int(payload.get(cls.intel_gpu_key, 0)),
         )
 
     @property

@@ -387,7 +387,6 @@ class TestContainerBuilder:
                 nvidia_gpu=1,
                 amd_gpu=2,
                 intel_gpu=3,
-                gpu_model_id="gpumodel",
                 nvidia_gpu_model="gpumodel"
             ),
         )
@@ -550,7 +549,7 @@ class TestJob:
                 memory=64 * 10**6,
                 nvidia_gpu=1,
                 amd_gpu=2,
-                gpu_model_id="nvidia-tesla-k80",
+                nvidia_gpu_model="nvidia-tesla-k80",
             ),
         )
         return JobRequest(

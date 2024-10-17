@@ -326,7 +326,7 @@ class KubeOrchestratorPreemption:
             return (
                 free.nvidia_gpu or 0,
                 free.amd_gpu or 0,
-                free.intel_gpu,
+                free.intel_gpu or 0,
                 free.memory,
                 free.cpu
             )
