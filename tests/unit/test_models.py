@@ -1741,7 +1741,7 @@ async def test_parse_response(mock_orchestrator: MockOrchestrator) -> None:
                         memory=128 * 10**6,
                         nvidia_gpu=1,
                         amd_gpu=2,
-                        gpu_model_id="nvidia-tesla-k80",
+                        nvidia_gpu_model="nvidia-tesla-k80",
                         shm=True,
                         tpu=ContainerTPUResource(type="type", software_version="1.0"),
                     ),

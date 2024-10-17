@@ -74,7 +74,6 @@ def create_resources_from_payload(payload: dict[str, Any]) -> ContainerResources
         nvidia_gpu=payload.get("nvidia_gpu"),
         amd_gpu=payload.get("amd_gpu"),
         intel_gpu=payload.get("intel_gpu"),
-        gpu_model_id=payload.get("gpu_model"),
         nvidia_gpu_model=payload.get("nvidia_gpu_model") or payload.get("gpu_model"),
         amd_gpu_model=payload.get("amd_gpu_model"),
         intel_gpu_model=payload.get("intel_gpu_model"),

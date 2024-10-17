@@ -651,7 +651,7 @@ class Job:
             return preset.credits_per_hour
         # Default cost is maximal cost through all presets.
         # If there are no presets,
-        # that it are badly configured cluster in general,
+        # then it is a badly configured cluster in general,
         # and it is safe to assume zero cost
         result = max(
             (preset.credits_per_hour for preset in self._orchestrator_config.presets),
