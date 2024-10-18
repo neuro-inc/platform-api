@@ -33,7 +33,7 @@ class TestInMemoryJobsStorage:
                         memory=128,
                         nvidia_gpu=1,
                         amd_gpu=1,
-                        gpu_model_id="nvidia-tesla-k80",
+                        nvidia_gpu_model="nvidia-tesla-k80",
                     )
                     if is_gpu_job
                     else ContainerResources(cpu=1, memory=128)

@@ -410,6 +410,10 @@ class JobRecord:
     def has_amd_gpu(self) -> bool:
         return bool(self.request.container.resources.amd_gpu)
 
+    @property
+    def has_intel_gpu(self) -> bool:
+        return bool(self.request.container.resources.intel_gpu)
+
     def get_run_time(
         self,
         *,
@@ -645,8 +649,9 @@ class Job:
         preset = self.preset
         if preset:
             return preset.credits_per_hour
-        # Default cost is maximal cost through all presets
-        # If there is no presets, that it is badly configured cluster in general
+        # Default cost is maximal cost through all presets.
+        # If there are no presets,
+        # then it is a badly configured cluster in general,
         # and it is safe to assume zero cost
         result = max(
             (preset.credits_per_hour for preset in self._orchestrator_config.presets),
@@ -709,6 +714,10 @@ class Job:
     @property
     def has_amd_gpu(self) -> bool:
         return self._record.has_amd_gpu
+
+    @property
+    def has_intel_gpu(self) -> bool:
+        return self._record.has_intel_gpu
 
     @property
     def status(self) -> JobStatus:
