@@ -196,7 +196,10 @@ class ContainerResources:
     memory: int
     nvidia_gpu: Optional[int] = None
     amd_gpu: Optional[int] = None
-    gpu_model_id: Optional[str] = None  # TODO: deprecated, remove
+    intel_gpu: Optional[int] = None
+    nvidia_gpu_model: Optional[str] = None
+    amd_gpu_model: Optional[str] = None
+    intel_gpu_model: Optional[str] = None
     shm: Optional[bool] = None
     tpu: Optional[ContainerTPUResource] = None
 
@@ -214,7 +217,12 @@ class ContainerResources:
             ),
             nvidia_gpu=payload.get("nvidia_gpu") or payload.get("gpu"),
             amd_gpu=payload.get("amd_gpu"),
-            gpu_model_id=payload.get("gpu_model_id"),
+            intel_gpu=payload.get("intel_gpu"),
+            nvidia_gpu_model=(
+                payload.get("nvidia_gpu_model") or payload.get("gpu_model_id")
+            ),
+            amd_gpu_model=payload.get("amd_gpu_model"),
+            intel_gpu_model=payload.get("intel_gpu_model"),
             shm=payload.get("shm"),
             tpu=tpu,
         )
@@ -226,8 +234,16 @@ class ContainerResources:
             payload["gpu"] = self.nvidia_gpu
         if self.amd_gpu is not None:
             payload["amd_gpu"] = self.amd_gpu
-        if self.gpu_model_id:
-            payload["gpu_model_id"] = self.gpu_model_id
+        if self.intel_gpu is not None:
+            payload["intel_gpu"] = self.intel_gpu
+        if self.nvidia_gpu_model:
+            # todo: gpu_model_id is deprecated. it is here for a backward compatability
+            payload["gpu_model_id"] = self.nvidia_gpu_model
+            payload["nvidia_gpu_model"] = self.nvidia_gpu_model
+        if self.amd_gpu_model:
+            payload["amd_gpu_model"] = self.amd_gpu_model
+        if self.intel_gpu_model:
+            payload["intel_gpu_model"] = self.intel_gpu_model
         if self.shm is not None:
             payload["shm"] = self.shm
         if self.tpu:
@@ -236,7 +252,7 @@ class ContainerResources:
 
     @property
     def require_gpu(self) -> bool:
-        return bool(self.nvidia_gpu or self.amd_gpu)
+        return bool(self.nvidia_gpu or self.amd_gpu or self.intel_gpu)
 
     def check_fit_into_pool_type(self, pool_type: ResourcePoolType) -> bool:
         if not pool_type.cpu or not pool_type.memory:
@@ -258,27 +274,41 @@ class ContainerResources:
 
     def _check_gpu(self, entry: Union[ResourcePoolType, Preset]) -> bool:
         if not self.require_gpu:
-            # container does not need GPU. we are good regardless of presence
-            # of GPU in the pool type.
+            # container does not need GPU.
+            # we are good regardless of the presence of GPU in the pool type.
             return True
 
         # container needs GPU
-
-        if not entry.nvidia_gpu and not entry.amd_gpu:
+        if self.nvidia_gpu and not self._gpu_match(
+            resources_gpu=self.nvidia_gpu,
+            resources_gpu_model=self.nvidia_gpu_model,
+            entry_gpu=entry.nvidia_gpu,
+            entry_gpu_model=entry.nvidia_gpu_model,
+        ):
             return False
 
-        if (entry.nvidia_gpu or 0) < (self.nvidia_gpu or 0):
+        if self.amd_gpu and not self._gpu_match(
+            resources_gpu=self.amd_gpu,
+            resources_gpu_model=self.amd_gpu_model,
+            entry_gpu=entry.amd_gpu,
+            entry_gpu_model=entry.amd_gpu_model,
+        ):
             return False
 
-        if (entry.amd_gpu or 0) < (self.amd_gpu or 0):
+        if self.intel_gpu and not self._gpu_match(
+            resources_gpu=self.intel_gpu,
+            resources_gpu_model=self.intel_gpu_model,
+            entry_gpu=entry.intel_gpu,
+            entry_gpu_model=entry.intel_gpu_model,
+        ):
             return False
 
         return True
 
     def _check_tpu(self, pool_type: ResourcePoolType) -> bool:
         if not self.tpu:
-            # container does not need TPU. we are good regardless of presence
-            # of TPU in the pool type.
+            # container does not need TPU.
+            # we are good regardless of the presence of TPU in the pool type.
             return True
 
         # container needs TPU
@@ -290,6 +320,29 @@ class ContainerResources:
             self.tpu.type in pool_type.tpu.types
             and self.tpu.software_version in pool_type.tpu.software_versions
         )
+
+    @staticmethod
+    def _gpu_match(
+        resources_gpu: int,
+        resources_gpu_model: Optional[str],
+        entry_gpu: Optional[int],
+        entry_gpu_model: Optional[str],
+    ) -> bool:
+        """
+        Ensures that the resource GPU requirement matches
+        with the entry (preset or resource pool) GPUs
+        """
+        if not entry_gpu:
+            # entry doesn't have the same GPU make
+            return False
+        if entry_gpu < resources_gpu:
+            # entry has less GPU than resources requires
+            return False
+        if not resources_gpu_model:
+            # ready to exit. resources doesn't required a specific GPU model
+            return True
+        # resource requires a specific model. therefore, we compare them
+        return entry_gpu_model == resources_gpu_model
 
     def _check_tpu_preset(self, preset: Preset) -> bool:
         if not self.tpu:

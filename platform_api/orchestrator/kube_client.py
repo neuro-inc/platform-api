@@ -299,12 +299,14 @@ class Resources:
     memory_request: Optional[int] = None
     nvidia_gpu: Optional[int] = None
     amd_gpu: Optional[int] = None
+    intel_gpu: Optional[int] = None
     shm: Optional[bool] = None
     tpu_version: Optional[str] = None
     tpu_cores: Optional[int] = None
 
     nvidia_gpu_key: ClassVar[str] = "nvidia.com/gpu"
     amd_gpu_key: ClassVar[str] = "amd.com/gpu"
+    intel_gpu_key: ClassVar[str] = "gpu.intel.com/i915"
     tpu_key_prefix: ClassVar[str] = "cloud-tpus.google.com/"
 
     def __post_init__(self) -> None:
@@ -339,6 +341,9 @@ class Resources:
         if self.amd_gpu:
             payload["requests"][self.amd_gpu_key] = self.amd_gpu
             payload["limits"][self.amd_gpu_key] = self.amd_gpu
+        if self.intel_gpu:
+            payload["requests"][self.intel_gpu_key] = self.intel_gpu
+            payload["limits"][self.intel_gpu_key] = self.intel_gpu
         if self.tpu_version:
             payload["requests"][self.tpu_key] = self.tpu_cores
             payload["limits"][self.tpu_key] = self.tpu_cores
@@ -355,12 +360,16 @@ class Resources:
         amd_gpu = None
         if cls.amd_gpu_key in requests:
             amd_gpu = int(requests[cls.amd_gpu_key])
+        intel_gpu = None
+        if cls.intel_gpu_key in requests:
+            intel_gpu = int(requests[cls.intel_gpu_key])
         tpu_version, tpu_cores = cls._parse_tpu(requests)
         return cls(
             cpu=cls.parse_cpu(requests.get("cpu", "0")),
             memory=cls.parse_memory(requests.get("memory", "0Mi")),
             nvidia_gpu=nvidia_gpu,
             amd_gpu=amd_gpu,
+            intel_gpu=intel_gpu,
             tpu_version=tpu_version,
             tpu_cores=tpu_cores,
         )
@@ -424,6 +433,7 @@ class Resources:
             memory=resources.memory,
             nvidia_gpu=resources.nvidia_gpu,
             amd_gpu=resources.amd_gpu,
+            intel_gpu=resources.intel_gpu,
             shm=resources.shm,
             **kwargs,
         )
@@ -1556,9 +1566,11 @@ class NodeResources:
     memory: int = 0
     nvidia_gpu: int = 0
     amd_gpu: int = 0
+    intel_gpu: int = 0
 
     nvidia_gpu_key: ClassVar[str] = "nvidia.com/gpu"
     amd_gpu_key: ClassVar[str] = "amd.com/gpu"
+    intel_gpu_key: ClassVar[str] = "gpu.intel.com/i915"
 
     def __post_init__(self) -> None:
         if self.cpu < 0:
@@ -1569,6 +1581,8 @@ class NodeResources:
             raise ValueError(f"Invalid nvidia gpu: {self.nvidia_gpu}")
         if self.amd_gpu < 0:
             raise ValueError(f"Invalid amd gpu:  {self.amd_gpu}")
+        if self.intel_gpu < 0:
+            raise ValueError(f"Invalid intel gpu:  {self.intel_gpu}")
 
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "NodeResources":
@@ -1577,6 +1591,7 @@ class NodeResources:
             memory=Resources.parse_memory(payload.get("memory", "0Mi")),
             nvidia_gpu=int(payload.get(cls.nvidia_gpu_key, 0)),
             amd_gpu=int(payload.get(cls.amd_gpu_key, 0)),
+            intel_gpu=int(payload.get(cls.intel_gpu_key, 0)),
         )
 
     @property
@@ -1586,6 +1601,7 @@ class NodeResources:
             or self.memory > 0
             or self.nvidia_gpu > 0
             or self.amd_gpu > 0
+            or self.intel_gpu > 0
         )
 
     @property
@@ -1601,6 +1617,7 @@ class NodeResources:
             and self.memory >= r.memory
             and self.nvidia_gpu >= (r.nvidia_gpu or 0)
             and self.amd_gpu >= (r.amd_gpu or 0)
+            and self.intel_gpu >= (r.intel_gpu or 0)
         )
 
     def __add__(self, other: "NodeResources") -> "NodeResources":
@@ -1609,6 +1626,7 @@ class NodeResources:
             memory=self.memory + other.memory,
             nvidia_gpu=self.nvidia_gpu + other.nvidia_gpu,
             amd_gpu=self.amd_gpu + other.amd_gpu,
+            intel_gpu=self.intel_gpu + other.intel_gpu,
         )
 
     def __sub__(self, other: "NodeResources") -> "NodeResources":
@@ -1617,6 +1635,7 @@ class NodeResources:
             memory=self.memory - other.memory,
             nvidia_gpu=self.nvidia_gpu - other.nvidia_gpu,
             amd_gpu=self.amd_gpu - other.amd_gpu,
+            intel_gpu=self.intel_gpu - other.intel_gpu,
         )
 
     def __str__(self) -> str:
@@ -2665,6 +2684,8 @@ class KubePreemption:
             pods = [p for p in pods if p.resources and p.resources.nvidia_gpu]
         if resources.amd_gpu:
             pods = [p for p in pods if p.resources and p.resources.amd_gpu]
+        if resources.intel_gpu:
+            pods = [p for p in pods if p.resources and p.resources.intel_gpu]
         pods_to_preempt: list[PodDescriptor] = []
         while pods and resources.any:
             logger.debug("Pods left: %d", len(pods))
@@ -2711,6 +2732,7 @@ class KubePreemption:
             memory=max(0, r1.memory - r2.memory),
             nvidia_gpu=max(0, (r1.nvidia_gpu or 0) - (r2.nvidia_gpu or 0)),
             amd_gpu=max(0, (r1.amd_gpu or 0) - (r2.amd_gpu or 0)),
+            intel_gpu=max(0, (r1.intel_gpu or 0) - (r2.intel_gpu or 0)),
         )
 
     @classmethod
@@ -2729,10 +2751,20 @@ class KubePreemption:
             dist += _dist(resources.nvidia_gpu or 0, pod.resources.nvidia_gpu or 0)
         if resources.amd_gpu:
             dist += _dist(resources.amd_gpu or 0, pod.resources.amd_gpu or 0)
+        if resources.intel_gpu:
+            dist += _dist(resources.intel_gpu or 0, pod.resources.intel_gpu or 0)
         return dist
 
     @classmethod
     def _has_less_resources(cls, r1: Resources, r2: Resources) -> bool:
-        key1 = ((r1.nvidia_gpu or 0) + (r1.amd_gpu or 0), r1.memory, r1.cpu_mcores)
-        key2 = ((r2.nvidia_gpu or 0) + (r2.amd_gpu or 0), r2.memory, r2.cpu_mcores)
+        key1 = (
+            (r1.nvidia_gpu or 0) + (r1.amd_gpu or 0) + (r1.intel_gpu or 0),
+            r1.memory,
+            r1.cpu_mcores,
+        )
+        key2 = (
+            (r2.nvidia_gpu or 0) + (r2.amd_gpu or 0) + (r2.intel_gpu or 0),
+            r2.memory,
+            r2.cpu_mcores,
+        )
         return key1 < key2

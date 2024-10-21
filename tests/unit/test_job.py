@@ -286,6 +286,7 @@ class TestContainerBuilder:
                 "memory_mb": 128,
                 "nvidia_gpu": 1,
                 "amd_gpu": 2,
+                "intel_gpu": 3,
             },
             "http": {"port": 80},
             "volumes": [
@@ -311,7 +312,12 @@ class TestContainerBuilder:
                 )
             ],
             resources=ContainerResources(
-                cpu=0.1, memory=128 * 2**20, nvidia_gpu=1, amd_gpu=2, shm=None
+                cpu=0.1,
+                memory=128 * 2**20,
+                nvidia_gpu=1,
+                amd_gpu=2,
+                intel_gpu=3,
+                shm=None,
             ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
@@ -330,6 +336,7 @@ class TestContainerBuilder:
                     "memory_mb": 128,
                     "nvidia_gpu": 1,
                     "amd_gpu": 2,
+                    "intel_gpu": 3,
                 },
                 "http": {"port": 80},
                 "volumes": [
@@ -356,7 +363,12 @@ class TestContainerBuilder:
                 )
             ],
             resources=ContainerResources(
-                cpu=0.1, memory=128 * 2**20, nvidia_gpu=1, amd_gpu=2, shm=None
+                cpu=0.1,
+                memory=128 * 2**20,
+                nvidia_gpu=1,
+                amd_gpu=2,
+                intel_gpu=3,
+                shm=None,
             ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
@@ -370,6 +382,7 @@ class TestContainerBuilder:
                 "memory_mb": 128,
                 "nvidia_gpu": 1,
                 "amd_gpu": 2,
+                "intel_gpu": 3,
                 "gpu_model": "gpumodel",
             },
         }
@@ -381,7 +394,8 @@ class TestContainerBuilder:
                 memory=128 * 2**20,
                 nvidia_gpu=1,
                 amd_gpu=2,
-                gpu_model_id="gpumodel",
+                intel_gpu=3,
+                nvidia_gpu_model="gpumodel",
             ),
         )
 
@@ -543,7 +557,7 @@ class TestJob:
                 memory=64 * 10**6,
                 nvidia_gpu=1,
                 amd_gpu=2,
-                gpu_model_id="nvidia-tesla-k80",
+                nvidia_gpu_model="nvidia-tesla-k80",
             ),
         )
         return JobRequest(

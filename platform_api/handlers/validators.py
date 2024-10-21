@@ -225,10 +225,15 @@ def create_resources_validator(
         common_resources_validator
         + t.Dict(
             {
-                t.Key("gpu", optional=True): t.Int(gte=0),  # TODO: deprecated, remove
+                # TODO: deprecated, remove
+                t.Key("gpu", to_name="nvidia_gpu", optional=True): t.Int(gte=0),
                 t.Key("nvidia_gpu", optional=True): t.Int(gte=0),
                 t.Key("amd_gpu", optional=True): t.Int(gte=0),
-                t.Key("gpu_model", optional=True): t.String,
+                t.Key("intel_gpu", optional=True): t.Int(gte=0),
+                t.Key("gpu_model", to_name="nvidia_gpu_model", optional=True): t.String,
+                t.Key("nvidia_gpu_model", optional=True): t.String,
+                t.Key("amd_gpu_model", optional=True): t.String,
+                t.Key("intel_gpu_model", optional=True): t.String,
             }
         ),
     ]
