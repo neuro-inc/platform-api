@@ -151,7 +151,8 @@ class ClusterConfigFactory:
             amd_gpu=payload.get("amd_gpu"),
             intel_gpu=payload.get("intel_gpu"),
             nvidia_gpu_model=(
-                payload.get("nvidia_gpu_model") or payload.get("gpu_model")),
+                payload.get("nvidia_gpu_model") or payload.get("gpu_model")
+            ),
             amd_gpu_model=payload.get("amd_gpu_model"),
             intel_gpu_model=payload.get("intel_gpu_model"),
             is_preemptible=payload.get("is_preemptible"),

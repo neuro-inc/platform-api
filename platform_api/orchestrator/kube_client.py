@@ -1626,7 +1626,7 @@ class NodeResources:
             memory=self.memory + other.memory,
             nvidia_gpu=self.nvidia_gpu + other.nvidia_gpu,
             amd_gpu=self.amd_gpu + other.amd_gpu,
-            intel_gpu=self.intel_gpu + other.intel_gpu
+            intel_gpu=self.intel_gpu + other.intel_gpu,
         )
 
     def __sub__(self, other: "NodeResources") -> "NodeResources":
@@ -1635,7 +1635,7 @@ class NodeResources:
             memory=self.memory - other.memory,
             nvidia_gpu=self.nvidia_gpu - other.nvidia_gpu,
             amd_gpu=self.amd_gpu - other.amd_gpu,
-            intel_gpu=self.intel_gpu - other.intel_gpu
+            intel_gpu=self.intel_gpu - other.intel_gpu,
         )
 
     def __str__(self) -> str:
@@ -2760,11 +2760,11 @@ class KubePreemption:
         key1 = (
             (r1.nvidia_gpu or 0) + (r1.amd_gpu or 0) + (r1.intel_gpu or 0),
             r1.memory,
-            r1.cpu_mcores
+            r1.cpu_mcores,
         )
         key2 = (
             (r2.nvidia_gpu or 0) + (r2.amd_gpu or 0) + (r2.intel_gpu or 0),
             r2.memory,
-            r2.cpu_mcores
+            r2.cpu_mcores,
         )
         return key1 < key2

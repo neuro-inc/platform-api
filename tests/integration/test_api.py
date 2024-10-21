@@ -617,7 +617,7 @@ class TestApi:
                         "disk_size": 150 * 10**9,
                         "nvidia_gpu": 1,
                         "amd_gpu": 2,
-                        "intel_gpu": 3
+                        "intel_gpu": 3,
                     },
                 ],
                 "resource_presets": [

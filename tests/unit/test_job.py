@@ -312,8 +312,12 @@ class TestContainerBuilder:
                 )
             ],
             resources=ContainerResources(
-                cpu=0.1, memory=128 * 2**20, nvidia_gpu=1,
-                amd_gpu=2, intel_gpu=3, shm=None
+                cpu=0.1,
+                memory=128 * 2**20,
+                nvidia_gpu=1,
+                amd_gpu=2,
+                intel_gpu=3,
+                shm=None,
             ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
@@ -359,8 +363,12 @@ class TestContainerBuilder:
                 )
             ],
             resources=ContainerResources(
-                cpu=0.1, memory=128 * 2**20, nvidia_gpu=1,
-                amd_gpu=2, intel_gpu=3, shm=None
+                cpu=0.1,
+                memory=128 * 2**20,
+                nvidia_gpu=1,
+                amd_gpu=2,
+                intel_gpu=3,
+                shm=None,
             ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
@@ -387,7 +395,7 @@ class TestContainerBuilder:
                 nvidia_gpu=1,
                 amd_gpu=2,
                 intel_gpu=3,
-                nvidia_gpu_model="gpumodel"
+                nvidia_gpu_model="gpumodel",
             ),
         )
 

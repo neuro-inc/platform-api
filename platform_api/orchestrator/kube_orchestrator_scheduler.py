@@ -202,7 +202,7 @@ class KubeOrchestratorScheduler:
                             memory=pod.resources.memory,
                             nvidia_gpu=pod.resources.nvidia_gpu or 0,
                             amd_gpu=pod.resources.amd_gpu or 0,
-                            intel_gpu=pod.resources.intel_gpu or 0
+                            intel_gpu=pod.resources.intel_gpu or 0,
                         )
                     break
                 logger.debug(
@@ -271,7 +271,7 @@ class KubeOrchestratorPreemption:
             return (
                 (r.nvidia_gpu or 0) + (r.amd_gpu or 0) + (r.intel_gpu or 0),
                 r.memory,
-                r.cpu
+                r.cpu,
             )
 
         pods_to_schedule = []
@@ -328,7 +328,7 @@ class KubeOrchestratorPreemption:
                 free.amd_gpu or 0,
                 free.intel_gpu or 0,
                 free.memory,
-                free.cpu
+                free.cpu,
             )
 
         nodes = self._nodes_handler.get_ready_nodes()
