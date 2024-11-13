@@ -34,7 +34,12 @@ from platform_api.orchestrator.job_policy_enforcer import (
 )
 
 from .cluster import ClusterConfig, ClusterConfigRegistry, ClusterUpdater
-from .cluster_config import EnergySchedule, EnergySchedulePeriod, VolumeConfig
+from .cluster_config import (
+    AppsConfig,
+    EnergySchedule,
+    EnergySchedulePeriod,
+    VolumeConfig,
+)
 from .config import Config, CORSConfig
 from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
@@ -190,6 +195,7 @@ class ConfigApiHandler:
                 self._convert_storage_volume_to_payload(volume)
                 for volume in cluster_config.storage.volumes
             ],
+            "apps": self._convert_apps_config_to_payload(cluster_config.apps),
         }
         if cluster_config.location:
             result["location"] = cluster_config.location
@@ -318,6 +324,13 @@ class ConfigApiHandler:
         return {
             "name": volume.name,
             "credits_per_hour_per_gb": str(volume.credits_per_hour_per_gb),
+        }
+
+    def _convert_apps_config_to_payload(
+        self, apps_config: AppsConfig
+    ) -> dict[str, Any]:
+        return {
+            "apps_hostname_templates": apps_config.apps_hostname_templates,
         }
 
 

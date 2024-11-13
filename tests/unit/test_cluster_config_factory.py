@@ -197,6 +197,7 @@ def clusters_payload(storage_payload: dict[str, Any]) -> list[dict[str, Any]]:
             "disks": {"url": "https://dev.neu.ro/api/v1/disk"},
             "buckets": {"url": "https://dev.neu.ro/api/v1/buckets"},
             "blob_storage": {"url": "https://dev.neu.ro/api/v1/blob"},
+            "apps": {"apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"]},
             **storage_payload,
         }
     ]
@@ -460,6 +461,15 @@ class TestClusterConfigFactory:
                     )
                 ],
             ),
+        ]
+
+    def test_apps(self, clusters_payload: Sequence[dict[str, Any]]) -> None:
+        factory = ClusterConfigFactory()
+        clusters = factory.create_cluster_configs(clusters_payload)
+
+        assert clusters[0].apps
+        assert clusters[0].apps.apps_hostname_templates == [
+            "{app_name}.apps.dev.neu.ro"
         ]
 
 

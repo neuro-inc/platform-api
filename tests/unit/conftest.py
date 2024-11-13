@@ -34,6 +34,7 @@ from platform_api.cluster import (
 )
 from platform_api.cluster_config import (
     UTC,
+    AppsConfig,
     EnergyConfig,
     EnergySchedule,
     EnergySchedulePeriod,
@@ -471,6 +472,7 @@ def cluster_config() -> ClusterConfig:
             ]
         ),
         storage=StorageConfig(volumes=()),
+        apps=AppsConfig(apps_hostname_templates=[]),
     )
 
 

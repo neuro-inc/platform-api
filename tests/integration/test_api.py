@@ -75,6 +75,7 @@ def cluster_configs_payload() -> list[dict[str, Any]]:
             "blob_storage": {"url": "https://dev.neu.ro/api/v1/blob"},
             "disks": {"url": "https://dev.neu.ro/api/v1/disk"},
             "buckets": {"url": "https://dev.neu.ro/api/v1/buckets"},
+            "apps": {"apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"]},
         }
     ]
 
@@ -504,6 +505,7 @@ class TestApi:
                         "credits_per_hour_per_gb": "100",
                     }
                 ],
+                "apps": {"apps_hostname_templates": []},
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -735,6 +737,7 @@ class TestApi:
                 "timezone": "UTC",
                 "energy_schedules": mock.ANY,
                 "storage_volumes": mock.ANY,
+                "apps": {"apps_hostname_templates": []},
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -981,6 +984,7 @@ class TestApi:
                 "timezone": "UTC",
                 "energy_schedules": mock.ANY,
                 "storage_volumes": mock.ANY,
+                "apps": {"apps_hostname_templates": []},
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,

@@ -20,6 +20,7 @@ from yarl import URL
 
 from platform_api.cluster_config import (
     UTC,
+    AppsConfig,
     ClusterConfig,
     EnergyConfig,
     EnergySchedule,
@@ -951,6 +952,9 @@ def cluster_config_factory(
                         credits_per_hour_per_gb=Decimal("100"),
                     )
                 ]
+            ),
+            apps=AppsConfig(
+                apps_hostname_templates=["{app_name}.apps.dev.neu.ro"],
             ),
         )
 

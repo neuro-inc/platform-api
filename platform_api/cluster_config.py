@@ -155,11 +155,17 @@ class StorageConfig:
 
 
 @dataclass(frozen=True)
+class AppsConfig:
+    apps_hostname_templates: list[str]
+
+
+@dataclass(frozen=True)
 class ClusterConfig:
     name: str
     orchestrator: OrchestratorConfig
     storage: StorageConfig
     ingress: IngressConfig
+    apps: AppsConfig
     timezone: tzinfo = UTC
     energy: EnergyConfig = EnergyConfig()
     location: Optional[str] = None

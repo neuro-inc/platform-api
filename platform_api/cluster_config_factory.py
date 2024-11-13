@@ -10,6 +10,7 @@ from yarl import URL
 
 from .cluster_config import (
     DEFAULT_ENERGY_SCHEDULE_NAME,
+    AppsConfig,
     ClusterConfig,
     EnergyConfig,
     EnergySchedule,
@@ -54,6 +55,7 @@ class ClusterConfigFactory:
                 timezone=timezone,
                 energy=self._create_energy_config(payload, timezone=timezone),
                 storage=self._create_storage_config(payload),
+                apps=self._create_apps_config(payload),
             )
         except t.DataError as err:
             logging.warning(f"failed to parse cluster config: {err}")
@@ -234,4 +236,10 @@ class ClusterConfigFactory:
                 )
                 for p in payload["storage"].get("volumes", ())
             ]
+        )
+
+    def _create_apps_config(self, payload: dict[str, Any]) -> AppsConfig:
+        apps_payload: dict[str, Any] = payload.get("apps", {})
+        return AppsConfig(
+            apps_hostname_templates=apps_payload.get("apps_hostname_templates", []),
         )
