@@ -505,7 +505,7 @@ class TestApi:
                         "credits_per_hour_per_gb": "100",
                     }
                 ],
-                "apps": {"apps_hostname_templates": []},
+                "apps": {"apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"]},
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -737,7 +737,7 @@ class TestApi:
                 "timezone": "UTC",
                 "energy_schedules": mock.ANY,
                 "storage_volumes": mock.ANY,
-                "apps": {"apps_hostname_templates": []},
+                "apps": {"apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"]},
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -984,7 +984,7 @@ class TestApi:
                 "timezone": "UTC",
                 "energy_schedules": mock.ANY,
                 "storage_volumes": mock.ANY,
-                "apps": {"apps_hostname_templates": []},
+                "apps": {"apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"]},
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
