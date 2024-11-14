@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Protocol
 
 import aiodocker
@@ -220,6 +221,7 @@ async def regular_user_factory(
             if org_name is not None:
                 try:
                     await admin_client.create_org(org_name)
+                    await admin_client.update_org_balance(org_name, Decimal("1000"))
                 except ClientResponseError:
                     pass
                 try:
