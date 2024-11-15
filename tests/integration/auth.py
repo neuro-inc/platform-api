@@ -221,7 +221,6 @@ async def regular_user_factory(
             if org_name is not None:
                 try:
                     await admin_client.create_org(org_name)
-                    await admin_client.update_org_balance(org_name, Decimal("1000"))
                 except ClientResponseError:
                     pass
                 try:
@@ -236,6 +235,11 @@ async def regular_user_factory(
                     await admin_client.create_org_cluster(
                         cluster_name=cluster,
                         org_name=org_name,
+                    )
+                    await admin_client.update_org_cluster_balance(
+                        cluster_name=cluster,
+                        org_name=org_name,
+                        credits=Decimal("100"),
                     )
                 except ClientResponseError:
                     pass
