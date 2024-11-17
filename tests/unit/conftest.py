@@ -34,6 +34,7 @@ from platform_api.cluster import (
 )
 from platform_api.cluster_config import (
     UTC,
+    AppsConfig,
     EnergyConfig,
     EnergySchedule,
     EnergySchedulePeriod,
@@ -286,7 +287,9 @@ class MockAdminClient(AdminClientDummy):
         self.spending_log: list[
             tuple[str, Optional[str], str, Decimal, Optional[str]]
         ] = []
-        self.debts_log: list[tuple[str, str, Decimal, str]] = []
+        self.debts_log: list[tuple[str, Decimal, str, Optional[str], Optional[str]]] = (
+            []
+        )
         self.raise_404: bool = False
 
     async def get_user_with_clusters(self, name: str) -> tuple[User, list[ClusterUser]]:
@@ -316,11 +319,14 @@ class MockAdminClient(AdminClientDummy):
     async def add_debt(
         self,
         cluster_name: str,
-        username: str,
         credits: Decimal,
         idempotency_key: str,
+        org_name: Optional[str] = None,
+        username: Optional[str] = None,
     ) -> None:
-        self.debts_log.append((cluster_name, username, credits, idempotency_key))
+        self.debts_log.append(
+            (cluster_name, credits, idempotency_key, org_name, username)
+        )
 
     async def get_cluster_user(  # type: ignore
         self,
@@ -471,6 +477,7 @@ def cluster_config() -> ClusterConfig:
             ]
         ),
         storage=StorageConfig(volumes=()),
+        apps=AppsConfig(apps_hostname_templates=[]),
     )
 
 
