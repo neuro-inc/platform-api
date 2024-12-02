@@ -15,7 +15,7 @@ repos:
     args:
     - --futures=true
 - repo: https://github.com/Zac-HD/shed
-  rev: 2024.3.1
+  rev: 2024.10.1
   hooks:
   - id: shed
     args:
@@ -62,7 +62,7 @@ repos:
 #     - -ignore
 #     - 'SC1004:'
 - repo: https://github.com/sirosen/check-jsonschema
-  rev: 0.29.4
+  rev: 0.30.0
   hooks:
   - id: check-github-actions
   - id: check-github-workflows
