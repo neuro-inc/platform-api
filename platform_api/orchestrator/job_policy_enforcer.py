@@ -5,17 +5,12 @@ import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from datetime import timedelta
-from decimal import Decimal
 from typing import Any, Optional, TypeVar
 
 from aiohttp import ClientResponseError
 from neuro_admin_client import AdminClient, ClusterUser, OrgCluster
 from neuro_auth_client import AuthClient
 from neuro_logging import new_trace, trace
-from neuro_notifications_client import (
-    Client as NotificationsClient,
-    CreditsWillRunOutSoon,
-)
 
 from platform_api.cluster import ClusterConfigRegistry
 from platform_api.config import JobPolicyEnforcerConfig
@@ -33,78 +28,6 @@ class JobPolicyEnforcer:
     @abc.abstractmethod
     async def enforce(self) -> None:
         pass
-
-
-class CreditsNotificationsEnforcer(JobPolicyEnforcer):
-    def __init__(
-        self,
-        jobs_service: JobsService,
-        admin_client: AdminClient,
-        notifications_client: NotificationsClient,
-        notification_threshold: Decimal,
-    ):
-        self._jobs_service = jobs_service
-        self._admin_client = admin_client
-        self._notifications_client = notifications_client
-        self._threshold = notification_threshold
-        self._sent: dict[tuple[str, str], Optional[Decimal]] = defaultdict(lambda: None)
-
-    async def _notify_user_if_needed(
-        self,
-        username: str,
-        cluster_name: str,
-        org_name: Optional[str],
-        credits: Optional[Decimal],
-    ) -> None:
-        notification_key = (username, cluster_name)
-        if credits is None or credits >= self._threshold:
-            return
-        # Note: this check is also performed in notifications service
-        # using redis storage, so it's OK to use in memory dict here:
-        # this is just an optimization to avoid spamming it
-        # with duplicate notifications
-        if self._sent[notification_key] == credits:
-            return
-        # TODO patch notifications to support org_name
-        await self._notifications_client.notify(
-            CreditsWillRunOutSoon(
-                user_id=username, cluster_name=cluster_name, credits=credits
-            )
-        )
-        self._sent[notification_key] = credits
-
-    @trace
-    async def enforce(self) -> None:
-        user_to_clusters: dict[str, set[tuple[str, Optional[str]]]] = defaultdict(set)
-        job_filter = JobFilter(
-            statuses={JobStatus(item) for item in JobStatus.active_values()}
-        )
-        async with self._jobs_service.iter_all_jobs(job_filter) as running_jobs:
-            async for job in running_jobs:
-                user_to_clusters[job.owner].add((job.cluster_name, job.org_name))
-        await run_and_log_exceptions(
-            self._enforce_for_user(username, clusters_with_org)
-            for username, clusters_with_org in user_to_clusters.items()
-        )
-
-    async def _enforce_for_user(
-        self, username: str, clusters_and_orgs: set[tuple[str, Optional[str]]]
-    ) -> None:
-        base_name = username.split("/", 1)[0]  # SA inherit balance from main user
-        _, cluster_users = await self._admin_client.get_user_with_clusters(base_name)
-        cluster_to_user = {
-            (cluster_user.cluster_name, cluster_user.org_name): cluster_user
-            for cluster_user in cluster_users
-        }
-        for cluster_name, org_name in clusters_and_orgs:
-            cluster_user = cluster_to_user.get((cluster_name, org_name))
-            if cluster_user:
-                await self._notify_user_if_needed(
-                    username=username,
-                    cluster_name=cluster_name,
-                    org_name=org_name,
-                    credits=cluster_user.balance.credits,
-                )
 
 
 class RuntimeLimitEnforcer(JobPolicyEnforcer):
