@@ -370,7 +370,7 @@ class MockAdminClient(AdminClientDummy):
 
     async def get_org_user(  # type: ignore
         self, org_name: str, user_name: str, with_user_info: bool = False
-    ) -> OrgUser | OrgUserWithInfo:
+    ) -> Union[OrgUser, OrgUserWithInfo]:
         for org_user in self.org_users.get(user_name, []):
             if org_user.org_name == org_name:
                 if with_user_info:
