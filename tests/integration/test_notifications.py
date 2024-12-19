@@ -25,9 +25,17 @@ class TestCannotStartJobNoCredits:
         regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
         test_cluster_name: str,
+        test_org_name: str,
     ) -> None:
         user = await regular_user_factory(
-            clusters=[(test_cluster_name, Balance(credits=Decimal("100")), Quota())]
+            clusters=[
+                (
+                    test_cluster_name,
+                    test_org_name,
+                    Balance(credits=Decimal("100")),
+                    Quota(),
+                )
+            ]
         )
         url = api.jobs_base_url
         job_request = job_request_factory()
@@ -48,9 +56,17 @@ class TestCannotStartJobNoCredits:
         regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
         test_cluster_name: str,
+        test_org_name: str,
     ) -> None:
         user = await regular_user_factory(
-            clusters=[(test_cluster_name, Balance(credits=Decimal("0")), Quota())]
+            clusters=[
+                (
+                    test_cluster_name,
+                    test_org_name,
+                    Balance(credits=Decimal("0")),
+                    Quota(),
+                )
+            ]
         )
         url = api.jobs_base_url
         job_request = job_request_factory()
