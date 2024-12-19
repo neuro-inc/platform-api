@@ -16,7 +16,11 @@ from neuro_admin_client import (
     ClusterUser,
     ClusterUserRoleType,
     ClusterUserWithInfo,
+    Org,
     OrgCluster,
+    OrgUser,
+    OrgUserRoleType,
+    OrgUserWithInfo,
     Quota,
     User,
     UserInfo,
@@ -282,7 +286,9 @@ class MockAuthClient(AuthClient):
 class MockAdminClient(AdminClientDummy):
     def __init__(self) -> None:
         self.users: dict[str, User] = {}
+        self.orgs: dict[str, list[Org]] = defaultdict(list)
         self.cluster_users: dict[str, list[ClusterUser]] = defaultdict(list)
+        self.org_users: dict[str, list[OrgUser]] = defaultdict(list)
         self.org_clusters: dict[str, list[OrgCluster]] = defaultdict(list)
         self.spending_log: list[
             tuple[str, Optional[str], str, Decimal, Optional[str]]
@@ -297,7 +303,7 @@ class MockAdminClient(AdminClientDummy):
             raise ClientResponseError(None, (), status=404)  # type: ignore
         return self.users[name], self.cluster_users[name]
 
-    async def charge_cluster_user(  # type: ignore
+    async def charge_cluster_user(
         self,
         cluster_name: str,
         user_name: str,
@@ -360,6 +366,29 @@ class MockAdminClient(AdminClientDummy):
         for org_cluster in self.org_clusters.get(org_name, []):
             if org_cluster.cluster_name == cluster_name:
                 return org_cluster
+        raise ClientResponseError(None, (), status=404)  # type: ignore
+
+    async def get_org_user(  # type: ignore
+        self, org_name: str, user_name: str, with_user_info: bool = False
+    ) -> OrgUser | OrgUserWithInfo:
+        for org_user in self.org_users.get(user_name, []):
+            if org_user.org_name == org_name:
+                if with_user_info:
+                    return org_user.add_info(
+                        UserInfo(
+                            email=self.users[user_name].email,
+                            first_name=self.users[user_name].first_name,
+                            last_name=self.users[user_name].last_name,
+                            created_at=self.users[user_name].created_at,
+                        )
+                    )
+                return org_user
+        raise ClientResponseError(None, (), status=404)  # type: ignore
+
+    async def get_org(self, name: str) -> Org:
+        for org in self.orgs.get(name, []):
+            if org.name == name:
+                return org
         raise ClientResponseError(None, (), status=404)  # type: ignore
 
 
@@ -633,6 +662,16 @@ def user_factory(
                     org_name=org_name,
                 )
             )
+            if org_name:
+                mock_admin_client.orgs[org_name].append(Org(name=org_name))
+                mock_admin_client.org_users[name].append(
+                    OrgUser(
+                        org_name=org_name,
+                        user_name=name,
+                        role=OrgUserRoleType.USER,
+                        balance=balance,
+                    )
+                )
         return AuthUser(name=name)
 
     return _factory
@@ -648,6 +687,12 @@ def org_factory(
     async def _factory(name: str, clusters: list[tuple[str, Balance, Quota]]) -> str:
         mock_admin_client.users[name] = User(name=name, email=f"{name}@domain.com")
         for cluster, balance, quota in clusters:
+            mock_admin_client.orgs[name].append(
+                Org(
+                    name=name,
+                    balance=balance,
+                )
+            )
             mock_admin_client.org_clusters[name].append(
                 OrgCluster(
                     cluster_name=cluster,

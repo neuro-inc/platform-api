@@ -1510,14 +1510,19 @@ class TestJobsService:
         balance: Balance,
         user_factory: UserFactory,
         test_cluster: str,
+        test_org: str,
     ) -> None:
-        user = await user_factory("testuser", [(test_cluster, balance, Quota())])
+        user = await user_factory(
+            "testuser", [(test_cluster, test_org, balance, Quota())]
+        )
         request = job_request_factory(with_gpu=True)
 
         with pytest.raises(
             NoCreditsError, match=f"No credits left for user '{user.name}'"
         ):
-            await jobs_service.create_job(request, user, cluster_name=test_cluster)
+            await jobs_service.create_job(
+                request, user, cluster_name=test_cluster, org_name=test_org
+            )
 
     @pytest.mark.parametrize(
         "balance",
@@ -2050,14 +2055,19 @@ class TestJobServiceNotification:
         mock_notifications_client: MockNotificationsClient,
         user_factory: UserFactory,
         test_cluster: str,
+        test_org: str,
     ) -> None:
         user = await user_factory(
-            "testuser", [(test_cluster, Balance(credits=Decimal("0")), Quota())]
+            "testuser",
+            [(test_cluster, test_org, Balance(credits=Decimal("0")), Quota())],
         )
 
         with pytest.raises(NoCreditsError):
             await jobs_service.create_job(
-                job_request=mock_job_request, user=user, cluster_name=test_cluster
+                job_request=mock_job_request,
+                user=user,
+                cluster_name=test_cluster,
+                org_name=test_org,
             )
 
         assert mock_notifications_client.sent_notifications == [
