@@ -26,7 +26,6 @@ from neuro_notifications_client import Client as NotificationsClient
 
 from platform_api.orchestrator.job_policy_enforcer import (
     CreditsLimitEnforcer,
-    CreditsNotificationsEnforcer,
     JobPolicyEnforcePoller,
     RetentionPolicyEnforcer,
     RuntimeLimitEnforcer,
@@ -509,14 +508,6 @@ async def create_app(
                     enforcers=[
                         RuntimeLimitEnforcer(jobs_service),
                         CreditsLimitEnforcer(jobs_service, admin_client),
-                        CreditsNotificationsEnforcer(
-                            jobs_service=jobs_service,
-                            admin_client=admin_client,
-                            notifications_client=notifications_client,
-                            notification_threshold=(
-                                config.job_policy_enforcer.credit_notification_threshold
-                            ),
-                        ),
                         StopOnClusterRemoveEnforcer(
                             jobs_service=jobs_service,
                             auth_client=auth_client,

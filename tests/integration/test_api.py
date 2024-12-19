@@ -3609,9 +3609,17 @@ class TestJobs:
         regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         test_cluster_name: str,
+        test_org_name: str,
     ) -> None:
         user = await regular_user_factory(
-            clusters=[(test_cluster_name, Balance(credits=Decimal("100")), Quota())]
+            clusters=[
+                (
+                    test_cluster_name,
+                    test_org_name,
+                    Balance(credits=Decimal("100")),
+                    Quota(),
+                )
+            ]
         )
         url = api.jobs_base_url
         job_request = job_request_factory()
@@ -3634,9 +3642,10 @@ class TestJobs:
         regular_user_factory: UserFactory,
         credits: Decimal,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         user = await regular_user_factory(
-            clusters=[(cluster_name, Balance(credits=credits), Quota())]
+            clusters=[(cluster_name, test_org_name, Balance(credits=credits), Quota())]
         )
         url = api.jobs_base_url
         job_request = job_request_factory()
@@ -3973,7 +3982,7 @@ class TestJobs:
 
         org_user = await regular_user_factory(
             clusters=[
-                ("test-cluster", Balance(), Quota()),
+                ("test-cluster", "org", Balance(), Quota()),
                 ("test-cluster", "org1", Balance(), Quota()),
                 ("test-cluster", "org2", Balance(), Quota()),
             ],

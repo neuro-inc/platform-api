@@ -13,6 +13,7 @@ from neuro_admin_client import (
     AdminClient,
     ClusterUser,
     GetUserResponse,
+    Org,
     OrgCluster,
     OrgUser,
     ProjectUser,
@@ -166,14 +167,12 @@ class JobsService:
         if running_count >= org_cluster.quota.total_running_jobs:
             raise RunningJobsQuotaExceededError.create_for_org(org_cluster.org_name)
 
-    async def _raise_for_no_credits(
-        self, cluster_entry: Union[ClusterUser, OrgCluster]
-    ) -> None:
-        if cluster_entry.balance.is_non_positive:
-            if isinstance(cluster_entry, ClusterUser):
-                raise NoCreditsError.create_for_user(cluster_entry.user_name)
+    async def _raise_for_no_credits(self, org_entry: Union[OrgUser, Org]) -> None:
+        if org_entry.balance.is_non_positive:
+            if isinstance(org_entry, OrgUser):
+                raise NoCreditsError.create_for_user(org_entry.user_name)
             else:
-                raise NoCreditsError.create_for_org(cluster_entry.org_name)
+                raise NoCreditsError.create_for_org(org_entry.name)
 
     async def _make_pass_config_token(
         self, username: str, cluster_name: str, job_id: str
@@ -243,37 +242,45 @@ class JobsService:
         base_name = get_base_owner(
             user.name
         )  # SA has access to same clusters as a user
-        cluster_user = await self._admin_client.get_cluster_user(
-            user_name=base_name,
-            cluster_name=cluster_name,
-            org_name=org_name,
-        )
 
         if job_name is not None and maybe_job_id(job_name):
             raise JobsServiceException(
                 "Failed to create job: job name cannot start with 'job-' prefix."
             )
+
+        # check quotas for both a user and a cluster
+        cluster_user = await self._admin_client.get_cluster_user(
+            user_name=base_name,
+            cluster_name=cluster_name,
+            org_name=org_name,
+        )
         if not wait_for_jobs_quota:
             await self._raise_for_running_jobs_quota(cluster_user)
-        try:
-            await self._raise_for_no_credits(cluster_user)
-        except NoCreditsError:
-            await self._notifications_client.notify(
-                JobCannotStartNoCredits(
-                    user_id=user.name,
-                    cluster_name=cluster_name,
-                )
-            )
-            raise
+
         if org_name:
-            # check that OrgCluster itself has enough credits and quota:
             org_cluster = await self._admin_client.get_org_cluster(
                 cluster_name, org_name
             )
             if not wait_for_jobs_quota:
                 await self._raise_for_orgs_running_jobs_quota(org_cluster)
-            # TODO: add notification about org cluster credits exhausted
-            await self._raise_for_no_credits(org_cluster)
+            org_user = await self._admin_client.get_org_user(
+                org_name=org_name,
+                user_name=base_name,
+            )
+
+            try:
+                await self._raise_for_no_credits(org_user)
+            except NoCreditsError:
+                await self._notifications_client.notify(
+                    JobCannotStartNoCredits(
+                        user_id=user.name,
+                        cluster_name=cluster_name,
+                    )
+                )
+                raise
+
+            org = await self._admin_client.get_org(org_name)
+            await self._raise_for_no_credits(org)
 
         if pass_config:
             job_request = await self._setup_pass_config(

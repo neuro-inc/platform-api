@@ -162,6 +162,11 @@ def test_cluster_name() -> str:
     return "test-cluster"
 
 
+@pytest.fixture
+def test_org_name() -> str:
+    return "test-org"
+
+
 class UserFactory(Protocol):
     async def __call__(
         self,
@@ -183,6 +188,7 @@ async def regular_user_factory(
     token_factory: Callable[[str], str],
     admin_token: str,
     test_cluster_name: str,
+    test_org_name: str,
     admin_client_factory: Callable[[str], Awaitable[AdminClient]],
 ) -> UserFactory:
     async def _factory(
@@ -201,6 +207,7 @@ async def regular_user_factory(
         await admin_client.create_user(name=name, email=f"{name}@email.com")
         user_token = token_factory(name)
         user_admin_client = await admin_client_factory(user_token)
+        admin_admin_client = await admin_client_factory(admin_token)
         for entry in clusters:
             org_name: str | None = None
             if len(entry) == 3:
@@ -228,6 +235,7 @@ async def regular_user_factory(
                         org_name=org_name,
                         user_name=name,
                         role=org_user_role,
+                        balance=balance,
                     )
                 except ClientResponseError:
                     pass
@@ -236,8 +244,10 @@ async def regular_user_factory(
                         cluster_name=cluster,
                         org_name=org_name,
                     )
-                    await admin_client.update_org_cluster_balance(
-                        cluster_name=cluster,
+                except ClientResponseError:
+                    pass
+                try:
+                    await admin_admin_client.update_org_balance(
                         org_name=org_name,
                         credits=Decimal("100"),
                     )
@@ -249,7 +259,6 @@ async def regular_user_factory(
                     org_name=org_name,
                     role=cluster_user_role,
                     user_name=name,
-                    balance=balance,
                     quota=quota,
                 )
             except ClientResponseError:
