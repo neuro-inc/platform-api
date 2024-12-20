@@ -1,16 +1,14 @@
 import asyncio
 import datetime
-import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import replace
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Optional
 
 import pytest
 from neuro_admin_client import AdminClient, Balance, Quota
 from neuro_auth_client import User as AuthUser
-from neuro_notifications_client import CreditsWillRunOutSoon
 from yarl import URL
 
 from platform_api.cluster import ClusterConfigRegistry
@@ -18,7 +16,6 @@ from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job import Job, JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_policy_enforcer import (
     CreditsLimitEnforcer,
-    CreditsNotificationsEnforcer,
     JobPolicyEnforcePoller,
     JobPolicyEnforcer,
     RetentionPolicyEnforcer,
@@ -31,7 +28,6 @@ from platform_api.orchestrator.jobs_storage import JobFilter
 from tests.unit.conftest import (
     MockAdminClient,
     MockAuthClient,
-    MockNotificationsClient,
     OrgFactory,
     UserFactory,
 )
@@ -425,72 +421,6 @@ class TestHasCreditsEnforcer:
         await has_credits_enforcer.enforce()
 
         await check_cancelled(jobs, JobStatusReason.QUOTA_EXHAUSTED)
-
-
-class TestCreditsNotificationEnforcer:
-    async def test_credits_almost_run_out_user_notified(
-        self,
-        jobs_service: JobsService,
-        mock_admin_client: AdminClient,
-        mock_notifications_client: MockNotificationsClient,
-        job_request_factory: Callable[[], JobRequest],
-        user_factory: UserFactory,
-        test_cluster: str,
-    ) -> None:
-        user = await user_factory(
-            "some-user", [(test_cluster, Balance(credits=Decimal("10.00")), Quota())]
-        )
-
-        enforcer = CreditsNotificationsEnforcer(
-            jobs_service,
-            mock_admin_client,
-            mock_notifications_client,
-            notification_threshold=Decimal("2000"),
-        )
-        job, _ = await jobs_service.create_job(
-            job_request_factory(), user, cluster_name="test-cluster"
-        )
-        await enforcer.enforce()
-        assert (
-            CreditsWillRunOutSoon(
-                user_id=user.name,
-                cluster_name="test-cluster",
-                credits=Decimal("10"),
-            )
-            in mock_notifications_client.sent_notifications
-        )
-
-    async def test_no_credits_not_notified(
-        self,
-        jobs_service: JobsService,
-        mock_admin_client: AdminClient,
-        mock_notifications_client: MockNotificationsClient,
-        job_request_factory: Callable[[], JobRequest],
-        caplog: Any,
-        user_factory: UserFactory,
-        test_cluster: str,
-    ) -> None:
-        user = await user_factory(
-            "some-user", [(test_cluster, Balance(credits=None), Quota())]
-        )
-
-        enforcer = CreditsNotificationsEnforcer(
-            jobs_service,
-            mock_admin_client,
-            mock_notifications_client,
-            notification_threshold=Decimal("2000"),
-        )
-        job, _ = await jobs_service.create_job(
-            job_request_factory(), user, cluster_name="test-cluster"
-        )
-        await enforcer.enforce()
-        assert not any(
-            isinstance(notification, CreditsWillRunOutSoon)
-            for notification in mock_notifications_client.sent_notifications
-        )
-        assert not any(
-            record.levelno >= logging.ERROR for record in caplog.records
-        ), list(caplog.records)
 
 
 class TestStopOnClusterRemoveEnforcer:
