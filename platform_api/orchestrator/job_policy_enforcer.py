@@ -2,13 +2,9 @@ import abc
 import asyncio
 import contextlib
 import logging
-from collections import defaultdict
-from collections.abc import Callable, Iterable, Mapping
 from datetime import timedelta
-from typing import Any, Optional, TypeVar
+from typing import Any, Optional
 
-from aiohttp import ClientResponseError
-from neuro_admin_client import AdminClient, ClusterUser, OrgCluster
 from neuro_auth_client import AuthClient
 from neuro_logging import new_trace, trace
 
@@ -58,91 +54,6 @@ class RuntimeLimitEnforcer(JobPolicyEnforcer):
                 f"on cluster '{job.cluster_name}'"
             )
             await self._service.cancel_job(job.id, JobStatusReason.LIFE_SPAN_ENDED)
-
-
-class CreditsLimitEnforcer(JobPolicyEnforcer):
-    def __init__(self, service: JobsService, admin_client: AdminClient):
-        self._service = service
-        self._admin_client = admin_client
-
-    _T = TypeVar("_T")
-    _K = TypeVar("_K")
-
-    def _groupby(
-        self, it: Iterable[_T], key: Callable[[_T], _K]
-    ) -> Mapping[_K, list[_T]]:
-        res = defaultdict(list)
-        for item in it:
-            res[key(item)].append(item)
-        return res
-
-    @trace
-    async def enforce(self) -> None:
-        jobs = await self._service.get_all_jobs(
-            job_filter=JobFilter(
-                statuses={JobStatus(item) for item in JobStatus.active_values()}
-            )
-        )
-        owner_to_jobs = self._groupby(jobs, lambda job: job.owner)
-        org_to_jobs = self._groupby(jobs, lambda job: (job.cluster_name, job.org_name))
-        coros = [
-            self._enforce_for_user(owner, user_jobs)
-            for owner, user_jobs in owner_to_jobs.items()
-        ]
-        coros += [
-            self._enforce_for_org(cluster_name, org_name, org_jobs)
-            for (cluster_name, org_name), org_jobs in org_to_jobs.items()
-            if org_name is not None
-        ]
-        await run_and_log_exceptions(coros)
-
-    async def _enforce_for_user(self, username: str, user_jobs: Iterable[Job]) -> None:
-        base_name = username.split("/", 1)[0]  # SA inherit balance from main user
-        user, user_clusters = await self._admin_client.get_user_with_clusters(base_name)
-        for (cluster_name, org_name), org_cluster_jobs in self._groupby(
-            user_jobs, lambda job: (job.cluster_name, job.org_name)
-        ).items():
-            user_cluster: Optional[ClusterUser]
-            try:
-                user_cluster = next(
-                    user_cluster
-                    for user_cluster in user_clusters
-                    if user_cluster.cluster_name == cluster_name
-                    and user_cluster.org_name == org_name
-                )
-            except StopIteration:
-                logger.warning(
-                    f"User {username} has jobs in cluster {cluster_name} "
-                    f"as part of org {org_name}, but has no access to this "
-                    "cluster as part of this org. Jobs will be cancelled"
-                )
-                user_cluster = None
-            if user_cluster is None or user_cluster.balance.is_non_positive:
-                for job in org_cluster_jobs:
-                    await self._service.cancel_job(
-                        job.id, JobStatusReason.QUOTA_EXHAUSTED
-                    )
-
-    async def _enforce_for_org(
-        self, cluster_name: str, org_name: str, org_cluster_jobs: Iterable[Job]
-    ) -> None:
-        org_cluster: Optional[OrgCluster] = None
-        try:
-            org_cluster = await self._admin_client.get_org_cluster(
-                cluster_name, org_name
-            )
-        except ClientResponseError as e:
-            if e.status == 404:
-                logger.warning(
-                    f"Org {org_name} has jobs in cluster {cluster_name} but has no "
-                    f"access to this cluster as part of this org. "
-                    f"Jobs will be cancelled"
-                )
-            else:
-                raise
-        if org_cluster is None or org_cluster.balance.is_non_positive:
-            for job in org_cluster_jobs:
-                await self._service.cancel_job(job.id, JobStatusReason.QUOTA_EXHAUSTED)
 
 
 class StopOnClusterRemoveEnforcer(JobPolicyEnforcer):
