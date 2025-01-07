@@ -71,6 +71,12 @@ jobs:
         key: py-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('setup.cfg') }}
     - name: Install dependencies
       run: make setup
+    - name: Login to ghcr.io
+      uses: docker/login-action@v2.0.0
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
     - name: Install NFS
       run: |
         sudo apt-get -q update
