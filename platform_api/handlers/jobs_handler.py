@@ -104,15 +104,15 @@ def create_job_request_validator(
     )
 
     def multiname_key(
-        name: str, keys: Sequence[str], default: Any, trafaret: t.Trafaret
+        name: str, keys: Sequence[str], default: Any, trafaret_func: t.Trafaret
     ) -> t.Key:
         _empty = object()
 
         def _take_first(data: dict[str, Any]) -> dict[str, Any]:
             for key in keys:
                 if data[key] is not _empty:
-                    return trafaret(data[key])
-            return trafaret(default)
+                    return trafaret_func(data[key])
+            return trafaret_func(default)
 
         return t.keys.subdict(
             name,
@@ -152,13 +152,13 @@ def create_job_request_validator(
             "scheduler_enabled",
             ["scheduler_enabled", "is_preemptible"],
             default=False,
-            trafaret=t.Bool(),
+            trafaret_func=t.Bool(),
         ),
         multiname_key(
             "preemptible_node",
             ["preemptible_node", "is_preemptible_node_required"],
             default=False,
-            trafaret=t.Bool(),
+            trafaret_func=t.Bool(),
         ),
     )
     # Either flat structure or payload with container field are allowed
