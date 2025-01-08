@@ -131,7 +131,7 @@ async def _admin_server_setup_db(
             f"NP_ADMIN_CONFIG_TOKEN={admin_token}",
             "NP_ADMIN_CONFIG_URL=http://host.docker.internal:8089",
             f"NP_ADMIN_POSTGRES_DSN={admin_postgres_dsn}",
-            f"NP_ADMIN_NOTIFICATIONS_URL=http://host.docker.internal:8083",
+            "NP_ADMIN_NOTIFICATIONS_URL=http://host.docker.internal:8083",
             "NP_ADMIN_NOTIFICATIONS_TOKEN=token",
         ],
     }
@@ -182,7 +182,7 @@ async def admin_server(
             f"NP_ADMIN_CONFIG_TOKEN={admin_token}",
             "NP_ADMIN_CONFIG_URL=http://host.docker.internal:8089",
             f"NP_ADMIN_POSTGRES_DSN={admin_postgres_dsn}",
-            f"NP_ADMIN_NOTIFICATIONS_URL=http://host.docker.internal:8083",
+            "NP_ADMIN_NOTIFICATIONS_URL=http://host.docker.internal:8083",
             "NP_ADMIN_NOTIFICATIONS_TOKEN=token",
             "NP_LOG_LEVEL=DEBUG",
         ],
