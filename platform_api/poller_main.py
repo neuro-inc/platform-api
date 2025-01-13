@@ -2,7 +2,6 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack
-from typing import Optional
 
 import aiohttp.web
 from aiohttp.web_urldispatcher import AbstractRoute
@@ -74,7 +73,7 @@ def make_tracing_trace_configs(config: PollerConfig) -> list[aiohttp.TraceConfig
 
 
 async def create_app(
-    config: PollerConfig, cluster: Optional[ClusterConfig] = None
+    config: PollerConfig, cluster: ClusterConfig | None = None
 ) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
@@ -208,11 +207,7 @@ def setup_tracing(config: PollerConfig) -> None:
 
     if config.sentry:
         setup_sentry(
-            config.sentry.dsn,
-            app_name=config.sentry.app_name,
-            cluster_name=config.sentry.cluster_name,
-            sample_rate=config.sentry.sample_rate,
-            exclude=[JobError, JobStorageTransactionError],
+            ignore_errors=[JobError, JobStorageTransactionError],
         )
 
 

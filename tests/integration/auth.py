@@ -114,7 +114,7 @@ async def auth_config(auth_server: AuthConfig) -> AsyncIterator[AuthConfig]:
 
 
 @asynccontextmanager
-async def create_auth_client(config: AuthConfig) -> AsyncGenerator[AuthClient, None]:
+async def create_auth_client(config: AuthConfig) -> AsyncGenerator[AuthClient]:
     async with AuthClient(
         url=config.server_endpoint_url, token=config.service_token
     ) as client:
@@ -122,7 +122,7 @@ async def create_auth_client(config: AuthConfig) -> AsyncGenerator[AuthClient, N
 
 
 @pytest.fixture
-async def auth_client(auth_server: AuthConfig) -> AsyncGenerator[AuthClient, None]:
+async def auth_client(auth_server: AuthConfig) -> AsyncGenerator[AuthClient]:
     async with create_auth_client(auth_server) as client:
         yield client
 

@@ -4,7 +4,7 @@ import subprocess
 import sys
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from typing import Any, Optional
+from typing import Any
 
 import aiodocker
 import aiodocker.containers
@@ -166,8 +166,8 @@ class SecretsClient:
         self,
         key: str,
         value: str,
-        org_name: Optional[str] = None,
-        project_name: Optional[str] = None,
+        org_name: str | None = None,
+        project_name: str | None = None,
     ) -> None:
         url = self._base_url / "secrets"
         payload = {

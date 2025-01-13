@@ -2,7 +2,7 @@ import logging
 from collections.abc import Sequence
 from datetime import time, tzinfo
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import trafaret as t
@@ -25,7 +25,7 @@ from .resource import Preset, ResourcePoolType, TPUPreset, TPUResource
 _cluster_config_validator = t.Dict({"name": t.String}).allow_extra("*")
 
 
-def _get_memory_with_deprecated_mb(data: Any, key: str) -> Optional[int]:
+def _get_memory_with_deprecated_mb(data: Any, key: str) -> int | None:
     if key in data:
         return data[key]
     mb_key = key + "_mb"
@@ -41,7 +41,7 @@ class ClusterConfigFactory:
         configs = (self.create_cluster_config(p) for p in payload)
         return [c for c in configs if c]
 
-    def create_cluster_config(self, payload: dict[str, Any]) -> Optional[ClusterConfig]:
+    def create_cluster_config(self, payload: dict[str, Any]) -> ClusterConfig | None:
         try:
             _cluster_config_validator.check(payload)
             timezone = self._create_timezone(payload.get("timezone"))
@@ -136,9 +136,7 @@ class ClusterConfigFactory:
             ),
         )
 
-    def _create_tpu_preset(
-        self, payload: Optional[dict[str, Any]]
-    ) -> Optional[TPUPreset]:
+    def _create_tpu_preset(self, payload: dict[str, Any] | None) -> TPUPreset | None:
         if not payload:
             return None
 
@@ -170,8 +168,8 @@ class ClusterConfigFactory:
         )
 
     def _create_tpu_resource(
-        self, payload: Optional[dict[str, Any]]
-    ) -> Optional[TPUResource]:
+        self, payload: dict[str, Any] | None
+    ) -> TPUResource | None:
         if not payload:
             return None
 
@@ -181,7 +179,7 @@ class ClusterConfigFactory:
             software_versions=tuple(payload["software_versions"]),
         )
 
-    def _create_timezone(self, name: Optional[str]) -> tzinfo:
+    def _create_timezone(self, name: str | None) -> tzinfo:
         if not name:
             return ClusterConfig.timezone
         try:

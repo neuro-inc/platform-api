@@ -5,11 +5,11 @@ import sys
 from collections.abc import Callable, Coroutine, Iterable
 from contextlib import AbstractAsyncContextManager
 from types import TracebackType
-from typing import Any, Optional, TypeVar, Union
+from typing import Any, TypeVar
 
 
 async def run_and_log_exceptions(
-    coros: Union[Coroutine[Any, Any, Any], Iterable[Coroutine[Any, Any, Any]]]
+    coros: Coroutine[Any, Any, Any] | Iterable[Coroutine[Any, Any, Any]]
 ) -> None:
     try:
         # Check is iterable
@@ -41,9 +41,9 @@ else:
 
         async def __aexit__(
             self,
-            exc_type: Optional[type[BaseException]],
-            exc: Optional[BaseException],
-            tb: Optional[TracebackType],
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: TracebackType | None,
         ) -> None:
             await self.thing.aclose()  # type: ignore
 

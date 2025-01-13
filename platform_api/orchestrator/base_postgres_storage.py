@@ -2,7 +2,6 @@ import asyncio
 import sys
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from typing import Optional
 
 import sqlalchemy.sql as sasql
 from sqlalchemy.engine import Row
@@ -24,7 +23,7 @@ class BasePostgresStorage:
             yield conn
 
     async def _execute(
-        self, query: sasql.ClauseElement, conn: Optional[AsyncConnection] = None
+        self, query: sasql.ClauseElement, conn: AsyncConnection | None = None
     ) -> None:
         if conn:
             await conn.execute(query)
@@ -33,8 +32,8 @@ class BasePostgresStorage:
             await conn.execute(query)
 
     async def _fetchrow(
-        self, query: sasql.ClauseElement, conn: Optional[AsyncConnection] = None
-    ) -> Optional[Row]:
+        self, query: sasql.ClauseElement, conn: AsyncConnection | None = None
+    ) -> Row | None:
         if conn:
             result = await conn.execute(query)
             return result.one_or_none()
@@ -43,7 +42,7 @@ class BasePostgresStorage:
             return result.one_or_none()
 
     async def _fetch(
-        self, query: sasql.ClauseElement, conn: Optional[AsyncConnection] = None
+        self, query: sasql.ClauseElement, conn: AsyncConnection | None = None
     ) -> list[Row]:
         if conn:
             result = await conn.execute(query)

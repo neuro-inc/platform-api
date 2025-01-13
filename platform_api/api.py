@@ -578,11 +578,7 @@ def setup_tracing(config: Config) -> None:
 
     if config.sentry:
         setup_sentry(
-            config.sentry.dsn,
-            app_name=config.sentry.app_name,
-            cluster_name=config.sentry.cluster_name,
-            sample_rate=config.sentry.sample_rate,
-            exclude=[JobError, JobStorageTransactionError],
+            ignore_errors=[JobError, JobStorageTransactionError],
         )
 
 

@@ -3,7 +3,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import Enum
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -40,14 +39,14 @@ class Preset:
     memory: int
     scheduler_enabled: bool = False
     preemptible_node: bool = False
-    nvidia_gpu: Optional[int] = None
-    amd_gpu: Optional[int] = None
-    intel_gpu: Optional[int] = None
-    nvidia_gpu_model: Optional[str] = None
-    amd_gpu_model: Optional[str] = None
-    intel_gpu_model: Optional[str] = None
-    gpu_model: Optional[str] = None  # TODO: deprecated
-    tpu: Optional[TPUPreset] = None
+    nvidia_gpu: int | None = None
+    amd_gpu: int | None = None
+    intel_gpu: int | None = None
+    nvidia_gpu_model: str | None = None
+    amd_gpu_model: str | None = None
+    intel_gpu_model: str | None = None
+    gpu_model: str | None = None  # TODO: deprecated
+    tpu: TPUPreset | None = None
     is_external_job: bool = False
     resource_pool_names: Sequence[str] = ()
     available_resource_pool_names: Sequence[str] = ()
@@ -66,22 +65,22 @@ class ResourcePoolType:
 
     # default_factory is used only in tests
     name: str = field(default_factory=lambda: str(uuid.uuid4()))
-    is_preemptible: Optional[bool] = False
-    cpu: Optional[float] = None
-    memory: Optional[int] = None
-    nvidia_gpu: Optional[int] = None
-    amd_gpu: Optional[int] = None
-    intel_gpu: Optional[int] = None
-    nvidia_gpu_model: Optional[str] = None
-    amd_gpu_model: Optional[str] = None
-    intel_gpu_model: Optional[str] = None
-    disk_size: Optional[int] = None
-    min_size: Optional[int] = None
-    max_size: Optional[int] = None
-    idle_size: Optional[int] = None
-    tpu: Optional[TPUResource] = None
-    cpu_min_watts: Optional[float] = None
-    cpu_max_watts: Optional[float] = None
+    is_preemptible: bool | None = False
+    cpu: float | None = None
+    memory: int | None = None
+    nvidia_gpu: int | None = None
+    amd_gpu: int | None = None
+    intel_gpu: int | None = None
+    nvidia_gpu_model: str | None = None
+    amd_gpu_model: str | None = None
+    intel_gpu_model: str | None = None
+    disk_size: int | None = None
+    min_size: int | None = None
+    max_size: int | None = None
+    idle_size: int | None = None
+    tpu: TPUResource | None = None
+    cpu_min_watts: float | None = None
+    cpu_max_watts: float | None = None
 
     @property
     def has_gpu(self) -> bool:
