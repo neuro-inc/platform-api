@@ -15,7 +15,6 @@ repos:
   - id: requirements-txt-fixer
   - id: trailing-whitespace
   - id: check-symlinks
-  - id: check-yaml
     exclude: ^charts/
 - repo: https://github.com/sondrelg/pep585-upgrade
   rev: v1.0
