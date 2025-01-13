@@ -15,6 +15,7 @@ repos:
   - id: requirements-txt-fixer
   - id: trailing-whitespace
   - id: check-symlinks
+  - id: check-yaml
     exclude: ^charts/
 - repo: https://github.com/sondrelg/pep585-upgrade
   rev: v1.0
@@ -23,12 +24,12 @@ repos:
     args:
     - --futures=true
 - repo: https://github.com/Zac-HD/shed
-  rev: 2024.3.1
+  rev: 2024.10.1
   hooks:
   - id: shed
     args:
     - --refactor
-    - --py39-plus
+    - --py313-plus
     types_or:
     - python
     - markdown
@@ -50,8 +51,14 @@ repos:
   hooks:
   - id: check-github-actions
   - id: check-github-workflows
+- repo: https://github.com/python-poetry/poetry
+  rev: '2.0.1'
+  hooks:
+  - id: poetry-check
+  - id: poetry-lock
+  - id: poetry-install
 ci:
   skip:
-  # - actionlint-docker
+  #  - actionlint-docker
   - check-github-actions
   - check-github-workflows
