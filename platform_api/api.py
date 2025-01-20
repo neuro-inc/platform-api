@@ -2,7 +2,6 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
-from importlib.metadata import version
 from typing import Any
 
 import aiohttp.web
@@ -24,6 +23,7 @@ from neuro_logging import (
 )
 from neuro_notifications_client import Client as NotificationsClient
 
+from platform_api import __version__
 from platform_api.orchestrator.job_policy_enforcer import (
     CreditsLimitEnforcer,
     JobPolicyEnforcePoller,
@@ -204,7 +204,7 @@ class ConfigApiHandler:
             result["users_url"] = str(self._config.auth.public_endpoint_url)
         return result
 
-    def _convert_resource_pool_type_to_payload(
+    def _convert_resource_pool_type_to_payload(  # noqa: C901
         self, resource_pool_type: ResourcePoolType
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -383,13 +383,10 @@ async def create_jobs_app(config: Config) -> aiohttp.web.Application:
     return jobs_app
 
 
-package_version = version(__package__)
-
-
 async def add_version_to_header(
     request: aiohttp.web.Request, response: aiohttp.web.StreamResponse
 ) -> None:
-    response.headers["X-Service-Version"] = f"platform-api/{package_version}"
+    response.headers["X-Service-Version"] = f"platform-api/{__version__}"
 
 
 def make_tracing_trace_configs(config: Config) -> list[aiohttp.TraceConfig]:
@@ -554,7 +551,7 @@ def _setup_cors(app: aiohttp.web.Application, config: CORSConfig) -> None:
     if not config.allowed_origins:
         return
 
-    logger.info(f"Setting up CORS with allowed origins: {config.allowed_origins}")
+    logger.info("Setting up CORS with allowed origins: %s", config.allowed_origins)
     default_options = aiohttp_cors.ResourceOptions(
         allow_credentials=True, expose_headers="*", allow_headers="*"
     )
@@ -562,7 +559,7 @@ def _setup_cors(app: aiohttp.web.Application, config: CORSConfig) -> None:
         app, defaults={origin: default_options for origin in config.allowed_origins}
     )
     for route in app.router.routes():
-        logger.debug(f"Setting up CORS for {route}")
+        logger.debug("Setting up CORS for %s", route)
         cors.add(route)
 
 
