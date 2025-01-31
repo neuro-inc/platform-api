@@ -706,8 +706,9 @@ class JobsHandler:
             ),
             None,
         )
-        # Always use NO_ORG as default if use has direct access to cluster
-        # if cluster_config_for_default_org is None validator below will raise an error
+        # Always use NO_ORG as default if a user has direct access to cluster
+        # if cluster_config_for_default_org is None,
+        # a validator below will raise an error
         default_org_name = None
         if (
             cluster_config_for_default_org is not None
