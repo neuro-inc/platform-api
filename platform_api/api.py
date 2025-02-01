@@ -12,15 +12,7 @@ from aiohttp_security import check_permission
 from neuro_admin_client import AdminClient, OrgUser, ProjectUser
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
-from neuro_logging import (
-    init_logging,
-    make_sentry_trace_config,
-    make_zipkin_trace_config,
-    notrace,
-    setup_sentry,
-    setup_zipkin,
-    setup_zipkin_tracer,
-)
+from neuro_logging import init_logging, setup_sentry
 from neuro_notifications_client import Client as NotificationsClient
 
 from platform_api.orchestrator.job_policy_enforcer import (
@@ -66,7 +58,6 @@ class ApiHandler:
     def register(self, app: aiohttp.web.Application) -> list[AbstractRoute]:
         return app.add_routes((aiohttp.web.get("/ping", self.handle_ping),))
 
-    @notrace
     async def handle_ping(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         return aiohttp.web.Response()
 
@@ -391,18 +382,6 @@ async def add_version_to_header(
     response.headers["X-Service-Version"] = f"platform-api/{package_version}"
 
 
-def make_tracing_trace_configs(config: Config) -> list[aiohttp.TraceConfig]:
-    trace_configs = []
-
-    if config.zipkin:
-        trace_configs.append(make_zipkin_trace_config())
-
-    if config.sentry:
-        trace_configs.append(make_sentry_trace_config())
-
-    return trace_configs
-
-
 async def create_app(
     config: Config, clusters: Sequence[ClusterConfig] = ()
 ) -> aiohttp.web.Application:
@@ -416,7 +395,6 @@ async def create_app(
                 AuthClient(
                     url=config.auth.server_endpoint_url,
                     token=config.auth.service_token,
-                    trace_configs=make_tracing_trace_configs(config),
                 )
             )
             app["jobs_app"]["auth_client"] = auth_client
@@ -425,7 +403,6 @@ async def create_app(
                 AdminClient(
                     base_url=config.admin_url,
                     service_token=config.auth.service_token,
-                    trace_configs=make_tracing_trace_configs(config),
                 )
             )
 
@@ -438,7 +415,6 @@ async def create_app(
                 NotificationsClient(
                     url=config.notifications.url or None,
                     token=config.notifications.token,
-                    trace_configs=make_tracing_trace_configs(config),
                 )
             )
 
@@ -450,7 +426,6 @@ async def create_app(
                 ConfigClient(
                     base_url=config.config_url,
                     service_token=config.auth.service_token,
-                    trace_configs=make_tracing_trace_configs(config),
                 )
             )
 
@@ -526,7 +501,7 @@ async def create_app(
 
     api_v1_app = aiohttp.web.Application()
     api_v1_handler = ApiHandler()
-    probes_routes = api_v1_handler.register(api_v1_app)
+    api_v1_handler.register(api_v1_app)
     app["api_v1_app"] = api_v1_app
 
     config_app = await create_config_app(config)
@@ -541,30 +516,7 @@ async def create_app(
 
     app.on_response_prepare.append(add_version_to_header)
 
-    if config.zipkin:
-        setup_zipkin(app, skip_routes=probes_routes)
-
     return app
-
-
-def setup_tracing(config: Config) -> None:
-    if config.zipkin:
-        setup_zipkin_tracer(
-            config.zipkin.app_name,
-            config.server.host,
-            config.server.port,
-            config.zipkin.url,
-            config.zipkin.sample_rate,
-        )
-
-    if config.sentry:
-        setup_sentry(
-            config.sentry.dsn,
-            app_name=config.sentry.app_name,
-            cluster_name=config.sentry.cluster_name,
-            sample_rate=config.sentry.sample_rate,
-            exclude=[JobError, JobStorageTransactionError],
-        )
 
 
 def main() -> None:
@@ -572,6 +524,6 @@ def main() -> None:
     config = EnvironConfigFactory().create()
     logging.info("Loaded config: %r", config)
     loop = asyncio.get_event_loop()
-    setup_tracing(config)
+    setup_sentry(ignore_errors=[JobError, JobStorageTransactionError])
     app = loop.run_until_complete(create_app(config))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)

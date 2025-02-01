@@ -56,8 +56,6 @@ ingress:
 
 secrets: []
 
-zipkin: {}
-
 sentry: {}
 
 priorityClassName: ""
