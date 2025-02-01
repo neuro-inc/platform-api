@@ -433,6 +433,6 @@ def job_request_factory() -> Callable[[], dict[str, Any]]:
 
 @pytest.fixture
 async def job_submit(
-    job_request_factory: Callable[[], dict[str, Any]]
+    job_request_factory: Callable[[], dict[str, Any]],
 ) -> dict[str, Any]:
     return job_request_factory()

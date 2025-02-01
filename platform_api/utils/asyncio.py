@@ -9,7 +9,7 @@ from typing import Any, Optional, TypeVar, Union
 
 
 async def run_and_log_exceptions(
-    coros: Union[Coroutine[Any, Any, Any], Iterable[Coroutine[Any, Any, Any]]]
+    coros: Union[Coroutine[Any, Any, Any], Iterable[Coroutine[Any, Any, Any]]],
 ) -> None:
     try:
         # Check is iterable
@@ -49,7 +49,7 @@ else:
 
 
 def asyncgeneratorcontextmanager(
-    func: Callable[..., T_co]
+    func: Callable[..., T_co],
 ) -> Callable[..., AbstractAsyncContextManager[T_co]]:
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> AbstractAsyncContextManager[T_co]:
