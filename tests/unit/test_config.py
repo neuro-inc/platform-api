@@ -386,8 +386,6 @@ class TestEnvironConfigFactory:
             "https://dev.neu.ro/oauth/show-code"
         )
 
-        assert not config.cors.allowed_origins
-
         assert config.zipkin is None
         assert config.sentry is None
 
@@ -424,7 +422,6 @@ class TestEnvironConfigFactory:
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
-            "NP_CORS_ORIGINS": "https://domain1.com,http://do.main",
             "NP_ZIPKIN_URL": "https://zipkin:9411",
             "NP_SENTRY_DSN": "https://sentry",
             "NP_SENTRY_CLUSTER_NAME": "test",
@@ -459,8 +456,6 @@ class TestEnvironConfigFactory:
         assert config.auth.public_endpoint_url == URL("https://neu.ro/api/v1/users")
         assert config.auth.service_token == "token"
         assert config.auth.service_name == "servicename"
-
-        assert config.cors.allowed_origins == ["https://domain1.com", "http://do.main"]
 
         assert config.zipkin
         assert config.sentry

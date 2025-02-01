@@ -92,67 +92,6 @@ class TestApi:
             assert response.status == HTTPOk.status_code, await response.text()
             assert "platform-api" in response.headers["X-Service-Version"]
 
-    async def test_ping_unknown_origin(
-        self, api: ApiConfig, client: aiohttp.ClientSession
-    ) -> None:
-        async with client.get(
-            api.ping_url, headers={"Origin": "http://unknown"}
-        ) as response:
-            assert response.status == HTTPOk.status_code, await response.text()
-            assert "Access-Control-Allow-Origin" not in response.headers
-
-    async def test_ping_allowed_origin(
-        self, api: ApiConfig, client: aiohttp.ClientSession
-    ) -> None:
-        async with client.get(
-            api.ping_url, headers={"Origin": "https://neu.ro"}
-        ) as resp:
-            assert resp.status == HTTPOk.status_code, await resp.text()
-            assert resp.headers["Access-Control-Allow-Origin"] == "https://neu.ro"
-            assert resp.headers["Access-Control-Allow-Credentials"] == "true"
-            assert resp.headers["Access-Control-Expose-Headers"]
-
-    async def test_ping_options_no_headers(
-        self, api: ApiConfig, client: aiohttp.ClientSession
-    ) -> None:
-        async with client.options(api.ping_url) as resp:
-            assert resp.status == HTTPForbidden.status_code, await resp.text()
-            assert await resp.text() == (
-                "CORS preflight request failed: "
-                "origin header is not specified in the request"
-            )
-
-    async def test_ping_options_unknown_origin(
-        self, api: ApiConfig, client: aiohttp.ClientSession
-    ) -> None:
-        async with client.options(
-            api.ping_url,
-            headers={
-                "Origin": "http://unknown",
-                "Access-Control-Request-Method": "GET",
-            },
-        ) as resp:
-            assert resp.status == HTTPForbidden.status_code, await resp.text()
-            assert await resp.text() == (
-                "CORS preflight request failed: "
-                "origin 'http://unknown' is not allowed"
-            )
-
-    async def test_ping_options(
-        self, api: ApiConfig, client: aiohttp.ClientSession
-    ) -> None:
-        async with client.options(
-            api.ping_url,
-            headers={
-                "Origin": "https://neu.ro",
-                "Access-Control-Request-Method": "GET",
-            },
-        ) as resp:
-            assert resp.status == HTTPOk.status_code, await resp.text()
-            assert resp.headers["Access-Control-Allow-Origin"] == "https://neu.ro"
-            assert resp.headers["Access-Control-Allow-Credentials"] == "true"
-            assert resp.headers["Access-Control-Allow-Methods"] == "GET"
-
     async def test_config_unauthorized(
         self, api: ApiConfig, client: aiohttp.ClientSession
     ) -> None:
@@ -2955,8 +2894,7 @@ class TestJobs:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
             err = (
-                "Invalid URI scheme: "
-                f"\\\\*'{wrong_scheme}\\\\*' != \\\\*'secret\\\\*'"
+                f"Invalid URI scheme: \\\\*'{wrong_scheme}\\\\*' != \\\\*'secret\\\\*'"
             )
             assert re.search(err, msg["error"]), msg
 
@@ -3149,7 +3087,7 @@ class TestJobs:
         url = api.jobs_base_url
         job_submit["container"]["volumes"] = [
             {
-                "src_storage_uri": "storage://wrong-cluster/" f"{regular_user.name}",
+                "src_storage_uri": f"storage://wrong-cluster/{regular_user.name}",
                 "dst_path": "/var/storage",
                 "read_only": False,
             }

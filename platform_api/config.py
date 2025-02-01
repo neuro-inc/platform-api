@@ -219,11 +219,6 @@ class JobPolicyEnforcerConfig:
 
 
 @dataclass(frozen=True)
-class CORSConfig:
-    allowed_origins: Sequence[str] = ()
-
-
-@dataclass(frozen=True)
 class JobsSchedulerConfig:
     # Minimal time that preepmtible job is guaranteed to run before suspended
     run_quantum_sec: float = 1 * 60 * 60  # 1h
@@ -271,7 +266,6 @@ class Config:
     oauth: Optional[OAuthConfig] = None
 
     jobs: JobsConfig = JobsConfig()
-    cors: CORSConfig = CORSConfig()
 
     scheduler: JobsSchedulerConfig = JobsSchedulerConfig()
 
