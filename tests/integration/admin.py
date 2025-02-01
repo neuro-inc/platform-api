@@ -13,7 +13,6 @@ from aiohttp import ClientError, ClientResponseError
 from aiohttp.web_exceptions import HTTPCreated, HTTPNoContent, HTTPNotFound
 from async_timeout import timeout
 from neuro_admin_client import AdminClient
-from neuro_logging import make_request_logging_trace_config
 from yarl import URL
 
 from platform_api.config import AuthConfig
@@ -235,11 +234,7 @@ async def admin_url(admin_server: URL) -> AsyncIterator[URL]:
 async def create_admin_client(
     url: URL, service_token: str, *, do_create_compute_user: bool = False
 ) -> AsyncGenerator[AdminClient, None]:
-    async with AdminClient(
-        base_url=url,
-        service_token=service_token,
-        trace_configs=[make_request_logging_trace_config()],
-    ) as client:
+    async with AdminClient(base_url=url, service_token=service_token) as client:
         if do_create_compute_user:
             await create_compute_user(client)
         yield client

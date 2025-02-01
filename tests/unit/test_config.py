@@ -9,10 +9,8 @@ from yarl import URL
 from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import (
     RegistryConfig,
-    SentryConfig,
     StorageConfig,
     StorageType,
-    ZipkinConfig,
 )
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.job_request import ContainerVolume
@@ -386,9 +384,6 @@ class TestEnvironConfigFactory:
             "https://dev.neu.ro/oauth/show-code"
         )
 
-        assert config.zipkin is None
-        assert config.sentry is None
-
     def test_create_value_error_invalid_port(self) -> None:
         environ = {
             "NP_API_PORT": "port",
@@ -422,9 +417,6 @@ class TestEnvironConfigFactory:
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
-            "NP_ZIPKIN_URL": "https://zipkin:9411",
-            "NP_SENTRY_DSN": "https://sentry",
-            "NP_SENTRY_CLUSTER_NAME": "test",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -456,9 +448,6 @@ class TestEnvironConfigFactory:
         assert config.auth.public_endpoint_url == URL("https://neu.ro/api/v1/users")
         assert config.auth.service_token == "token"
         assert config.auth.service_name == "servicename"
-
-        assert config.zipkin
-        assert config.sentry
 
     def test_alembic_with_escaped_symbol(self) -> None:
         async_dsn = "postgresql+asyncpg://postgres%40@localhost:5432/postgres"
@@ -625,63 +614,6 @@ class TestEnvironConfigFactory:
             node_label_node_pool="node-pool-label",
             image_pull_secret_name="test-secret",
             external_job_runner_image="custom-external-job-runner:latest",
-        )
-
-    def test_create_zipkin_none(self) -> None:
-        result = EnvironConfigFactory({}).create_zipkin("platform-api")
-
-        assert result is None
-
-    def test_create_zipkin_default(self) -> None:
-        env = {"NP_ZIPKIN_URL": "https://zipkin:9411"}
-        result = EnvironConfigFactory(env).create_zipkin("platform-api")
-
-        assert result == ZipkinConfig(
-            url=URL("https://zipkin:9411"), app_name="platform-api"
-        )
-
-    def test_create_zipkin_custom(self) -> None:
-        env = {
-            "NP_ZIPKIN_URL": "https://zipkin:9411",
-            "NP_ZIPKIN_APP_NAME": "api",
-            "NP_ZIPKIN_SAMPLE_RATE": "1",
-        }
-        result = EnvironConfigFactory(env).create_zipkin("platform-api")
-
-        assert result == ZipkinConfig(
-            url=URL("https://zipkin:9411"), app_name="api", sample_rate=1
-        )
-
-    def test_create_sentry_none(self) -> None:
-        result = EnvironConfigFactory({}).create_sentry("platform-api")
-
-        assert result is None
-
-    def test_create_sentry_default(self) -> None:
-        env = {
-            "NP_SENTRY_DSN": "https://sentry",
-            "NP_SENTRY_CLUSTER_NAME": "test",
-        }
-        result = EnvironConfigFactory(env).create_sentry("platform-api")
-
-        assert result == SentryConfig(
-            dsn=URL("https://sentry"), app_name="platform-api", cluster_name="test"
-        )
-
-    def test_create_sentry_custom(self) -> None:
-        env = {
-            "NP_SENTRY_DSN": "https://sentry",
-            "NP_SENTRY_APP_NAME": "api",
-            "NP_SENTRY_CLUSTER_NAME": "test",
-            "NP_SENTRY_SAMPLE_RATE": "1",
-        }
-        result = EnvironConfigFactory(env).create_sentry("platform-api")
-
-        assert result == SentryConfig(
-            dsn=URL("https://sentry"),
-            app_name="api",
-            cluster_name="test",
-            sample_rate=1,
         )
 
 

@@ -133,13 +133,6 @@ class ServerConfig:
 
 
 @dataclass(frozen=True)
-class ZipkinConfig:
-    url: URL
-    app_name: str
-    sample_rate: float = 0
-
-
-@dataclass(frozen=True)
 class AuthConfig:
     server_endpoint_url: Optional[URL]
     public_endpoint_url: Optional[URL]
@@ -242,14 +235,6 @@ class JobsSchedulerConfig:
 
 
 @dataclass(frozen=True)
-class SentryConfig:
-    dsn: URL
-    cluster_name: str
-    app_name: str
-    sample_rate: float = 0
-
-
-@dataclass(frozen=True)
 class Config:
     server: ServerConfig
 
@@ -268,9 +253,6 @@ class Config:
     jobs: JobsConfig = JobsConfig()
 
     scheduler: JobsSchedulerConfig = JobsSchedulerConfig()
-
-    zipkin: Optional[ZipkinConfig] = None
-    sentry: Optional[SentryConfig] = None
 
 
 @dataclass(frozen=True)
@@ -291,9 +273,6 @@ class PollerConfig:
     jobs: JobsConfig = JobsConfig()
 
     scheduler: JobsSchedulerConfig = JobsSchedulerConfig()
-
-    zipkin: Optional[ZipkinConfig] = None
-    sentry: Optional[SentryConfig] = None
 
 
 @dataclass(frozen=True)

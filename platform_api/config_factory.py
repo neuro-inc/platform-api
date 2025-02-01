@@ -22,11 +22,9 @@ from .config import (
     PollerConfig,
     PostgresConfig,
     RegistryConfig,
-    SentryConfig,
     ServerConfig,
     StorageConfig,
     StorageType,
-    ZipkinConfig,
 )
 from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
 
@@ -68,25 +66,6 @@ class EnvironConfigFactory:
             admin_url=admin_url,
             admin_public_url=admin_public_url,
             api_base_url=api_base_url,
-            zipkin=self.create_zipkin("platform-api"),
-            sentry=self.create_sentry("platform-api"),
-        )
-
-    def create_sentry(self, default_app_name: str) -> Optional[SentryConfig]:
-        if "NP_SENTRY_DSN" not in self._environ:
-            return None
-
-        dsn = URL(self._environ["NP_SENTRY_DSN"])
-        app_name = self._environ.get("NP_SENTRY_APP_NAME", default_app_name)
-        cluster_name = self._environ["NP_SENTRY_CLUSTER_NAME"]
-        sample_rate = float(
-            self._environ.get("NP_SENTRY_SAMPLE_RATE", SentryConfig.sample_rate)
-        )
-        return SentryConfig(
-            dsn=dsn,
-            cluster_name=cluster_name,
-            app_name=app_name,
-            sample_rate=sample_rate,
         )
 
     def create_poller(self) -> PollerConfig:
@@ -104,8 +83,6 @@ class EnvironConfigFactory:
             config_url=config_url,
             admin_url=admin_url,
             cluster_name=cluster_name,
-            zipkin=self.create_zipkin("platform-api-poller"),
-            sentry=self.create_sentry("platform-api-poller"),
             registry_config=self.create_registry(),
             storage_configs=self.create_storages(),
             kube_config=self.create_kube(),
@@ -180,17 +157,6 @@ class EnvironConfigFactory:
             service_name=name,
             public_endpoint_url=public_endpoint_url,
         )
-
-    def create_zipkin(self, default_app_name: str) -> Optional[ZipkinConfig]:
-        if "NP_ZIPKIN_URL" not in self._environ:
-            return None
-
-        url = URL(self._environ["NP_ZIPKIN_URL"])
-        app_name = self._environ.get("NP_ZIPKIN_APP_NAME", default_app_name)
-        sample_rate = float(
-            self._environ.get("NP_ZIPKIN_SAMPLE_RATE", ZipkinConfig.sample_rate)
-        )
-        return ZipkinConfig(url=url, app_name=app_name, sample_rate=sample_rate)
 
     def try_create_oauth(self) -> Optional[OAuthConfig]:
         auth_url = self._environ.get("NP_OAUTH_AUTH_URL")
