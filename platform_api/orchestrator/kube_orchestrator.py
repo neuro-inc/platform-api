@@ -480,8 +480,8 @@ class KubeOrchestrator(Orchestrator):
     ) -> PodDescriptor:
         if not pod.resources:
             return pod
-        max_node_cpu = max(p.cpu or 0 for p in pool_types)
-        max_node_memory = max(p.memory or 0 for p in pool_types)
+        max_node_cpu = max(p.available_cpu or 0 for p in pool_types)
+        max_node_memory = max(p.available_memory or 0 for p in pool_types)
         max_node_nvidia_gpu = max(p.nvidia_gpu or 0 for p in pool_types)
         max_node_amd_gpu = max(p.amd_gpu or 0 for p in pool_types)
         max_node_intel_gpu = max(p.intel_gpu or 0 for p in pool_types)

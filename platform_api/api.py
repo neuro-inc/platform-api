@@ -202,21 +202,28 @@ class ConfigApiHandler:
             "min_size": resource_pool_type.min_size,
             "max_size": resource_pool_type.max_size,
             "cpu": resource_pool_type.cpu,
+            "available_cpu": resource_pool_type.available_cpu or resource_pool_type.cpu,
             "memory": resource_pool_type.memory,
+            "available_memory": (
+                resource_pool_type.available_memory or resource_pool_type.memory
+            ),
             "disk_size": resource_pool_type.disk_size,
+            "available_disk_size": (
+                resource_pool_type.available_disk_size or resource_pool_type.disk_size
+            ),
         }
         if resource_pool_type.idle_size:
             payload["idle_size"] = resource_pool_type.idle_size
         if resource_pool_type.nvidia_gpu is not None:
             payload["nvidia_gpu"] = resource_pool_type.nvidia_gpu
-        if resource_pool_type.amd_gpu is not None:
-            payload["amd_gpu"] = resource_pool_type.amd_gpu
-        if resource_pool_type.intel_gpu is not None:
-            payload["intel_gpu"] = resource_pool_type.intel_gpu
         if resource_pool_type.nvidia_gpu_model is not None:
             payload["nvidia_gpu_model"] = resource_pool_type.nvidia_gpu_model
+        if resource_pool_type.amd_gpu is not None:
+            payload["amd_gpu"] = resource_pool_type.amd_gpu
         if resource_pool_type.amd_gpu_model is not None:
             payload["amd_gpu_model"] = resource_pool_type.amd_gpu_model
+        if resource_pool_type.intel_gpu is not None:
+            payload["intel_gpu"] = resource_pool_type.intel_gpu
         if resource_pool_type.intel_gpu_model is not None:
             payload["intel_gpu_model"] = resource_pool_type.intel_gpu_model
         if resource_pool_type.tpu:

@@ -255,11 +255,13 @@ class ContainerResources:
         return bool(self.nvidia_gpu or self.amd_gpu or self.intel_gpu)
 
     def check_fit_into_pool_type(self, pool_type: ResourcePoolType) -> bool:
-        if not pool_type.cpu or not pool_type.memory:
+        available_cpu = pool_type.available_cpu or pool_type.cpu
+        available_memory = pool_type.available_memory or pool_type.memory
+        if not available_cpu or not available_memory:
             return False
         return (
-            self.cpu <= pool_type.cpu
-            and self.memory <= pool_type.memory
+            self.cpu <= available_cpu
+            and self.memory <= available_memory
             and self._check_gpu(pool_type)
             and self._check_tpu(pool_type)
         )

@@ -158,9 +158,14 @@ class ClusterConfigFactory:
             amd_gpu_model=payload.get("amd_gpu_model"),
             intel_gpu_model=payload.get("intel_gpu_model"),
             is_preemptible=payload.get("is_preemptible"),
-            cpu=payload.get("available_cpu") or payload.get("cpu"),
-            memory=payload.get("available_memory") or payload.get("memory"),
+            cpu=payload.get("cpu"),
+            available_cpu=payload.get("available_cpu") or payload.get("cpu"),
+            memory=payload.get("memory"),
+            available_memory=payload.get("available_memory") or payload.get("memory"),
             disk_size=payload.get("disk_size"),
+            available_disk_size=(
+                payload.get("available_disk_size") or payload.get("disk_size")
+            ),
             min_size=payload.get("min_size"),
             max_size=payload.get("max_size"),
             idle_size=payload.get("idle_size"),
