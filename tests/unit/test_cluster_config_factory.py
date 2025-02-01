@@ -129,6 +129,7 @@ def clusters_payload(storage_payload: dict[str, Any]) -> list[dict[str, Any]]:
                         "memory": 53248 * 10**6,
                         "available_memory": 49152 * 10**6,
                         "disk_size": 150 * 10**9,
+                        "available_disk_size": 130 * 10**9,
                         "tpu": {
                             "ipv4_cidr_block": "1.1.1.1/32",
                             "types": ["v2-8", "v3-8"],
@@ -140,9 +141,12 @@ def clusters_payload(storage_payload: dict[str, Any]) -> list[dict[str, Any]]:
                         "is_preemptible": True,
                         "min_size": 1,
                         "max_size": 16,
-                        "cpu": 31.0,
-                        "memory": 204800 * 10**6,
-                        "disk_size_gb": 150 * 10**9,
+                        "cpu": 32.0,
+                        "available_cpu": 31.0,
+                        "memory": 212992 * 10**6,
+                        "available_memory": 204800 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 130 * 10**9,
                         "nvidia_gpu": 4,
                         "amd_gpu": 4,
                         "intel_gpu": 4,
@@ -156,7 +160,8 @@ def clusters_payload(storage_payload: dict[str, Any]) -> list[dict[str, Any]]:
                         "available_cpu": 31.0,
                         "memory": 212992 * 10**6,
                         "available_memory": 204800 * 10**6,
-                        "disk_size_gb": 150 * 10**9,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 130 * 10**9,
                         "nvidia_gpu": 4,
                         "amd_gpu": 4,
                         "intel_gpu": 4,
@@ -170,7 +175,8 @@ def clusters_payload(storage_payload: dict[str, Any]) -> list[dict[str, Any]]:
                         "available_cpu": 7.0,
                         "memory": 53248 * 10**6,
                         "available_memory": 49152 * 10**6,
-                        "disk_size_gb": 150 * 10**9,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 130 * 10**9,
                         "nvidia_gpu": 1,
                         "amd_gpu": 1,
                         "intel_gpu": 1,
@@ -184,7 +190,8 @@ def clusters_payload(storage_payload: dict[str, Any]) -> list[dict[str, Any]]:
                         "available_cpu": 7.0,
                         "memory": 53248 * 10**6,
                         "available_memory": 49152 * 10**6,
-                        "disk_size_gb": 150 * 10**9,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 130 * 10**9,
                         "nvidia_gpu": 1,
                         "amd_gpu": 1,
                         "intel_gpu": 1,
@@ -259,9 +266,12 @@ class TestClusterConfigFactory:
 
         assert len(orchestrator.resource_pool_types) == 5
         assert orchestrator.resource_pool_types[0].name == "n1-highmem-8"
-        assert orchestrator.resource_pool_types[0].cpu == 7.0
-        assert orchestrator.resource_pool_types[0].memory == 49152 * 10**6
+        assert orchestrator.resource_pool_types[0].cpu == 8.0
+        assert orchestrator.resource_pool_types[0].available_cpu == 7.0
+        assert orchestrator.resource_pool_types[0].memory == 53248 * 10**6
+        assert orchestrator.resource_pool_types[0].available_memory == 49152 * 10**6
         assert orchestrator.resource_pool_types[0].disk_size == 150 * 10**9
+        assert orchestrator.resource_pool_types[0].available_disk_size == 130 * 10**9
         assert orchestrator.resource_pool_types[0].nvidia_gpu is None
         assert orchestrator.resource_pool_types[0].tpu == TPUResource(
             ipv4_cidr_block="1.1.1.1/32",
@@ -269,8 +279,10 @@ class TestClusterConfigFactory:
             software_versions=("1.13", "1.14"),
         )
 
-        assert orchestrator.resource_pool_types[1].cpu == 31.0
-        assert orchestrator.resource_pool_types[1].memory == 204800 * 10**6
+        assert orchestrator.resource_pool_types[1].cpu == 32.0
+        assert orchestrator.resource_pool_types[1].available_cpu == 31.0
+        assert orchestrator.resource_pool_types[1].memory == 212992 * 10**6
+        assert orchestrator.resource_pool_types[1].available_memory == 204800 * 10**6
         assert orchestrator.resource_pool_types[1].nvidia_gpu == 4
         assert orchestrator.resource_pool_types[1].amd_gpu == 4
         assert orchestrator.resource_pool_types[1].intel_gpu == 4
