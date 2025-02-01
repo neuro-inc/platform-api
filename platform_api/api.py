@@ -6,7 +6,6 @@ from importlib.metadata import version
 from typing import Any
 
 import aiohttp.web
-import aiohttp_cors
 from aiohttp.web import HTTPUnauthorized
 from aiohttp.web_urldispatcher import AbstractRoute
 from aiohttp_security import check_permission
@@ -39,7 +38,7 @@ from .cluster_config import (
     EnergySchedulePeriod,
     VolumeConfig,
 )
-from .config import Config, CORSConfig
+from .config import Config
 from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
@@ -540,30 +539,12 @@ async def create_app(
 
     app.add_subapp("/api/v1", api_v1_app)
 
-    _setup_cors(app, config.cors)
-
     app.on_response_prepare.append(add_version_to_header)
 
     if config.zipkin:
         setup_zipkin(app, skip_routes=probes_routes)
 
     return app
-
-
-def _setup_cors(app: aiohttp.web.Application, config: CORSConfig) -> None:
-    if not config.allowed_origins:
-        return
-
-    logger.info(f"Setting up CORS with allowed origins: {config.allowed_origins}")
-    default_options = aiohttp_cors.ResourceOptions(
-        allow_credentials=True, expose_headers="*", allow_headers="*"
-    )
-    cors = aiohttp_cors.setup(
-        app, defaults={origin: default_options for origin in config.allowed_origins}
-    )
-    for route in app.router.routes():
-        logger.debug(f"Setting up CORS for {route}")
-        cors.add(route)
 
 
 def setup_tracing(config: Config) -> None:

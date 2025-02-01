@@ -64,7 +64,7 @@ async def create_config_app(payload: list[dict[str, Any]]) -> aiohttp.web.Applic
 
 @asynccontextmanager
 async def create_config_api(
-    cluster_configs_payload: list[dict[str, Any]]
+    cluster_configs_payload: list[dict[str, Any]],
 ) -> AsyncIterator[URL]:
     app = await create_config_app(cluster_configs_payload)
     runner = ApiRunner(app, port=8082)

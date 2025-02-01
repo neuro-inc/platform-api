@@ -12,7 +12,6 @@ from alembic.config import Config as AlembicConfig
 from .config import (
     AuthConfig,
     Config,
-    CORSConfig,
     DatabaseConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
@@ -65,7 +64,6 @@ class EnvironConfigFactory:
             job_policy_enforcer=self.create_job_policy_enforcer(),
             scheduler=self.create_job_scheduler(),
             notifications=self.create_notifications(),
-            cors=self.create_cors(),
             config_url=config_url,
             admin_url=admin_url,
             admin_public_url=admin_public_url,
@@ -226,13 +224,6 @@ class EnvironConfigFactory:
         url = URL(self._environ.get("NP_NOTIFICATIONS_URL", ""))
         token = self._environ.get("NP_NOTIFICATIONS_TOKEN", "")
         return NotificationsConfig(url=url, token=token)
-
-    def create_cors(self) -> CORSConfig:
-        origins: Sequence[str] = CORSConfig.allowed_origins
-        origins_str = self._environ.get("NP_CORS_ORIGINS", "").strip()
-        if origins_str:
-            origins = origins_str.split(",")
-        return CORSConfig(allowed_origins=origins)
 
     def create_postgres(self) -> PostgresConfig:
         try:

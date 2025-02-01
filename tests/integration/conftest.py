@@ -32,7 +32,6 @@ from platform_api.cluster_config import (
 from platform_api.config import (
     AuthConfig,
     Config,
-    CORSConfig,
     DatabaseConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
@@ -495,11 +494,11 @@ class MyKubeClient(KubeClient):
                     cpu = resource_requests.get("cpu")
                     memory = resource_requests.get("memory")
                     print(
-                        f'  {pod["metadata"]["name"]:40s}',
+                        f"  {pod['metadata']['name']:40s}",
                         f"{str(cpu):5s}",
                         f"{str(memory):10s}",
-                        f'{pod["status"]["phase"]:9s}',
-                        f'{str(pod["spec"].get("nodeName"))}',
+                        f"{pod['status']['phase']:9s}",
+                        f"{str(pod['spec'].get('nodeName'))}",
                     )
             pytest.fail("Pod unscheduled")
 
@@ -906,7 +905,6 @@ def config_factory(
             jobs=jobs_config,
             job_policy_enforcer=job_policy_enforcer,
             notifications=notifications_config,
-            cors=CORSConfig(allowed_origins=["https://neu.ro"]),
             config_url=config_url,
             admin_url=admin_url,
             admin_public_url=admin_url,

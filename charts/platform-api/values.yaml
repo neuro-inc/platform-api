@@ -33,9 +33,6 @@ oauth:
   successRedirectUrl: https://staging.neu.ro/oauth/login
   headlessCallbackUrl: https://staging.neu.ro/oauth/show-code
 
-cors:
-  origins: []
-
 postgres:
   dsn: {}
 
