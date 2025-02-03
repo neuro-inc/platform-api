@@ -1223,13 +1223,13 @@ class PodDescriptor:
         if self.node_affinity or self.pod_affinity:
             payload["spec"]["affinity"] = {}
         if self.node_affinity:
-            payload["spec"]["affinity"][
-                "nodeAffinity"
-            ] = self.node_affinity.to_primitive()
+            # fmt: off
+            payload["spec"]["affinity"]["nodeAffinity"] = self.node_affinity.to_primitive()
+            # fmt: on
         if self.pod_affinity:
-            payload["spec"]["affinity"][
-                "podAffinity"
-            ] = self.pod_affinity.to_primitive()
+            # fmt: off
+            payload["spec"]["affinity"]["podAffinity"] = self.pod_affinity.to_primitive()
+            # fmt: on
         if self.priority_class_name:
             payload["spec"]["priorityClassName"] = self.priority_class_name
         return payload
@@ -1857,7 +1857,8 @@ class KubeClient:
         if self._client:
             return
         connector = aiohttp.TCPConnector(
-            limit=self._conn_pool_size, ssl=self._create_ssl_context()  # type: ignore
+            limit=self._conn_pool_size,
+            ssl=self._create_ssl_context(),  # type: ignore
         )
         if self._token_path:
             self._token = Path(self._token_path).read_text()

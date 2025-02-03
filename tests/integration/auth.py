@@ -171,9 +171,10 @@ class UserFactory(Protocol):
     async def __call__(
         self,
         name: str | None = None,
-        clusters: (
-            list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]]
-        ) | None = None,
+        # fmt: off
+        clusters: (list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]])
+        | None = None,
+        # fmt: on
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
         do_create_project: bool = True,
@@ -193,9 +194,10 @@ async def regular_user_factory(
 ) -> UserFactory:
     async def _factory(
         name: str | None = None,
-        clusters: (
-            list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]]
-        ) | None = None,
+        # fmt: off
+        clusters: (list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]])
+        | None = None,
+        # fmt: on
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
         do_create_project: bool = True,
