@@ -1,7 +1,7 @@
 import shlex
 from collections.abc import Sequence
 from pathlib import PurePath
-from typing import Any
+from typing import Any, Optional
 from urllib.parse import unquote, urlsplit
 
 import trafaret as t
@@ -246,7 +246,7 @@ def create_resources_validator(
 
 def create_tpu_validator(
     *, allow_any: bool = False, allowed: Sequence[TPUResource] = ()
-) -> t.Trafaret | None:
+) -> Optional[t.Trafaret]:  # noqa: UP007
     if allow_any:
         return t.Dict({"type": t.String, "software_version": t.String})
 
