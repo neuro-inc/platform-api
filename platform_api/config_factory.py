@@ -3,7 +3,6 @@ import pathlib
 from collections.abc import Sequence
 from decimal import Decimal
 from pathlib import PurePath
-from typing import Optional
 
 from yarl import URL
 
@@ -30,7 +29,7 @@ from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
 
 
 class EnvironConfigFactory:
-    def __init__(self, environ: Optional[dict[str, str]] = None):
+    def __init__(self, environ: dict[str, str] | None = None):
         self._environ = environ or os.environ
 
     def _get_bool(self, name: str, default: bool = False) -> bool:
@@ -39,7 +38,7 @@ class EnvironConfigFactory:
             return default
         return value.lower() in ("true", "1", "yes", "y")
 
-    def _get_url(self, name: str) -> Optional[URL]:
+    def _get_url(self, name: str) -> URL | None:
         value = self._environ[name]
         if value == "-":
             return None
@@ -158,7 +157,7 @@ class EnvironConfigFactory:
             public_endpoint_url=public_endpoint_url,
         )
 
-    def try_create_oauth(self) -> Optional[OAuthConfig]:
+    def try_create_oauth(self) -> OAuthConfig | None:
         auth_url = self._environ.get("NP_OAUTH_AUTH_URL")
         token_url = self._environ.get("NP_OAUTH_TOKEN_URL")
         logout_url = self._environ.get("NP_OAUTH_LOGOUT_URL")

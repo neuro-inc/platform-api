@@ -3,8 +3,8 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Iterable, Set
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Union, cast
+from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from platform_api.orchestrator.job import JobRecord
 from platform_api.orchestrator.job_request import JobStatus
@@ -28,7 +28,7 @@ class JobStorageJobFoundError(JobsStorageException):
         )
 
 
-ClusterOrgProjectNameSet = dict[str, dict[Optional[str], dict[str, Set[str]]]]
+ClusterOrgProjectNameSet = dict[str, dict[str | None, dict[str, Set[str]]]]
 
 
 @dataclass(frozen=True)
@@ -37,21 +37,19 @@ class JobFilter:
     clusters: ClusterOrgProjectNameSet = field(
         default_factory=cast(type[ClusterOrgProjectNameSet], dict)
     )
-    orgs: Set[Optional[str]] = field(
-        default_factory=cast(type[Set[Optional[str]]], set)
-    )
+    orgs: Set[str | None] = field(default_factory=cast(type[Set[str | None]], set))
     owners: Set[str] = field(default_factory=cast(type[Set[str]], set))
     projects: Set[str] = field(default_factory=cast(type[Set[str]], set))
     base_owners: Set[str] = field(default_factory=cast(type[Set[str]], set))
     tags: Set[str] = field(default_factory=cast(type[Set[str]], set))
-    name: Optional[str] = None
+    name: str | None = None
     ids: Set[str] = field(default_factory=cast(type[Set[str]], set))
-    since: datetime = datetime(1, 1, 1, tzinfo=timezone.utc)
-    until: datetime = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc)
-    materialized: Optional[bool] = None
-    being_dropped: Optional[bool] = None
-    logs_removed: Optional[bool] = None
-    org_project_hash: Union[bytes, str, None] = None
+    since: datetime = datetime(1, 1, 1, tzinfo=UTC)
+    until: datetime = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=UTC)
+    materialized: bool | None = None
+    being_dropped: bool | None = None
+    logs_removed: bool | None = None
+    org_project_hash: bytes | str | None = None
 
     def check(self, job: JobRecord) -> bool:
         if self.statuses and job.status not in self.statuses:
@@ -120,25 +118,25 @@ class JobsStorage(ABC):
     @abstractmethod
     def iter_all_jobs(
         self,
-        job_filter: Optional[JobFilter] = None,
+        job_filter: JobFilter | None = None,
         *,
         reverse: bool = False,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> AbstractAsyncContextManager[AsyncIterator[JobRecord]]:
         pass
 
     @abstractmethod
     async def get_jobs_by_ids(
-        self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
+        self, job_ids: Iterable[str], job_filter: JobFilter | None = None
     ) -> list[JobRecord]:
         pass
 
     # Only used in tests
     async def get_all_jobs(
         self,
-        job_filter: Optional[JobFilter] = None,
+        job_filter: JobFilter | None = None,
         reverse: bool = False,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> list[JobRecord]:
         async with self.iter_all_jobs(job_filter, reverse=reverse, limit=limit) as it:
             return [job async for job in it]
@@ -163,6 +161,6 @@ class JobsStorage(ABC):
 
     @abstractmethod
     async def get_jobs_for_drop(
-        self, *, delay: timedelta = timedelta(), limit: Optional[int] = None
+        self, *, delay: timedelta = timedelta(), limit: int | None = None
     ) -> list[JobRecord]:
         pass

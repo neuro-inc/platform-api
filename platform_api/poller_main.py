@@ -2,7 +2,6 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack
-from typing import Optional
 
 import aiohttp.web
 from aiohttp.web_urldispatcher import AbstractRoute
@@ -53,7 +52,7 @@ def create_cluster_factory(
 
 
 async def create_app(
-    config: PollerConfig, cluster: Optional[ClusterConfig] = None
+    config: PollerConfig, cluster: ClusterConfig | None = None
 ) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config

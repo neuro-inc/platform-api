@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from asyncio import timeout
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime
@@ -11,7 +12,6 @@ import aiohttp.web
 import pytest
 from aiohttp import ClientError, ClientResponseError
 from aiohttp.web_exceptions import HTTPCreated, HTTPNoContent, HTTPNotFound
-from async_timeout import timeout
 from neuro_admin_client import AdminClient
 from yarl import URL
 
@@ -233,7 +233,7 @@ async def admin_url(admin_server: URL) -> AsyncIterator[URL]:
 @asynccontextmanager
 async def create_admin_client(
     url: URL, service_token: str, *, do_create_compute_user: bool = False
-) -> AsyncGenerator[AdminClient, None]:
+) -> AsyncGenerator[AdminClient]:
     async with AdminClient(base_url=url, service_token=service_token) as client:
         if do_create_compute_user:
             await create_compute_user(client)
@@ -269,7 +269,7 @@ async def admin_client_factory(
 @pytest.fixture
 async def admin_client(
     admin_url: URL, auth_config: AuthConfig
-) -> AsyncGenerator[AdminClient, None]:
+) -> AsyncGenerator[AdminClient]:
     async with create_admin_client(
         admin_url, auth_config.service_token, do_create_compute_user=True
     ) as client:

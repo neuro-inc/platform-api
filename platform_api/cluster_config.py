@@ -2,7 +2,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, time, tzinfo
 from decimal import Decimal
-from typing import Optional
 from zoneinfo import ZoneInfo
 
 from yarl import URL
@@ -114,7 +113,7 @@ class OrchestratorConfig:
         )
 
     @property
-    def tpu_ipv4_cidr_block(self) -> Optional[str]:
+    def tpu_ipv4_cidr_block(self) -> str | None:
         tpus = self.tpu_resources
         if not tpus:
             return None
@@ -142,7 +141,7 @@ class IngressConfig:
 @dataclass(frozen=True)
 class VolumeConfig:
     name: str
-    path: Optional[str]
+    path: str | None
     credits_per_hour_per_gb: Decimal
 
 
@@ -168,8 +167,8 @@ class ClusterConfig:
     apps: AppsConfig
     timezone: tzinfo = UTC
     energy: EnergyConfig = EnergyConfig()
-    location: Optional[str] = None
-    logo_url: Optional[URL] = None
+    location: str | None = None
+    logo_url: URL | None = None
 
     def with_storage_volumes(self, value: Sequence[VolumeConfig]) -> "ClusterConfig":
         return replace(self, storage=self.storage.with_volumes(value))

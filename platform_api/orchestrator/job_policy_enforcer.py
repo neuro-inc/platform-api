@@ -5,7 +5,7 @@ import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from datetime import timedelta
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 
 from aiohttp import ClientResponseError
 from neuro_admin_client import AdminClient, ClusterUser, OrgCluster
@@ -102,7 +102,7 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
         for (cluster_name, org_name), org_cluster_jobs in self._groupby(
             user_jobs, lambda job: (job.cluster_name, job.org_name)
         ).items():
-            user_cluster: Optional[ClusterUser]
+            user_cluster: ClusterUser | None
             try:
                 user_cluster = next(
                     user_cluster
@@ -126,7 +126,7 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
     async def _enforce_for_org(
         self, cluster_name: str, org_name: str, org_cluster_jobs: Iterable[Job]
     ) -> None:
-        org_cluster: Optional[OrgCluster] = None
+        org_cluster: OrgCluster | None = None
         try:
             org_cluster = await self._admin_client.get_org_cluster(
                 cluster_name, org_name
@@ -201,7 +201,7 @@ class JobPolicyEnforcePoller:
         self._enforcers = enforcers
         self._config = config
 
-        self._task: Optional[asyncio.Task[None]] = None
+        self._task: asyncio.Task[None] | None = None
 
     async def __aenter__(self) -> "JobPolicyEnforcePoller":
         await self.start()

@@ -3,7 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
-from typing import Any, Optional
+from typing import Any
 
 from aiorwlock import RWLock
 
@@ -73,8 +73,8 @@ class ClusterUpdater:
         self._config = config
         self._config_client = config_client
 
-        self._is_active: Optional[asyncio.Future[None]] = None
-        self._task: Optional[asyncio.Future[None]] = None
+        self._is_active: asyncio.Future[None] | None = None
+        self._task: asyncio.Future[None] | None = None
 
     async def start(self) -> None:
         logger.info("Starting Cluster Updater")
@@ -155,7 +155,7 @@ class SingleClusterUpdater:
 class ClusterHolder:
     def __init__(self, *, factory: ClusterFactory) -> None:
         self._factory = factory
-        self._cluster: Optional[Cluster] = None
+        self._cluster: Cluster | None = None
         self._lock = RWLock()
 
     async def __aenter__(self) -> "ClusterHolder":

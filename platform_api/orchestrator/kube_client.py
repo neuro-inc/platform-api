@@ -4,6 +4,7 @@ import enum
 import json
 import logging
 import ssl
+from asyncio import timeout
 from base64 import b64encode
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import suppress
@@ -11,12 +12,11 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
 from pathlib import Path, PurePath
-from typing import Any, ClassVar, NoReturn, Optional, Union
+from typing import Any, ClassVar, NoReturn, Optional
 from urllib.parse import urlsplit
 
 import aiohttp
 import iso8601
-from async_timeout import timeout
 from yarl import URL
 
 from .job_request import (
@@ -74,7 +74,7 @@ class ExpiredException(KubeClientException):
     pass
 
 
-def _raise_status_job_exception(pod: dict[str, Any], job_id: Optional[str]) -> NoReturn:
+def _raise_status_job_exception(pod: dict[str, Any], job_id: str | None) -> NoReturn:
     if pod["code"] == 409:
         raise AlreadyExistsException(pod.get("reason", "job already exists"))
     elif pod["code"] == 404:
@@ -113,7 +113,7 @@ class APIResources(dict[str, APIResource]):
     group_versions: list[str] = [GroupVersion.NETWORKING_V1]
 
     @property
-    def networking_v1(self) -> Optional[APIResource]:
+    def networking_v1(self) -> APIResource | None:
         return self.get(GroupVersion.NETWORKING_V1)
 
     @property
@@ -128,7 +128,7 @@ class Volume(metaclass=abc.ABCMeta):
     def create_mount(
         self,
         container_volume: ContainerVolume,
-        mount_sub_path: Optional[PurePath] = None,
+        mount_sub_path: PurePath | None = None,
     ) -> "VolumeMount":
         raise NotImplementedError("Cannot create mount for abstract Volume type.")
 
@@ -140,12 +140,12 @@ class Volume(metaclass=abc.ABCMeta):
 class PathVolume(Volume):
     # None for cluster storage.
     # /org for organization/additional storage.
-    path: Optional[PurePath]
+    path: PurePath | None
 
     def create_mount(
         self,
         container_volume: ContainerVolume,
-        mount_sub_path: Optional[PurePath] = None,
+        mount_sub_path: PurePath | None = None,
     ) -> "VolumeMount":
         try:
             sub_path = container_volume.src_path.relative_to(
@@ -181,7 +181,7 @@ class SharedMemoryVolume(Volume):
     def create_mount(
         self,
         container_volume: ContainerVolume,
-        mount_sub_path: Optional[PurePath] = None,
+        mount_sub_path: PurePath | None = None,
     ) -> "VolumeMount":
         mount_sub_path = mount_sub_path or PurePath("")
         return VolumeMount(
@@ -296,13 +296,13 @@ class PVCDiskVolume(Volume):
 class Resources:
     cpu: float
     memory: int
-    memory_request: Optional[int] = None
-    nvidia_gpu: Optional[int] = None
-    amd_gpu: Optional[int] = None
-    intel_gpu: Optional[int] = None
-    shm: Optional[bool] = None
-    tpu_version: Optional[str] = None
-    tpu_cores: Optional[int] = None
+    memory_request: int | None = None
+    nvidia_gpu: int | None = None
+    amd_gpu: int | None = None
+    intel_gpu: int | None = None
+    shm: bool | None = None
+    tpu_version: str | None = None
+    tpu_cores: int | None = None
 
     nvidia_gpu_key: ClassVar[str] = "nvidia.com/gpu"
     amd_gpu_key: ClassVar[str] = "amd.com/gpu"
@@ -407,7 +407,7 @@ class Resources:
         return memory_b
 
     @classmethod
-    def _parse_tpu(cls, payload: dict[str, Any]) -> tuple[Optional[str], Optional[int]]:
+    def _parse_tpu(cls, payload: dict[str, Any]) -> tuple[str | None, int | None]:
         for key, value in payload.items():
             if key.startswith(cls.tpu_key_prefix):
                 return key.split("/")[-1], int(value)
@@ -442,18 +442,18 @@ class Resources:
 @dataclass(frozen=True)
 class Service:
     name: str
-    target_port: Optional[int]
-    uid: Optional[str] = None
+    target_port: int | None
+    uid: str | None = None
     selector: dict[str, str] = field(default_factory=dict)
     port: int = 80
     service_type: ServiceType = ServiceType.CLUSTER_IP
-    cluster_ip: Optional[str] = None
+    cluster_ip: str | None = None
     labels: dict[str, str] = field(default_factory=dict)
 
     def _add_port_map(
         self,
-        port: Optional[int],
-        target_port: Optional[int],
+        port: int | None,
+        target_port: int | None,
         port_name: str,
         ports: list[dict[str, Any]],
     ) -> None:
@@ -531,8 +531,8 @@ class Service:
 @dataclass(frozen=True)
 class IngressRule:
     host: str
-    service_name: Optional[str] = None
-    service_port: Optional[int] = None
+    service_name: str | None = None
+    service_port: int | None = None
 
     @classmethod
     def from_v1beta1_primitive(cls, payload: dict[str, Any]) -> "IngressRule":
@@ -601,7 +601,7 @@ class IngressRule:
 @dataclass(frozen=True)
 class Ingress:
     name: str
-    ingress_class: Optional[str] = None
+    ingress_class: str | None = None
     rules: list[IngressRule] = field(default_factory=list)
     annotations: dict[str, str] = field(default_factory=dict)
     labels: dict[str, str] = field(default_factory=dict)
@@ -765,7 +765,7 @@ class SelectorOperator(str, Enum):
     def requires_no_values(self) -> bool:
         return self in (self.DOES_NOT_EXIST, self.EXISTS)
 
-    def apply(self, label_value: Optional[str], values: list[str]) -> bool:
+    def apply(self, label_value: str | None, values: list[str]) -> bool:
         if self == self.IN:
             assert values, "Values are required"
             return label_value is not None and label_value in values
@@ -939,21 +939,21 @@ class PodDescriptor:
     image: str
     command: list[str] = field(default_factory=list)
     args: list[str] = field(default_factory=list)
-    working_dir: Optional[str] = None
+    working_dir: str | None = None
     env: dict[str, str] = field(default_factory=dict)
     # TODO (artem): create base type `EnvVar` and merge `env` and `secret_env`
     secret_env_list: list[SecretEnvVar] = field(default_factory=list)
     volume_mounts: list[VolumeMount] = field(default_factory=list)
     volumes: list[Volume] = field(default_factory=list)
-    resources: Optional[Resources] = None
+    resources: Resources | None = None
     node_selector: dict[str, str] = field(default_factory=dict)
     tolerations: list[Toleration] = field(default_factory=list)
-    node_affinity: Optional[NodeAffinity] = None
-    pod_affinity: Optional[PodAffinity] = None
+    node_affinity: NodeAffinity | None = None
+    pod_affinity: PodAffinity | None = None
     labels: dict[str, str] = field(default_factory=dict)
     annotations: dict[str, str] = field(default_factory=dict)
 
-    port: Optional[int] = None
+    port: int | None = None
     health_check_path: str = "/"
     tty: bool = False
 
@@ -964,10 +964,10 @@ class PodDescriptor:
     # TODO (A Danshyn 12/09/2018): expose readiness probe properly
     readiness_probe: bool = False
 
-    node_name: Optional[str] = None
-    priority_class_name: Optional[str] = None
+    node_name: str | None = None
+    priority_class_name: str | None = None
 
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
 
     tpu_version_annotation_key: ClassVar[str] = "tf-version.cloud-tpus.google.com"
 
@@ -979,12 +979,13 @@ class PodDescriptor:
     def _process_storage_volumes(
         cls,
         container: Container,
-        storage_volume_factory: Optional[
-            Callable[[ContainerVolume], Sequence[PathVolume]]
-        ] = None,
-        storage_volume_mount_factory: Optional[
+        storage_volume_factory: (
+            Callable[[ContainerVolume], Sequence[PathVolume]] | None
+        ) = None,
+        storage_volume_mount_factory: (
             Callable[[ContainerVolume, Sequence[PathVolume]], Sequence[VolumeMount]]
-        ] = None,
+            | None
+        ) = None,
     ) -> tuple[list[PathVolume], list[VolumeMount]]:
         if not storage_volume_factory or not storage_volume_mount_factory:
             return [], []
@@ -1008,7 +1009,7 @@ class PodDescriptor:
     def _process_secret_volumes(
         cls,
         container: Container,
-        secret_volume_factory: Optional[Callable[[str], SecretVolume]] = None,
+        secret_volume_factory: Callable[[str], SecretVolume] | None = None,
     ) -> tuple[list[SecretVolume], list[VolumeMount]]:
         path_to_secret_volumes = container.get_path_to_secret_volumes()
         if not secret_volume_factory:
@@ -1049,22 +1050,23 @@ class PodDescriptor:
     def from_job_request(
         cls,
         job_request: JobRequest,
-        storage_volume_factory: Optional[
-            Callable[[ContainerVolume], Sequence[PathVolume]]
-        ] = None,
-        storage_volume_mount_factory: Optional[
+        storage_volume_factory: (
+            Callable[[ContainerVolume], Sequence[PathVolume]] | None
+        ) = None,
+        storage_volume_mount_factory: (
             Callable[[ContainerVolume, Sequence[PathVolume]], Sequence[VolumeMount]]
-        ] = None,
-        secret_volume_factory: Optional[Callable[[str], SecretVolume]] = None,
-        image_pull_secret_names: Optional[list[str]] = None,
-        node_selector: Optional[dict[str, str]] = None,
-        tolerations: Optional[list[Toleration]] = None,
-        node_affinity: Optional[NodeAffinity] = None,
-        pod_affinity: Optional[PodAffinity] = None,
-        labels: Optional[dict[str, str]] = None,
-        priority_class_name: Optional[str] = None,
+            | None
+        ) = None,
+        secret_volume_factory: Callable[[str], SecretVolume] | None = None,
+        image_pull_secret_names: list[str] | None = None,
+        node_selector: dict[str, str] | None = None,
+        tolerations: list[Toleration] | None = None,
+        node_affinity: NodeAffinity | None = None,
+        pod_affinity: PodAffinity | None = None,
+        labels: dict[str, str] | None = None,
+        priority_class_name: str | None = None,
         restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER,
-        meta_env: Optional[dict[str, str]] = None,
+        meta_env: dict[str, str] | None = None,
         privileged: bool = False,
     ) -> "PodDescriptor":
         container = job_request.container
@@ -1308,7 +1310,7 @@ class PodDescriptor:
 
 
 class ContainerStatus:
-    def __init__(self, payload: Optional[dict[str, Any]] = None) -> None:
+    def __init__(self, payload: dict[str, Any] | None = None) -> None:
         self._payload = payload or {}
 
     @property
@@ -1324,7 +1326,7 @@ class ContainerStatus:
         return bool(self._state) and "terminated" in self._state
 
     @property
-    def reason(self) -> Optional[str]:
+    def reason(self) -> str | None:
         """Return the reason of the current state.
 
         'waiting' reasons:
@@ -1349,13 +1351,13 @@ class ContainerStatus:
         return None
 
     @property
-    def message(self) -> Optional[str]:
+    def message(self) -> str | None:
         for state in self._state.values():
             return state.get("message")
         return None
 
     @property
-    def exit_code(self) -> Optional[int]:
+    def exit_code(self) -> int | None:
         assert self.is_terminated
         return self._state["terminated"]["exitCode"]
 
@@ -1394,7 +1396,7 @@ class PodCondition:
         return self._payload.get("message", "")
 
     @property
-    def status(self) -> Optional[bool]:
+    def status(self) -> bool | None:
         val = self._payload["status"]
         if val == "Unknown":
             return None
@@ -1421,15 +1423,15 @@ class KubernetesEvent:
         return self._payload["involvedObject"]
 
     @property
-    def reason(self) -> Optional[str]:
+    def reason(self) -> str | None:
         return self._payload.get("reason", None)
 
     @property
-    def message(self) -> Optional[str]:
+    def message(self) -> str | None:
         return self._payload.get("message", None)
 
     @property
-    def first_timestamp(self) -> Optional[datetime]:
+    def first_timestamp(self) -> datetime | None:
         event_time = self._payload.get("firstTimestamp") or self._payload.get(
             "deprecatedFirstTimestamp"
         )
@@ -1438,14 +1440,14 @@ class KubernetesEvent:
         return None
 
     @property
-    def event_time(self) -> Optional[datetime]:
+    def event_time(self) -> datetime | None:
         event_time = self._payload.get("eventTime")
         if event_time:
             return iso8601.parse_date(event_time)
         return None
 
     @property
-    def last_timestamp(self) -> Optional[datetime]:
+    def last_timestamp(self) -> datetime | None:
         event_time = self._payload.get("lastTimestamp") or self._payload.get(
             "deprecatedLastTimestamp"
         )
@@ -1516,7 +1518,7 @@ class PodStatus:
         return all(status.is_terminated for status in self._container_statuses)
 
     @property
-    def reason(self) -> Optional[str]:
+    def reason(self) -> str | None:
         """
 
         If kubelet decides to evict the pod, it sets the "Failed" phase along with
@@ -1664,7 +1666,7 @@ class NodeConditionType(enum.Enum):
 @dataclass(frozen=True)
 class NodeCondition:
     type: NodeConditionType
-    status: Optional[bool]
+    status: bool | None
     transition_time: datetime
     message: str = ""
     reason: str = ""
@@ -1680,7 +1682,7 @@ class NodeCondition:
         )
 
     @classmethod
-    def _parse_status(cls, value: str) -> Optional[bool]:
+    def _parse_status(cls, value: str) -> bool | None:
         if value == "Unknown":
             return None
         elif value == "True":
@@ -1798,18 +1800,18 @@ class KubeClient:
         *,
         base_url: str,
         namespace: str,
-        cert_authority_path: Optional[str] = None,
-        cert_authority_data_pem: Optional[str] = None,
+        cert_authority_path: str | None = None,
+        cert_authority_data_pem: str | None = None,
         auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE,
-        auth_cert_path: Optional[str] = None,
-        auth_cert_key_path: Optional[str] = None,
-        token: Optional[str] = None,
-        token_path: Optional[str] = None,
+        auth_cert_path: str | None = None,
+        auth_cert_key_path: str | None = None,
+        token: str | None = None,
+        token_path: str | None = None,
         token_update_interval_s: int = 300,
         conn_timeout_s: int = 300,
         read_timeout_s: int = 100,
         conn_pool_size: int = 100,
-        trace_configs: Optional[list[aiohttp.TraceConfig]] = None,
+        trace_configs: list[aiohttp.TraceConfig] | None = None,
     ) -> None:
         self._base_url = base_url
         self._namespace = namespace
@@ -1831,14 +1833,14 @@ class KubeClient:
         self._conn_pool_size = conn_pool_size
         self._trace_configs = trace_configs
 
-        self._client: Optional[aiohttp.ClientSession] = None
-        self._token_updater_task: Optional[asyncio.Task[None]] = None
+        self._client: aiohttp.ClientSession | None = None
+        self._token_updater_task: asyncio.Task[None] | None = None
 
     @property
     def _is_ssl(self) -> bool:
         return urlsplit(self._base_url).scheme == "https"
 
-    def _create_ssl_context(self) -> Optional[ssl.SSLContext]:
+    def _create_ssl_context(self) -> ssl.SSLContext | None:
         if not self._is_ssl:
             return None
         ssl_context = ssl.create_default_context(
@@ -1855,7 +1857,7 @@ class KubeClient:
         if self._client:
             return
         connector = aiohttp.TCPConnector(
-            limit=self._conn_pool_size, ssl=self._create_ssl_context()
+            limit=self._conn_pool_size, ssl=self._create_ssl_context()  # type: ignore
         )
         if self._token_path:
             self._token = Path(self._token_path).read_text()
@@ -1940,14 +1942,14 @@ class KubeClient:
         return self._all_pods_url if all_namespaces else self._pods_url
 
     def _generate_all_network_policies_url(
-        self, namespace_name: Optional[str] = None
+        self, namespace_name: str | None = None
     ) -> str:
         namespace_name = namespace_name or self._namespace
         namespace_url = f"{self._apis_networking_v1_url}/namespaces/{namespace_name}"
         return f"{namespace_url}/networkpolicies"
 
     def _generate_network_policy_url(
-        self, name: str, namespace_name: Optional[str] = None
+        self, name: str, namespace_name: str | None = None
     ) -> str:
         all_nps_url = self._generate_all_network_policies_url(namespace_name)
         return f"{all_nps_url}/{name}"
@@ -1992,31 +1994,29 @@ class KubeClient:
     def _generate_service_url(self, service_name: str) -> str:
         return f"{self._services_url}/{service_name}"
 
-    def _generate_all_secrets_url(self, namespace_name: Optional[str] = None) -> str:
+    def _generate_all_secrets_url(self, namespace_name: str | None = None) -> str:
         namespace_name = namespace_name or self._namespace
         namespace_url = self._generate_namespace_url(namespace_name)
         return f"{namespace_url}/secrets"
 
-    def _generate_all_pvcs_url(self, namespace_name: Optional[str] = None) -> str:
+    def _generate_all_pvcs_url(self, namespace_name: str | None = None) -> str:
         namespace_name = namespace_name or self._namespace
         namespace_url = self._generate_namespace_url(namespace_name)
         return f"{namespace_url}/persistentvolumeclaims"
 
     def _generate_secret_url(
-        self, secret_name: str, namespace_name: Optional[str] = None
+        self, secret_name: str, namespace_name: str | None = None
     ) -> str:
         all_secrets_url = self._generate_all_secrets_url(namespace_name)
         return f"{all_secrets_url}/{secret_name}"
 
     def _generate_pvc_url(
-        self, pvc_name: str, namespace_name: Optional[str] = None
+        self, pvc_name: str, namespace_name: str | None = None
     ) -> str:
         all_pvcs_url = self._generate_all_pvcs_url(namespace_name)
         return f"{all_pvcs_url}/{pvc_name}"
 
-    def _create_headers(
-        self, headers: Optional[dict[str, Any]] = None
-    ) -> dict[str, Any]:
+    def _create_headers(self, headers: dict[str, Any] | None = None) -> dict[str, Any]:
         headers = dict(headers) if headers else {}
         if self._auth_type == KubeClientAuthType.TOKEN and self._token:
             headers["Authorization"] = "Bearer " + self._token
@@ -2037,9 +2037,9 @@ class KubeClient:
     async def _watch(
         self,
         url: str,
-        params: Optional[dict[str, str]] = None,
-        resource_version: Optional[str] = None,
-    ) -> AsyncIterator[Union[WatchEvent, WatchBookmarkEvent]]:
+        params: dict[str, str] | None = None,
+        resource_version: str | None = None,
+    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
         params = params or {}
         params.update(watch="true", allowWatchBookmarks="true")
         if resource_version:
@@ -2071,7 +2071,7 @@ class KubeClient:
         payload = await self._request(method="GET", url=url, raise_for_status=True)
         return APIResource.from_primitive(payload)
 
-    async def _delete_resource_url(self, url: str, uid: Optional[str] = None) -> None:
+    async def _delete_resource_url(self, url: str, uid: str | None = None) -> None:
         request_payload = None
         if uid:
             request_payload = {"preconditions": {"uid": uid}}
@@ -2083,7 +2083,7 @@ class KubeClient:
             raise NotFoundException(str(e))
 
     async def get_endpoint(
-        self, name: str, namespace: Optional[str] = None
+        self, name: str, namespace: str | None = None
     ) -> dict[str, Any]:
         url = self._generate_endpoint_url(name, namespace or self._namespace)
         return await self._request(method="GET", url=url)
@@ -2092,8 +2092,8 @@ class KubeClient:
         self,
         name: str,
         capacity: dict[str, Any],
-        labels: Optional[dict[str, str]] = None,
-        taints: Optional[Sequence[NodeTaint]] = None,
+        labels: dict[str, str] | None = None,
+        taints: Sequence[NodeTaint] | None = None,
     ) -> None:
         taints = taints or []
         payload = {
@@ -2126,9 +2126,7 @@ class KubeClient:
         payload = await self._request(method="GET", url=self._generate_node_url(name))
         return Node.from_primitive(payload)
 
-    async def get_raw_nodes(
-        self, labels: Optional[dict[str, str]] = None
-    ) -> ListResult:
+    async def get_raw_nodes(self, labels: dict[str, str] | None = None) -> ListResult:
         params: dict[str, str] = {}
         if labels:
             params["labelSelector"] = ",".join(
@@ -2139,9 +2137,9 @@ class KubeClient:
 
     async def watch_nodes(
         self,
-        labels: Optional[dict[str, str]] = None,
-        resource_version: Optional[str] = None,
-    ) -> AsyncIterator[Union[WatchEvent, WatchBookmarkEvent]]:
+        labels: dict[str, str] | None = None,
+        resource_version: str | None = None,
+    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
         params: dict[str, str] = {}
         if labels:
             params["labelSelector"] = ",".join(
@@ -2186,8 +2184,8 @@ class KubeClient:
         return ListResult.from_primitive(payload)
 
     async def watch_pods(
-        self, all_namespaces: bool = False, resource_version: Optional[str] = None
-    ) -> AsyncIterator[Union[WatchEvent, WatchBookmarkEvent]]:
+        self, all_namespaces: bool = False, resource_version: str | None = None
+    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
         url = self._generate_pods_url(all_namespaces)
         async for event in self._watch(url, resource_version=resource_version):
             yield event
@@ -2227,10 +2225,10 @@ class KubeClient:
     async def create_ingress(
         self,
         name: str,
-        ingress_class: Optional[str] = None,
-        rules: Optional[list[IngressRule]] = None,
-        annotations: Optional[dict[str, str]] = None,
-        labels: Optional[dict[str, str]] = None,
+        ingress_class: str | None = None,
+        rules: list[IngressRule] | None = None,
+        annotations: dict[str, str] | None = None,
+        labels: dict[str, str] | None = None,
     ) -> Ingress:
         rules = rules or []
         annotations = annotations or {}
@@ -2257,7 +2255,7 @@ class KubeClient:
         return Ingress.from_primitive(payload)
 
     async def delete_all_ingresses(
-        self, *, labels: Optional[dict[str, str]] = None
+        self, *, labels: dict[str, str] | None = None
     ) -> None:
         params: dict[str, str] = {}
         if labels:
@@ -2340,12 +2338,12 @@ class KubeClient:
         )
         return [Service.from_primitive(item) for item in payload["items"]]
 
-    async def delete_service(self, name: str, uid: Optional[str] = None) -> None:
+    async def delete_service(self, name: str, uid: str | None = None) -> None:
         url = self._generate_service_url(name)
         await self._delete_resource_url(url, uid)
 
     async def delete_all_services(
-        self, *, labels: Optional[dict[str, str]] = None
+        self, *, labels: dict[str, str] | None = None
     ) -> None:
         params: dict[str, str] = {}
         if labels:
@@ -2371,19 +2369,19 @@ class KubeClient:
             await self.create_docker_secret(secret)
 
     async def get_raw_secret(
-        self, secret_name: str, namespace_name: Optional[str] = None
+        self, secret_name: str, namespace_name: str | None = None
     ) -> dict[str, Any]:
         url = self._generate_secret_url(secret_name, namespace_name)
         return await self._request(method="GET", url=url)
 
     async def delete_secret(
-        self, secret_name: str, namespace_name: Optional[str] = None
+        self, secret_name: str, namespace_name: str | None = None
     ) -> None:
         url = self._generate_secret_url(secret_name, namespace_name)
         await self._delete_resource_url(url)
 
     async def get_raw_pvc(
-        self, pvc_name: str, namespace_name: Optional[str] = None
+        self, pvc_name: str, namespace_name: str | None = None
     ) -> dict[str, Any]:
         url = self._generate_pvc_url(pvc_name, namespace_name)
         return await self._request(method="GET", url=url)
@@ -2463,7 +2461,7 @@ class KubeClient:
         name: str,
         pod_labels: dict[str, str],
         org_project_labels: dict[str, str],
-        namespace_name: Optional[str] = None,
+        namespace_name: str | None = None,
     ) -> dict[str, Any]:
         assert pod_labels
         # https://tools.ietf.org/html/rfc1918#section-3
@@ -2512,8 +2510,8 @@ class KubeClient:
         *,
         pod_labels: dict[str, str],
         rules: list[dict[str, Any]],
-        namespace_name: Optional[str] = None,
-        labels: Optional[dict[str, str]] = None,
+        namespace_name: str | None = None,
+        labels: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         assert pod_labels
         assert rules
@@ -2533,13 +2531,13 @@ class KubeClient:
         return await self._request(method="POST", url=url, json=request_payload)
 
     async def get_network_policy(
-        self, name: str, namespace_name: Optional[str] = None
+        self, name: str, namespace_name: str | None = None
     ) -> dict[str, Any]:
         url = self._generate_network_policy_url(name, namespace_name)
         return await self._request(method="GET", url=url)
 
     async def delete_network_policy(
-        self, name: str, namespace_name: Optional[str] = None
+        self, name: str, namespace_name: str | None = None
     ) -> None:
         url = self._generate_network_policy_url(name, namespace_name)
         await self._delete_resource_url(url)
@@ -2547,8 +2545,8 @@ class KubeClient:
     async def delete_all_network_policies(
         self,
         *,
-        namespace_name: Optional[str] = None,
-        labels: Optional[dict[str, str]] = None,
+        namespace_name: str | None = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
         params: dict[str, str] = {}
         if labels:
@@ -2576,7 +2574,7 @@ class Watcher(abc.ABC):
     def __init__(self, kube_client: KubeClient) -> None:
         self._kube_client = kube_client
         self._handlers: list[EventHandler] = []
-        self._watcher_task: Optional[asyncio.Task[None]] = None
+        self._watcher_task: asyncio.Task[None] | None = None
 
     def subscribe(self, handler: EventHandler) -> None:
         if self._watcher_task is not None:
@@ -2634,13 +2632,13 @@ class Watcher(abc.ABC):
     @abc.abstractmethod
     async def watch(
         self, resource_version: str
-    ) -> AsyncIterator[Union[WatchEvent, WatchBookmarkEvent]]:
+    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
         yield  # type: ignore
 
 
 class NodeWatcher(Watcher):
     def __init__(
-        self, kube_client: KubeClient, labels: Optional[dict[str, str]] = None
+        self, kube_client: KubeClient, labels: dict[str, str] | None = None
     ) -> None:
         super().__init__(kube_client)
         self._kwargs = {"labels": labels}
@@ -2650,7 +2648,7 @@ class NodeWatcher(Watcher):
 
     async def watch(
         self, resource_version: str
-    ) -> AsyncIterator[Union[WatchEvent, WatchBookmarkEvent]]:
+    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
         async for event in self._kube_client.watch_nodes(
             resource_version=resource_version, **self._kwargs
         ):
@@ -2667,7 +2665,7 @@ class PodWatcher(Watcher):
 
     async def watch(
         self, resource_version: str
-    ) -> AsyncIterator[Union[WatchEvent, WatchBookmarkEvent]]:
+    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
         async for event in self._kube_client.watch_pods(
             resource_version=resource_version, **self._kwargs
         ):

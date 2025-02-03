@@ -6,7 +6,6 @@ from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import timedelta
-from typing import Optional, Union
 
 from aiohttp import ClientResponseError
 from neuro_admin_client import (
@@ -92,7 +91,7 @@ class NoCreditsError(JobsServiceException):
 class UserClusterConfig:
     config: ClusterConfig
     # None value means the direct access to cluster without any or:
-    orgs: list[Optional[str]]
+    orgs: list[str | None]
 
 
 @dataclass(frozen=True)
@@ -131,7 +130,7 @@ class JobsService:
         self._api_base_url = api_base_url
 
     def _make_job(
-        self, record: JobRecord, cluster_config: Optional[ClusterConfig] = None
+        self, record: JobRecord, cluster_config: ClusterConfig | None = None
     ) -> Job:
         if cluster_config is not None:
             orchestrator_config = cluster_config.orchestrator
@@ -167,7 +166,7 @@ class JobsService:
         if running_count >= org_cluster.quota.total_running_jobs:
             raise RunningJobsQuotaExceededError.create_for_org(org_cluster.org_name)
 
-    async def _raise_for_no_credits(self, org_entry: Union[OrgUser, Org]) -> None:
+    async def _raise_for_no_credits(self, org_entry: OrgUser | Org) -> None:
         if org_entry.balance.is_non_positive:
             if isinstance(org_entry, OrgUser):
                 raise NoCreditsError.create_for_user(org_entry.user_name)
@@ -187,9 +186,9 @@ class JobsService:
         self,
         user: AuthUser,
         cluster_name: str,
-        org_name: Optional[str],
+        org_name: str | None,
         job_request: JobRequest,
-        project_name: Optional[str] = None,
+        project_name: str | None = None,
     ) -> JobRequest:
         if NEURO_PASSED_CONFIG in job_request.container.env:
             raise JobsServiceException(
@@ -222,21 +221,21 @@ class JobsService:
         user: AuthUser,
         cluster_name: str,
         *,
-        org_name: Optional[str] = None,
-        project_name: Optional[str] = None,
-        job_name: Optional[str] = None,
-        preset_name: Optional[str] = None,
+        org_name: str | None = None,
+        project_name: str | None = None,
+        job_name: str | None = None,
+        preset_name: str | None = None,
         tags: Sequence[str] = (),
         scheduler_enabled: bool = False,
         preemptible_node: bool = False,
         pass_config: bool = False,
         wait_for_jobs_quota: bool = False,
         privileged: bool = False,
-        schedule_timeout: Optional[float] = None,
-        max_run_time_minutes: Optional[int] = None,
+        schedule_timeout: float | None = None,
+        max_run_time_minutes: int | None = None,
         restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
         priority: JobPriority = JobPriority.NORMAL,
-        energy_schedule_name: Optional[str] = None,
+        energy_schedule_name: str | None = None,
     ) -> tuple[Job, Status]:
         project_name = project_name or user.name
         base_name = get_base_owner(
@@ -372,8 +371,8 @@ class JobsService:
     async def update_max_run_time(
         self,
         job_id: str,
-        max_run_time_minutes: Optional[int] = None,
-        additional_max_run_time_minutes: Optional[int] = None,
+        max_run_time_minutes: int | None = None,
+        additional_max_run_time_minutes: int | None = None,
     ) -> None:
         assert (
             max_run_time_minutes is not None
@@ -413,7 +412,7 @@ class JobsService:
         record = await self._jobs_storage.get_job(job_id)
         return await self._get_cluster_job(record)
 
-    async def cancel_job(self, job_id: str, reason: Optional[str] = None) -> None:
+    async def cancel_job(self, job_id: str, reason: str | None = None) -> None:
         for _ in range(self._max_deletion_attempts):
             try:
                 async with self._update_job_in_storage(job_id) as record:
@@ -434,10 +433,10 @@ class JobsService:
     @asyncgeneratorcontextmanager
     async def iter_all_jobs(
         self,
-        job_filter: Optional[JobFilter] = None,
+        job_filter: JobFilter | None = None,
         *,
         reverse: bool = False,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> AsyncIterator[Job]:
         async with self._jobs_storage.iter_all_jobs(
             job_filter, reverse=reverse, limit=limit
@@ -446,7 +445,7 @@ class JobsService:
                 yield await self._get_cluster_job(record)
 
     async def get_all_jobs(
-        self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
+        self, job_filter: JobFilter | None = None, *, reverse: bool = False
     ) -> list[Job]:
         async with self.iter_all_jobs(job_filter, reverse=reverse) as it:
             return [job async for job in it]
@@ -461,7 +460,7 @@ class JobsService:
         raise JobError(f"no such job {job_name}")
 
     async def get_jobs_by_ids(
-        self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
+        self, job_ids: Iterable[str], job_filter: JobFilter | None = None
     ) -> list[Job]:
         records = await self._jobs_storage.get_jobs_by_ids(
             job_ids, job_filter=job_filter
@@ -614,7 +613,7 @@ class JobsService:
         return self._jobs_storage
 
     async def get_job_ids_for_drop(
-        self, *, delay: timedelta, limit: Optional[int] = None
+        self, *, delay: timedelta, limit: int | None = None
     ) -> list[str]:
         return [
             record.id
@@ -631,7 +630,7 @@ class JobsService:
             record.being_dropped = True
 
     async def drop_progress(
-        self, job_id: str, *, logs_removed: Optional[bool] = None
+        self, job_id: str, *, logs_removed: bool | None = None
     ) -> None:
         async with self._jobs_storage.try_update_job(job_id) as record:
             if not record.being_dropped:

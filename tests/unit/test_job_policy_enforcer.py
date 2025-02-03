@@ -4,7 +4,6 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import replace
 from decimal import Decimal
-from typing import Optional
 
 import pytest
 from neuro_admin_client import AdminClient, Balance, Quota
@@ -68,7 +67,7 @@ class TestRuntimeLimitEnforcer:
             max_run_time_minutes=5,
             cluster_name="test-cluster",
         )
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         before_2_mins = now - datetime.timedelta(minutes=2)
         await jobs_service.set_job_status(
             job.id, JobStatusItem(JobStatus.RUNNING, transition_time=before_2_mins)
@@ -92,7 +91,7 @@ class TestRuntimeLimitEnforcer:
             cluster_name="test-cluster",
             max_run_time_minutes=1,
         )
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         before_2_mins = now - datetime.timedelta(minutes=2)
         await jobs_service.set_job_status(
             job.id, JobStatusItem(JobStatus.RUNNING, transition_time=before_2_mins)
@@ -224,9 +223,9 @@ class TestHasCreditsEnforcer:
         self,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
-    ) -> Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]]:
+    ) -> Callable[[AuthUser, str | None, int], Awaitable[list[Job]]]:
         async def _make_jobs(
-            user: AuthUser, org_name: Optional[str], count: int
+            user: AuthUser, org_name: str | None, count: int
         ) -> list[Job]:
             return [
                 (
@@ -257,7 +256,7 @@ class TestHasCreditsEnforcer:
     def check_cancelled(
         self, jobs_service: JobsService
     ) -> Callable[[Iterable[Job]], Awaitable[None]]:
-        async def _check(jobs: Iterable[Job], reason: Optional[str] = None) -> None:
+        async def _check(jobs: Iterable[Job], reason: str | None = None) -> None:
             for job in jobs:
                 job = await jobs_service.get_job(job.id)
                 assert job.status == JobStatus.CANCELLED
@@ -269,7 +268,7 @@ class TestHasCreditsEnforcer:
         self,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         user_factory: UserFactory,
         test_cluster: str,
@@ -286,7 +285,7 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         user_factory: UserFactory,
         test_cluster: str,
@@ -306,7 +305,7 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         credits: Decimal,
         mock_admin_client: MockAdminClient,
@@ -327,7 +326,7 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         mock_admin_client: MockAdminClient,
     ) -> None:
@@ -342,7 +341,7 @@ class TestHasCreditsEnforcer:
         self,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         org_factory: OrgFactory,
         user_factory: UserFactory,
@@ -363,7 +362,7 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         org_factory: OrgFactory,
         user_factory: UserFactory,
@@ -389,7 +388,7 @@ class TestHasCreditsEnforcer:
         test_user_with_org: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         credits: Decimal,
         mock_admin_client: MockAdminClient,
@@ -411,7 +410,7 @@ class TestHasCreditsEnforcer:
         test_user_with_org: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         mock_admin_client: MockAdminClient,
     ) -> None:
@@ -522,7 +521,7 @@ class TestRetentionPolicyEnforcer:
             job_request_factory(), test_user, cluster_name="test-cluster"
         )
 
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         await jobs_service.set_job_status(
             job.id,
             JobStatusItem(
@@ -547,7 +546,7 @@ class TestRetentionPolicyEnforcer:
             job_request_factory(), test_user, cluster_name="test-cluster"
         )
 
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         await jobs_service.set_job_status(
             job.id,
             JobStatusItem(

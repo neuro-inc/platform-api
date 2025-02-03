@@ -4,7 +4,7 @@ import logging
 from collections import defaultdict
 from collections.abc import AsyncIterator, Sequence, Set
 from dataclasses import dataclass, replace
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp.web
 import iso8601
@@ -78,7 +78,7 @@ def create_job_request_validator(
     allow_flat_structure: bool = False,
     allowed_tpu_resources: Sequence[TPUResource],
     cluster_name: str,
-    org_name: Optional[str],
+    org_name: str | None,
     storage_scheme: str = "storage",
     allowed_energy_schedule_names: Sequence[str] = (),
 ) -> t.Trafaret:
@@ -248,7 +248,7 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
 def create_job_cluster_org_name_validator(
     *,
     default_cluster_name: str,
-    default_org_name: Optional[str],
+    default_org_name: str | None,
     default_project_name: str,
 ) -> t.Trafaret:
     return t.Dict(
@@ -543,7 +543,7 @@ def infer_permissions_from_container(
     container: Container,
     registry_host: str,
     cluster_name: str,
-    org_name: Optional[str],
+    org_name: str | None,
     *,
     project_name: str,
 ) -> list[Permission]:
@@ -578,8 +578,8 @@ def infer_permissions_from_container(
 def make_job_uri(
     user: AuthUser,
     cluster_name: str,
-    org_name: Optional[str],
-    project_name: Optional[str] = None,
+    org_name: str | None,
+    project_name: str | None = None,
 ) -> URL:
     return (
         URL.build(scheme="job", host=cluster_name)
@@ -644,7 +644,7 @@ class JobsHandler:
         self,
         cluster_config: ClusterConfig,
         allow_flat_structure: bool = False,
-        org_name: Optional[str] = None,
+        org_name: str | None = None,
     ) -> t.Trafaret:
         return create_job_request_validator(
             allow_flat_structure=allow_flat_structure,
@@ -659,7 +659,7 @@ class JobsHandler:
         self,
         user_cluster_configs: Sequence[UserClusterConfig],
         cluster_name: str,
-        org_name: Optional[str],
+        org_name: str | None,
     ) -> ClusterConfig:
         for user_cluster_config in user_cluster_configs:
             if user_cluster_config.config.name == cluster_name:
@@ -844,7 +844,9 @@ class JobsHandler:
 
         try:
             bulk_job_filter = BulkJobFilterBuilder(
-                query_filter=self._job_filter_factory.create_from_query(request.query),
+                query_filter=self._job_filter_factory.create_from_query(
+                    request.query  # type: ignore
+                ),
                 access_tree=tree,
             ).build()
         except JobFilterException:
@@ -853,7 +855,7 @@ class JobsHandler:
             )
 
         reverse = _parse_bool(request.query.get("reverse", "0"))
-        limit: Optional[int] = None
+        limit: int | None = None
         if "limit" in request.query:
             limit = int(request.query["limit"])
             if limit <= 0:
@@ -907,7 +909,7 @@ class JobsHandler:
 
     @asyncgeneratorcontextmanager
     async def _iter_filtered_jobs(
-        self, bulk_job_filter: "BulkJobFilter", reverse: bool, limit: Optional[int]
+        self, bulk_job_filter: "BulkJobFilter", reverse: bool, limit: int | None
     ) -> AsyncIterator[Job]:
         def job_key(job: Job) -> tuple[float, str, Job]:
             return job.status_history.created_at_timestamp, job.id, job
@@ -1152,7 +1154,7 @@ class JobFilterFactory:
             **bool_filters,  # type: ignore
         )
 
-    def _parse_org_name(self, org_name: str) -> Optional[str]:
+    def _parse_org_name(self, org_name: str) -> str | None:
         return (
             None
             if org_name.upper() == NO_ORG
@@ -1162,10 +1164,10 @@ class JobFilterFactory:
 
 @dataclass(frozen=True)
 class BulkJobFilter:
-    bulk_filter: Optional[JobFilter]
+    bulk_filter: JobFilter | None
 
     shared_ids: set[str]
-    shared_ids_filter: Optional[JobFilter]
+    shared_ids_filter: JobFilter | None
 
 
 class BulkJobFilterBuilder:
@@ -1178,11 +1180,11 @@ class BulkJobFilterBuilder:
         self._has_access_to_all: bool = False
         self._has_clusters_shared_all: bool = False
         self._has_orgs_shared_all: bool = False
-        self._clusters_shared_any: dict[
-            str, dict[Optional[str], dict[str, set[str]]]
-        ] = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
+        self._clusters_shared_any: dict[str, dict[str | None, dict[str, set[str]]]] = (
+            defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
+        )
         self._projects_shared_any: set[str] = set()
-        self._orgs_shared_any: set[Optional[str]] = set()
+        self._orgs_shared_any: set[str | None] = set()
         self._shared_ids: set[str] = set()
 
     def build(self) -> BulkJobFilter:
@@ -1265,7 +1267,7 @@ class BulkJobFilterBuilder:
         self,
         tree: ClientAccessSubTreeView,
         cluster_name: str,
-        org_name: Optional[str],
+        org_name: str | None,
     ) -> None:
         for project, sub_tree in tree.children.items():
             if not sub_tree.can_list():
@@ -1292,7 +1294,7 @@ class BulkJobFilterBuilder:
         self,
         tree: ClientAccessSubTreeView,
         cluster_name: str,
-        org_name: Optional[str],
+        org_name: str | None,
         project_name: str,
     ) -> None:
         for name, sub_tree in tree.children.items():
@@ -1315,7 +1317,7 @@ class BulkJobFilterBuilder:
                     name
                 )
 
-    def _create_bulk_filter(self) -> Optional[JobFilter]:
+    def _create_bulk_filter(self) -> JobFilter | None:
         if not (
             self._has_access_to_all
             or self._clusters_shared_any
@@ -1362,7 +1364,7 @@ class BulkJobFilterBuilder:
         return bulk_filter
 
     def _optimize_clusters_projects(
-        self, orgs: Set[Optional[str]], projects: Set[str], name: Optional[str]
+        self, orgs: Set[str | None], projects: Set[str], name: str | None
     ) -> None:
         if orgs or projects or name:
             names = {name}

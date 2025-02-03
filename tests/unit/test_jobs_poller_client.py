@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp.web
 import pytest
@@ -42,10 +42,10 @@ async def create_local_app_server(
 
 class JobsHttpApi:
     def __init__(self) -> None:
-        self.address: Optional[ApiAddress] = None
-        self.last_url_tail: Optional[str] = None
-        self.last_query: Optional[Any] = None
-        self.last_payload: Optional[Mapping[str, Any]] = None
+        self.address: ApiAddress | None = None
+        self.last_url_tail: str | None = None
+        self.last_query: Any | None = None
+        self.last_payload: Mapping[str, Any] | None = None
         self.to_return: Any = []
 
 

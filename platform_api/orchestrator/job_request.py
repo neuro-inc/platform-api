@@ -5,7 +5,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
-from typing import Any, Optional, Union
+from typing import Any
 
 from yarl import URL
 
@@ -82,7 +82,7 @@ class Disk:
         )
 
     @classmethod
-    def create(cls, disk_uri: Union[str, URL]) -> "Disk":
+    def create(cls, disk_uri: str | URL) -> "Disk":
         # Note: format of `disk_uri` is enforced by validators
         uri = URL(disk_uri)
         cluster_name = uri.host
@@ -143,7 +143,7 @@ class Secret:
         )
 
     @classmethod
-    def create(cls, secret_uri: Union[str, URL]) -> "Secret":
+    def create(cls, secret_uri: str | URL) -> "Secret":
         # Note: format of `secret_uri` is enforced by validators
         uri = URL(secret_uri)
         cluster_name = uri.host
@@ -194,14 +194,14 @@ class ContainerTPUResource:
 class ContainerResources:
     cpu: float
     memory: int
-    nvidia_gpu: Optional[int] = None
-    amd_gpu: Optional[int] = None
-    intel_gpu: Optional[int] = None
-    nvidia_gpu_model: Optional[str] = None
-    amd_gpu_model: Optional[str] = None
-    intel_gpu_model: Optional[str] = None
-    shm: Optional[bool] = None
-    tpu: Optional[ContainerTPUResource] = None
+    nvidia_gpu: int | None = None
+    amd_gpu: int | None = None
+    intel_gpu: int | None = None
+    nvidia_gpu_model: str | None = None
+    amd_gpu_model: str | None = None
+    intel_gpu_model: str | None = None
+    shm: bool | None = None
+    tpu: ContainerTPUResource | None = None
 
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "ContainerResources":
@@ -274,7 +274,7 @@ class ContainerResources:
             and self._check_tpu_preset(preset)
         )
 
-    def _check_gpu(self, entry: Union[ResourcePoolType, Preset]) -> bool:
+    def _check_gpu(self, entry: ResourcePoolType | Preset) -> bool:
         if not self.require_gpu:
             # container does not need GPU.
             # we are good regardless of the presence of GPU in the pool type.
@@ -326,9 +326,9 @@ class ContainerResources:
     @staticmethod
     def _gpu_match(
         resources_gpu: int,
-        resources_gpu_model: Optional[str],
-        entry_gpu: Optional[int],
-        entry_gpu_model: Optional[str],
+        resources_gpu_model: str | None,
+        entry_gpu: int | None,
+        entry_gpu_model: str | None,
     ) -> bool:
         """
         Ensures that the resource GPU requirement matches
@@ -385,16 +385,16 @@ class ContainerHTTPServer:
 class Container:
     image: str
     resources: ContainerResources
-    entrypoint: Optional[str] = None
-    command: Optional[str] = None
+    entrypoint: str | None = None
+    command: str | None = None
     env: dict[str, str] = field(default_factory=dict)
     volumes: list[ContainerVolume] = field(default_factory=list)
     secret_env: dict[str, Secret] = field(default_factory=dict)
     secret_volumes: list[SecretContainerVolume] = field(default_factory=list)
     disk_volumes: list[DiskContainerVolume] = field(default_factory=list)
-    http_server: Optional[ContainerHTTPServer] = None
+    http_server: ContainerHTTPServer | None = None
     tty: bool = False
-    working_dir: Optional[str] = None
+    working_dir: str | None = None
 
     def belongs_to_registry(self, registry_host: str) -> bool:
         prefix = f"{registry_host}/"
@@ -431,7 +431,7 @@ class Container:
         return list(set(env_uris + vol_uris))
 
     @property
-    def port(self) -> Optional[int]:
+    def port(self) -> int | None:
         if self.http_server:
             return self.http_server.port
         return None
@@ -548,11 +548,11 @@ class Container:
 class JobRequest:
     job_id: str
     container: Container
-    description: Optional[str] = None
+    description: str | None = None
 
     @classmethod
     def create(
-        cls, container: Container, description: Optional[str] = None
+        cls, container: Container, description: str | None = None
     ) -> "JobRequest":
         return cls(
             job_id=f"job-{uuid.uuid4()}", description=description, container=container
