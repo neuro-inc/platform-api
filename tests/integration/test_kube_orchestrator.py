@@ -749,11 +749,6 @@ class TestKubeOrchestrator:
         await kube_client.delete_ingress(ingress.name)
 
     async def test_ingress_create_delete(self, kube_client: KubeClient) -> None:
-        print("Available API Resources:", kube_client._api_resources)
-        print(
-            "Has networking v1 ingress:",
-            kube_client._api_resources.has_networking_v1_ingress,
-        )
         name = str(uuid.uuid4())
         rules = [
             IngressRule(host=""),

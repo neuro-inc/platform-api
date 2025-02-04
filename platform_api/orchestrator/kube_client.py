@@ -110,7 +110,7 @@ class APIResource:
 
 
 class APIResources(dict[str, APIResource]):
-    group_versions: list[str] = [GroupVersion.NETWORKING_V1]
+    group_versions: list[str] = [GroupVersion.NETWORKING_V1.value]
 
     @property
     def networking_v1(self) -> APIResource | None:
