@@ -25,7 +25,7 @@ test_unit:
 	pytest -vv --cov platform_api --cov-config=setup.cfg --cov-report xml:.coverage-unit.xml tests/unit
 
 test_integration:
-	pytest -vv --maxfail=3 --durations=20 --cov platform_api --cov-config=setup.cfg --cov-report xml:.coverage-integration.xml tests/integration
+	pytest -x -s --log-cli-level=DEBUG -vv --maxfail=3 --durations=20 --cov platform_api --cov-config=setup.cfg --cov-report xml:.coverage-integration.xml tests/integration
 
 docker_build:
 	rm -rf build dist
