@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from asyncio import timeout
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -11,7 +12,6 @@ import aiodocker
 import pytest
 from aiohttp import ClientError, ClientResponseError
 from aiohttp.hdrs import AUTHORIZATION
-from async_timeout import timeout
 from jose import jwt
 from neuro_admin_client import (
     AdminClient,
@@ -114,7 +114,7 @@ async def auth_config(auth_server: AuthConfig) -> AsyncIterator[AuthConfig]:
 
 
 @asynccontextmanager
-async def create_auth_client(config: AuthConfig) -> AsyncGenerator[AuthClient, None]:
+async def create_auth_client(config: AuthConfig) -> AsyncGenerator[AuthClient]:
     async with AuthClient(
         url=config.server_endpoint_url, token=config.service_token
     ) as client:
@@ -122,7 +122,7 @@ async def create_auth_client(config: AuthConfig) -> AsyncGenerator[AuthClient, N
 
 
 @pytest.fixture
-async def auth_client(auth_server: AuthConfig) -> AsyncGenerator[AuthClient, None]:
+async def auth_client(auth_server: AuthConfig) -> AsyncGenerator[AuthClient]:
     async with create_auth_client(auth_server) as client:
         yield client
 
@@ -171,9 +171,10 @@ class UserFactory(Protocol):
     async def __call__(
         self,
         name: str | None = None,
-        clusters: (
-            list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]]
-        ) | None = None,
+        # fmt: off
+        clusters: (list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]])
+        | None = None,
+        # fmt: on
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
         do_create_project: bool = True,
@@ -193,9 +194,10 @@ async def regular_user_factory(
 ) -> UserFactory:
     async def _factory(
         name: str | None = None,
-        clusters: (
-            list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]]
-        ) | None = None,
+        # fmt: off
+        clusters: (list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]])
+        | None = None,
+        # fmt: on
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
         do_create_project: bool = True,

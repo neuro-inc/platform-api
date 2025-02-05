@@ -2,20 +2,20 @@ import asyncio
 import base64
 import json
 import uuid
+from asyncio import timeout
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path, PurePath
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlsplit
 
 import aiohttp
 import aiohttp.pytest_plugin
 import aiohttp.web
 import pytest
-from async_timeout import timeout
 from yarl import URL
 
 from platform_api.cluster_config import (
@@ -105,7 +105,7 @@ async def kube_config_cluster_payload(kube_config_payload: dict[str, Any]) -> An
 @pytest.fixture(scope="session")
 def cert_authority_data_pem(
     kube_config_cluster_payload: dict[str, Any],
-) -> Optional[str]:
+) -> str | None:
     if "certificate-authority" in kube_config_cluster_payload:
         ca_path = kube_config_cluster_payload["certificate-authority"]
         if ca_path:
@@ -300,7 +300,7 @@ async def orchestrator_config(
 def kube_config_factory(
     kube_config_cluster_payload: dict[str, Any],
     kube_config_user_payload: dict[str, Any],
-    cert_authority_data_pem: Optional[str],
+    cert_authority_data_pem: str | None,
 ) -> Iterator[Callable[..., KubeConfig]]:
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
@@ -399,8 +399,8 @@ class MyKubeClient(KubeClient):
         self,
         pvc_name: str,
         namespace: str,
-        storage: Optional[int] = None,
-        labels: Optional[Mapping[str, str]] = None,
+        storage: int | None = None,
+        labels: Mapping[str, str] | None = None,
     ) -> None:
         url = self._generate_all_pvcs_url(namespace)
         storage = storage or 1024 * 1024
@@ -429,7 +429,7 @@ class MyKubeClient(KubeClient):
         self._check_status_payload(payload)
 
     async def update_or_create_secret(
-        self, secret_name: str, namespace: str, data: Optional[dict[str, str]] = None
+        self, secret_name: str, namespace: str, data: dict[str, str] | None = None
     ) -> None:
         url = self._generate_all_secrets_url(namespace)
         data = data or {}
@@ -450,7 +450,7 @@ class MyKubeClient(KubeClient):
         timeout_s: float = 5.0,
         interval_s: float = 1.0,
     ) -> None:
-        raw_pod: Optional[dict[str, Any]] = None
+        raw_pod: dict[str, Any] | None = None
         try:
             async with timeout(timeout_s):
                 while True:
@@ -475,7 +475,7 @@ class MyKubeClient(KubeClient):
                     if pod_has_node and pod_is_scheduled:
                         return
                     await asyncio.sleep(interval_s)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             if raw_pod:
                 print("Node:", raw_pod["spec"].get("nodeName"))
                 print("Phase:", raw_pod["status"]["phase"])
@@ -513,7 +513,7 @@ class MyKubeClient(KubeClient):
                     except JobNotFoundException:
                         return
                     await asyncio.sleep(interval_s)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pytest.fail("Pod still exists")
 
     async def create_triggered_scaleup_event(self, pod_id: str) -> None:
@@ -626,7 +626,7 @@ class MyKubeClient(KubeClient):
 
 @pytest.fixture(scope="session")
 async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeClient]:
-    def _f(custom_kube_config: Optional[KubeConfig] = None) -> MyKubeClient:
+    def _f(custom_kube_config: KubeConfig | None = None) -> MyKubeClient:
         config = custom_kube_config or kube_config
         kube_client = MyKubeClient(
             base_url=config.endpoint_url,
@@ -660,7 +660,7 @@ async def nfs_volume_server(kube_client: MyKubeClient) -> Any:
 
 
 @pytest.fixture(scope="session")
-def storage_config_nfs(nfs_volume_server: Optional[str]) -> StorageConfig:
+def storage_config_nfs(nfs_volume_server: str | None) -> StorageConfig:
     assert nfs_volume_server
     return StorageConfig.create_nfs(
         nfs_server=nfs_volume_server, nfs_export_path=PurePath("/var/storage")
@@ -842,10 +842,10 @@ async def pod_factory(
 
     async def _create(
         image: str,
-        command: Optional[list[str]] = None,
+        command: list[str] | None = None,
         cpu: float = 0.1,
         memory: int = 128 * 10**6,
-        labels: Optional[dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
         wait: bool = True,
         wait_timeout_s: float = 60,
         idle: bool = False,
@@ -973,7 +973,7 @@ def config(config_factory: Callable[..., Config]) -> Config:
 
 @pytest.fixture
 def config_with_oauth(
-    config_factory: Callable[..., Config], oauth_config_dev: Optional[OAuthConfig]
+    config_factory: Callable[..., Config], oauth_config_dev: OAuthConfig | None
 ) -> Config:
     return config_factory(oauth=oauth_config_dev)
 
@@ -1007,7 +1007,7 @@ class ApiRunner:
 
         self._api_address_future: asyncio.Future[ApiAddress] = asyncio.Future()
         self._cleanup_future: asyncio.Future[None] = asyncio.Future()
-        self._task: Optional[asyncio.Task[None]] = None
+        self._task: asyncio.Task[None] | None = None
 
     async def _run(self) -> None:
         async with create_local_app_server(self._app, port=self._port) as api_address:

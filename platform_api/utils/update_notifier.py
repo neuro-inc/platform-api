@@ -123,8 +123,8 @@ class ResubscribingNotifier(Notifier):
         await self._inner_notifier.notify()
 
     class _Subscription(Subscription):
-        _inner_manager: Optional[AbstractAsyncContextManager[Subscription]] = None
-        _subscription: Optional[Subscription] = None
+        _inner_manager: AbstractAsyncContextManager[Subscription] | None = None
+        _subscription: Subscription | None = None
         _task: Optional["asyncio.Task[None]"] = None
 
         def __init__(

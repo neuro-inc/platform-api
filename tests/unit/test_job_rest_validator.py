@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 import trafaret as t
@@ -250,7 +250,7 @@ class TestJobResponseValidator:
                     "status": "pending",
                     "reason": None,
                     "description": None,
-                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                    "transition_time": datetime.now(UTC).isoformat(),
                 }
             ],
             "name": "test-job-name",
@@ -297,7 +297,7 @@ class TestJobResponseValidator:
                     "status": "pending",
                     "reason": None,
                     "description": None,
-                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                    "transition_time": datetime.now(UTC).isoformat(),
                 }
             ],
             "name": "test-job-name",
@@ -344,7 +344,7 @@ class TestJobResponseValidator:
                     "status": "pending",
                     "reason": None,
                     "description": None,
-                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                    "transition_time": datetime.now(UTC).isoformat(),
                 }
             ],
             "history": {
@@ -391,7 +391,7 @@ class TestJobResponseValidator:
                     "status": "pending",
                     "reason": None,
                     "description": None,
-                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                    "transition_time": datetime.now(UTC).isoformat(),
                 }
             ],
             "name": "test-job-name",
@@ -440,7 +440,7 @@ class TestJobResponseValidator:
                     "status": "pending",
                     "reason": None,
                     "description": None,
-                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                    "transition_time": datetime.now(UTC).isoformat(),
                 }
             ],
             "history": {
@@ -486,7 +486,7 @@ class TestJobResponseValidator:
                     "status": "pending",
                     "reason": None,
                     "description": None,
-                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                    "transition_time": datetime.now(UTC).isoformat(),
                 }
             ],
             "history": {
@@ -530,7 +530,7 @@ class TestJobResponseValidator:
                     "status": "pending",
                     "reason": None,
                     "description": None,
-                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                    "transition_time": datetime.now(UTC).isoformat(),
                 }
             ],
             "name": "test-job-name",
@@ -578,7 +578,7 @@ class TestJobResponseValidator:
                     "status": "pending",
                     "reason": None,
                     "description": None,
-                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                    "transition_time": datetime.now(UTC).isoformat(),
                 }
             ],
             "name": "test-job-name",
@@ -623,7 +623,7 @@ class TestJobResponseValidator:
                     "status": "pending",
                     "reason": None,
                     "description": None,
-                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                    "transition_time": datetime.now(UTC).isoformat(),
                 }
             ],
             "name": "test-job-name",
@@ -667,7 +667,7 @@ class TestJobResponseValidator:
                     "status": "pending",
                     "reason": None,
                     "description": None,
-                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                    "transition_time": datetime.now(UTC).isoformat(),
                 }
             ],
             "name": "test-job-name",
@@ -709,7 +709,7 @@ class TestJobResponseValidator:
                     "status": "pending",
                     "reason": None,
                     "description": None,
-                    "transition_time": datetime.now(timezone.utc).isoformat(),
+                    "transition_time": datetime.now(UTC).isoformat(),
                 }
             ],
             "name": "test-job-name",

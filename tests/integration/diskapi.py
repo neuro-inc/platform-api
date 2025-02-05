@@ -1,16 +1,16 @@
 import asyncio
 import subprocess
 import sys
+from asyncio import timeout
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from typing import Any, Optional
+from typing import Any
 
 import aiodocker
 import aiodocker.containers
 import aiohttp
 import pytest
 from aiohttp import ClientError
-from async_timeout import timeout
 from yarl import URL
 
 from platform_api.config import AuthConfig
@@ -162,7 +162,7 @@ class DiskAPIClient:
             txt = await resp.text()
             assert txt == "Pong"
 
-    async def create_disk(self, storage: int, org_name: Optional[str] = None) -> Disk:
+    async def create_disk(self, storage: int, org_name: str | None = None) -> Disk:
         url = self._base_url / "disk"
         payload = {"storage": storage, "org_name": org_name}
         async with self._client.post(url, json=payload) as resp:

@@ -1,8 +1,8 @@
 from collections.abc import AsyncIterator, Iterable, Mapping, Set
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, Union
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
@@ -62,7 +62,7 @@ class JobTables:
 
 
 class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
-    def __init__(self, engine: AsyncEngine, tables: Optional[JobTables] = None) -> None:
+    def __init__(self, engine: AsyncEngine, tables: JobTables | None = None) -> None:
         super().__init__(engine)
         self._tables = tables or JobTables.create()
 
@@ -111,7 +111,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         return f"id={values['id']}"
 
     async def _select_row(
-        self, job_id: str, conn: Optional[AsyncConnection] = None
+        self, job_id: str, conn: AsyncConnection | None = None
     ) -> Row:
         query = self._tables.jobs.select(self._tables.jobs.c.id == job_id)
         record = await self._fetchrow(query, conn=conn)
@@ -120,7 +120,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         return record
 
     async def _insert_values(
-        self, values: Mapping[str, Any], conn: Optional[AsyncConnection] = None
+        self, values: Mapping[str, Any], conn: AsyncConnection | None = None
     ) -> None:
         query = self._tables.jobs.insert().values(values)
         try:
@@ -240,10 +240,10 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
     @asyncgeneratorcontextmanager
     async def iter_all_jobs(
         self,
-        job_filter: Optional[JobFilter] = None,
+        job_filter: JobFilter | None = None,
         *,
         reverse: bool = False,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> AsyncIterator[JobRecord]:
         query = self._tables.jobs.select()
         if job_filter is not None:
@@ -259,7 +259,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
                 yield self._record_to_job(record)
 
     async def get_jobs_by_ids(
-        self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
+        self, job_ids: Iterable[str], job_filter: JobFilter | None = None
     ) -> list[JobRecord]:
         if job_filter is None:
             job_filter = JobFilter()
@@ -295,13 +295,13 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         self,
         *,
         delay: timedelta = timedelta(),
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> list[JobRecord]:
         job_filter = JobFilter(
             statuses={JobStatus(item) for item in JobStatus.finished_values()},
             materialized=False,
         )
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         query = (
             self._tables.jobs.select()
             .where(self._clause_for_filter(job_filter))
@@ -386,7 +386,7 @@ class JobFilterClauseBuilder:
     def filter_projects(self, projects: Set[str]) -> None:
         self._clauses.append(self._tables.jobs.c.project_name.in_(projects))
 
-    def filter_orgs(self, orgs: Set[Optional[str]]) -> None:
+    def filter_orgs(self, orgs: Set[str | None]) -> None:
         not_null_orgs = [org for org in orgs if org is not None]
         or_clauses = []
         if not_null_orgs:
@@ -426,7 +426,7 @@ class JobFilterClauseBuilder:
     def filter_logs_removed(self, logs_removed: bool) -> None:
         self._filter_bool_from_payload("logs_removed", logs_removed)
 
-    def filter_org_project_hash(self, org_project_hash: Union[bytes, str]) -> None:
+    def filter_org_project_hash(self, org_project_hash: bytes | str) -> None:
         if isinstance(org_project_hash, str):
             org_project_hash = bytes.fromhex(org_project_hash)
         self._clauses.append(self._tables.jobs.c.org_project_hash == org_project_hash)

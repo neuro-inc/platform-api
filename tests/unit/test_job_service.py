@@ -3,7 +3,7 @@ import base64
 import json
 from collections.abc import AsyncIterator, Callable
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from unittest import mock
@@ -63,7 +63,7 @@ class MockJobsScheduler(JobsScheduler):
     def __init__(
         self, *, admin_client: AdminClient, cluster_holder: ClusterHolder
     ) -> None:
-        self._now = datetime.now(timezone.utc)
+        self._now = datetime.now(UTC)
         super().__init__(
             config=JobsSchedulerConfig(
                 is_waiting_min_time_sec=1,
@@ -2998,9 +2998,7 @@ class TestScheduledJobsService:
         test_cluster: str,
     ) -> None:
         # Sunday
-        test_scheduler.set_current_datetime(
-            datetime(2023, 1, 1, 0, 0, tzinfo=timezone.utc)
-        )
+        test_scheduler.set_current_datetime(datetime(2023, 1, 1, 0, 0, tzinfo=UTC))
 
         job1, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
@@ -3020,9 +3018,7 @@ class TestScheduledJobsService:
         assert not job1.materialized
 
         # Monday 00:00
-        test_scheduler.set_current_datetime(
-            datetime(2023, 1, 2, 0, 0, tzinfo=timezone.utc)
-        )
+        test_scheduler.set_current_datetime(datetime(2023, 1, 2, 0, 0, tzinfo=UTC))
 
         await jobs_poller_service.update_jobs_statuses()
 
@@ -3039,9 +3035,7 @@ class TestScheduledJobsService:
         assert job1.status == JobStatus.RUNNING
 
         # Monday 06:00
-        test_scheduler.set_current_datetime(
-            datetime(2023, 1, 2, 6, 0, tzinfo=timezone.utc)
-        )
+        test_scheduler.set_current_datetime(datetime(2023, 1, 2, 6, 0, tzinfo=UTC))
 
         await jobs_poller_service.update_jobs_statuses()
 
@@ -3051,9 +3045,7 @@ class TestScheduledJobsService:
         assert not job1.materialized
 
         # Next Monday 00:00
-        test_scheduler.set_current_datetime(
-            datetime(2023, 1, 9, 0, 0, tzinfo=timezone.utc)
-        )
+        test_scheduler.set_current_datetime(datetime(2023, 1, 9, 0, 0, tzinfo=UTC))
 
         await jobs_poller_service.update_jobs_statuses()
 

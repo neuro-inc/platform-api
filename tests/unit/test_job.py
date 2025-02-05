@@ -1,10 +1,10 @@
 import dataclasses
 import hashlib
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import PurePath
-from typing import Any, Optional
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -498,7 +498,7 @@ def job_request_payload() -> dict[str, Any]:
 
 @pytest.fixture
 def job_payload(job_request_payload: Any) -> dict[str, Any]:
-    finished_at_str = datetime.now(timezone.utc).isoformat()
+    finished_at_str = datetime.now(UTC).isoformat()
     return {
         "id": "testjob",
         "request": job_request_payload,
@@ -590,7 +590,7 @@ class TestJob:
 
     @classmethod
     def _create_http_host_named_suffix(
-        cls, org_name: Optional[str], project_name: str
+        cls, org_name: str | None, project_name: str
     ) -> str:
         hasher = hashlib.new("sha256")
         org_name = org_name or NO_ORG
@@ -1061,7 +1061,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
@@ -1089,7 +1089,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
@@ -1105,7 +1105,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.preset_name == "cpu-small"
@@ -1121,7 +1121,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
@@ -1130,7 +1130,7 @@ class TestJob:
     def test_from_primitive_with_statuses(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
-        finished_at_str = datetime.now(timezone.utc).isoformat()
+        finished_at_str = datetime.now(UTC).isoformat()
         payload = {
             "id": "testjob",
             "request": job_request_payload,
@@ -1161,7 +1161,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
@@ -1187,7 +1187,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command is None
@@ -1205,7 +1205,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command == "arg1 arg2 arg3"
@@ -1223,7 +1223,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command is None
@@ -1241,7 +1241,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command == "arg1 arg2 arg3"
@@ -1257,7 +1257,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
             "max_run_time_minutes": 100,
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
@@ -1273,7 +1273,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
             "max_run_time_minutes": None,
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
@@ -1289,7 +1289,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
             "max_run_time_minutes": None,
             "org_name": "some-random-213-tenant-id",
         }
@@ -1305,7 +1305,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
             "priority": 1,
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
@@ -1321,7 +1321,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
             "max_run_time_minutes": None,
             "org_project_hash": "0123456789",
         }
@@ -1374,7 +1374,7 @@ class TestJob:
     def test_to_and_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
-        finished_at_str = datetime.now(timezone.utc).isoformat()
+        finished_at_str = datetime.now(UTC).isoformat()
         current_status_item = {
             "status": "failed",
             "transition_time": finished_at_str,
@@ -1653,7 +1653,7 @@ class TestContainerHTTPServer:
 
 class TestJobStatusItem:
     def test_from_primitive(self) -> None:
-        transition_time = datetime.now(timezone.utc)
+        transition_time = datetime.now(UTC)
         payload = {
             "status": "succeeded",
             "transition_time": transition_time.isoformat(),
@@ -1670,7 +1670,7 @@ class TestJobStatusItem:
         assert item.exit_code == 0
 
     def test_from_primitive_without_exit_code(self) -> None:
-        transition_time = datetime.now(timezone.utc)
+        transition_time = datetime.now(UTC)
         payload = {
             "status": "succeeded",
             "transition_time": transition_time.isoformat(),
@@ -1688,7 +1688,7 @@ class TestJobStatusItem:
     def test_to_primitive(self) -> None:
         item = JobStatusItem(
             status=JobStatus.SUCCEEDED,
-            transition_time=datetime.now(timezone.utc),
+            transition_time=datetime.now(UTC),
             exit_code=321,
         )
         assert item.to_primitive() == {
@@ -1706,11 +1706,11 @@ class TestJobStatusItem:
 
     def test_eq_different_times(self) -> None:
         old_item = JobStatusItem.create(
-            JobStatus.RUNNING, transition_time=datetime.now(timezone.utc)
+            JobStatus.RUNNING, transition_time=datetime.now(UTC)
         )
         new_item = JobStatusItem.create(
             JobStatus.RUNNING,
-            transition_time=datetime.now(timezone.utc) + timedelta(days=1),
+            transition_time=datetime.now(UTC) + timedelta(days=1),
         )
         assert old_item == new_item
 

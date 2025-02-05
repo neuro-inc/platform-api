@@ -1,4 +1,5 @@
-FROM python:3.9.9-slim-bullseye AS installer
+ARG PY_VERSION=3.13.1
+FROM python:${PY_VERSION}-slim-bullseye AS installer
 
 ENV PATH=/root/.local/bin:$PATH
 
@@ -9,7 +10,7 @@ COPY dist /tmp/dist
 RUN ls /tmp/dist
 RUN pip install --user --find-links /tmp/dist platform-api
 
-FROM python:3.9.9-slim-bullseye AS service
+FROM python:${PY_VERSION}-slim-bullseye  AS service
 
 LABEL org.opencontainers.image.source = "https://github.com/neuro-inc/platform-api"
 

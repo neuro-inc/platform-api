@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
@@ -286,9 +286,7 @@ class TestPodStatus:
         status = PodStatus.from_primitive(payload)
         assert len(status.conditions) == 3
         cond = status.conditions[1]
-        assert cond.transition_time == datetime(
-            2019, 6, 20, 11, 13, 37, tzinfo=timezone.utc
-        )
+        assert cond.transition_time == datetime(2019, 6, 20, 11, 13, 37, tzinfo=UTC)
         assert cond.reason == "PodCompleted"
         assert cond.message == ""
         assert cond.status is False
@@ -468,18 +466,14 @@ class TestKubernetesEvent:
             "type": "Normal",
         }
         event = KubernetesEvent(data)
-        assert event.first_timestamp == datetime(
-            2019, 6, 20, 11, 3, 32, tzinfo=timezone.utc
-        )
-        assert event.last_timestamp == datetime(
-            2019, 6, 20, 11, 3, 33, tzinfo=timezone.utc
-        )
+        assert event.first_timestamp == datetime(2019, 6, 20, 11, 3, 32, tzinfo=UTC)
+        assert event.last_timestamp == datetime(2019, 6, 20, 11, 3, 33, tzinfo=UTC)
         assert event.count == 12
 
 
 class TestNodeCondition:
     def test_from_primitive_status_true(self) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         condition = NodeCondition.from_primitive(
             {
                 "type": "Ready",
@@ -493,7 +487,7 @@ class TestNodeCondition:
         )
 
     def test_from_primitive_status_false(self) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         condition = NodeCondition.from_primitive(
             {
                 "type": "Ready",
@@ -507,7 +501,7 @@ class TestNodeCondition:
         )
 
     def test_from_primitive_status_unknown(self) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         condition = NodeCondition.from_primitive(
             {
                 "type": "Ready",
@@ -533,7 +527,7 @@ class TestNodeCondition:
 
 class TestNodeStatus:
     def test_from_primitive(self) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         status = NodeStatus.from_primitive(
             {
                 "allocatable": {},
@@ -759,8 +753,8 @@ PodFactory = Callable[..., PodDescriptor]
 @pytest.fixture
 async def pod_factory() -> PodFactory:
     def _create(
-        name: Optional[str] = None,
-        labels: Optional[dict[str, str]] = None,
+        name: str | None = None,
+        labels: dict[str, str] | None = None,
         cpu: float = 0.1,
         memory: int = 128,
         gpu: int = 1,

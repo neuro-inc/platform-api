@@ -1,6 +1,6 @@
 from datetime import timedelta
 from itertools import islice
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -53,12 +53,12 @@ class TestJobsStorage:
         )
 
     def _create_pending_job(
-        self, owner: str = "compute", job_name: Optional[str] = None, **kwargs: Any
+        self, owner: str = "compute", job_name: str | None = None, **kwargs: Any
     ) -> JobRecord:
         return self._create_job(owner=owner, name=job_name, **kwargs)
 
     def _create_running_job(
-        self, owner: str = "compute", job_name: Optional[str] = None, **kwargs: Any
+        self, owner: str = "compute", job_name: str | None = None, **kwargs: Any
     ) -> JobRecord:
         kwargs.setdefault("materialized", True)
         return self._create_job(
@@ -66,7 +66,7 @@ class TestJobsStorage:
         )
 
     def _create_succeeded_job(
-        self, owner: str = "compute", job_name: Optional[str] = None, **kwargs: Any
+        self, owner: str = "compute", job_name: str | None = None, **kwargs: Any
     ) -> JobRecord:
         kwargs.setdefault("materialized", True)
         return self._create_job(
@@ -74,7 +74,7 @@ class TestJobsStorage:
         )
 
     def _create_failed_job(
-        self, owner: str = "compute", job_name: Optional[str] = None, **kwargs: Any
+        self, owner: str = "compute", job_name: str | None = None, **kwargs: Any
     ) -> JobRecord:
         kwargs.setdefault("materialized", True)
         return self._create_job(
@@ -82,7 +82,7 @@ class TestJobsStorage:
         )
 
     def _create_cancelled_job(
-        self, owner: str = "compute", job_name: Optional[str] = None, **kwargs: Any
+        self, owner: str = "compute", job_name: str | None = None, **kwargs: Any
     ) -> JobRecord:
         return self._create_job(
             name=job_name, status=JobStatus.CANCELLED, owner=owner, **kwargs
@@ -719,7 +719,7 @@ class TestJobsStorage:
     async def test_get_all_with_filters(
         self,
         owners: tuple[str, ...],
-        name: Optional[str],
+        name: str | None,
         statuses: tuple[JobStatus, ...],
         storage: JobsStorage,
     ) -> None:
@@ -827,7 +827,7 @@ class TestJobsStorage:
     )
     async def test_get_all_filter_by_name_with_no_owner(
         self,
-        name: Optional[str],
+        name: str | None,
         statuses: tuple[JobStatus, ...],
         storage: JobsStorage,
     ) -> None:

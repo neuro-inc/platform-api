@@ -5,7 +5,7 @@ import hashlib
 import logging
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from functools import partial
 from typing import Any
@@ -30,7 +30,7 @@ JOB_NAME_SEPARATOR = "--"
 
 
 logger = logging.getLogger(__name__)
-current_datetime_factory = partial(datetime.now, timezone.utc)
+current_datetime_factory = partial(datetime.now, UTC)
 
 
 DEFAULT_ORPHANED_JOB_OWNER = "compute"

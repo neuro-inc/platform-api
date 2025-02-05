@@ -4,9 +4,9 @@ import operator
 import secrets
 from collections.abc import Sequence
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import PurePath
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp
 
@@ -93,7 +93,7 @@ class JobStatusItemFactory:
         else:
             return JobStatus.PENDING
 
-    def _parse_reason(self) -> Optional[str]:
+    def _parse_reason(self) -> str | None:
         if self._status.is_running and (
             self._container_status.is_waiting or self._container_status.is_terminated
         ):
@@ -102,7 +102,7 @@ class JobStatusItemFactory:
             return self._container_status.reason
         return None
 
-    def _compose_description(self) -> Optional[str]:
+    def _compose_description(self) -> str | None:
         if self._status == JobStatus.FAILED:
             if (
                 self._container_status.is_terminated
@@ -111,7 +111,7 @@ class JobStatusItemFactory:
                 return self._container_status.message
         return None
 
-    def _parse_exit_code(self) -> Optional[int]:
+    def _parse_exit_code(self) -> int | None:
         if self._status.is_finished and self._container_status.is_terminated:
             return self._container_status.exit_code
         return None
@@ -260,7 +260,7 @@ class KubeOrchestrator(Orchestrator):
             result.append(v.create_mount(container_volume, dst_path))
         return result
 
-    def _create_storage_volume_name(self, path: Optional[PurePath] = None) -> str:
+    def _create_storage_volume_name(self, path: PurePath | None = None) -> str:
         if path is None or path == PurePath("/"):
             return self._kube_config.storage_volume_name
         name_suffix = str(path).replace("/", "-").replace("_", "-")
@@ -579,7 +579,7 @@ class KubeOrchestrator(Orchestrator):
                 pvc_project: str = pvc["metadata"]["labels"].get(
                     "platform.neuromation.io/project"
                 )
-                pvc_org: Optional[str] = pvc["metadata"]["labels"].get(
+                pvc_org: str | None = pvc["metadata"]["labels"].get(
                     "platform.neuromation.io/disk-api-org-name"
                 )
                 pvc_path = pvc_project or pvc_user
@@ -708,7 +708,7 @@ class KubeOrchestrator(Orchestrator):
 
     def _get_pod_node_affinity(
         self, pool_types: Sequence[ResourcePoolType]
-    ) -> Optional[NodeAffinity]:
+    ) -> NodeAffinity | None:
         # NOTE:
         # The pod is scheduled onto a node only if at least one of
         # `LabelSelectorTerm`s is satisfied.
@@ -779,7 +779,7 @@ class KubeOrchestrator(Orchestrator):
     async def _get_external_job_status(
         self, job: Job, pod: PodDescriptor
     ) -> JobStatusItem:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         try:
             port = int(job.env.get("EXTERNAL_JOB_RUNNER_PORT", 8080))
@@ -823,7 +823,7 @@ class KubeOrchestrator(Orchestrator):
         # too much resources -- we will check for NotTriggerScaleUp event.
         # Or it tries to mount disk that is used by another job
         # -- we will check for FailedAttachVolume event.
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         assert pod.created_at is not None
         pod_events = await self._client.get_pod_events(
             self._get_job_pod_name(job), self._kube_config.namespace
@@ -931,7 +931,7 @@ class KubeOrchestrator(Orchestrator):
             return False
 
     async def _create_service(
-        self, pod: PodDescriptor, name: Optional[str] = None
+        self, pod: PodDescriptor, name: str | None = None
     ) -> Service:
         service = Service.create_headless_for_pod(pod)
         if name is not None:
@@ -942,7 +942,7 @@ class KubeOrchestrator(Orchestrator):
         return await self._client.list_services(self._get_job_labels(job))
 
     async def _delete_service(
-        self, name: str, *, uid: Optional[str] = None, ignore_missing: bool = False
+        self, name: str, *, uid: str | None = None, ignore_missing: bool = False
     ) -> None:
         try:
             await self._client.delete_service(name=name, uid=uid)

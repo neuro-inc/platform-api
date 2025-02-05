@@ -4,7 +4,7 @@ import re
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import AbstractAsyncContextManager
 from decimal import Decimal
-from typing import Any, Optional, cast
+from typing import Any, cast
 from unittest import mock
 
 import aiohttp.web
@@ -119,7 +119,7 @@ class TestApi:
 
             try:
                 await asyncio.wait_for(_loop(), timeout=5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 assert names == cluster_registry.cluster_names
 
         async with create_config_api(cluster_configs_payload):
@@ -1426,8 +1426,8 @@ class TestJobs:
             job_submit: dict[str, Any],
             user: _User,
             *,
-            secret_env: Optional[dict[str, str]] = None,
-            secret_volumes: Optional[dict[str, str]] = None,
+            secret_env: dict[str, str] | None = None,
+            secret_volumes: dict[str, str] | None = None,
         ) -> None:
             job_id = ""
             try:

@@ -3,7 +3,7 @@ import logging
 from collections.abc import Mapping
 from datetime import timedelta
 from pathlib import PurePath
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp
 from iso8601 import iso8601
@@ -160,14 +160,14 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
 
 
 class HttpJobsPollerApi(JobsPollerApi):
-    _client: Optional[aiohttp.ClientSession] = None
+    _client: aiohttp.ClientSession | None = None
 
     def __init__(
         self,
         url: URL,
         token: str,
         cluster_name: str,
-        trace_configs: Optional[list[aiohttp.TraceConfig]] = None,
+        trace_configs: list[aiohttp.TraceConfig] | None = None,
     ):
         self._base_url = url
         self._token = token
@@ -261,8 +261,8 @@ class JobsPoller:
         self._cluster_updater = cluster_updater
         self._interval_s = interval_s
 
-        self._is_active: Optional[asyncio.Future[None]] = None
-        self._task: Optional[asyncio.Future[None]] = None
+        self._is_active: asyncio.Future[None] | None = None
+        self._task: asyncio.Future[None] | None = None
 
     async def start(self) -> None:
         logger.info("Starting jobs polling")
