@@ -1,4 +1,3 @@
 *
-!dist
-!alembic
-!alembic.ini
+!alembic*
+!requirements.txt
