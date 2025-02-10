@@ -4059,7 +4059,7 @@ class TestJobs:
                 follower.name, [permission], token=owner.token
             )
 
-        yield _impl
+        return _impl
 
     @pytest.fixture
     async def share_secret(
@@ -4075,7 +4075,7 @@ class TestJobs:
                 follower.name, [permission], token=owner.token
             )
 
-        yield _impl
+        return _impl
 
     @pytest.fixture
     def create_job_request_with_name(
@@ -4087,7 +4087,7 @@ class TestJobs:
             job_request["name"] = job_name
             return job_request
 
-        yield _impl
+        return _impl
 
     @pytest.fixture
     def create_job_request_no_name(
@@ -4098,7 +4098,7 @@ class TestJobs:
             job_request["container"]["command"] = "sleep 30m"
             return job_request
 
-        yield _impl
+        return _impl
 
     async def test_get_all_jobs_filter_by_job_name_and_statuses(
         self,

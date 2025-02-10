@@ -111,7 +111,7 @@ async def create_auth_config(
 
 @pytest.fixture
 async def auth_config(auth_server: AuthConfig) -> AsyncIterator[AuthConfig]:
-    yield auth_server
+    return auth_server
 
 
 @asynccontextmanager

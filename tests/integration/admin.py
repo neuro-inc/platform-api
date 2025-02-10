@@ -228,7 +228,7 @@ async def create_admin_url(
 
 @pytest.fixture
 async def admin_url(admin_server: URL) -> AsyncIterator[URL]:
-    yield admin_server
+    return admin_server
 
 
 @asynccontextmanager
