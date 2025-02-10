@@ -94,8 +94,7 @@ class PostgresChannelNotifier(Notifier):
     ) -> AsyncIterator[Subscription]:
         def _listener(*args: Any, **kwargs: Any) -> None:
             logger.info(
-                f"{type(self).__qualname__}: Notified "
-                f"from channel {self._channel!r}"
+                f"{type(self).__qualname__}: Notified from channel {self._channel!r}"
             )
             listener()
 

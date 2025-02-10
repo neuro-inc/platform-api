@@ -4635,9 +4635,9 @@ class TestJobs:
             async with client.post(
                 url, headers=regular_user.headers, json=job_submit
             ) as response:
-                assert (
-                    response.status == HTTPAccepted.status_code
-                ), await response.text()
+                assert response.status == HTTPAccepted.status_code, (
+                    await response.text()
+                )
                 result = await response.json()
                 assert result["status"] in ["pending"]
                 job_id = result["id"]
@@ -4958,9 +4958,9 @@ class TestJobs:
                 assert result["error"] == f"Job {{id={job_id}}} has changed"
                 ok = False
             else:
-                assert (
-                    response.status == HTTPNoContent.status_code
-                ), await response.text()
+                assert response.status == HTTPNoContent.status_code, (
+                    await response.text()
+                )
                 ok = True
 
         if ok:
@@ -4997,9 +4997,9 @@ class TestJobs:
                 assert result["error"] == f"Job {{id={job_id}}} has changed"
                 ok = False
             else:
-                assert (
-                    response.status == HTTPNoContent.status_code
-                ), await response.text()
+                assert response.status == HTTPNoContent.status_code, (
+                    await response.text()
+                )
                 ok = True
 
         if ok:
