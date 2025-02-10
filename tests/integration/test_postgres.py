@@ -39,7 +39,7 @@ async def test_channel_notifier_connection_lost(sqalchemy_engine: AsyncEngine) -
     notifier = ResubscribingNotifier(notifier, check_interval=0.1)
     counter = Counter()
 
-    async with notifier.listen_to_updates(counter.callback) as subscriber:
+    async with notifier.listen_to_updates(counter.callback):
         await notifier.notify()
         await counter.assert_count(1)
 
@@ -49,7 +49,7 @@ async def test_channel_notifier_connection_lost(sqalchemy_engine: AsyncEngine) -
                 await conn.execute(
                     sa.text(
                         "SELECT pid, query FROM pg_stat_activity "
-                        "WHERE query LIKE 'LISTEN%';"
+                        "where QUERY like 'LISTEN%';"
                     )
                 )
             ).all()
@@ -58,18 +58,7 @@ async def test_channel_notifier_connection_lost(sqalchemy_engine: AsyncEngine) -
                 await conn.execute(
                     sa.text(f"SELECT pg_terminate_backend({pid_row['pid']});")
                 )
+        await asyncio.sleep(0.2)  # allow it to reconnect
 
-        # Instead of a fixed sleep, wait until the subscriber reconnects.
-        max_attempts = 50  # maximum total wait time of 5 seconds (50 * 0.1)
-        for _ in range(max_attempts):
-            if await subscriber.is_alive():
-                break
-            await asyncio.sleep(0.1)
-        else:
-            raise Exception(
-                "Subscriber did not reconnect in time after killing LISTEN connections"
-            )
-
-        # Now that we know the connection is alive again, send a notification.
         await notifier.notify()
         await counter.assert_count(2)
