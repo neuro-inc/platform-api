@@ -286,7 +286,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
         kwargs = {**defaults, **kwargs}
         return OrchestratorConfig(**kwargs)
 
-    return _f
+    yield _f
 
 
 @pytest.fixture(scope="session")
@@ -320,7 +320,7 @@ def kube_config_factory(
         kwargs = {**defaults, **kwargs}
         return KubeConfig(**kwargs)
 
-    return _f
+    yield _f
 
 
 @pytest.fixture(scope="session")
@@ -755,7 +755,7 @@ async def kube_node_gpu(
         node_name, capacity=default_node_capacity, taints=taints
     )
 
-    return node_name
+    yield node_name
 
 
 @pytest.fixture
@@ -776,7 +776,7 @@ async def kube_node_tpu(
         },
     )
 
-    return node_name
+    yield node_name
 
 
 @pytest.fixture
@@ -810,7 +810,7 @@ async def kube_node_preemptible(
         node_name, capacity=default_node_capacity, labels=labels, taints=taints
     )
 
-    return node_name
+    yield node_name
 
 
 @pytest.fixture
