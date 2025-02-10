@@ -35,7 +35,7 @@ endif
 
 .PHONY: test_unit
 test_unit:
-	poetry run pytest -vv --cov platform_api --cov-config=setup.cfg --cov-report xml:.coverage-unit.xml tests/unit
+	poetry run pytest -vv --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-unit.xml tests/unit
 
 .PHONY: test_integration
 test_integration:
