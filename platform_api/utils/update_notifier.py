@@ -179,7 +179,7 @@ class ResubscribingNotifier(Notifier):
             self._task.cancel()
             with suppress(asyncio.CancelledError):
                 await self._task
-            await self._teardown_subscription(args)
+            await self._teardown_subscription(*args)
 
     @asynccontextmanager
     async def listen_to_updates(
