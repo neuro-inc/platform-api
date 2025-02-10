@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator, Iterable, Mapping, Set
+from collections.abc import AsyncIterator, Iterable, Mapping, Set as AbstractSet
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -147,10 +147,9 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
                             project_name=project_name,
                             found_job_id=record["id"],
                         )
-                    else:
-                        # Conflicted entry gone. Retry insert. Possible infinite
-                        # loop has very low probability
-                        await self._insert_values(values, conn=conn)
+                    # Conflicted entry gone. Retry insert. Possible infinite
+                    # loop has very low probability
+                    await self._insert_values(values, conn=conn)
                 # Conflicting id case:
                 raise JobStorageTransactionError(
                     "Job {" + self._make_description(values) + "} has changed"
@@ -274,8 +273,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
                 all_jobs.append(job)
         # Restore ordering
         id_to_job = {job.id: job for job in all_jobs}
-        all_jobs = [id_to_job[job_id] for job_id in job_ids if job_id in id_to_job]
-        return all_jobs
+        return [id_to_job[job_id] for job_id in job_ids if job_id in id_to_job]
 
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
@@ -317,16 +315,18 @@ class JobFilterClauseBuilder:
         self._clauses: list[sasql.ClauseElement] = []
         self._tables = tables
 
-    def filter_statuses(self, statuses: Set[JobStatus]) -> None:
+    def filter_statuses(self, statuses: AbstractSet[JobStatus]) -> None:
         self._clauses.append(self._tables.jobs.c.status.in_(statuses))
 
-    def filter_owners(self, owners: Set[str]) -> None:
+    def filter_owners(self, owners: AbstractSet[str]) -> None:
         self._clauses.append(self._tables.jobs.c.owner.in_(owners))
 
-    def filter_base_owners(self, base_owners: Set[str]) -> None:
+    def filter_base_owners(self, base_owners: AbstractSet[str]) -> None:
         self._clauses.append(self._create_base_owner_clause(base_owners))
 
-    def _create_base_owner_clause(self, base_owners: Set[str]) -> sasql.ClauseElement:
+    def _create_base_owner_clause(
+        self, base_owners: AbstractSet[str]
+    ) -> sasql.ClauseElement:
         return func.split_part(self._tables.jobs.c.owner, "/", 1).in_(base_owners)
 
     def filter_clusters(self, clusters: ClusterOrgProjectNameSet) -> None:
@@ -383,10 +383,10 @@ class JobFilterClauseBuilder:
             )
         self._clauses.append(or_(*cluster_clauses))
 
-    def filter_projects(self, projects: Set[str]) -> None:
+    def filter_projects(self, projects: AbstractSet[str]) -> None:
         self._clauses.append(self._tables.jobs.c.project_name.in_(projects))
 
-    def filter_orgs(self, orgs: Set[str | None]) -> None:
+    def filter_orgs(self, orgs: AbstractSet[str | None]) -> None:
         not_null_orgs = [org for org in orgs if org is not None]
         or_clauses = []
         if not_null_orgs:
@@ -398,10 +398,10 @@ class JobFilterClauseBuilder:
     def filter_name(self, name: str) -> None:
         self._clauses.append(self._tables.jobs.c.name == name)
 
-    def filter_ids(self, ids: Set[str]) -> None:
+    def filter_ids(self, ids: AbstractSet[str]) -> None:
         self._clauses.append(self._tables.jobs.c.id.in_(ids))
 
-    def filter_tags(self, tags: Set[str]) -> None:
+    def filter_tags(self, tags: AbstractSet[str]) -> None:
         self._clauses.append(self._tables.jobs.c.tags.contains(list(tags)))
 
     def filter_since(self, since: datetime) -> None:

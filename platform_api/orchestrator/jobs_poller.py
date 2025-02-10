@@ -193,7 +193,7 @@ class HttpJobsPollerApi(JobsPollerApi):
         await self.init()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.close()
 
     async def get_unfinished_jobs(self) -> list[JobRecord]:
@@ -272,7 +272,7 @@ class JobsPoller:
         await self.start()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.stop()
 
     async def _init_task(self) -> None:

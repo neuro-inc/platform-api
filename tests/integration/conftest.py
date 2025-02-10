@@ -518,7 +518,7 @@ class MyKubeClient(KubeClient):
 
     async def create_triggered_scaleup_event(self, pod_id: str) -> None:
         url = f"{self._namespace_url}/events"
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)  # noqa: UP017
         now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         data = {
             "apiVersion": "v1",
@@ -557,7 +557,7 @@ class MyKubeClient(KubeClient):
 
     async def create_failed_attach_volume_event(self, pod_id: str) -> None:
         url = f"{self._namespace_url}/events"
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)  # noqa: UP017
         now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         data = {
             "apiVersion": "v1",
@@ -628,7 +628,7 @@ class MyKubeClient(KubeClient):
 async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeClient]:
     def _f(custom_kube_config: KubeConfig | None = None) -> MyKubeClient:
         config = custom_kube_config or kube_config
-        kube_client = MyKubeClient(
+        return MyKubeClient(
             base_url=config.endpoint_url,
             auth_type=config.auth_type,
             cert_authority_data_pem=config.cert_authority_data_pem,
@@ -640,7 +640,6 @@ async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeCl
             read_timeout_s=config.client_read_timeout_s,
             conn_pool_size=config.client_conn_pool_size,
         )
-        return kube_client
 
     return _f
 

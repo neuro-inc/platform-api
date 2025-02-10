@@ -580,7 +580,7 @@ class JobRecord:
             # already migrated to history
             items = [JobStatusItem.from_primitive(item) for item in payload["statuses"]]
         else:
-            logger.info(f"Migrating job {job_id} to status history")
+            logger.info("Migrating job %s to status history", job_id)
             status = JobStatus(payload["status"])
             transition_time = None
             if status.is_finished:
@@ -930,8 +930,7 @@ class Job:
         def datetime_factory() -> datetime:
             if now:
                 return now
-            else:
-                return self._current_datetime_factory()
+            return self._current_datetime_factory()
 
         return self._record.get_run_time(
             only_after=only_after,

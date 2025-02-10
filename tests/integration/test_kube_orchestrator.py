@@ -120,11 +120,10 @@ async def job_nginx(kube_orchestrator: KubeOrchestrator) -> MyJob:
         resources=ContainerResources(cpu=0.1, memory=256 * 10**6),
     )
     job_request = JobRequest.create(container)
-    job = MyJob(
+    return MyJob(
         orchestrator=kube_orchestrator,
         record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
     )
-    return job
 
 
 @pytest.fixture
@@ -159,13 +158,13 @@ class TestKubeOrchestrator:
             status = await job.query_status()
             if status_predicate(status):
                 return status
-            else:
-                await asyncio.sleep(max(interval_s, time.monotonic() - t0))
-                current_time = time.monotonic() - t0
-                if current_time > max_time:
-                    pytest.fail(f"too long: {current_time:.3f} sec")
-                await asyncio.sleep(interval_s)
-                interval_s *= 1.5
+
+            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+            current_time = time.monotonic() - t0
+            if current_time > max_time:
+                pytest.fail(f"too long: {current_time:.3f} sec")
+            await asyncio.sleep(interval_s)
+            interval_s *= 1.5
 
     async def wait_for_completion(self, *args: Any, **kwargs: Any) -> JobStatus:
         def _predicate(status: JobStatus) -> bool:

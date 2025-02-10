@@ -5,7 +5,7 @@ import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from datetime import timedelta
-from typing import Any, TypeVar
+from typing import TypeVar
 
 from aiohttp import ClientResponseError
 from neuro_admin_client import AdminClient, ClusterUser, OrgCluster
@@ -54,8 +54,10 @@ class RuntimeLimitEnforcer(JobPolicyEnforcer):
     async def _enforce_job_lifetime(self, job: Job) -> None:
         if self._is_runtime_limit_exceeded(job):
             logger.info(
-                f"Job {job.id} by user '{job.owner}' exceeded its lifetime limit "
-                f"on cluster '{job.cluster_name}'"
+                "Job %s by user '%s' exceeded its lifetime limit on cluster '%s'",
+                job.id,
+                job.owner,
+                job.cluster_name,
             )
             await self._service.cancel_job(job.id, JobStatusReason.LIFE_SPAN_ENDED)
 
@@ -112,9 +114,12 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
                 )
             except StopIteration:
                 logger.warning(
-                    f"User {username} has jobs in cluster {cluster_name} "
-                    f"as part of org {org_name}, but has no access to this "
-                    "cluster as part of this org. Jobs will be cancelled"
+                    "User %s has jobs in cluster %s as part of org %s, "
+                    "but has no access to this cluster as part of this org. "
+                    "Jobs will be cancelled",
+                    username,
+                    cluster_name,
+                    org_name,
                 )
                 user_cluster = None
             if user_cluster is None or user_cluster.balance.is_non_positive:
@@ -134,9 +139,10 @@ class CreditsLimitEnforcer(JobPolicyEnforcer):
         except ClientResponseError as e:
             if e.status == 404:
                 logger.warning(
-                    f"Org {org_name} has jobs in cluster {cluster_name} but has no "
-                    f"access to this cluster as part of this org. "
-                    f"Jobs will be cancelled"
+                    "Org %s has jobs in cluster %s but has no access to this "
+                    "cluster as part of this org. Jobs will be cancelled",
+                    org_name,
+                    cluster_name,
                 )
             else:
                 raise
@@ -207,14 +213,14 @@ class JobPolicyEnforcePoller:
         await self.start()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.stop()
 
     async def start(self) -> None:
         if self._task is not None:
             raise RuntimeError("Concurrent usage of enforce poller not allowed")
         names = ", ".join(self._get_enforcer_name(e) for e in self._enforcers)
-        logger.info(f"Starting job policy enforce polling with [{names}]")
+        logger.info("Starting job policy enforce polling with [%s]", names)
         self._task = self._loop.create_task(self._run())
 
     async def stop(self) -> None:
@@ -243,7 +249,7 @@ class JobPolicyEnforcePoller:
                 raise
             except BaseException:
                 name = f"job policy enforcer {self._get_enforcer_name(enforcer)}"
-                logger.exception(f"Failed to run iteration of the {name}, ignoring...")
+                logger.exception("Failed to run iteration of the %s, ignoring...", name)
 
     def _get_enforcer_name(self, enforcer: JobPolicyEnforcer) -> str:
         return type(enforcer).__name__

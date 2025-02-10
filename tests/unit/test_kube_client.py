@@ -429,7 +429,7 @@ class TestPodCondition:
     def test_status_invalid(self) -> None:
         cond = PodCondition({"status": "123"})
         with pytest.raises(ValueError):
-            cond.status
+            _ = cond.status
 
 
 class TestKubernetesEvent:
@@ -763,13 +763,12 @@ async def pod_factory() -> PodFactory:
         labels = labels or {}
         if idle:
             labels["platform.neuromation.io/idle"] = "true"
-        pod = PodDescriptor(
+        return PodDescriptor(
             name=name or f"pod-{uuid.uuid4()}",
             labels=labels,
             image="gcr.io/google_containers/pause:3.1",
             resources=Resources(cpu=cpu, memory=memory, nvidia_gpu=gpu),
         )
-        return pod
 
     return _create
 

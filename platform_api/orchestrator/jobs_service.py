@@ -170,8 +170,7 @@ class JobsService:
         if org_entry.balance.is_non_positive:
             if isinstance(org_entry, OrgUser):
                 raise NoCreditsError.create_for_user(org_entry.user_name)
-            else:
-                raise NoCreditsError.create_for_org(org_entry.name)
+            raise NoCreditsError.create_for_org(org_entry.name)
 
     async def _make_pass_config_token(
         self, username: str, cluster_name: str, job_id: str
@@ -345,7 +344,7 @@ class JobsService:
                 f"Cluster '{record.cluster_name}' not found"
             ) from cluster_err
         except JobsStorageException as transaction_err:
-            logger.error(f"Failed to create job {job_id}: {transaction_err}")
+            logger.error("Failed to create job %s: %s", job_id, transaction_err)
             raise JobsServiceException(f"Failed to create job: {transaction_err}")
 
     async def get_job_status(self, job_id: str) -> JobStatus:
@@ -420,7 +419,7 @@ class JobsService:
                         # the job has already finished. nothing to do here.
                         return
 
-                    logger.info(f"Canceling job {job_id} for reason {reason}")
+                    logger.info("Canceling job %s for reason %s", job_id, reason)
                     record.status_history.current = JobStatusItem.create(
                         JobStatus.CANCELLED, reason=reason
                     )

@@ -198,7 +198,6 @@ class TestUserNameValidator:
             ("with123numbers-and-hyphen_and-underscore", 1),
             ("name_with_hyphen-and-numbers123_and-underscore", 1),
             ("with123numbers.co.uk", 1),
-            ("WithCapitalLetters", 1),
             ("foo!", 1),
             ("foo@", 1),
             ("foo#", 1),

@@ -41,7 +41,7 @@ class KubeCluster(Cluster):
         await self._init_orchestrator()
 
     async def _init_orchestrator(self) -> None:
-        logger.info(f"Cluster '{self.name}': initializing Orchestrator")
+        logger.info("Cluster '%s': initializing Orchestrator", self.name)
         kube_node_watcher = NodeWatcher(
             self._kube_client, labels=self._get_job_node_labels()
         )

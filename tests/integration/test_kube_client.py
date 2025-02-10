@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import shlex
 import tempfile
 import uuid
@@ -105,7 +104,7 @@ class TestKubeClientTokenUpdater:
         _, path = tempfile.mkstemp()
         Path(path).write_text("token-1")
         yield path
-        os.remove(path)
+        Path(path).unlink()
 
     @pytest.fixture
     async def kube_client(
@@ -549,10 +548,9 @@ class TestKubeClient:
             labels = {"platform.neuromation.io/job": job_id}
 
             await delete_network_policy_later(np_name)
-            payload = await kube_client.create_egress_network_policy(
+            return await kube_client.create_egress_network_policy(
                 np_name, pod_labels=labels, labels=labels, rules=[{}]
             )
-            return payload
 
         return _f
 

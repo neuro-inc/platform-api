@@ -212,13 +212,13 @@ class TestJobPolicyEnforcePoller:
 
 
 class TestHasCreditsEnforcer:
-    @pytest.fixture()
+    @pytest.fixture
     def has_credits_enforcer(
         self, jobs_service: JobsService, mock_admin_client: AdminClient
     ) -> CreditsLimitEnforcer:
         return CreditsLimitEnforcer(jobs_service, mock_admin_client)
 
-    @pytest.fixture()
+    @pytest.fixture
     def make_jobs(
         self,
         jobs_service: JobsService,
@@ -241,7 +241,7 @@ class TestHasCreditsEnforcer:
 
         return _make_jobs
 
-    @pytest.fixture()
+    @pytest.fixture
     def check_not_cancelled(
         self, jobs_service: JobsService
     ) -> Callable[[Iterable[Job]], Awaitable[None]]:
@@ -252,7 +252,7 @@ class TestHasCreditsEnforcer:
 
         return _check
 
-    @pytest.fixture()
+    @pytest.fixture
     def check_cancelled(
         self, jobs_service: JobsService
     ) -> Callable[[Iterable[Job]], Awaitable[None]]:

@@ -58,7 +58,7 @@ class ClusterConfigFactory:
                 apps=self._create_apps_config(payload),
             )
         except t.DataError as err:
-            logging.warning(f"failed to parse cluster config: {err}")
+            logging.warning("failed to parse cluster config: %s", err)
             return None
 
     def _create_ingress_config(self, payload: dict[str, Any]) -> IngressConfig:

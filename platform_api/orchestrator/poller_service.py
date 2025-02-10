@@ -129,8 +129,7 @@ class JobsScheduler:
                     )
                     result += not_materialized[:free_places]
                 return result
-            else:
-                return jobs
+            return jobs
 
         # Filter jobs by user quota
         for (username, cluster, org_name), jobs in grouped_jobs.items():
@@ -256,15 +255,19 @@ class JobsScheduler:
 
 
 class JobsPollerApi(abc.ABC):
+    @abc.abstractmethod
     async def get_unfinished_jobs(self) -> list[JobRecord]:
         raise NotImplementedError
 
+    @abc.abstractmethod
     async def get_jobs_for_deletion(self, *, delay: timedelta) -> list[JobRecord]:
         raise NotImplementedError
 
+    @abc.abstractmethod
     async def push_status(self, job_id: str, status: JobStatusItem) -> None:
         raise NotImplementedError
 
+    @abc.abstractmethod
     async def set_materialized(self, job_id: str, materialized: bool) -> None:
         raise NotImplementedError
 
@@ -578,7 +581,7 @@ class JobsPollerService:
                 status_item = job.status_history.current
                 job.materialized = True
             except JobAlreadyExistsException:
-                logger.info(f"Job '{job.id}' already exists.")
+                logger.info("Job '%s' already exists.", job.id)
                 status_item = job.status_history.current
                 job.materialized = True
             except JobError as exc:

@@ -2352,7 +2352,7 @@ class TestJobServiceNotification:
 class TestScheduledJobsService:
     @pytest.fixture
     def cluster_config(self, cluster_config: ClusterConfig) -> ClusterConfig:
-        cluster_config = replace(
+        return replace(
             cluster_config,
             orchestrator=replace(
                 cluster_config.orchestrator,
@@ -2368,7 +2368,6 @@ class TestScheduledJobsService:
                 ],
             ),
         )
-        return cluster_config
 
     @pytest.fixture
     def mock_orchestrator(
