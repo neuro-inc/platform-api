@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 Callback = Callable[[], None]
 
 
-class Subscription:
+class Subscription(ABC):  # noqa: B024
     async def is_alive(self) -> bool:
         return False
 
