@@ -3,7 +3,6 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
-from typing import Any
 
 from aiorwlock import RWLock
 
@@ -84,7 +83,7 @@ class ClusterUpdater:
         await self.start()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.stop()
 
     async def _init_task(self) -> None:
@@ -161,7 +160,7 @@ class ClusterHolder:
     async def __aenter__(self) -> "ClusterHolder":
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.clean()
 
     async def update(

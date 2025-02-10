@@ -86,12 +86,11 @@ class JobStatusItemFactory:
         phase = self._pod_status.phase
         if phase == "Succeeded":
             return JobStatus.SUCCEEDED
-        elif phase in ("Failed", "Unknown"):
+        if phase in ("Failed", "Unknown"):
             return JobStatus.FAILED
-        elif phase == "Running":
+        if phase == "Running":
             return JobStatus.RUNNING
-        else:
-            return JobStatus.PENDING
+        return JobStatus.PENDING
 
     def _parse_reason(self) -> str | None:
         if self._status.is_running and (
@@ -773,8 +772,7 @@ class KubeOrchestrator(Orchestrator):
     async def _get_job_status(self, job: Job, pod: PodDescriptor) -> JobStatusItem:
         if job.is_external:
             return await self._get_external_job_status(job, pod)
-        else:
-            return await self._get_pod_status(job, pod)
+        return await self._get_pod_status(job, pod)
 
     async def _get_external_job_status(
         self, job: Job, pod: PodDescriptor

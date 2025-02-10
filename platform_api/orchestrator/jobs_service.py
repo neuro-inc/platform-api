@@ -170,8 +170,7 @@ class JobsService:
         if org_entry.balance.is_non_positive:
             if isinstance(org_entry, OrgUser):
                 raise NoCreditsError.create_for_user(org_entry.user_name)
-            else:
-                raise NoCreditsError.create_for_org(org_entry.name)
+            raise NoCreditsError.create_for_org(org_entry.name)
 
     async def _make_pass_config_token(
         self, username: str, cluster_name: str, job_id: str

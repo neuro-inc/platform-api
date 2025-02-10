@@ -173,7 +173,7 @@ class ResubscribingNotifier(Notifier):
             self._task = asyncio.create_task(self._checker_task())
             return self
 
-        async def __aexit__(self, *args: Any) -> None:
+        async def __aexit__(self, *args: object) -> None:
             assert self._task
             self._task.cancel()
             with suppress(asyncio.CancelledError):

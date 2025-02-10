@@ -30,8 +30,7 @@ class TestJobsPoller:
             all_jobs = await jobs_service.get_all_jobs()
             if all(job.status == JobStatus.SUCCEEDED for job in all_jobs):
                 break
-            else:
-                await asyncio.sleep(interval)
+            await asyncio.sleep(interval)
         else:
             pytest.fail("Not all jobs have succeeded")
 

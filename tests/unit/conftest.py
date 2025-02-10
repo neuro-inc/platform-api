@@ -423,7 +423,7 @@ def job_request_factory() -> Callable[[], JobRequest]:
     return factory
 
 
-@pytest.fixture()
+@pytest.fixture
 def cert_authority_path(tmp_path: Path) -> str:
     ca_path = tmp_path / "ca.crt"
     ca_path.write_text(CA_DATA_PEM)

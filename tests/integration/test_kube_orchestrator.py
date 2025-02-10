@@ -159,13 +159,12 @@ class TestKubeOrchestrator:
             status = await job.query_status()
             if status_predicate(status):
                 return status
-            else:
-                await asyncio.sleep(max(interval_s, time.monotonic() - t0))
-                current_time = time.monotonic() - t0
-                if current_time > max_time:
-                    pytest.fail(f"too long: {current_time:.3f} sec")
-                await asyncio.sleep(interval_s)
-                interval_s *= 1.5
+            await asyncio.sleep(max(interval_s, time.monotonic() - t0))
+            current_time = time.monotonic() - t0
+            if current_time > max_time:
+                pytest.fail(f"too long: {current_time:.3f} sec")
+            await asyncio.sleep(interval_s)
+            interval_s *= 1.5
 
     async def wait_for_completion(self, *args: Any, **kwargs: Any) -> JobStatus:
         def _predicate(status: JobStatus) -> bool:
@@ -1282,7 +1281,7 @@ class TestKubeOrchestrator:
                 ),
             )
 
-        yield impl
+        return impl
 
     @pytest.fixture
     def create_client_job(
@@ -1305,7 +1304,7 @@ class TestKubeOrchestrator:
                 ),
             )
 
-        yield impl
+        return impl
 
     async def test_job_check_dns_hostname(
         self,
@@ -3087,7 +3086,7 @@ class TestPreemption:
         await kube_client.create_node(
             node_name, capacity=default_node_capacity, labels=labels, taints=taints
         )
-        yield node_name
+        return node_name
 
     async def test_non_preemptible_job(
         self,
@@ -4025,7 +4024,7 @@ class TestExternalJobsPreemption:
         await kube_client.create_node(
             node_name, capacity=default_node_capacity, labels=labels, taints=taints
         )
-        yield node_name
+        return node_name
 
     async def test_job_lost_running_pod(
         self,

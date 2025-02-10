@@ -899,14 +899,13 @@ class JobsHandler:
                     await response.write(json.dumps(payload).encode())
                 await response.write_eof()
                 return response
-            else:
-                response_payload = {
-                    "jobs": [convert_job_to_job_response(job) async for job in jobs]
-                }
-                self._bulk_jobs_response_validator.check(response_payload)
-                return aiohttp.web.json_response(
-                    data=response_payload, status=aiohttp.web.HTTPOk.status_code
-                )
+            response_payload = {
+                "jobs": [convert_job_to_job_response(job) async for job in jobs]
+            }
+            self._bulk_jobs_response_validator.check(response_payload)
+            return aiohttp.web.json_response(
+                data=response_payload, status=aiohttp.web.HTTPOk.status_code
+            )
 
     @asyncgeneratorcontextmanager
     async def _iter_filtered_jobs(
@@ -1393,10 +1392,9 @@ def _parse_bool(value: str) -> bool:
     value = value.lower()
     if value in ("0", "false"):
         return False
-    elif value in ("1", "true"):
+    if value in ("1", "true"):
         return True
-    else:
-        raise ValueError('Required "0", "1", "false" or "true"')
+    raise ValueError('Required "0", "1", "false" or "true"')
 
 
 def _permission_to_primitive(perm: Permission) -> dict[str, str]:

@@ -147,10 +147,9 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
                             project_name=project_name,
                             found_job_id=record["id"],
                         )
-                    else:
-                        # Conflicted entry gone. Retry insert. Possible infinite
-                        # loop has very low probability
-                        await self._insert_values(values, conn=conn)
+                    # Conflicted entry gone. Retry insert. Possible infinite
+                    # loop has very low probability
+                    await self._insert_values(values, conn=conn)
                 # Conflicting id case:
                 raise JobStorageTransactionError(
                     "Job {" + self._make_description(values) + "} has changed"

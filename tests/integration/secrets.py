@@ -5,7 +5,6 @@ import sys
 from asyncio import timeout
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from typing import Any
 
 import aiodocker
 import aiodocker.containers
@@ -147,7 +146,7 @@ class SecretsClient:
     async def __aenter__(self) -> "SecretsClient":
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.close()
 
     async def close(self) -> None:

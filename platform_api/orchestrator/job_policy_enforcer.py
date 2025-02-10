@@ -5,7 +5,7 @@ import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from datetime import timedelta
-from typing import Any, TypeVar
+from typing import TypeVar
 
 from aiohttp import ClientResponseError
 from neuro_admin_client import AdminClient, ClusterUser, OrgCluster
@@ -207,7 +207,7 @@ class JobPolicyEnforcePoller:
         await self.start()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.stop()
 
     async def start(self) -> None:

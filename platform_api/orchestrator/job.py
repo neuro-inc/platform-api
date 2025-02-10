@@ -930,8 +930,7 @@ class Job:
         def datetime_factory() -> datetime:
             if now:
                 return now
-            else:
-                return self._current_datetime_factory()
+            return self._current_datetime_factory()
 
         return self._record.get_run_time(
             only_after=only_after,

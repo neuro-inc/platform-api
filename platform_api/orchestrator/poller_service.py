@@ -129,8 +129,7 @@ class JobsScheduler:
                     )
                     result += not_materialized[:free_places]
                 return result
-            else:
-                return jobs
+            return jobs
 
         # Filter jobs by user quota
         for (username, cluster, org_name), jobs in grouped_jobs.items():

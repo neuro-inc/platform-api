@@ -77,12 +77,11 @@ class ExpiredException(KubeClientException):
 def _raise_status_job_exception(pod: dict[str, Any], job_id: str | None) -> NoReturn:
     if pod["code"] == 409:
         raise AlreadyExistsException(pod.get("reason", "job already exists"))
-    elif pod["code"] == 404:
+    if pod["code"] == 404:
         raise JobNotFoundException(f"job {job_id} was not found")
-    elif pod["code"] == 422:
+    if pod["code"] == 422:
         raise JobError(f"cant create job with id {job_id}")
-    else:
-        raise JobError("unexpected")
+    raise JobError("unexpected")
 
 
 class GroupVersion(str, Enum):
@@ -153,7 +152,7 @@ class PathVolume(Volume):
             )
         except ValueError:
             sub_path = container_volume.src_path.relative_to("/")
-        mount_sub_path = mount_sub_path or PurePath("")
+        mount_sub_path = mount_sub_path or PurePath()
         return VolumeMount(
             volume=self,
             mount_path=container_volume.dst_path / mount_sub_path,
@@ -183,11 +182,11 @@ class SharedMemoryVolume(Volume):
         container_volume: ContainerVolume,
         mount_sub_path: PurePath | None = None,
     ) -> "VolumeMount":
-        mount_sub_path = mount_sub_path or PurePath("")
+        mount_sub_path = mount_sub_path or PurePath()
         return VolumeMount(
             volume=self,
             mount_path=container_volume.dst_path / mount_sub_path,
-            sub_path=PurePath(""),
+            sub_path=PurePath(),
             read_only=container_volume.read_only,
         )
 
@@ -240,7 +239,7 @@ class SecretEnvVar:
 class VolumeMount:
     volume: Volume
     mount_path: PurePath
-    sub_path: PurePath = PurePath("")
+    sub_path: PurePath = PurePath()
     read_only: bool = False
 
     def to_primitive(self) -> dict[str, Any]:
@@ -1400,9 +1399,9 @@ class PodCondition:
         val = self._payload["status"]
         if val == "Unknown":
             return None
-        elif val == "True":
+        if val == "True":
             return True
-        elif val == "False":
+        if val == "False":
             return False
         raise ValueError(f"Invalid status {val!r}")
 
@@ -1685,9 +1684,9 @@ class NodeCondition:
     def _parse_status(cls, value: str) -> bool | None:
         if value == "Unknown":
             return None
-        elif value == "True":
+        if value == "True":
             return True
-        elif value == "False":
+        if value == "False":
             return False
         raise ValueError(f"Invalid status {value!r}")
 
@@ -1910,7 +1909,7 @@ class KubeClient:
         await self.init_api_resources()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.close()
 
     @property
@@ -2586,7 +2585,7 @@ class Watcher(abc.ABC):
         await self.start()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.stop()
 
     async def start(self) -> None:

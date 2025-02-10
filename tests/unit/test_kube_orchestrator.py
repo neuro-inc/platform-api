@@ -100,7 +100,7 @@ class TestVolume:
         mount = volume.create_mount(container_volume)
         assert mount.volume == volume
         assert mount.mount_path == PurePath("/container/path/to/dir")
-        assert mount.sub_path == PurePath("")
+        assert mount.sub_path == PurePath()
         assert not mount.read_only
 
     def test_create_mount_with_mount_sub_path(self) -> None:
@@ -124,7 +124,7 @@ class TestVolume:
         mount = volume.create_mount(container_volume, PurePath("sub/dir"))
         assert mount.volume == volume
         assert mount.mount_path == PurePath("/dev/shm/sub/dir")
-        assert mount.sub_path == PurePath("")
+        assert mount.sub_path == PurePath()
         assert not mount.read_only
 
 
