@@ -90,7 +90,8 @@ class MockOrchestrator(Orchestrator):
         self.raise_on_delete = False
         self.delete_job_exc_factory = self._create_delete_job_exc
         self.current_datetime_factory: Callable[[], datetime] = partial(
-            datetime.now, timezone.utc
+            datetime.now,
+            timezone.utc,  # noqa: UP017
         )
         self._deleted_job_ids: list[str] = []
         self._preemptible_job_ids: list[str] = []
@@ -423,7 +424,7 @@ def job_request_factory() -> Callable[[], JobRequest]:
     return factory
 
 
-@pytest.fixture()
+@pytest.fixture
 def cert_authority_path(tmp_path: Path) -> str:
     ca_path = tmp_path / "ca.crt"
     ca_path.write_text(CA_DATA_PEM)

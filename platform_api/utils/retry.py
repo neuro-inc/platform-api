@@ -1,12 +1,11 @@
 import asyncio
 import logging
 from collections.abc import Callable, Iterator
-from typing import Any
 
 log = logging.getLogger(__name__)
 
 
-class retries:
+class retries:  # noqa: N801
     def __init__(
         self,
         msg: str,
@@ -34,7 +33,7 @@ class retries:
         pass
 
     async def __aexit__(
-        self, type: type[BaseException], value: BaseException, tb: Any
+        self, type: type[BaseException] | None, value: BaseException | None, tb: object
     ) -> bool:
         if type is None:
             # Stop iteration

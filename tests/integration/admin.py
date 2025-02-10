@@ -5,6 +5,7 @@ from asyncio import timeout
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import aiodocker
@@ -95,7 +96,7 @@ async def config_client(fake_config_app: URL) -> AsyncIterator[_TestConfigClient
 
 @pytest.fixture(scope="session")
 def admin_server_image_name() -> str:
-    with open("PLATFORMADMIN_IMAGE") as f:
+    with Path("PLATFORMADMIN_IMAGE").open() as f:
         return f.read().strip()
 
 

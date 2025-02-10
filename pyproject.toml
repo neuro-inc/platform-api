@@ -46,7 +46,7 @@ vcs = "git"
 optional = true
 
 [tool.poetry.group.dev.dependencies]
-mypy= "1.14.1"
+mypy= "1.15.0"
 pre-commit="3.4.0"
 aiodocker="0.21.0"
 pytest="8.3.4"
@@ -79,6 +79,11 @@ ignore = [
     "PT012",
     "FBT001",
     "FBT002",
+    "PT007",
+    "ASYNC110",
+    "FBT003",
+    "PT022", # Disables rule that forces return instead of yield in async fixtures
+    "C901",
     "B904"
 ]
 

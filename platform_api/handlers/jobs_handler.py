@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from collections import defaultdict
-from collections.abc import AsyncIterator, Sequence, Set
+from collections.abc import AsyncIterator, Sequence, Set as AbstractSet
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -240,10 +240,7 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
             payload["resources"] = container_resources
         return payload
 
-    validator = (
-        t.Call(_check_no_resources) >> _check_preset_exists >> _set_preset_resources
-    )
-    return validator
+    return t.Call(_check_no_resources) >> _check_preset_exists >> _set_preset_resources
 
 
 def create_job_cluster_org_name_validator(
@@ -899,14 +896,14 @@ class JobsHandler:
                     await response.write(json.dumps(payload).encode())
                 await response.write_eof()
                 return response
-            else:
-                response_payload = {
-                    "jobs": [convert_job_to_job_response(job) async for job in jobs]
-                }
-                self._bulk_jobs_response_validator.check(response_payload)
-                return aiohttp.web.json_response(
-                    data=response_payload, status=aiohttp.web.HTTPOk.status_code
-                )
+
+            response_payload = {
+                "jobs": [convert_job_to_job_response(job) async for job in jobs]
+            }
+            self._bulk_jobs_response_validator.check(response_payload)
+            return aiohttp.web.json_response(
+                data=response_payload, status=aiohttp.web.HTTPOk.status_code
+            )
 
     @asyncgeneratorcontextmanager
     async def _iter_filtered_jobs(
@@ -1365,7 +1362,10 @@ class BulkJobFilterBuilder:
         return bulk_filter
 
     def _optimize_clusters_projects(
-        self, orgs: Set[str | None], projects: Set[str], name: str | None
+        self,
+        orgs: AbstractSet[str | None],
+        projects: AbstractSet[str],
+        name: str | None,
     ) -> None:
         if orgs or projects or name:
             names = {name}
@@ -1393,10 +1393,10 @@ def _parse_bool(value: str) -> bool:
     value = value.lower()
     if value in ("0", "false"):
         return False
-    elif value in ("1", "true"):
+    if value in ("1", "true"):
         return True
-    else:
-        raise ValueError('Required "0", "1", "false" or "true"')
+
+    raise ValueError('Required "0", "1", "false" or "true"')
 
 
 def _permission_to_primitive(perm: Permission) -> dict[str, str]:

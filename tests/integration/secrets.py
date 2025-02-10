@@ -1,11 +1,10 @@
 import asyncio
 import base64
-import subprocess
 import sys
 from asyncio import timeout
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from typing import Any
+from pathlib import Path
 
 import aiodocker
 import aiodocker.containers
@@ -21,7 +20,7 @@ from tests.integration.auth import _User
 
 @pytest.fixture(scope="session")
 def secrets_server_image_name() -> str:
-    with open("PLATFORMSECRETS_IMAGE") as f:
+    with Path("PLATFORMSECRETS_IMAGE").open() as f:
         return f.read().strip()
 
 
@@ -37,17 +36,17 @@ async def docker_host(docker: aiodocker.Docker) -> str:
 @pytest.fixture(scope="session")
 async def kube_proxy_url(docker_host: str) -> AsyncIterator[str]:
     cmd = "kubectl proxy -p 8084 --address='0.0.0.0' --accept-hosts='.*'"
-    proc = subprocess.Popen(
+    proc = await asyncio.create_subprocess_shell(
         cmd,
-        shell=True,
-        stderr=subprocess.STDOUT,
-        stdout=subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        stdout=asyncio.subprocess.PIPE,
         close_fds=True,
     )
     try:
         prefix = "Starting to serve on "
         assert proc.stdout, proc
-        line = proc.stdout.readline().decode().strip()
+        line_bytes = await proc.stdout.readline()
+        line = line_bytes.decode().strip()
         err = f"Error while running command `{cmd}`: output `{line}`"
         if "error" in line.lower():
             raise RuntimeError(f"{err}: Error detected")
@@ -64,7 +63,7 @@ async def kube_proxy_url(docker_host: str) -> AsyncIterator[str]:
 
     finally:
         proc.terminate()
-        proc.wait()
+        await proc.wait()
 
 
 @pytest.fixture
@@ -131,8 +130,7 @@ async def secrets_server_url(
 async def create_secrets_url(container: aiodocker.containers.DockerContainer) -> URL:
     host = "0.0.0.0"
     port = int((await container.port(8080))[0]["HostPort"])
-    url = URL(f"http://{host}:{port}")
-    return url
+    return URL(f"http://{host}:{port}")
 
 
 class SecretsClient:
@@ -147,7 +145,7 @@ class SecretsClient:
     async def __aenter__(self) -> "SecretsClient":
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.close()
 
     async def close(self) -> None:
