@@ -17,7 +17,7 @@ class Counter:
 
         try:
             await asyncio.wait_for(_loop(), timeout=1)
-        except asyncio.TimeoutError:  # noqa: UP041
+        except TimeoutError:
             assert self.count == expected_count
 
 
