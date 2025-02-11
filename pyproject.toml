@@ -31,7 +31,8 @@ dependencies = [
     "psycopg2-binary==2.9.10",
     "typing-extensions==4.9.0",
     "neuro-admin-client==25.1.1",
-    "yarl==1.18.3"
+    "yarl==1.18.3",
+    "greenlet==3.1.1" #need to explicitly define greenlet to make it available on arm64
 ]
 
 [project.scripts]
