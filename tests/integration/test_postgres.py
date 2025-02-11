@@ -76,4 +76,5 @@ async def test_channel_notifier_connection_lost(sqalchemy_engine: AsyncEngine) -
         await asyncio.sleep(0.2)  # allow it to reconnect
         logger.warning("notify for test_channel_notifier_connection_lost")
         await notifier.notify()
+        logger.warning("notified for test_channel_notifier_connection_lost")
         await counter.assert_count(2)
