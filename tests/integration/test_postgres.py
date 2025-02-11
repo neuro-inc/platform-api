@@ -43,7 +43,6 @@ async def test_channel_notifier_connection_lost(sqalchemy_engine: AsyncEngine) -
     notifier = ResubscribingNotifier(notifier, check_interval=0.1)
     counter = Counter()
 
-    logger.warning("Start test_channel_notifier_connection_lost")
     async with notifier.listen_to_updates(counter.callback):
         await notifier.notify()
         await counter.assert_count(1)

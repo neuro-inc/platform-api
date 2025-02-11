@@ -85,6 +85,8 @@ ignore = [
     "FBT003",
     "PT022", # Disables rule that forces return instead of yield in async fixtures
     "C901",
+    "PYI036",
+    "G004",
     "B904"
 ]
 
