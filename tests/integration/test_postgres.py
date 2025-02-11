@@ -38,18 +38,18 @@ async def test_channel_notifier(sqalchemy_engine: AsyncEngine) -> None:
 
 
 async def test_channel_notifier_connection_lost(sqalchemy_engine: AsyncEngine) -> None:
-    logger.info("Start test_channel_notifier_connection_lost")
+    logger.warning("Start test_channel_notifier_connection_lost")
     notifier: Notifier = PostgresChannelNotifier(sqalchemy_engine, "channel")
     notifier = ResubscribingNotifier(notifier, check_interval=0.1)
     counter = Counter()
 
-    logger.info("Start test_channel_notifier_connection_lost")
+    logger.warning("Start test_channel_notifier_connection_lost")
     async with notifier.listen_to_updates(counter.callback):
         await notifier.notify()
         await counter.assert_count(1)
 
         # Kill 'LISTEN ...' connections
-        logger.info(
+        logger.warning(
             "Kill 'LISTEN ...' connections for test_channel_notifier_connection_lost"
         )
         async with sqalchemy_engine.connect() as conn:
@@ -61,11 +61,11 @@ async def test_channel_notifier_connection_lost(sqalchemy_engine: AsyncEngine) -
                     )
                 )
             ).all()
-        logger.info(
+        logger.warning(
             "Killed 'LISTEN ...' connections for test_channel_notifier_connection_lost"
         )
         for pid_row in pid_rows:
-            logger.info(
+            logger.warning(
                 "pid_row %s for test_channel_notifier_connection_lost", pid_row["pid"]
             )
             async with sqalchemy_engine.connect() as conn:
@@ -73,8 +73,8 @@ async def test_channel_notifier_connection_lost(sqalchemy_engine: AsyncEngine) -
                     sa.text(f"SELECT pg_terminate_backend({pid_row['pid']});")
                 )
 
-        logger.info("sleep for test_channel_notifier_connection_lost")
+        logger.warning("sleep for test_channel_notifier_connection_lost")
         await asyncio.sleep(0.2)  # allow it to reconnect
-        logger.info("notify for test_channel_notifier_connection_lost")
+        logger.warning("notify for test_channel_notifier_connection_lost")
         await notifier.notify()
         await counter.assert_count(2)
