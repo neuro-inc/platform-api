@@ -27,7 +27,7 @@ dependencies = [
     "aiohttp-cors==0.7.0",
     "asyncpg==0.30.0",
     "sqlalchemy==1.4.25",
-    "alembic==1.14.0",
+    "alembic==1.9.4",
     "psycopg2-binary==2.9.10",
     "typing-extensions==4.9.0",
     "neuro-admin-client==25.1.1",
@@ -85,8 +85,6 @@ ignore = [
     "FBT003",
     "PT022", # Disables rule that forces return instead of yield in async fixtures
     "C901",
-    "PYI036",
-    "G004",
     "B904"
 ]
 
