@@ -22,13 +22,13 @@ repos:
   - id: upgrade-type-hints
     args:
     - --futures=true
-- repo: https://github.com/Zac-HD/shed
-  rev: 2024.10.1
-  hooks:
-  - id: shed
-    args:
-    - --refactor
-    - --py313-plus
+#- repo: https://github.com/Zac-HD/shed
+#  rev: 2024.10.1
+#  hooks:
+#  - id: shed
+#    args:
+#    - --refactor
+#    - --py313-plus
     types_or:
     - python
     - markdown
