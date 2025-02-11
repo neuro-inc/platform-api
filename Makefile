@@ -39,7 +39,7 @@ test_unit:
 
 .PHONY: test_integration
 test_integration:
-	poetry run pytest -x -s --log-cli-level=DEBUG -vv --maxfail=3 --durations=20 --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-integration.xml tests/integration
+	poetry run pytest -vv --maxfail=3 --durations=20 --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-integration.xml tests/integration
 
 .PHONY: docker_build
 docker_build: .python-version dist
