@@ -86,12 +86,11 @@ class JobStatusItemFactory:
         phase = self._pod_status.phase
         if phase == "Succeeded":
             return JobStatus.SUCCEEDED
-        elif phase in ("Failed", "Unknown"):
+        if phase in ("Failed", "Unknown"):
             return JobStatus.FAILED
-        elif phase == "Running":
+        if phase == "Running":
             return JobStatus.RUNNING
-        else:
-            return JobStatus.PENDING
+        return JobStatus.PENDING
 
     def _parse_reason(self) -> str | None:
         if self._status.is_running and (
@@ -309,10 +308,10 @@ class KubeOrchestrator(Orchestrator):
                 org_project_labels=org_project_labels,
                 namespace_name=self._kube_config.namespace,
             )
-            logger.info(f"Created default network policy for user '{job.owner}'")
+            logger.info("Created default network policy for user '%s'", job.owner)
         except AlreadyExistsException:
             logger.info(
-                f"Default network policy for user '{job.owner}' already exists."
+                "Default network policy for user '%s' already exists.", job.owner
             )
 
     async def _create_project_network_policy(self, job: Job) -> None:
@@ -330,10 +329,14 @@ class KubeOrchestrator(Orchestrator):
                 org_project_labels=org_project_labels,
                 namespace_name=self.kube_config.namespace,
             )
-            logger.info(f"Created defautl network policy for {org=} {project=}")
+            logger.info(
+                "Created default network policy for org=%s project=%s", org, project
+            )
         except AlreadyExistsException:
             logger.info(
-                f"Defautl network policy for project {org=} {project=} already exists."
+                "Default network policy for project org=%s project=%s already exists.",
+                org,
+                project,
             )
 
     async def _create_pod_network_policy(self, job: Job) -> None:
@@ -366,7 +369,7 @@ class KubeOrchestrator(Orchestrator):
         except NotFoundException:
             logger.info("Network policy %s not found", name)
         except Exception as e:
-            logger.error(f"Failed to remove network policy {name}: {e}")
+            logger.error("Failed to remove network policy %s: %s", name, e)
 
     def _create_pod_descriptor(
         self, job: Job, tolerate_unreachable_node: bool = False
@@ -431,8 +434,7 @@ class KubeOrchestrator(Orchestrator):
         )
         pod = self._update_pod_container_resources(pod, pool_types)
         pod = self._update_pod_image(job, pod)
-        pod = self._update_pod_command(job, pod)
-        return pod
+        return self._update_pod_command(job, pod)
 
     def _get_job_resource_pool_types(self, job: Job) -> Sequence[ResourcePoolType]:
         job_preset = job.preset
@@ -629,7 +631,7 @@ class KubeOrchestrator(Orchestrator):
             )
             pod = await self._client.create_pod(descriptor)
 
-            logger.info(f"Starting Service for {job.id}.")
+            logger.info("Starting Service for %s.", job.id)
             service = await self._create_service(descriptor)
             if job.is_named:
                 # If old job finished recently, it pod can be still there
@@ -639,7 +641,7 @@ class KubeOrchestrator(Orchestrator):
                 await self._create_service(descriptor, name=service_name)
 
             if job.has_http_server_exposed:
-                logger.info(f"Starting Ingress for {job.id}")
+                logger.info("Starting Ingress for %s", job.id)
                 await self._create_ingress(job, service)
         except AlreadyExistsException as e:
             raise JobAlreadyExistsException(str(e))
@@ -773,8 +775,7 @@ class KubeOrchestrator(Orchestrator):
     async def _get_job_status(self, job: Job, pod: PodDescriptor) -> JobStatusItem:
         if job.is_external:
             return await self._get_external_job_status(job, pod)
-        else:
-            return await self._get_pod_status(job, pod)
+        return await self._get_pod_status(job, pod)
 
     async def _get_external_job_status(
         self, job: Job, pod: PodDescriptor
@@ -849,7 +850,7 @@ class KubeOrchestrator(Orchestrator):
                     )
             return job_status
 
-        logger.info(f"Found unscheduled pod. Job '{job.id}'")
+        logger.info("Found unscheduled pod. Job '%s'", job.id)
 
         # Jobs with scheduling enabled never timeout on k8s scheduler
         if job.scheduler_enabled:
@@ -894,15 +895,15 @@ class KubeOrchestrator(Orchestrator):
             pod_status = pod.status
             assert pod_status is not None
             if pod_status.is_node_lost:
-                logger.info(f"Detected NodeLost in pod '{pod_name}'. Job '{job.id}'")
+                logger.info("Detected NodeLost in pod '%s'. Job '%s'", pod_name, job.id)
                 # if the pod's status reason is `NodeLost` regardless of
                 # the pod's status phase, we need to forcefully delete the
                 # pod and reschedule another one instead.
-                logger.info(f"Forcefully deleting pod '{pod_name}'. Job '{job.id}'")
+                logger.info("Forcefully deleting pod '%s'. Job '%s'", pod_name, job.id)
                 await self._client.delete_pod(pod_name, force=True)
                 do_recreate_pod = True
         except JobNotFoundException:
-            logger.info(f"Pod '{pod_name}' was lost. Job '{job.id}'")
+            logger.info("Pod '%s' was lost. Job '%s'", pod_name, job.id)
             # if the job is still in PENDING/RUNNING, but the underlying
             # pod is gone, this may mean that the node was
             # preempted/failed (the node resource may no longer exist)
@@ -911,12 +912,12 @@ class KubeOrchestrator(Orchestrator):
             do_recreate_pod = True
 
         if do_recreate_pod:
-            logger.info(f"Recreating preempted pod '{pod_name}'. Job '{job.id}'")
+            logger.info("Recreating preempted pod '%s'. Job '%s'", pod_name, job.id)
             descriptor = self._create_pod_descriptor(job)
             try:
                 pod = await self._client.create_pod(descriptor)
             except JobError:
-                # handing possible 422 and other failures
+                # handling possible 422 and other failures
                 raise JobNotFoundException(
                     f"Pod '{pod_name}' not found. Job '{job.id}'"
                 )
@@ -949,9 +950,10 @@ class KubeOrchestrator(Orchestrator):
         except NotFoundException:
             if ignore_missing:
                 return
-            logger.exception(f"Failed to remove service {name}")
+            logger.exception("Failed to remove service %s", name)
+
         except Exception:
-            logger.exception(f"Failed to remove service {name}")
+            logger.exception("Failed to remove service %s", name)
 
     async def delete_job(self, job: Job) -> JobStatus:
         if job.has_http_server_exposed:
@@ -1005,7 +1007,7 @@ class KubeOrchestrator(Orchestrator):
         try:
             await self._client.delete_all_ingresses(labels=labels)
         except Exception as e:
-            logger.warning(f"Failed to remove ingresses {labels}: {e}")
+            logger.warning("Failed to remove ingresses %s: %s", labels, e)
 
     async def _create_ingress(self, job: Job, service: Service) -> None:
         if job.name:
@@ -1030,7 +1032,7 @@ class KubeOrchestrator(Orchestrator):
         try:
             await self._client.delete_ingress(name)
         except Exception as e:
-            logger.warning(f"Failed to remove ingress {name}: {e}")
+            logger.warning("Failed to remove ingress %s: %s", name, e)
 
     async def delete_all_job_resources(self, job_id: str) -> None:
         labels = {JOB_LABEL_KEY: job_id}

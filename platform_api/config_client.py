@@ -33,7 +33,7 @@ class ConfigClient:
         self._init()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.aclose()
 
     async def aclose(self) -> None:

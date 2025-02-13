@@ -42,8 +42,7 @@ class EnvironConfigFactory:
         value = self._environ[name]
         if value == "-":
             return None
-        else:
-            return URL(value)
+        return URL(value)
 
     def create(self) -> Config:
         auth = self.create_auth()
