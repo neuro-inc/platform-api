@@ -466,7 +466,7 @@ class TestApi:
                 "admin_url": f"{admin_url}",
                 "clusters": [
                     expected_cluster_payload,
-                    {**expected_cluster_payload, **{"name": "testcluster2"}},
+                    {**expected_cluster_payload, "name": "testcluster2"},
                 ],
                 "orgs": [],
                 "projects": [],
@@ -1467,7 +1467,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         key, value = "key1", "value1"
         await regular_secrets_client.create_secret(key, value)
@@ -1491,7 +1491,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         secret_name, secret_value = "key1", "value1"
         secret_path = "/etc/foo/file.txt"
@@ -1592,7 +1592,7 @@ class TestJobs:
         secrets_client_factory: Callable[
             [_User], AbstractAsyncContextManager[SecretsClient]
         ],
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         org_user = await regular_user_factory(
             clusters=[
@@ -1625,7 +1625,7 @@ class TestJobs:
         service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         secrets_client_factory: Callable[[_User], SecretsClient],
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
@@ -1679,7 +1679,7 @@ class TestJobs:
         service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         secrets_client_factory: Callable[[_User], SecretsClient],
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
@@ -2306,7 +2306,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         user = regular_user
         key_1, key_2 = "key_1", "key_2"
@@ -2346,7 +2346,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         """Mount multiple different secrets as both secret env and
         secret volumes in a single job.
@@ -2416,7 +2416,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         """Same secret key is allowed to be mounted as a secret volume
         and a secret env simultaneously.
@@ -2473,7 +2473,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         user = regular_user
         key_1, key_2, key_3 = "key_1", "key_2", "key_3"
@@ -2518,7 +2518,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         user = regular_user
         key_1, key_2, key_3 = "key_1", "key_2", "key_3"
@@ -2563,7 +2563,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         user = regular_user
         key_1, key_2, key_3 = "key_1", "key_2", "key_3"
@@ -2608,7 +2608,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         user = regular_user
         key_1, key_2 = "key_1", "key_2"
@@ -2837,7 +2837,7 @@ class TestJobs:
         ],
         secret_kind: str,
         share_secret: Callable[..., Awaitable[None]],
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         cluster_name = test_cluster_name
         usr_1 = await regular_user_factory(

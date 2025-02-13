@@ -200,8 +200,7 @@ class JobsClient:
         async with self._client.get(url, headers=headers or self._headers) as response:
             response_text = await response.text()
             assert response.status == HTTPOk.status_code, response_text
-            result = await response.json()
-        return result
+            return await response.json()
 
     async def get_job_materialized_by_id(
         self,

@@ -6,6 +6,7 @@ from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from decimal import Decimal
+from pathlib import Path
 from typing import Protocol
 
 import aiodocker
@@ -30,7 +31,7 @@ from tests.integration.conftest import _TestConfigClient
 
 @pytest.fixture(scope="session")
 def auth_server_image_name() -> str:
-    with open("PLATFORMAUTHAPI_IMAGE") as f:
+    with Path("PLATFORMAUTHAPI_IMAGE").open() as f:
         return f.read().strip()
 
 
