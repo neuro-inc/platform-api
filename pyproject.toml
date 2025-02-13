@@ -26,13 +26,12 @@ dependencies = [
     "neuro-logging==25.1.0",
     "aiohttp-cors==0.7.0",
     "asyncpg==0.30.0",
-    "sqlalchemy==1.4.25",
+    "sqlalchemy==1.4.54",
     "alembic==1.14.0",
     "psycopg2-binary==2.9.10",
     "typing-extensions==4.9.0",
     "neuro-admin-client==25.1.1",
-    "yarl==1.18.3",
-    "greenlet==3.1.1" #need to explicitly define greenlet to make it available on arm64
+    "yarl==1.18.3"
 ]
 
 [project.scripts]
