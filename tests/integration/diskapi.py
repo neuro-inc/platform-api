@@ -37,7 +37,7 @@ async def docker_host(docker: aiodocker.Docker) -> str:
 @pytest.fixture(scope="session")
 async def kube_proxy_url(docker_host: str) -> AsyncIterator[str]:
     cmd = "kubectl proxy -p 8086 --address='0.0.0.0' --accept-hosts='.*'"
-    proc = subprocess.Popen(
+    proc = subprocess.Popen(  # noqa: ASYNC220
         cmd,
         shell=True,
         stderr=subprocess.STDOUT,
