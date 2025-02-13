@@ -1,6 +1,6 @@
 import asyncio
-import sys
 import subprocess
+import sys
 from asyncio import timeout
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
