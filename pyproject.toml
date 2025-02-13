@@ -119,6 +119,7 @@ filterwarnings = """
     ignore::DeprecationWarning:jose.jws
     ignore:direct construction of Function has been deprecated, please use Function.from_parent:pytest.PytestDeprecationWarning:pytest_asyncio
     ignore::aiohttp.web_exceptions.NotAppKeyWarning
+    ignore::ResourceWarning
     ignore:The loop argument is deprecated:DeprecationWarning:
     """
 
