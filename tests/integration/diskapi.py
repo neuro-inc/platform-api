@@ -35,9 +35,9 @@ async def docker_host(docker: aiodocker.Docker) -> str:
 
 @pytest.fixture(scope="session")
 async def kube_proxy_url(docker_host: str) -> AsyncIterator[str]:
-    cmd = "kubectl proxy -p 8086 --address='0.0.0.0' --accept-hosts='.*'"
-    proc = await asyncio.create_subprocess_shell(
-        cmd,
+    cmd = ["kubectl", "proxy", "-p", "8086", "--address=0.0.0.0", "--accept-hosts=.*"]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
         stderr=asyncio.subprocess.STDOUT,
         stdout=asyncio.subprocess.PIPE,
     )
@@ -45,7 +45,11 @@ async def kube_proxy_url(docker_host: str) -> AsyncIterator[str]:
         prefix = "Starting to serve on "
         assert proc.stdout, proc
 
-        line_bytes = await asyncio.wait_for(proc.stdout.readline(), timeout=5)
+        try:
+            line_bytes = await asyncio.wait_for(proc.stdout.readline(), timeout=5)
+        except TimeoutError:
+            raise RuntimeError("Timeout while waiting for `kubectl proxy` to start")
+
         line = line_bytes.decode().strip()
         err = f"Error while running command `{cmd}`: output `{line}`"
         if "error" in line.lower():
@@ -63,7 +67,8 @@ async def kube_proxy_url(docker_host: str) -> AsyncIterator[str]:
         yield f"http://{docker_host}:{port}"
 
     finally:
-        proc.kill()
+        proc.terminate()
+        await asyncio.sleep(1)
         await proc.wait()
 
 
