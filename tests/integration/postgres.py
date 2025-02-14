@@ -1,4 +1,4 @@
-import time
+import asyncio
 from collections.abc import AsyncIterator
 
 import aiodocker
@@ -121,7 +121,7 @@ async def _wait_for_postgres_server(
             return
         except Exception:
             pass
-        time.sleep(interval_s)  # noqa: ASYNC251
+        await asyncio.sleep(interval_s)
 
 
 @pytest.fixture
