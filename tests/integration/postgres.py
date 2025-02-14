@@ -121,7 +121,7 @@ async def _wait_for_postgres_server(
             return
         except Exception:
             pass
-        time.sleep(interval_s)
+        time.sleep(interval_s)  # noqa: ASYNC251
 
 
 @pytest.fixture

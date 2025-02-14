@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Iterable, Set
+from collections.abc import AsyncIterator, Iterable, Set as AbstractSet
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -28,22 +28,30 @@ class JobStorageJobFoundError(JobsStorageException):
         )
 
 
-ClusterOrgProjectNameSet = dict[str, dict[str | None, dict[str, Set[str]]]]
+ClusterOrgProjectNameSet = dict[str, dict[str | None, dict[str, AbstractSet[str]]]]
 
 
 @dataclass(frozen=True)
 class JobFilter:
-    statuses: Set[JobStatus] = field(default_factory=cast(type[Set[JobStatus]], set))
+    statuses: AbstractSet[JobStatus] = field(
+        default_factory=cast(type[AbstractSet[JobStatus]], set)
+    )
     clusters: ClusterOrgProjectNameSet = field(
         default_factory=cast(type[ClusterOrgProjectNameSet], dict)
     )
-    orgs: Set[str | None] = field(default_factory=cast(type[Set[str | None]], set))
-    owners: Set[str] = field(default_factory=cast(type[Set[str]], set))
-    projects: Set[str] = field(default_factory=cast(type[Set[str]], set))
-    base_owners: Set[str] = field(default_factory=cast(type[Set[str]], set))
-    tags: Set[str] = field(default_factory=cast(type[Set[str]], set))
+    orgs: AbstractSet[str | None] = field(
+        default_factory=cast(type[AbstractSet[str | None]], set)
+    )
+    owners: AbstractSet[str] = field(default_factory=cast(type[AbstractSet[str]], set))
+    projects: AbstractSet[str] = field(
+        default_factory=cast(type[AbstractSet[str]], set)
+    )
+    base_owners: AbstractSet[str] = field(
+        default_factory=cast(type[AbstractSet[str]], set)
+    )
+    tags: AbstractSet[str] = field(default_factory=cast(type[AbstractSet[str]], set))
     name: str | None = None
-    ids: Set[str] = field(default_factory=cast(type[Set[str]], set))
+    ids: AbstractSet[str] = field(default_factory=cast(type[AbstractSet[str]], set))
     since: datetime = datetime(1, 1, 1, tzinfo=UTC)
     until: datetime = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=UTC)
     materialized: bool | None = None

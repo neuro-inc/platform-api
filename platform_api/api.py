@@ -2,7 +2,6 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
-from importlib.metadata import version
 from typing import Any
 
 import aiohttp.web
@@ -15,6 +14,7 @@ from neuro_auth_client.security import AuthScheme, setup_security
 from neuro_logging import init_logging, setup_sentry
 from neuro_notifications_client import Client as NotificationsClient
 
+from platform_api import __version__
 from platform_api.orchestrator.job_policy_enforcer import (
     CreditsLimitEnforcer,
     JobPolicyEnforcePoller,
@@ -194,7 +194,7 @@ class ConfigApiHandler:
             result["users_url"] = str(self._config.auth.public_endpoint_url)
         return result
 
-    def _convert_resource_pool_type_to_payload(
+    def _convert_resource_pool_type_to_payload(  # noqa: C901
         self, resource_pool_type: ResourcePoolType
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -380,13 +380,10 @@ async def create_jobs_app(config: Config) -> aiohttp.web.Application:
     return jobs_app
 
 
-package_version = version(__package__)
-
-
 async def add_version_to_header(
     request: aiohttp.web.Request, response: aiohttp.web.StreamResponse
 ) -> None:
-    response.headers["X-Service-Version"] = f"platform-api/{package_version}"
+    response.headers["X-Service-Version"] = f"platform-api/{__version__}"
 
 
 async def create_app(

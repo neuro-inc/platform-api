@@ -46,5 +46,4 @@ class Stream:
             self._waiter = self._loop.create_future()
             await self._waiter
             assert self._waiter is None
-        data = self._data.popleft()
-        return data
+        return self._data.popleft()

@@ -63,7 +63,7 @@ class TestContainer:
             resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         with pytest.raises(JobError, match="invalid command format"):
-            container.command_list
+            _ = container.command_list
 
     def test_entrypoint_list_invalid(self) -> None:
         container = Container(
@@ -72,7 +72,7 @@ class TestContainer:
             resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         with pytest.raises(JobError, match="invalid command format"):
-            container.entrypoint_list
+            _ = container.entrypoint_list
 
     def test_entrypoint_list_non_empty(self) -> None:
         container = Container(
