@@ -28,6 +28,13 @@ spec:
       containers:
       - name: platform-api
         image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        securityContext:
+                   {{- if .Values.securityContext.enabled }}
+          runAsUser: {{ .Values.securityContext.runAsUser }}
+          runAsGroup: {{ .Values.securityContext.runAsGroup }}
+          runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+          allowPrivilegeEscalation: {{ .Values.securityContext.allowPrivilegeEscalation }}
+                   {{- end }}
         livenessProbe:
           httpGet:
             path: /api/v1/ping
