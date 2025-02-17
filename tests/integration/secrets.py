@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import subprocess
 import sys
 from asyncio import timeout
 from collections.abc import AsyncIterator, Callable
@@ -36,23 +35,28 @@ async def docker_host(docker: aiodocker.Docker) -> str:
 
 @pytest.fixture(scope="session")
 async def kube_proxy_url(docker_host: str) -> AsyncIterator[str]:
-    cmd = "kubectl proxy -p 8084 --address='0.0.0.0' --accept-hosts='.*'"
-    proc = subprocess.Popen(  # noqa: ASYNC220
-        cmd,
-        shell=True,
-        stderr=subprocess.STDOUT,
-        stdout=subprocess.PIPE,
-        close_fds=True,
+    cmd = ["kubectl", "proxy", "-p", "8084", "--address=0.0.0.0", "--accept-hosts=.*"]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stderr=asyncio.subprocess.STDOUT,
+        stdout=asyncio.subprocess.PIPE,
     )
     try:
         prefix = "Starting to serve on "
         assert proc.stdout, proc
-        line = proc.stdout.readline().decode().strip()
+
+        try:
+            line_bytes = await asyncio.wait_for(proc.stdout.readline(), timeout=5)
+        except TimeoutError:
+            raise RuntimeError("Timeout while waiting for `kubectl proxy` to start")
+
+        line = line_bytes.decode().strip()
         err = f"Error while running command `{cmd}`: output `{line}`"
         if "error" in line.lower():
             raise RuntimeError(f"{err}: Error detected")
         if not line.startswith(prefix):
             raise RuntimeError(f"{err}: Unexpected output")
+
         try:
             value = line[len(prefix) :]
             _, port_str = value.rsplit(":", 1)
@@ -64,7 +68,8 @@ async def kube_proxy_url(docker_host: str) -> AsyncIterator[str]:
 
     finally:
         proc.terminate()
-        proc.wait()
+        await asyncio.sleep(1)
+        await proc.wait()
 
 
 @pytest.fixture
