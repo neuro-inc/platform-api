@@ -14,6 +14,13 @@ strategy:
 
 enforcerRetentionDelayDays:
 
+securityContext:
+  enabled: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+
 platform:
   apiPublicUrl: https://staging.neu.ro/api/v1
   adminPublicUrl: https://staging.neu.ro/apis/admin/v1
