@@ -36,7 +36,7 @@ dependencies = [
 
 [project.scripts]
 platform-api = "platform_api.api:main"
-
+platform-api-poller = "platform_api.poller_main:main"
 
 [tool.poetry-dynamic-versioning]
 enable = true
