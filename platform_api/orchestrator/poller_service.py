@@ -317,7 +317,9 @@ class JobsPollerService:
         for secret_path, path_secrets in grouped_secrets.items():
             missing.extend(
                 await orchestrator.get_missing_secrets(
-                    secret_path, [secret.secret_key for secret in path_secrets]
+                    job.namespace,
+                    secret_path,
+                    [secret.secret_key for secret in path_secrets],
                 )
             )
         if missing:
@@ -329,7 +331,7 @@ class JobsPollerService:
             disk_volume.disk for disk_volume in job.request.container.disk_volumes
         ]
         if job_disks:
-            missing = await orchestrator.get_missing_disks(job_disks)
+            missing = await orchestrator.get_missing_disks(job.namespace, job_disks)
             if missing:
                 details = ", ".join(f"'{disk.disk_id}'" for disk in missing)
                 raise JobError(f"Missing disks: {details}")

@@ -15,7 +15,6 @@ from multidict import MultiDictProxy
 from neuro_auth_client import (
     AuthClient,
     Permission,
-    User as AuthUser,
     check_permissions,
 )
 from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
@@ -78,7 +77,7 @@ def create_job_request_validator(
     allow_flat_structure: bool = False,
     allowed_tpu_resources: Sequence[TPUResource],
     cluster_name: str,
-    org_name: str | None,
+    org_name: str,
     storage_scheme: str = "storage",
     allowed_energy_schedule_names: Sequence[str] = (),
 ) -> t.Trafaret:
@@ -535,19 +534,16 @@ def convert_job_to_job_response(job: Job) -> dict[str, Any]:
 
 
 def infer_permissions_from_container(
-    user: AuthUser,
     container: Container,
     registry_host: str,
     cluster_name: str,
-    org_name: str | None,
+    org_name: str,
     *,
     project_name: str,
 ) -> list[Permission]:
     permissions = [
         Permission(
-            uri=str(
-                make_job_uri(user, cluster_name, org_name, project_name=project_name)
-            ),
+            uri=str(make_job_uri(cluster_name, org_name, project_name=project_name)),
             action="write",
         )
     ]
@@ -572,16 +568,11 @@ def infer_permissions_from_container(
 
 
 def make_job_uri(
-    user: AuthUser,
     cluster_name: str,
-    org_name: str | None,
-    project_name: str | None = None,
+    org_name: str,
+    project_name: str,
 ) -> URL:
-    return (
-        URL.build(scheme="job", host=cluster_name)
-        / (org_name or "")
-        / (project_name or user.name)
-    )
+    return URL.build(scheme="job", host=cluster_name) / org_name / project_name
 
 
 class JobsHandler:
@@ -639,8 +630,8 @@ class JobsHandler:
     async def _create_job_request_validator(
         self,
         cluster_config: ClusterConfig,
+        org_name: str,
         allow_flat_structure: bool = False,
-        org_name: str | None = None,
     ) -> t.Trafaret:
         return create_job_request_validator(
             allow_flat_structure=allow_flat_structure,
@@ -734,14 +725,13 @@ class JobsHandler:
             allow_flat_structure = False
 
         job_request_validator = await self._create_job_request_validator(
-            cluster_config, allow_flat_structure=allow_flat_structure, org_name=org_name
+            cluster_config, org_name=org_name, allow_flat_structure=allow_flat_structure
         )
         request_payload = job_request_validator.check(request_payload)
 
         container = create_container_from_payload(request_payload)
 
         permissions = infer_permissions_from_container(
-            user,
             container,
             cluster_config.ingress.registry_host,
             cluster_name,

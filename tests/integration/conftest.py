@@ -826,7 +826,7 @@ async def delete_pod_later(
 
     for pod in pods:
         try:
-            await kube_client.delete_pod(pod.name)
+            await kube_client.delete_pod(kube_client.default_namespace, pod.name)
         except Exception:
             pass
 

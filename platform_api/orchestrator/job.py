@@ -25,6 +25,7 @@ from .job_request import (
     JobRequest,
     JobStatus,
 )
+from .kube_client import generate_namespace_name
 
 JOB_NAME_SEPARATOR = "--"
 
@@ -289,7 +290,7 @@ class JobRecord:
     cluster_name: str
     project_name: str
     org_project_hash: bytes
-    org_name: str | None = None
+    org_name: str
     name: str | None = None
     preset_name: str | None = None
     tags: Sequence[str] = ()
@@ -532,8 +533,8 @@ class JobRecord:
             request.job_id, payload
         )
         owner = payload.get("owner") or orphaned_job_owner
-        org_name = payload.get("org_name", None)
-        project_name = payload.get("project_name") or get_base_owner(owner)
+        org_name = payload["org_name"]
+        project_name = payload["project_name"]
         org_project_hash = payload.get("org_project_hash")
         if org_project_hash and isinstance(org_project_hash, str):
             org_project_hash = bytes.fromhex(org_project_hash)
@@ -948,7 +949,7 @@ class Job:
         return runtime_hours * self.price_credits_per_hour
 
     @property
-    def org_name(self) -> str | None:
+    def org_name(self) -> str:
         return self._record.org_name
 
     @property
@@ -962,6 +963,10 @@ class Job:
     @property
     def priority(self) -> JobPriority:
         return self._record.priority
+
+    @property
+    def namespace(self) -> str:
+        return generate_namespace_name(self.org_name, self.project_name)
 
     def to_primitive(self) -> dict[str, Any]:
         return self._record.to_primitive()

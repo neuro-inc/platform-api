@@ -7,7 +7,7 @@ from unittest import mock
 
 import pytest
 from multidict import MultiDict
-from neuro_auth_client import Permission, User as AuthUser
+from neuro_auth_client import Permission
 from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
 from trafaret import DataError
 from yarl import URL
@@ -1662,24 +1662,21 @@ class TestBulkJobFilterBuilder:
 
 class TestInferPermissionsFromContainer:
     def test_no_volumes(self) -> None:
-        user = AuthUser(name="testuser")
         container = Container(
             image="image", resources=ContainerResources(cpu=0.1, memory=16 * 10**6)
         )
         permissions = infer_permissions_from_container(
-            user,
             container,
             "example.com",
             "test-cluster",
-            None,
+            "test-org",
             project_name="testproject",
         )
         assert permissions == [
-            Permission(uri="job://test-cluster/testproject", action="write")
+            Permission(uri="job://test-cluster/test-org/testproject", action="write")
         ]
 
     def test_volumes(self) -> None:
-        user = AuthUser(name="testuser")
         container = Container(
             image="image",
             resources=ContainerResources(cpu=0.1, memory=16 * 10**6),
@@ -1696,35 +1693,32 @@ class TestInferPermissionsFromContainer:
             ],
         )
         permissions = infer_permissions_from_container(
-            user,
             container,
             "http://example.com",
             "test-cluster",
-            org_name=None,
+            "test-org",
             project_name="testproject",
         )
         assert permissions == [
-            Permission(uri="job://test-cluster/testproject", action="write"),
+            Permission(uri="job://test-cluster/test-org/testproject", action="write"),
             Permission(uri="storage://test-cluster/testuser/dataset", action="read"),
             Permission(uri="storage://test-cluster/testuser/result", action="write"),
         ]
 
     def test_image(self) -> None:
-        user = AuthUser(name="testuser")
         container = Container(
             image="example.com/testuser/image",
             resources=ContainerResources(cpu=0.1, memory=16 * 10**6),
         )
         permissions = infer_permissions_from_container(
-            user,
             container,
             "example.com",
             "test-cluster",
-            org_name=None,
+            "test-org",
             project_name="testproject",
         )
         assert permissions == [
-            Permission(uri="job://test-cluster/testproject", action="write"),
+            Permission(uri="job://test-cluster/test-org/testproject", action="write"),
             Permission(uri="image://test-cluster/testuser/image", action="read"),
         ]
 
@@ -1781,6 +1775,7 @@ async def test_parse_response(mock_orchestrator: MockOrchestrator) -> None:
                 description="test test description",
             ),
             cluster_name="test-cluster",
+            org_name="test-org",
             name="test-job-name",
             scheduler_enabled=True,
             energy_schedule_name="green",
@@ -1890,6 +1885,8 @@ async def test_job_to_job_response_nonzero_runtime(
             ),
             status_history=status_history,
             cluster_name="test-cluster",
+            org_name="test-org",
+            project_name="test-project",
             name="test-job-name",
         ),
         current_datetime_factory=_mocked_datetime_factory,
@@ -1915,6 +1912,8 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
                 )
             ),
             cluster_name="test-cluster",
+            org_name="test-org",
+            project_name="test-project",
             owner=owner_name,
             name=job_name,
         ),
@@ -1924,8 +1923,9 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "id": job.id,
         "owner": owner_name,
         "cluster_name": "test-cluster",
-        "project_name": owner_name,
-        "org_project_hash": "743d9df172",
+        "project_name": "test-project",
+        "org_name": "test-org",
+        "org_project_hash": "48e35fc28a",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         "http_url_named": job.http_url_named,
@@ -1959,7 +1959,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "is_preemptible_node_required": False,
         "materialized": False,
         "pass_config": False,
-        "uri": f"job://test-cluster/{owner_name}/{job.id}",
+        "uri": f"job://test-cluster/test-org/test-project/{job.id}",
         "restart_policy": "never",
         "privileged": False,
         "being_dropped": False,
@@ -1986,6 +1986,8 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
                 )
             ),
             cluster_name="test-cluster",
+            org_name="test-org",
+            project_name="test-project",
             owner=owner_name,
             name=job_name,
         ),
@@ -1995,8 +1997,9 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "id": job.id,
         "owner": owner_name,
         "cluster_name": "test-cluster",
-        "project_name": owner_name,
-        "org_project_hash": "743d9df172",
+        "org_name": "test-org",
+        "project_name": "test-project",
+        "org_project_hash": "48e35fc28a",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         "http_url_named": job.http_url_named,
@@ -2031,7 +2034,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "is_preemptible_node_required": False,
         "materialized": False,
         "pass_config": False,
-        "uri": f"job://test-cluster/{owner_name}/{job.id}",
+        "uri": f"job://test-cluster/test-org/test-project/{job.id}",
         "restart_policy": "never",
         "privileged": False,
         "being_dropped": False,
@@ -2055,6 +2058,8 @@ async def test_job_to_job_response_assert_non_empty_cluster_name(
                 )
             ),
             cluster_name="",
+            org_name="test-org",
+            project_name="test-project",
         ),
     )
     with pytest.raises(AssertionError):
@@ -2074,6 +2079,8 @@ async def test_job_to_job_response_with_preset_name(
                 )
             ),
             cluster_name="test-cluster",
+            org_name="test-org",
+            project_name="test-project",
             preset_name="cpu-small",
         ),
     )
@@ -2095,6 +2102,8 @@ async def test_job_to_job_response__energy_schedule_name(
                 )
             ),
             cluster_name="test-cluster",
+            org_name="test-org",
+            project_name="test-project",
             preset_name="cpu-small",
             scheduler_enabled=True,
             energy_schedule_name="green",
