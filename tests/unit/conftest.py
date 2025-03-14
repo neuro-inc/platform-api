@@ -176,7 +176,7 @@ class MockOrchestrator(Orchestrator):
     ) -> list[str]:
         return []
 
-    async def get_missing_disks(self, disks: list[Disk]) -> list[Disk]:
+    async def get_missing_disks(self, namespace: str, disks: list[Disk]) -> list[Disk]:
         return []
 
     def update_preemptible_jobs(self, *jobs: Job | list[Job]) -> None:
@@ -723,3 +723,8 @@ async def test_user_with_org(
     return await user_factory(
         "test_user", [(test_cluster, test_org, Balance(), Quota())]
     )
+
+
+@pytest.fixture
+def test_project() -> str:
+    return "proj"

@@ -1,8 +1,10 @@
 import abc
 import asyncio
 import enum
+import hashlib
 import json
 import logging
+import math
 import ssl
 from asyncio import timeout
 from base64 import b64encode
@@ -82,6 +84,69 @@ def _raise_status_job_exception(pod: dict[str, Any], job_id: str | None) -> NoRe
     if pod["code"] == 422:
         raise JobError(f"cant create job with id {job_id}")
     raise JobError("unexpected")
+
+
+KUBE_NAME_LENGTH_MAX = 63
+KUBE_NAMESPACE_SEP = "--"
+KUBE_NAMESPACE_PREFIX = "platform"
+KUBE_NAMESPACE_HASH_LENGTH = 24
+
+
+def generate_namespace_name(org_name: str, project_name: str) -> str:
+    """
+    returns a Kubernetes resource name in the format
+    `platform--<org_name>--<project_name>--<hash>`,
+    ensuring that the total length does not exceed `KUBE_NAME_LENGTH_MAX` characters.
+
+    - `platform--` prefix is never truncated
+    - `<hash>` (a sha256 truncated to 24 chars), is also never truncated
+    - if the names are long, we truncate them evenly,
+      so at least some parts of both org and proj names will remain
+    """
+    hashable = f"{org_name}{KUBE_NAMESPACE_SEP}{project_name}"
+    name_hash = hashlib.sha256(hashable.encode("utf-8")).hexdigest()[
+        :KUBE_NAMESPACE_HASH_LENGTH
+    ]
+
+    len_reserved = (
+        len(KUBE_NAMESPACE_PREFIX)
+        + (len(KUBE_NAMESPACE_SEP) * 2)
+        + KUBE_NAMESPACE_HASH_LENGTH
+    )
+    len_free = KUBE_NAME_LENGTH_MAX - len_reserved
+    if len(hashable) <= len_free:
+        return (
+            f"{KUBE_NAMESPACE_PREFIX}"
+            f"{KUBE_NAMESPACE_SEP}"
+            f"{hashable}"
+            f"{KUBE_NAMESPACE_SEP}"
+            f"{name_hash}"
+        )
+
+    # org and project names do not fit into a full length.
+    # let's figure out the full length of org and proj, and calculate a ratio
+    # between org and project, so that we'll truncate more chars from the
+    # string which actually has more chars
+    len_org, len_proj = len(org_name), len(project_name)
+    len_org_proj = len_org + len_proj + len(KUBE_NAMESPACE_SEP)
+    exceeds = len_org_proj - len_free
+
+    # ratio calculation. for proj can be derived via an org ratio
+    remove_from_org = math.ceil((len_org / len_org_proj) * exceeds)
+    remove_from_proj = exceeds - remove_from_org
+
+    new_org_name = org_name[: max(1, len_org - remove_from_org)]
+    new_project_name = project_name[: max(1, len_proj - remove_from_proj)]
+
+    return (
+        f"{KUBE_NAMESPACE_PREFIX}"
+        f"{KUBE_NAMESPACE_SEP}"
+        f"{new_org_name}"
+        f"{KUBE_NAMESPACE_SEP}"
+        f"{new_project_name}"
+        f"{KUBE_NAMESPACE_SEP}"
+        f"{name_hash}"
+    )
 
 
 class GroupVersion(str, Enum):
@@ -1921,37 +1986,42 @@ class KubeClient:
     def _apis_networking_v1_url(self) -> str:
         return f"{self._base_url}/apis/networking.k8s.io/v1"
 
-    def _generate_namespace_url(self, namespace_name: str) -> str:
-        return f"{self._api_v1_url}/namespaces/{namespace_name}"
+    @property
+    def default_namespace(self) -> str:
+        return self._namespace
 
     @property
     def _namespace_url(self) -> str:
         return self._generate_namespace_url(self._namespace)
 
     @property
-    def _pods_url(self) -> str:
-        return f"{self._namespace_url}/pods"
+    def _namespaces_url(self) -> str:
+        return f"{self._api_v1_url}/namespaces"
 
     @property
     def _all_pods_url(self) -> str:
         return f"{self._api_v1_url}/pods"
 
-    def _generate_pod_url(self, pod_id: str) -> str:
-        return f"{self._pods_url}/{pod_id}"
+    def _generate_namespace_url(self, namespace_name: str) -> str:
+        return f"{self._namespaces_url}/{namespace_name}"
 
-    def _generate_pods_url(self, all_namespaces: bool = False) -> str:
-        return self._all_pods_url if all_namespaces else self._pods_url
+    def _generate_pod_url(self, namespace: str, pod_id: str) -> str:
+        pods_url = self._generate_pods_url(namespace)
+        return f"{pods_url}/{pod_id}"
 
-    def _generate_all_network_policies_url(
-        self, namespace_name: str | None = None
+    def _generate_pods_url(
+        self, namespace: str | None = None, all_namespaces: bool = False
     ) -> str:
-        namespace_name = namespace_name or self._namespace
+        if all_namespaces or not namespace:
+            return self._all_pods_url
+        namespace_url = self._generate_namespace_url(namespace)
+        return f"{namespace_url}/pods"
+
+    def _generate_all_network_policies_url(self, namespace_name: str) -> str:
         namespace_url = f"{self._apis_networking_v1_url}/namespaces/{namespace_name}"
         return f"{namespace_url}/networkpolicies"
 
-    def _generate_network_policy_url(
-        self, name: str, namespace_name: str | None = None
-    ) -> str:
+    def _generate_network_policy_url(self, name: str, namespace_name: str) -> str:
         all_nps_url = self._generate_all_network_policies_url(namespace_name)
         return f"{all_nps_url}/{name}"
 
@@ -1965,35 +2035,33 @@ class KubeClient:
     def _generate_node_url(self, name: str) -> str:
         return f"{self._nodes_url}/{name}"
 
-    @property
-    def _networking_v1beta1_namespace_url(self) -> str:
+    def _generate_ingress_url(self, namespace: str, ingress_name: str) -> str:
+        url = self._generate_ingresses_url(namespace)
+        return f"{url}/{ingress_name}"
+
+    def _generate_services_url(self, namespace: str) -> str:
+        url = self._generate_namespace_url(namespace)
+        return f"{url}/services"
+
+    def _generate_service_url(self, namespace: str, service_name: str) -> str:
+        url = self._generate_services_url(namespace)
+        return f"{url}/{service_name}"
+
+    def _generate_networking_v1_namespace_url(self, namespace: str) -> str:
+        return f"{self._base_url}/apis/networking.k8s.io/v1" f"/namespaces/{namespace}"
+
+    def _generate_networking_v1beta1_namespace_url(self, namespace: str) -> str:
         return (
             f"{self._base_url}/apis/networking.k8s.io/v1beta1"
-            f"/namespaces/{self._namespace}"
+            f"/namespaces/{namespace}"
         )
 
-    @property
-    def _networking_v1_namespace_url(self) -> str:
-        return (
-            f"{self._base_url}/apis/networking.k8s.io/v1"
-            f"/namespaces/{self._namespace}"
-        )
-
-    @property
-    def _ingresses_url(self) -> str:
+    def _generate_ingresses_url(self, namespace: str) -> str:
         if self._api_resources.has_networking_v1_ingress:
-            return f"{self._networking_v1_namespace_url}/ingresses"
-        return f"{self._networking_v1beta1_namespace_url}/ingresses"
-
-    def _generate_ingress_url(self, ingress_name: str) -> str:
-        return f"{self._ingresses_url}/{ingress_name}"
-
-    @property
-    def _services_url(self) -> str:
-        return f"{self._namespace_url}/services"
-
-    def _generate_service_url(self, service_name: str) -> str:
-        return f"{self._services_url}/{service_name}"
+            url = self._generate_networking_v1_namespace_url(namespace)
+        else:
+            url = self._generate_networking_v1beta1_namespace_url(namespace)
+        return f"{url}/ingresses"
 
     def _generate_all_secrets_url(self, namespace_name: str | None = None) -> str:
         namespace_name = namespace_name or self._namespace
@@ -2149,23 +2217,29 @@ class KubeClient:
         async for event in self._watch(self._nodes_url, params, resource_version):
             yield event
 
-    async def create_pod(self, descriptor: PodDescriptor) -> PodDescriptor:
+    async def create_pod(
+        self, namespace: str, descriptor: PodDescriptor
+    ) -> PodDescriptor:
+        url = self._generate_pods_url(namespace)
         payload = await self._request(
             method="POST",
-            url=self._pods_url,
+            url=url,
             json=descriptor.to_primitive(),
             check_status_payload=False,
         )
         return PodDescriptor.from_primitive(payload)
 
     async def set_raw_pod_status(
-        self, name: str, payload: dict[str, Any]
+        self,
+        namespace: str,
+        name: str,
+        payload: dict[str, Any],
     ) -> dict[str, Any]:
-        url = self._generate_pod_url(name) + "/status"
+        url = self._generate_pod_url(namespace, name) + "/status"
         return await self._request(method="PUT", url=url, json=payload)
 
-    async def get_pod(self, pod_name: str) -> PodDescriptor:
-        url = self._generate_pod_url(pod_name)
+    async def get_pod(self, namespace: str, pod_name: str) -> PodDescriptor:
+        url = self._generate_pod_url(namespace, pod_name)
         payload = await self._request(
             method="GET",
             url=url,
@@ -2173,12 +2247,12 @@ class KubeClient:
         )
         return PodDescriptor.from_primitive(payload)
 
-    async def get_raw_pod(self, name: str) -> dict[str, Any]:
-        url = self._generate_pod_url(name)
+    async def get_raw_pod(self, namespace: str, name: str) -> dict[str, Any]:
+        url = self._generate_pod_url(namespace, name)
         return await self._request(method="GET", url=url)
 
     async def get_raw_pods(self, all_namespaces: bool = False) -> ListResult:
-        url = self._generate_pods_url(all_namespaces)
+        url = self._generate_pods_url(all_namespaces=all_namespaces)
         payload = await self._request(method="GET", url=url)
         assert payload["kind"] == "PodList"
         return ListResult.from_primitive(payload)
@@ -2186,18 +2260,24 @@ class KubeClient:
     async def watch_pods(
         self, all_namespaces: bool = False, resource_version: str | None = None
     ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
-        url = self._generate_pods_url(all_namespaces)
+        url = self._generate_pods_url(all_namespaces=all_namespaces)
         async for event in self._watch(url, resource_version=resource_version):
             yield event
 
-    async def get_pod_status(self, pod_id: str) -> PodStatus:
-        pod = await self.get_pod(pod_id)
+    async def get_pod_status(
+        self,
+        namespace: str,
+        pod_id: str,
+    ) -> PodStatus:
+        pod = await self.get_pod(namespace, pod_id)
         if pod.status is None:
             raise ValueError("Missing pod status")
         return pod.status
 
-    async def delete_pod(self, pod_name: str, force: bool = False) -> PodStatus:
-        url = self._generate_pod_url(pod_name)
+    async def delete_pod(
+        self, namespace: str, pod_name: str, *, force: bool = False
+    ) -> PodStatus:
+        url = self._generate_pod_url(namespace, pod_name)
         request_payload = None
         if force:
             request_payload = {
@@ -2214,17 +2294,19 @@ class KubeClient:
         pod = PodDescriptor.from_primitive(payload)
         return pod.status  # type: ignore
 
-    async def delete_all_pods(self, *, labels: dict[str, str]) -> None:
+    async def delete_all_pods(self, namespace: str, *, labels: dict[str, str]) -> None:
+        url = self._generate_pods_url(namespace)
         params: dict[str, str] = {}
         if labels:
             params["labelSelector"] = ",".join(
                 "=".join(item) for item in labels.items()
             )
-        await self._request(method="DELETE", url=self._pods_url, params=params)
+        await self._request(method="DELETE", url=url, params=params)
 
     async def create_ingress(
         self,
         name: str,
+        namespace: str,
         ingress_class: str | None = None,
         rules: list[IngressRule] | None = None,
         annotations: dict[str, str] | None = None,
@@ -2244,28 +2326,29 @@ class KubeClient:
             payload = ingress.to_v1_primitive()
         else:
             payload = ingress.to_v1beta1_primitive()
-        payload = await self._request(
-            method="POST", url=self._ingresses_url, json=payload
-        )
+
+        url = self._generate_ingresses_url(namespace)
+        payload = await self._request(method="POST", url=url, json=payload)
         return Ingress.from_primitive(payload)
 
-    async def get_ingress(self, name: str) -> Ingress:
-        url = self._generate_ingress_url(name)
+    async def get_ingress(self, namespace: str, name: str) -> Ingress:
+        url = self._generate_ingress_url(namespace, name)
         payload = await self._request(method="GET", url=url)
         return Ingress.from_primitive(payload)
 
     async def delete_all_ingresses(
-        self, *, labels: dict[str, str] | None = None
+        self, namespace: str, *, labels: dict[str, str] | None = None
     ) -> None:
         params: dict[str, str] = {}
         if labels:
             params["labelSelector"] = ",".join(
                 "=".join(item) for item in labels.items()
             )
-        await self._request(method="DELETE", url=self._ingresses_url, params=params)
+        url = self._generate_ingresses_url(namespace)
+        await self._request(method="DELETE", url=url, params=params)
 
-    async def delete_ingress(self, name: str) -> None:
-        url = self._generate_ingress_url(name)
+    async def delete_ingress(self, namespace: str, name: str) -> None:
+        url = self._generate_ingress_url(namespace, name)
         await self._request(method="DELETE", url=url)
 
     def _check_status_payload(self, payload: dict[str, Any]) -> None:
@@ -2286,9 +2369,11 @@ class KubeClient:
                     raise ConflictException(payload["reason"])
                 raise StatusException(payload["reason"])
 
-    async def add_ingress_rule(self, name: str, rule: IngressRule) -> Ingress:
+    async def add_ingress_rule(
+        self, namespace: str, name: str, rule: IngressRule
+    ) -> Ingress:
         # TODO (A Danshyn 06/13/18): test if does not exist already
-        url = self._generate_ingress_url(name)
+        url = self._generate_ingress_url(namespace, name)
         headers = {"Content-Type": "application/json-patch+json"}
         if self._api_resources.has_networking_v1_ingress:
             rule_payload = rule.to_v1_primitive()
@@ -2300,14 +2385,16 @@ class KubeClient:
         )
         return Ingress.from_primitive(payload)
 
-    async def remove_ingress_rule(self, name: str, host: str) -> Ingress:
+    async def remove_ingress_rule(
+        self, namespace: str, name: str, host: str
+    ) -> Ingress:
         # TODO (A Danshyn 06/13/18): this one should have a retry in case of
         # a race condition
-        ingress = await self.get_ingress(name)
+        ingress = await self.get_ingress(namespace, name)
         rule_index = ingress.find_rule_index_by_host(host)
         if rule_index < 0:
             raise StatusException("NotFound")
-        url = self._generate_ingress_url(name)
+        url = self._generate_ingress_url(namespace, name)
         rule = [
             {"op": "test", "path": f"/spec/rules/{rule_index}/host", "value": host},
             {"op": "remove", "path": f"/spec/rules/{rule_index}"},
@@ -2318,39 +2405,44 @@ class KubeClient:
         )
         return Ingress.from_primitive(payload)
 
-    async def create_service(self, service: Service) -> Service:
-        url = self._services_url
+    async def create_service(self, namespace: str, service: Service) -> Service:
+        url = self._generate_services_url(namespace)
         payload = await self._request(
             method="POST", url=url, json=service.to_primitive()
         )
         return Service.from_primitive(payload)
 
-    async def get_service(self, name: str) -> Service:
-        url = self._generate_service_url(name)
+    async def get_service(self, namespace: str, name: str) -> Service:
+        url = self._generate_service_url(namespace, name)
         payload = await self._request(method="GET", url=url)
         return Service.from_primitive(payload)
 
-    async def list_services(self, labels: dict[str, str]) -> list[Service]:
-        url = self._services_url
+    async def list_services(
+        self, namespace: str, labels: dict[str, str]
+    ) -> list[Service]:
+        url = self._generate_services_url(namespace)
         label_selector = ",".join(f"{label}={value}" for label, value in labels.items())
         payload = await self._request(
             method="GET", url=url, params={"labelSelector": label_selector}
         )
         return [Service.from_primitive(item) for item in payload["items"]]
 
-    async def delete_service(self, name: str, uid: str | None = None) -> None:
-        url = self._generate_service_url(name)
+    async def delete_service(
+        self, namespace: str, name: str, uid: str | None = None
+    ) -> None:
+        url = self._generate_service_url(namespace, name)
         await self._delete_resource_url(url, uid)
 
     async def delete_all_services(
-        self, *, labels: dict[str, str] | None = None
+        self, namespace: str, *, labels: dict[str, str] | None = None
     ) -> None:
+        url = self._generate_services_url(namespace)
         params: dict[str, str] = {}
         if labels:
             params["labelSelector"] = ",".join(
                 "=".join(item) for item in labels.items()
             )
-        await self._request(method="DELETE", url=self._services_url, params=params)
+        await self._request(method="DELETE", url=url, params=params)
 
     async def create_docker_secret(self, secret: DockerRegistrySecret) -> None:
         url = self._generate_all_secrets_url(secret.namespace)
@@ -2401,7 +2493,11 @@ class KubeClient:
         return [KubernetesEvent(item) for item in payload.get("items", [])]
 
     async def wait_pod_is_running(
-        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+        self,
+        namespace: str,
+        pod_name: str,
+        timeout_s: float = 10.0 * 60,
+        interval_s: float = 1.0,
     ) -> None:
         """Wait until the pod transitions from the waiting state.
 
@@ -2410,13 +2506,17 @@ class KubeClient:
         """
         async with timeout(timeout_s):
             while True:
-                pod_status = await self.get_pod_status(pod_name)
+                pod_status = await self.get_pod_status(namespace, pod_name)
                 if not pod_status.is_waiting:
                     return
                 await asyncio.sleep(interval_s)
 
     async def wait_pod_is_terminated(
-        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+        self,
+        namespace: str,
+        pod_name: str,
+        timeout_s: float = 10.0 * 60,
+        interval_s: float = 1.0,
     ) -> None:
         """Wait until the pod transitions to the terminated state.
 
@@ -2425,13 +2525,17 @@ class KubeClient:
         """
         async with timeout(timeout_s):
             while True:
-                pod_status = await self.get_pod_status(pod_name)
+                pod_status = await self.get_pod_status(namespace, pod_name)
                 if pod_status.is_terminated:
                     return
                 await asyncio.sleep(interval_s)
 
     async def wait_pod_is_finished(
-        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+        self,
+        namespace: str,
+        pod_name: str,
+        timeout_s: float = 10.0 * 60,
+        interval_s: float = 1.0,
     ) -> None:
         """Wait until the pod is finished.
 
@@ -2440,28 +2544,32 @@ class KubeClient:
         """
         async with timeout(timeout_s):
             while True:
-                pod_status = await self.get_pod_status(pod_name)
+                pod_status = await self.get_pod_status(namespace, pod_name)
                 if pod_status.phase in ("Succeeded", "Failed"):
                     return
                 await asyncio.sleep(interval_s)
 
     async def wait_pod_is_deleted(
-        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+        self,
+        namespace: str,
+        pod_name: str,
+        timeout_s: float = 10.0 * 60,
+        interval_s: float = 1.0,
     ) -> None:
         async with timeout(timeout_s):
             while True:
                 try:
-                    await self.get_pod(pod_name)
+                    await self.get_pod(namespace, pod_name)
                     await asyncio.sleep(interval_s)
                 except JobNotFoundException:
                     return
 
     async def create_default_network_policy(
         self,
+        namespace: str,
         name: str,
         pod_labels: dict[str, str],
         org_project_labels: dict[str, str],
-        namespace_name: str | None = None,
     ) -> dict[str, Any]:
         assert pod_labels
         # https://tools.ietf.org/html/rfc1918#section-3
@@ -2501,16 +2609,16 @@ class KubeClient:
             },
         ]
         return await self.create_egress_network_policy(
-            name, pod_labels=pod_labels, rules=rules, namespace_name=namespace_name
+            namespace, name, pod_labels=pod_labels, rules=rules
         )
 
     async def create_egress_network_policy(
         self,
+        namespace: str,
         name: str,
         *,
         pod_labels: dict[str, str],
         rules: list[dict[str, Any]],
-        namespace_name: str | None = None,
         labels: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         assert pod_labels
@@ -2527,25 +2635,29 @@ class KubeClient:
                 "egress": rules,
             },
         }
-        url = self._generate_all_network_policies_url(namespace_name)
+        url = self._generate_all_network_policies_url(namespace)
         return await self._request(method="POST", url=url, json=request_payload)
 
     async def get_network_policy(
-        self, name: str, namespace_name: str | None = None
+        self,
+        namespace: str,
+        name: str,
     ) -> dict[str, Any]:
-        url = self._generate_network_policy_url(name, namespace_name)
+        url = self._generate_network_policy_url(name, namespace)
         return await self._request(method="GET", url=url)
 
     async def delete_network_policy(
-        self, name: str, namespace_name: str | None = None
+        self,
+        namespace: str,
+        name: str,
     ) -> None:
-        url = self._generate_network_policy_url(name, namespace_name)
+        url = self._generate_network_policy_url(name, namespace)
         await self._delete_resource_url(url)
 
     async def delete_all_network_policies(
         self,
+        namespace: str,
         *,
-        namespace_name: str | None = None,
         labels: dict[str, str] | None = None,
     ) -> None:
         params: dict[str, str] = {}
@@ -2555,8 +2667,34 @@ class KubeClient:
             )
         await self._request(
             method="DELETE",
-            url=self._generate_all_network_policies_url(namespace_name),
+            url=self._generate_all_network_policies_url(namespace),
             params=params,
+        )
+
+    async def get_namespace(self, name: str) -> dict[str, Any]:
+        url = self._generate_namespace_url(name)
+        return await self._request(method="GET", url=url)
+
+    async def create_namespace(
+        self, name: str, *, labels: dict[str, str]
+    ) -> dict[str, Any]:
+        payload = {
+            "apiVersion": "v1",
+            "kind": "Namespace",
+            "metadata": {
+                "name": name,
+                "labels": labels,
+            },
+        }
+        return await self._request(
+            method="POST", url=self._namespaces_url, json=payload
+        )
+
+    async def delete_namespace(self, name: str) -> None:
+        url = self._generate_namespace_url(name)
+        await self._request(
+            method="DELETE",
+            url=url,
         )
 
 

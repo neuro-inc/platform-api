@@ -47,24 +47,34 @@ def job_policy_enforcer_config() -> JobPolicyEnforcerConfig:
 class TestRuntimeLimitEnforcer:
     async def test_enforce_nothing_killed(
         self,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
+        test_org: str,
+        test_project: str,
     ) -> None:
         enforcer = RuntimeLimitEnforcer(jobs_service)
         await jobs_service.create_job(
-            job_request_factory(), test_user, cluster_name="test-cluster"
+            job_request_factory(),
+            test_user_with_org,
+            cluster_name="test-cluster",
+            org_name=test_org,
+            project_name=test_project,
         )
         await jobs_service.create_job(
             job_request_factory(),
-            test_user,
+            test_user_with_org,
             max_run_time_minutes=1,
+            org_name=test_org,
+            project_name=test_project,
             cluster_name="test-cluster",
         )
         job, _ = await jobs_service.create_job(
             job_request_factory(),
-            test_user,
+            test_user_with_org,
             max_run_time_minutes=5,
+            org_name=test_org,
+            project_name=test_project,
             cluster_name="test-cluster",
         )
         now = datetime.datetime.now(datetime.UTC)
@@ -80,16 +90,20 @@ class TestRuntimeLimitEnforcer:
 
     async def test_enforce_killed(
         self,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
+        test_org: str,
+        test_project: str,
     ) -> None:
         enforcer = RuntimeLimitEnforcer(jobs_service)
         job, _ = await jobs_service.create_job(
             job_request_factory(),
-            test_user,
+            test_user_with_org,
             cluster_name="test-cluster",
             max_run_time_minutes=1,
+            org_name=test_org,
+            project_name=test_project,
         )
         now = datetime.datetime.now(datetime.UTC)
         before_2_mins = now - datetime.timedelta(minutes=2)
@@ -223,6 +237,7 @@ class TestHasCreditsEnforcer:
         self,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
+        test_project: str,
     ) -> Callable[[AuthUser, str | None, int], Awaitable[list[Job]]]:
         async def _make_jobs(
             user: AuthUser, org_name: str | None, count: int
@@ -234,6 +249,7 @@ class TestHasCreditsEnforcer:
                         user,
                         cluster_name="test-cluster",
                         org_name=org_name,
+                        project_name=test_project,
                     )
                 )[0]
                 for _ in range(count)
@@ -272,9 +288,12 @@ class TestHasCreditsEnforcer:
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         user_factory: UserFactory,
         test_cluster: str,
+        test_org: str,
     ) -> None:
-        user = await user_factory("some-user", [(test_cluster, Balance(), Quota())])
-        jobs = await make_jobs(user, None, 5)
+        user = await user_factory(
+            "some-user", [(test_cluster, test_org, Balance(), Quota())]
+        )
+        jobs = await make_jobs(user, test_org, 5)
 
         await has_credits_enforcer.enforce()
 
@@ -289,11 +308,13 @@ class TestHasCreditsEnforcer:
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         user_factory: UserFactory,
         test_cluster: str,
+        test_org: str,
     ) -> None:
         user = await user_factory(
-            "some-user", [(test_cluster, Balance(credits=Decimal("1.00")), Quota())]
+            "some-user",
+            [(test_cluster, test_org, Balance(credits=Decimal("1.00")), Quota())],
         )
-        jobs = await make_jobs(user, None, 5)
+        jobs = await make_jobs(user, test_org, 5)
 
         await has_credits_enforcer.enforce()
 
@@ -302,18 +323,19 @@ class TestHasCreditsEnforcer:
     @pytest.mark.parametrize("credits", [Decimal("0"), Decimal("-0.5")])
     async def test_user_has_no_credits_kill_all(
         self,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
         make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         credits: Decimal,
         mock_admin_client: MockAdminClient,
+        test_org: str,
     ) -> None:
-        jobs = await make_jobs(test_user, None, 5)
-        old_cluster_user = mock_admin_client.cluster_users[test_user.name][0]
+        jobs = await make_jobs(test_user_with_org, test_org, 5)
+        old_cluster_user = mock_admin_client.cluster_users[test_user_with_org.name][0]
 
-        mock_admin_client.cluster_users[test_user.name] = [
+        mock_admin_client.cluster_users[test_user_with_org.name] = [
             replace(old_cluster_user, balance=Balance(credits=credits))
         ]
 
@@ -323,15 +345,16 @@ class TestHasCreditsEnforcer:
 
     async def test_user_has_no_access_to_cluster_kill_all(
         self,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
         make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         mock_admin_client: MockAdminClient,
+        test_org: str,
     ) -> None:
-        jobs = await make_jobs(test_user, None, 5)
-        mock_admin_client.cluster_users[test_user.name] = []
+        jobs = await make_jobs(test_user_with_org, test_org, 5)
+        mock_admin_client.cluster_users[test_user_with_org.name] = []
 
         await has_credits_enforcer.enforce()
 
@@ -425,17 +448,23 @@ class TestHasCreditsEnforcer:
 class TestStopOnClusterRemoveEnforcer:
     async def test_job_untouched_by_default(
         self,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         jobs_service: JobsService,
         mock_auth_client: MockAuthClient,
         cluster_config_registry: ClusterConfigRegistry,
         job_request_factory: Callable[[], JobRequest],
+        test_org: str,
+        test_project: str,
     ) -> None:
         enforcer = StopOnClusterRemoveEnforcer(
             jobs_service, cluster_config_registry, mock_auth_client
         )
         job, _ = await jobs_service.create_job(
-            job_request_factory(), test_user, cluster_name="test-cluster"
+            job_request_factory(),
+            test_user_with_org,
+            cluster_name="test-cluster",
+            org_name=test_org,
+            project_name=test_project,
         )
 
         await enforcer.enforce()
@@ -445,17 +474,23 @@ class TestStopOnClusterRemoveEnforcer:
 
     async def test_job_removed_cluster_gone(
         self,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         jobs_service: JobsService,
         mock_auth_client: MockAuthClient,
         cluster_config_registry: ClusterConfigRegistry,
         job_request_factory: Callable[[], JobRequest],
+        test_org: str,
+        test_project: str,
     ) -> None:
         enforcer = StopOnClusterRemoveEnforcer(
             jobs_service, cluster_config_registry, mock_auth_client
         )
         job, _ = await jobs_service.create_job(
-            job_request_factory(), test_user, cluster_name="test-cluster"
+            job_request_factory(),
+            test_user_with_org,
+            cluster_name="test-cluster",
+            org_name=test_org,
+            project_name=test_project,
         )
 
         cluster_config_registry.remove("test-cluster")
@@ -467,19 +502,23 @@ class TestStopOnClusterRemoveEnforcer:
 
     async def test_job_with_pass_config_removed_cluster_gone(
         self,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         jobs_service: JobsService,
         mock_auth_client: MockAuthClient,
         cluster_config_registry: ClusterConfigRegistry,
         job_request_factory: Callable[[], JobRequest],
+        test_org: str,
+        test_project: str,
     ) -> None:
         enforcer = StopOnClusterRemoveEnforcer(
             jobs_service, cluster_config_registry, mock_auth_client
         )
         job, _ = await jobs_service.create_job(
             job_request_factory(),
-            test_user,
+            test_user_with_org,
             cluster_name="test-cluster",
+            org_name=test_org,
+            project_name=test_project,
             pass_config=True,
         )
 
@@ -496,13 +535,19 @@ class TestStopOnClusterRemoveEnforcer:
 class TestRetentionPolicyEnforcer:
     async def test_job_untouched_by_default(
         self,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
+        test_org: str,
+        test_project: str,
     ) -> None:
         enforcer = RetentionPolicyEnforcer(jobs_service, datetime.timedelta(days=1))
         job, _ = await jobs_service.create_job(
-            job_request_factory(), test_user, cluster_name="test-cluster"
+            job_request_factory(),
+            test_user_with_org,
+            cluster_name="test-cluster",
+            org_name=test_org,
+            project_name=test_project,
         )
 
         await enforcer.enforce()
@@ -512,13 +557,19 @@ class TestRetentionPolicyEnforcer:
 
     async def test_job_not_marked_to_drop_if_delay_is_smaller(
         self,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
+        test_org: str,
+        test_project: str,
     ) -> None:
         enforcer = RetentionPolicyEnforcer(jobs_service, datetime.timedelta(days=3))
         job, _ = await jobs_service.create_job(
-            job_request_factory(), test_user, cluster_name="test-cluster"
+            job_request_factory(),
+            test_user_with_org,
+            cluster_name="test-cluster",
+            org_name=test_org,
+            project_name=test_project,
         )
 
         now = datetime.datetime.now(datetime.UTC)
@@ -537,13 +588,19 @@ class TestRetentionPolicyEnforcer:
 
     async def test_job_marked_to_drop(
         self,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
+        test_org: str,
+        test_project: str,
     ) -> None:
         enforcer = RetentionPolicyEnforcer(jobs_service, datetime.timedelta(days=1))
         job, _ = await jobs_service.create_job(
-            job_request_factory(), test_user, cluster_name="test-cluster"
+            job_request_factory(),
+            test_user_with_org,
+            cluster_name="test-cluster",
+            org_name=test_org,
+            project_name=test_project,
         )
 
         now = datetime.datetime.now(datetime.UTC)

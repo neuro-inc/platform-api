@@ -1421,7 +1421,7 @@ class TestKubeOrchestrator:
         await delete_job_later(job)
         await job.start()
 
-        raw_pod = await kube_client.get_raw_pod(job.id)
+        raw_pod = await kube_client.get_raw_pod(job.namespace, job.id)
         assert raw_pod["metadata"]["labels"] == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/preset": job.preset_name,
@@ -1431,13 +1431,17 @@ class TestKubeOrchestrator:
         }
 
         user_policy_name = "neurouser-" + job.owner
-        raw_policy = await kube_client.get_network_policy(user_policy_name)
+        raw_policy = await kube_client.get_network_policy(
+            job.namespace, user_policy_name
+        )
         assert raw_policy["spec"]["podSelector"]["matchLabels"] == {
             "platform.neuromation.io/user": job.owner
         }
 
         project_policy_name = "project--" + job.org_project_hash.hex()
-        raw_policy = await kube_client.get_network_policy(project_policy_name)
+        raw_policy = await kube_client.get_network_policy(
+            job.namespace, project_policy_name
+        )
         assert raw_policy["spec"]["podSelector"]["matchLabels"] == {
             "platform.neuromation.io/project": job.owner,
             "platform.neuromation.io/org": "no_org",
@@ -1733,7 +1737,7 @@ class TestKubeOrchestrator:
             )
 
             missing = await orchestrator.get_missing_secrets(
-                user_name, secret_names=["key3", "key2", "key1"]
+                kube_config.namespace, user_name, secret_names=["key3", "key2", "key1"]
             )
             assert missing == ["key1", "key3"]
 
@@ -1789,7 +1793,7 @@ class TestKubeOrchestrator:
             ]
 
             missing = await orchestrator.get_missing_disks(
-                disks=[disk1, disk2, disk3, disk4]
+                kube_config.namespace, disks=[disk1, disk2, disk3, disk4]
             )
             assert missing == [disk3, disk4]
 
@@ -2243,25 +2247,25 @@ class TestKubeOrchestrator:
 
         pod_name = ingress_name = service_name = networkpolicy_name = job.id
 
-        assert await kube_client.get_pod(pod_name)
-        await kube_client.get_ingress(ingress_name)
-        await kube_client.get_service(service_name)
-        await kube_client.get_network_policy(networkpolicy_name)
+        assert await kube_client.get_pod(job.namespace, pod_name)
+        await kube_client.get_ingress(job.namespace, ingress_name)
+        await kube_client.get_service(job.namespace, service_name)
+        await kube_client.get_network_policy(job.namespace, networkpolicy_name)
 
-        await kube_orchestrator.delete_all_job_resources(job.id)
+        await kube_orchestrator.delete_all_job_resources(job.namespace, job.id)
 
         await kube_client.wait_pod_non_existent(pod_name, timeout_s=60.0)
         with pytest.raises(JobNotFoundException):
-            await kube_client.get_pod(pod_name)
+            await kube_client.get_pod(job.namespace, pod_name)
 
         with pytest.raises(NotFoundException):
-            await kube_client.get_ingress(ingress_name)
+            await kube_client.get_ingress(job.namespace, ingress_name)
 
         with pytest.raises(StatusException, match="NotFound"):
-            await kube_client.get_service(service_name)
+            await kube_client.get_service(job.namespace, service_name)
 
         with pytest.raises(StatusException, match="NotFound"):
-            await kube_client.get_network_policy(networkpolicy_name)
+            await kube_client.get_network_policy(job.namespace, networkpolicy_name)
 
     async def test_cleanup_old_named_ingresses(
         self,
@@ -3271,12 +3275,12 @@ class TestPreemption:
 
         await kube_client.wait_pod_scheduled(pod_name, node_name)
 
-        raw_pod = await kube_client.get_raw_pod(pod_name)
+        raw_pod = await kube_client.get_raw_pod(job.namespace, pod_name)
 
         raw_pod["status"]["reason"] = "NodeLost"
-        await kube_client.set_raw_pod_status(pod_name, raw_pod)
+        await kube_client.set_raw_pod_status(job.namespace, pod_name, raw_pod)
 
-        raw_pod = await kube_client.get_raw_pod(pod_name)
+        raw_pod = await kube_client.get_raw_pod(job.namespace, pod_name)
         assert raw_pod["status"]["reason"] == "NodeLost"
 
         # triggering pod recreation
@@ -3285,7 +3289,7 @@ class TestPreemption:
 
         await kube_client.wait_pod_scheduled(pod_name, node_name)
 
-        raw_pod = await kube_client.get_raw_pod(pod_name)
+        raw_pod = await kube_client.get_raw_pod(job.namespace, pod_name)
         assert not raw_pod["status"].get("reason")
 
     async def test_preemptible_job_recreation_failed(
@@ -3541,7 +3545,7 @@ class TestJobsPreemption:
         assert preempted_jobs == [preemptible_job]
 
         await kube_client.wait_pod_is_deleted(
-            preemptible_job.id, timeout_s=60, interval_s=0.1
+            job.namespace, preemptible_job.id, timeout_s=60, interval_s=0.1
         )
 
     async def test_cannot_be_scheduled(
