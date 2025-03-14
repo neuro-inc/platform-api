@@ -27,6 +27,7 @@ from .job_request import (
 )
 from .kube_client import (
     AlreadyExistsException,
+    ConflictException,
     DockerRegistrySecret,
     HostVolume,
     IngressRule,
@@ -285,10 +286,20 @@ class KubeOrchestrator(Orchestrator):
     def _get_project_resource_name(self, job: Job) -> str:
         return (self._project_prefix + job.org_project_hash.hex()).lower()
 
+    async def _create_namespace(self, job: Job) -> None:
+        labels = self._get_org_project_labels(job)
+        try:
+            await self._client.create_namespace(
+                name=job.namespace,
+                labels=labels,
+            )
+        except (AlreadyExistsException, ConflictException):
+            pass
+
     async def _create_docker_secret(self, job: Job) -> DockerRegistrySecret:
         secret = DockerRegistrySecret(
             name=self._get_docker_secret_name(job),
-            namespace=self._kube_config.namespace,
+            namespace=job.namespace,
             username=self._registry_config.username,
             password=self._registry_config.password,
             email=self._registry_config.email,
@@ -303,10 +314,10 @@ class KubeOrchestrator(Orchestrator):
         org_project_labels = self._get_org_project_labels(job)
         try:
             await self._client.create_default_network_policy(
+                job.namespace,
                 name,
                 pod_labels=pod_labels,
                 org_project_labels=org_project_labels,
-                namespace_name=self._kube_config.namespace,
             )
             logger.info("Created default network policy for user '%s'", job.owner)
         except AlreadyExistsException:
@@ -324,10 +335,10 @@ class KubeOrchestrator(Orchestrator):
         org = job.org_name or "no_org"
         try:
             await self._client.create_default_network_policy(
+                job.namespace,
                 name,
                 pod_labels=pod_labels,
                 org_project_labels=org_project_labels,
-                namespace_name=self.kube_config.namespace,
             )
             logger.info(
                 "Created default network policy for org=%s project=%s", org, project
@@ -353,10 +364,10 @@ class KubeOrchestrator(Orchestrator):
         ]
         labels = self._get_pod_labels(job)
         await self._client.create_egress_network_policy(
+            job.namespace,
             name,
             pod_labels=pod_labels,
             rules=rules,
-            namespace_name=self._kube_config.namespace,
             labels=labels,
         )
 
@@ -364,7 +375,8 @@ class KubeOrchestrator(Orchestrator):
         name = self._get_job_pod_name(job)
         try:
             await self._client.delete_network_policy(
-                name, namespace_name=self._kube_config.namespace
+                job.namespace,
+                name,
             )
         except NotFoundException:
             logger.info("Network policy %s not found", name)
@@ -567,13 +579,14 @@ class KubeOrchestrator(Orchestrator):
     def _get_pod_restart_policy(self, job: Job) -> PodRestartPolicy:
         return self._restart_policy_map[job.restart_policy]
 
-    async def get_missing_disks(self, disks: list[Disk]) -> list[Disk]:
+    async def get_missing_disks(self, namespace: str, disks: list[Disk]) -> list[Disk]:
         assert disks, "no disks"
         missing = []
         for disk in disks:
             try:
                 pvc = await self._client.get_raw_pvc(
-                    disk.disk_id, self._kube_config.namespace
+                    disk.disk_id,
+                    namespace,
                 )
                 pvc_user: str = pvc["metadata"]["labels"][
                     "platform.neuromation.io/user"
@@ -595,14 +608,12 @@ class KubeOrchestrator(Orchestrator):
         return sorted(missing, key=lambda disk: disk.disk_id)
 
     async def get_missing_secrets(
-        self, secret_path: str, secret_names: list[str]
+        self, namespace: str, secret_path: str, secret_names: list[str]
     ) -> list[str]:
         assert secret_names, "no sec names"
         user_secret_name = self._get_k8s_secret_name(secret_path)
         try:
-            raw = await self._client.get_raw_secret(
-                user_secret_name, self._kube_config.namespace
-            )
+            raw = await self._client.get_raw_secret(user_secret_name, namespace)
             keys = raw.get("data", {}).keys()
             missing = set(secret_names) - set(keys)
             return sorted(missing)
@@ -619,7 +630,7 @@ class KubeOrchestrator(Orchestrator):
         """
         tolerate_unreachable_node: used only in tests
         """
-
+        await self._create_namespace(job)
         await self._create_docker_secret(job)
         await self._create_user_network_policy(job)
         await self._create_project_network_policy(job)
@@ -629,16 +640,18 @@ class KubeOrchestrator(Orchestrator):
             descriptor = self._create_pod_descriptor(
                 job, tolerate_unreachable_node=tolerate_unreachable_node
             )
-            pod = await self._client.create_pod(descriptor)
+            pod = await self._client.create_pod(job.namespace, descriptor)
 
             logger.info("Starting Service for %s.", job.id)
-            service = await self._create_service(descriptor)
+            service = await self._create_service(job.namespace, descriptor)
             if job.is_named:
                 # If old job finished recently, it pod can be still there
                 # with corresponding service, so we should delete it here
                 service_name = self._get_service_name_for_named(job)
-                await self._delete_service(service_name, ignore_missing=True)
-                await self._create_service(descriptor, name=service_name)
+                await self._delete_service(
+                    job.namespace, service_name, ignore_missing=True
+                )
+                await self._create_service(job.namespace, descriptor, name=service_name)
 
             if job.has_http_server_exposed:
                 logger.info("Starting Ingress for %s", job.id)
@@ -768,7 +781,7 @@ class KubeOrchestrator(Orchestrator):
         if job.is_restartable or job.is_external:
             pod = await self._check_pod_lost(job)
         else:
-            pod = await self._client.get_pod(self._get_job_pod_name(job))
+            pod = await self._client.get_pod(job.namespace, self._get_job_pod_name(job))
 
         return await self._get_job_status(job, pod)
 
@@ -827,7 +840,8 @@ class KubeOrchestrator(Orchestrator):
         now = datetime.now(UTC)
         assert pod.created_at is not None
         pod_events = await self._client.get_pod_events(
-            self._get_job_pod_name(job), self._kube_config.namespace
+            self._get_job_pod_name(job),
+            job.namespace,
         )
 
         if pod_status.is_scheduled:
@@ -891,7 +905,7 @@ class KubeOrchestrator(Orchestrator):
         pod_name = self._get_job_pod_name(job)
         do_recreate_pod = False
         try:
-            pod = await self._client.get_pod(pod_name)
+            pod = await self._client.get_pod(job.namespace, pod_name)
             pod_status = pod.status
             assert pod_status is not None
             if pod_status.is_node_lost:
@@ -900,7 +914,7 @@ class KubeOrchestrator(Orchestrator):
                 # the pod's status phase, we need to forcefully delete the
                 # pod and reschedule another one instead.
                 logger.info("Forcefully deleting pod '%s'. Job '%s'", pod_name, job.id)
-                await self._client.delete_pod(pod_name, force=True)
+                await self._client.delete_pod(job.namespace, pod_name, force=True)
                 do_recreate_pod = True
         except JobNotFoundException:
             logger.info("Pod '%s' was lost. Job '%s'", pod_name, job.id)
@@ -915,7 +929,7 @@ class KubeOrchestrator(Orchestrator):
             logger.info("Recreating preempted pod '%s'. Job '%s'", pod_name, job.id)
             descriptor = self._create_pod_descriptor(job)
             try:
-                pod = await self._client.create_pod(descriptor)
+                pod = await self._client.create_pod(job.namespace, descriptor)
             except JobError:
                 # handling possible 422 and other failures
                 raise JobNotFoundException(
@@ -924,29 +938,36 @@ class KubeOrchestrator(Orchestrator):
 
         return pod
 
-    async def _check_pod_exists(self, pod_name: str) -> bool:
+    async def _check_pod_exists(self, namespace: str, pod_name: str) -> bool:
         try:
-            await self._client.get_pod_status(pod_name)
+            await self._client.get_pod_status(namespace, pod_name)
             return True
         except JobNotFoundException:
             return False
 
     async def _create_service(
-        self, pod: PodDescriptor, name: str | None = None
+        self, namespace: str, pod: PodDescriptor, name: str | None = None
     ) -> Service:
         service = Service.create_headless_for_pod(pod)
         if name is not None:
             service = service.make_named(name)
-        return await self._client.create_service(service)
+        return await self._client.create_service(namespace, service)
 
     async def _get_services(self, job: Job) -> list[Service]:
-        return await self._client.list_services(self._get_job_labels(job))
+        return await self._client.list_services(
+            job.namespace, self._get_job_labels(job)
+        )
 
     async def _delete_service(
-        self, name: str, *, uid: str | None = None, ignore_missing: bool = False
+        self,
+        namespace: str,
+        name: str,
+        *,
+        uid: str | None = None,
+        ignore_missing: bool = False,
     ) -> None:
         try:
-            await self._client.delete_service(name=name, uid=uid)
+            await self._client.delete_service(namespace=namespace, name=name, uid=uid)
         except NotFoundException:
             if ignore_missing:
                 return
@@ -961,13 +982,13 @@ class KubeOrchestrator(Orchestrator):
 
         for service in await self._get_services(job):
             await self._delete_service(
-                service.name, uid=service.uid, ignore_missing=True
+                job.namespace, service.name, uid=service.uid, ignore_missing=True
             )
 
         await self._delete_pod_network_policy(job)
 
         pod_id = self._get_job_pod_name(job)
-        status = await self._client.delete_pod(pod_id)
+        status = await self._client.delete_pod(job.namespace, pod_id)
         return convert_pod_status_to_job_status(status).status
 
     def _get_job_ingress_name(self, job: Job) -> str:
@@ -1005,7 +1026,7 @@ class KubeOrchestrator(Orchestrator):
     async def _delete_ingresses_by_job_name(self, job: Job, service: Service) -> None:
         labels = self._get_job_name_ingress_labels(job, service)
         try:
-            await self._client.delete_all_ingresses(labels=labels)
+            await self._client.delete_all_ingresses(job.namespace, labels=labels)
         except Exception as e:
             logger.warning("Failed to remove ingresses %s: %s", labels, e)
 
@@ -1021,6 +1042,7 @@ class KubeOrchestrator(Orchestrator):
         annotations = self._get_ingress_annotations(job)
         await self._client.create_ingress(
             name,
+            job.namespace,
             ingress_class=self._kube_config.jobs_ingress_class,
             rules=rules,
             annotations=annotations,
@@ -1030,16 +1052,17 @@ class KubeOrchestrator(Orchestrator):
     async def _delete_ingress(self, job: Job) -> None:
         name = self._get_job_ingress_name(job)
         try:
-            await self._client.delete_ingress(name)
+            await self._client.delete_ingress(job.namespace, name)
         except Exception as e:
             logger.warning("Failed to remove ingress %s: %s", name, e)
 
-    async def delete_all_job_resources(self, job_id: str) -> None:
+    async def delete_all_job_resources(self, namespace: str, job_id: str) -> None:
         labels = {JOB_LABEL_KEY: job_id}
-        await self._client.delete_all_pods(labels=labels)
-        await self._client.delete_all_ingresses(labels=labels)
-        await self._client.delete_all_services(labels=labels)
-        await self._client.delete_all_network_policies(labels=labels)
+        await self._client.delete_all_pods(namespace, labels=labels)
+        # todo: check this
+        await self._client.delete_all_ingresses(namespace, labels=labels)
+        await self._client.delete_all_services(namespace, labels=labels)
+        await self._client.delete_all_network_policies(namespace, labels=labels)
 
     async def preempt_jobs(
         self, jobs_to_schedule: list[Job], preemptible_jobs: list[Job]
