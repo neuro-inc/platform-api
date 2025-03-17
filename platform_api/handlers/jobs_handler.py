@@ -271,6 +271,7 @@ def create_job_response_validator() -> t.Trafaret:
             # on the dev and staging envs. we may want to change this once the
             # prod env is there.
             "owner": t.String(allow_blank=True),
+            "namespace": t.String,
             "cluster_name": t.String(allow_blank=False),
             t.Key("org_name", optional=True): t.String,
             "project_name": t.String(allow_blank=False),
@@ -467,6 +468,7 @@ def convert_job_to_job_response(job: Job) -> dict[str, Any]:
     response_payload: dict[str, Any] = {
         "id": job.id,
         "owner": job.owner,
+        "namespace": job.namespace,
         "cluster_name": job.cluster_name,
         "project_name": job.project_name,
         "org_project_hash": job.org_project_hash.hex(),
