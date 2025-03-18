@@ -1812,6 +1812,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "org_name": "test-tenant-id",
         "project_name": "test-project",
         "org_project_hash": "61c2aef2a5",
+        "namespace": "platform--test-tenant-i--test-project--d0d03a56494108f3b9fb51c1",
         "status": "pending",
         "statuses": [
             {
@@ -1926,6 +1927,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "project_name": "test-project",
         "org_name": "test-org",
         "org_project_hash": "48e35fc28a",
+        "namespace": "platform--test-org--test-project--a5e4118c50842e7acbd85e28",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         "http_url_named": job.http_url_named,
@@ -2000,6 +2002,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "org_name": "test-org",
         "project_name": "test-project",
         "org_project_hash": "48e35fc28a",
+        "namespace": "platform--test-org--test-project--a5e4118c50842e7acbd85e28",
         "name": job_name,
         "http_url": f"http://{job.id}.jobs",
         "http_url_named": job.http_url_named,

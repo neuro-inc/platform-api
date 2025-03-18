@@ -77,7 +77,7 @@ def create_job_request_validator(
     allow_flat_structure: bool = False,
     allowed_tpu_resources: Sequence[TPUResource],
     cluster_name: str,
-    org_name: str,
+    org_name: str | None,
     storage_scheme: str = "storage",
     allowed_energy_schedule_names: Sequence[str] = (),
 ) -> t.Trafaret:
@@ -541,13 +541,13 @@ def infer_permissions_from_container(
     container: Container,
     registry_host: str,
     cluster_name: str,
-    org_name: str,
+    org_name: str | None,
     *,
     project_name: str,
 ) -> list[Permission]:
     permissions = [
         Permission(
-            uri=str(make_job_uri(cluster_name, org_name, project_name=project_name)),
+            uri=str(make_job_uri(cluster_name, project_name, org_name)),
             action="write",
         )
     ]
@@ -573,10 +573,10 @@ def infer_permissions_from_container(
 
 def make_job_uri(
     cluster_name: str,
-    org_name: str,
     project_name: str,
+    org_name: str | None,
 ) -> URL:
-    return URL.build(scheme="job", host=cluster_name) / org_name / project_name
+    return URL.build(scheme="job", host=cluster_name) / (org_name or "") / project_name
 
 
 class JobsHandler:
@@ -634,8 +634,8 @@ class JobsHandler:
     async def _create_job_request_validator(
         self,
         cluster_config: ClusterConfig,
-        org_name: str,
         allow_flat_structure: bool = False,
+        org_name: str | None = None,
     ) -> t.Trafaret:
         return create_job_request_validator(
             allow_flat_structure=allow_flat_structure,
@@ -697,8 +697,9 @@ class JobsHandler:
             ),
             None,
         )
-        # Always use NO_ORG as default if use has direct access to cluster
-        # if cluster_config_for_default_org is None validator below will raise an error
+        # always use NO_ORG as default if a user has direct access to cluster.
+        # if cluster_config_for_default_org is None,
+        # the validator below will raise an error
         default_org_name = None
         if (
             cluster_config_for_default_org is not None
