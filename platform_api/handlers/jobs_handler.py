@@ -15,7 +15,6 @@ from multidict import MultiDictProxy
 from neuro_auth_client import (
     AuthClient,
     Permission,
-    User as AuthUser,
     check_permissions,
 )
 from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
@@ -272,6 +271,7 @@ def create_job_response_validator() -> t.Trafaret:
             # on the dev and staging envs. we may want to change this once the
             # prod env is there.
             "owner": t.String(allow_blank=True),
+            "namespace": t.String,
             "cluster_name": t.String(allow_blank=False),
             t.Key("org_name", optional=True): t.String,
             "project_name": t.String(allow_blank=False),
@@ -470,6 +470,7 @@ def convert_job_to_job_response(job: Job) -> dict[str, Any]:
     response_payload: dict[str, Any] = {
         "id": job.id,
         "owner": job.owner,
+        "namespace": job.namespace,
         "cluster_name": job.cluster_name,
         "project_name": job.project_name,
         "org_project_hash": job.org_project_hash.hex(),
@@ -537,7 +538,6 @@ def convert_job_to_job_response(job: Job) -> dict[str, Any]:
 
 
 def infer_permissions_from_container(
-    user: AuthUser,
     container: Container,
     registry_host: str,
     cluster_name: str,
@@ -547,9 +547,7 @@ def infer_permissions_from_container(
 ) -> list[Permission]:
     permissions = [
         Permission(
-            uri=str(
-                make_job_uri(user, cluster_name, org_name, project_name=project_name)
-            ),
+            uri=str(make_job_uri(cluster_name, project_name, org_name)),
             action="write",
         )
     ]
@@ -574,16 +572,11 @@ def infer_permissions_from_container(
 
 
 def make_job_uri(
-    user: AuthUser,
     cluster_name: str,
+    project_name: str,
     org_name: str | None,
-    project_name: str | None = None,
 ) -> URL:
-    return (
-        URL.build(scheme="job", host=cluster_name)
-        / (org_name or "")
-        / (project_name or user.name)
-    )
+    return URL.build(scheme="job", host=cluster_name) / (org_name or "") / project_name
 
 
 class JobsHandler:
@@ -704,8 +697,9 @@ class JobsHandler:
             ),
             None,
         )
-        # Always use NO_ORG as default if use has direct access to cluster
-        # if cluster_config_for_default_org is None validator below will raise an error
+        # always use NO_ORG as default if a user has direct access to cluster.
+        # if cluster_config_for_default_org is None,
+        # the validator below will raise an error
         default_org_name = None
         if (
             cluster_config_for_default_org is not None
@@ -736,14 +730,13 @@ class JobsHandler:
             allow_flat_structure = False
 
         job_request_validator = await self._create_job_request_validator(
-            cluster_config, allow_flat_structure=allow_flat_structure, org_name=org_name
+            cluster_config, org_name=org_name, allow_flat_structure=allow_flat_structure
         )
         request_payload = job_request_validator.check(request_payload)
 
         container = create_container_from_payload(request_payload)
 
         permissions = infer_permissions_from_container(
-            user,
             container,
             cluster_config.ingress.registry_host,
             cluster_name,

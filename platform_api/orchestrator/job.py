@@ -25,6 +25,7 @@ from .job_request import (
     JobRequest,
     JobStatus,
 )
+from .kube_client import generate_namespace_name
 
 JOB_NAME_SEPARATOR = "--"
 
@@ -533,7 +534,7 @@ class JobRecord:
         )
         owner = payload.get("owner") or orphaned_job_owner
         org_name = payload.get("org_name", None)
-        project_name = payload.get("project_name") or get_base_owner(owner)
+        project_name = payload["project_name"]
         org_project_hash = payload.get("org_project_hash")
         if org_project_hash and isinstance(org_project_hash, str):
             org_project_hash = bytes.fromhex(org_project_hash)
@@ -962,6 +963,11 @@ class Job:
     @property
     def priority(self) -> JobPriority:
         return self._record.priority
+
+    @property
+    def namespace(self) -> str:
+        org_name = self.org_name or NO_ORG
+        return generate_namespace_name(org_name, self.project_name)
 
     def to_primitive(self) -> dict[str, Any]:
         return self._record.to_primitive()

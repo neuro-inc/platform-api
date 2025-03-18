@@ -129,7 +129,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             if isinstance(exc.orig.__cause__, UniqueViolationError):
                 e = exc.orig.__cause__
                 if e.constraint_name == "jobs_name_project_name_uq":
-                    # We need to retrieve conflicting job from database to
+                    # We need to retrieve a conflicting job from database to
                     # build JobStorageJobFoundError
                     project_name = values["project_name"]
                     query = (

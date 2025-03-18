@@ -54,14 +54,24 @@ class TestJobsPoller:
         jobs_service: JobsService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         await jobs_service.create_job(
-            job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         await jobs_service.create_job(
-            job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
 
         all_jobs = await jobs_service.get_all_jobs()
@@ -77,14 +87,24 @@ class TestJobsPoller:
         jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         await jobs_service.create_job(
-            job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         await jobs_service.create_job(
-            job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
 
         all_jobs = await jobs_service.get_all_jobs()
