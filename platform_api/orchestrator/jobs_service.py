@@ -220,8 +220,8 @@ class JobsService:
         user: AuthUser,
         cluster_name: str,
         *,
-        org_name: str,
         project_name: str,
+        org_name: str | None = None,
         job_name: str | None = None,
         preset_name: str | None = None,
         tags: Sequence[str] = (),
@@ -263,28 +263,31 @@ class JobsService:
         if not wait_for_jobs_quota:
             await self._raise_for_running_jobs_quota(cluster_user)
 
-        org_cluster = await self._admin_client.get_org_cluster(cluster_name, org_name)
-        if not wait_for_jobs_quota:
-            await self._raise_for_orgs_running_jobs_quota(org_cluster)
-
-        org_user = await self._admin_client.get_org_user(
-            org_name=org_name,
-            user_name=base_name,
-        )
-
-        try:
-            await self._raise_for_no_credits(org_user)
-        except NoCreditsError:
-            await self._notifications_client.notify(
-                JobCannotStartNoCredits(
-                    user_id=user.name,
-                    cluster_name=cluster_name,
-                )
+        if org_name:
+            org_cluster = await self._admin_client.get_org_cluster(
+                cluster_name, org_name
             )
-            raise
+            if not wait_for_jobs_quota:
+                await self._raise_for_orgs_running_jobs_quota(org_cluster)
 
-        org = await self._admin_client.get_org(org_name)
-        await self._raise_for_no_credits(org)
+            org_user = await self._admin_client.get_org_user(
+                org_name=org_name,
+                user_name=base_name,
+            )
+
+            try:
+                await self._raise_for_no_credits(org_user)
+            except NoCreditsError:
+                await self._notifications_client.notify(
+                    JobCannotStartNoCredits(
+                        user_id=user.name,
+                        cluster_name=cluster_name,
+                    )
+                )
+                raise
+
+            org = await self._admin_client.get_org(org_name)
+            await self._raise_for_no_credits(org)
 
         if pass_config:
             job_request = await self._setup_pass_config(

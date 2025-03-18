@@ -290,7 +290,7 @@ class JobRecord:
     cluster_name: str
     project_name: str
     org_project_hash: bytes
-    org_name: str
+    org_name: str | None = None
     name: str | None = None
     preset_name: str | None = None
     tags: Sequence[str] = ()
@@ -533,7 +533,7 @@ class JobRecord:
             request.job_id, payload
         )
         owner = payload.get("owner") or orphaned_job_owner
-        org_name = payload["org_name"]
+        org_name = payload.get("org_name", None)
         project_name = payload["project_name"]
         org_project_hash = payload.get("org_project_hash")
         if org_project_hash and isinstance(org_project_hash, str):
@@ -949,7 +949,7 @@ class Job:
         return runtime_hours * self.price_credits_per_hour
 
     @property
-    def org_name(self) -> str:
+    def org_name(self) -> str | None:
         return self._record.org_name
 
     @property
@@ -966,7 +966,8 @@ class Job:
 
     @property
     def namespace(self) -> str:
-        return generate_namespace_name(self.org_name, self.project_name)
+        org_name = self.org_name or NO_ORG
+        return generate_namespace_name(org_name, self.project_name)
 
     def to_primitive(self) -> dict[str, Any]:
         return self._record.to_primitive()
