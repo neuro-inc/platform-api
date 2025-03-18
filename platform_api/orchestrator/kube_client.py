@@ -21,6 +21,7 @@ import aiohttp
 import iso8601
 from yarl import URL
 
+from ..config import NO_ORG, NO_ORG_NORMALIZED
 from .job_request import (
     Container,
     ContainerResources,
@@ -103,6 +104,9 @@ def generate_namespace_name(org_name: str, project_name: str) -> str:
     - if the names are long, we truncate them evenly,
       so at least some parts of both org and proj names will remain
     """
+    if org_name == NO_ORG:
+        org_name = NO_ORG_NORMALIZED
+
     hashable = f"{org_name}{KUBE_NAMESPACE_SEP}{project_name}"
     name_hash = hashlib.sha256(hashable.encode("utf-8")).hexdigest()[
         :KUBE_NAMESPACE_HASH_LENGTH

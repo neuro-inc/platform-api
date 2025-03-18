@@ -11,7 +11,7 @@ from typing import Any
 import aiohttp
 
 from platform_api.cluster_config import OrchestratorConfig
-from platform_api.config import RegistryConfig, StorageConfig
+from platform_api.config import NO_ORG, RegistryConfig, StorageConfig
 from platform_api.resource import ResourcePoolType
 
 from .base import Orchestrator
@@ -332,7 +332,7 @@ class KubeOrchestrator(Orchestrator):
         org_project_labels = self._get_org_project_labels(job)
 
         project = job.project_name
-        org = job.org_name or "no_org"
+        org = job.org_name or NO_ORG
         try:
             await self._client.create_default_network_policy(
                 job.namespace,
