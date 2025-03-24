@@ -34,7 +34,7 @@ repos:
     - markdown
     - rst
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.8.6
+  rev: v0.11.2
   hooks:
   - id: ruff-format
   - id: ruff
@@ -47,7 +47,7 @@ repos:
       docs/spelling_wordlist.txt|
       .gitignore
 - repo: https://github.com/sirosen/check-jsonschema
-  rev: 0.30.0
+  rev: 0.31.3
   hooks:
   - id: check-github-actions
   - id: check-github-workflows
