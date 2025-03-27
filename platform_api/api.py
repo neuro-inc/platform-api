@@ -2,32 +2,21 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
-from importlib.metadata import version
 from typing import Any
 
 import aiohttp.web
-import aiohttp_cors
 from aiohttp.web import HTTPUnauthorized
 from aiohttp.web_urldispatcher import AbstractRoute
 from aiohttp_security import check_permission
 from neuro_admin_client import AdminClient, OrgUser, ProjectUser
 from neuro_auth_client import AuthClient, Permission
 from neuro_auth_client.security import AuthScheme, setup_security
-from neuro_logging import (
-    init_logging,
-    make_sentry_trace_config,
-    make_zipkin_trace_config,
-    notrace,
-    setup_sentry,
-    setup_zipkin,
-    setup_zipkin_tracer,
-)
+from neuro_logging import init_logging, setup_sentry
 from neuro_notifications_client import Client as NotificationsClient
 
+from platform_api import __version__
 from platform_api.orchestrator.job_policy_enforcer import (
-    BillingEnforcer,
     CreditsLimitEnforcer,
-    CreditsNotificationsEnforcer,
     JobPolicyEnforcePoller,
     RetentionPolicyEnforcer,
     RuntimeLimitEnforcer,
@@ -35,13 +24,16 @@ from platform_api.orchestrator.job_policy_enforcer import (
 )
 
 from .cluster import ClusterConfig, ClusterConfigRegistry, ClusterUpdater
-from .cluster_config import EnergySchedule, EnergySchedulePeriod
-from .config import Config, CORSConfig
+from .cluster_config import (
+    AppsConfig,
+    EnergySchedule,
+    EnergySchedulePeriod,
+    VolumeConfig,
+)
+from .config import Config
 from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
-from .orchestrator.billing_log.service import BillingLogService, BillingLogWorker
-from .orchestrator.billing_log.storage import PostgresBillingLogStorage
 from .orchestrator.job_request import JobError, JobException
 from .orchestrator.jobs_service import (
     JobsService,
@@ -51,7 +43,7 @@ from .orchestrator.jobs_service import (
 from .orchestrator.jobs_storage import JobsStorage, PostgresJobsStorage
 from .orchestrator.jobs_storage.base import JobStorageTransactionError
 from .postgres import make_async_engine
-from .resource import Preset
+from .resource import Preset, ResourcePoolType
 from .user import authorized_user, untrusted_user
 from .utils.update_notifier import (
     Notifier,
@@ -66,7 +58,6 @@ class ApiHandler:
     def register(self, app: aiohttp.web.Application) -> list[AbstractRoute]:
         return app.add_routes((aiohttp.web.get("/ping", self.handle_ping),))
 
-    @notrace
     async def handle_ping(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         return aiohttp.web.Response()
 
@@ -164,6 +155,10 @@ class ConfigApiHandler:
     ) -> dict[str, Any]:
         cluster_config = user_cluster_config.config
         orgs = user_cluster_config.orgs
+        resource_pool_types = [
+            self._convert_resource_pool_type_to_payload(r)
+            for r in cluster_config.orchestrator.resource_pool_types
+        ]
         presets = [
             self._convert_preset_to_payload(preset)
             for preset in cluster_config.orchestrator.presets
@@ -177,6 +172,7 @@ class ConfigApiHandler:
             "metrics_url": str(cluster_config.ingress.metrics_url),
             "disks_url": str(cluster_config.ingress.disks_url),
             "buckets_url": str(cluster_config.ingress.buckets_url),
+            "resource_pool_types": resource_pool_types,
             "resource_presets": presets,
             "orgs": orgs,
             "timezone": str(cluster_config.timezone),
@@ -184,10 +180,65 @@ class ConfigApiHandler:
                 self._convert_energy_schedule_to_payload(schedule)
                 for schedule in cluster_config.energy.schedules
             ],
+            "storage_volumes": [
+                self._convert_storage_volume_to_payload(volume)
+                for volume in cluster_config.storage.volumes
+            ],
+            "apps": self._convert_apps_config_to_payload(cluster_config.apps),
         }
+        if cluster_config.location:
+            result["location"] = cluster_config.location
+        if cluster_config.logo_url:
+            result["logo_url"] = str(cluster_config.logo_url)
         if self._config.auth.public_endpoint_url:
             result["users_url"] = str(self._config.auth.public_endpoint_url)
         return result
+
+    def _convert_resource_pool_type_to_payload(  # noqa: C901
+        self, resource_pool_type: ResourcePoolType
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "name": resource_pool_type.name,
+            "min_size": resource_pool_type.min_size,
+            "max_size": resource_pool_type.max_size,
+            "cpu": resource_pool_type.cpu,
+            "available_cpu": resource_pool_type.available_cpu or resource_pool_type.cpu,
+            "memory": resource_pool_type.memory,
+            "available_memory": (
+                resource_pool_type.available_memory or resource_pool_type.memory
+            ),
+            "disk_size": resource_pool_type.disk_size,
+            "available_disk_size": (
+                resource_pool_type.available_disk_size or resource_pool_type.disk_size
+            ),
+        }
+        if resource_pool_type.idle_size:
+            payload["idle_size"] = resource_pool_type.idle_size
+        if resource_pool_type.nvidia_gpu is not None:
+            payload["nvidia_gpu"] = resource_pool_type.nvidia_gpu
+        if resource_pool_type.nvidia_gpu_model is not None:
+            payload["nvidia_gpu_model"] = resource_pool_type.nvidia_gpu_model
+        if resource_pool_type.amd_gpu is not None:
+            payload["amd_gpu"] = resource_pool_type.amd_gpu
+        if resource_pool_type.amd_gpu_model is not None:
+            payload["amd_gpu_model"] = resource_pool_type.amd_gpu_model
+        if resource_pool_type.intel_gpu is not None:
+            payload["intel_gpu"] = resource_pool_type.intel_gpu
+        if resource_pool_type.intel_gpu_model is not None:
+            payload["intel_gpu_model"] = resource_pool_type.intel_gpu_model
+        if resource_pool_type.tpu:
+            payload["tpu"] = {
+                "types": resource_pool_type.tpu.types,
+                "software_versions": resource_pool_type.tpu.software_versions,
+                "ipv4_cidr_block": resource_pool_type.tpu.ipv4_cidr_block,
+            }
+        if resource_pool_type.is_preemptible:
+            payload["is_preemptible"] = resource_pool_type.is_preemptible
+        if resource_pool_type.cpu_min_watts:
+            payload["cpu_min_watts"] = resource_pool_type.cpu_min_watts
+        if resource_pool_type.cpu_max_watts:
+            payload["cpu_max_watts"] = resource_pool_type.cpu_max_watts
+        return payload
 
     def _convert_preset_to_payload(self, preset: Preset) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -201,16 +252,32 @@ class ConfigApiHandler:
             "is_preemptible": preset.scheduler_enabled,
             "is_preemptible_node_required": preset.preemptible_node,
         }
-        if preset.gpu is not None:
-            payload["gpu"] = preset.gpu
-        if preset.gpu_model is not None:
-            payload["gpu_model"] = preset.gpu_model
-
+        if preset.nvidia_gpu is not None:
+            payload["nvidia_gpu"] = preset.nvidia_gpu
+            payload["gpu"] = preset.nvidia_gpu
+        if preset.amd_gpu is not None:
+            payload["amd_gpu"] = preset.amd_gpu
+        if preset.intel_gpu is not None:
+            payload["intel_gpu"] = preset.intel_gpu
+        nvidia_gpu_model = preset.nvidia_gpu_model or preset.gpu_model
+        if nvidia_gpu_model is not None:
+            payload["gpu_model"] = nvidia_gpu_model
+            payload["nvidia_gpu_model"] = nvidia_gpu_model
+        if preset.amd_gpu_model is not None:
+            payload["amd_gpu_model"] = preset.amd_gpu_model
+        if preset.intel_gpu_model is not None:
+            payload["intel_gpu_model"] = preset.intel_gpu_model
         if preset.tpu:
             payload["tpu"] = {
                 "type": preset.tpu.type,
                 "software_version": preset.tpu.software_version,
             }
+        if preset.resource_pool_names:
+            payload["resource_pool_names"] = preset.resource_pool_names
+        if preset.available_resource_pool_names:
+            payload["available_resource_pool_names"] = (
+                preset.available_resource_pool_names
+            )
         return payload
 
     def _convert_energy_schedule_to_payload(
@@ -245,6 +312,21 @@ class ConfigApiHandler:
             "role": str(project_user.role),
             "cluster_name": project_user.cluster_name,
             "org_name": project_user.org_name,
+        }
+
+    def _convert_storage_volume_to_payload(
+        self, volume: VolumeConfig
+    ) -> dict[str, Any]:
+        return {
+            "name": volume.name,
+            "credits_per_hour_per_gb": str(volume.credits_per_hour_per_gb),
+        }
+
+    def _convert_apps_config_to_payload(
+        self, apps_config: AppsConfig
+    ) -> dict[str, Any]:
+        return {
+            "apps_hostname_templates": apps_config.apps_hostname_templates,
         }
 
 
@@ -298,25 +380,10 @@ async def create_jobs_app(config: Config) -> aiohttp.web.Application:
     return jobs_app
 
 
-package_version = version(__package__)
-
-
 async def add_version_to_header(
     request: aiohttp.web.Request, response: aiohttp.web.StreamResponse
 ) -> None:
-    response.headers["X-Service-Version"] = f"platform-api/{package_version}"
-
-
-def make_tracing_trace_configs(config: Config) -> list[aiohttp.TraceConfig]:
-    trace_configs = []
-
-    if config.zipkin:
-        trace_configs.append(make_zipkin_trace_config())
-
-    if config.sentry:
-        trace_configs.append(make_sentry_trace_config())
-
-    return trace_configs
+    response.headers["X-Service-Version"] = f"platform-api/{__version__}"
 
 
 async def create_app(
@@ -332,7 +399,6 @@ async def create_app(
                 AuthClient(
                     url=config.auth.server_endpoint_url,
                     token=config.auth.service_token,
-                    trace_configs=make_tracing_trace_configs(config),
                 )
             )
             app["jobs_app"]["auth_client"] = auth_client
@@ -341,7 +407,6 @@ async def create_app(
                 AdminClient(
                     base_url=config.admin_url,
                     service_token=config.auth.service_token,
-                    trace_configs=make_tracing_trace_configs(config),
                 )
             )
 
@@ -354,7 +419,6 @@ async def create_app(
                 NotificationsClient(
                     url=config.notifications.url or None,
                     token=config.notifications.token,
-                    trace_configs=make_tracing_trace_configs(config),
                 )
             )
 
@@ -366,7 +430,6 @@ async def create_app(
                 ConfigClient(
                     base_url=config.config_url,
                     service_token=config.auth.service_token,
-                    trace_configs=make_tracing_trace_configs(config),
                 )
             )
 
@@ -417,54 +480,12 @@ async def create_app(
 
             logger.info("Initializing JobPolicyEnforcePoller")
 
-            logger.info("Initializing BillingLogStorage")
-            billing_log_storage = PostgresBillingLogStorage(engine)
-
-            billing_log_new_entry_notifier = ResubscribingNotifier(
-                PostgresChannelNotifier(engine, "billing_log_new_entry"),
-                check_interval=15,
-            )
-
-            billing_log_entry_done_notifier = ResubscribingNotifier(
-                PostgresChannelNotifier(engine, "billing_log_entry_done_notifier"),
-                check_interval=15,
-            )
-
-            logger.info("Initializing BillingLogService")
-            billing_log_service = await exit_stack.enter_async_context(
-                BillingLogService(
-                    storage=billing_log_storage,
-                    new_entry=billing_log_new_entry_notifier,
-                    entry_done=billing_log_entry_done_notifier,
-                )
-            )
-
-            logger.info("Initializing BillingLogWorker")
-            await exit_stack.enter_async_context(
-                BillingLogWorker(
-                    storage=billing_log_storage,
-                    new_entry=billing_log_new_entry_notifier,
-                    entry_done=billing_log_entry_done_notifier,
-                    admin_client=admin_client,
-                    jobs_service=jobs_service,
-                )
-            )
-
             await exit_stack.enter_async_context(
                 JobPolicyEnforcePoller(
                     config.job_policy_enforcer,
                     enforcers=[
                         RuntimeLimitEnforcer(jobs_service),
                         CreditsLimitEnforcer(jobs_service, admin_client),
-                        BillingEnforcer(jobs_service, billing_log_service),
-                        CreditsNotificationsEnforcer(
-                            jobs_service=jobs_service,
-                            admin_client=admin_client,
-                            notifications_client=notifications_client,
-                            notification_threshold=(
-                                config.job_policy_enforcer.credit_notification_threshold
-                            ),
-                        ),
                         StopOnClusterRemoveEnforcer(
                             jobs_service=jobs_service,
                             auth_client=auth_client,
@@ -484,7 +505,7 @@ async def create_app(
 
     api_v1_app = aiohttp.web.Application()
     api_v1_handler = ApiHandler()
-    probes_routes = api_v1_handler.register(api_v1_app)
+    api_v1_handler.register(api_v1_app)
     app["api_v1_app"] = api_v1_app
 
     config_app = await create_config_app(config)
@@ -497,50 +518,9 @@ async def create_app(
 
     app.add_subapp("/api/v1", api_v1_app)
 
-    _setup_cors(app, config.cors)
-
     app.on_response_prepare.append(add_version_to_header)
 
-    if config.zipkin:
-        setup_zipkin(app, skip_routes=probes_routes)
-
     return app
-
-
-def _setup_cors(app: aiohttp.web.Application, config: CORSConfig) -> None:
-    if not config.allowed_origins:
-        return
-
-    logger.info(f"Setting up CORS with allowed origins: {config.allowed_origins}")
-    default_options = aiohttp_cors.ResourceOptions(
-        allow_credentials=True, expose_headers="*", allow_headers="*"
-    )
-    cors = aiohttp_cors.setup(
-        app, defaults={origin: default_options for origin in config.allowed_origins}
-    )
-    for route in app.router.routes():
-        logger.debug(f"Setting up CORS for {route}")
-        cors.add(route)
-
-
-def setup_tracing(config: Config) -> None:
-    if config.zipkin:
-        setup_zipkin_tracer(
-            config.zipkin.app_name,
-            config.server.host,
-            config.server.port,
-            config.zipkin.url,
-            config.zipkin.sample_rate,
-        )
-
-    if config.sentry:
-        setup_sentry(
-            config.sentry.dsn,
-            app_name=config.sentry.app_name,
-            cluster_name=config.sentry.cluster_name,
-            sample_rate=config.sentry.sample_rate,
-            exclude=[JobError, JobStorageTransactionError],
-        )
 
 
 def main() -> None:
@@ -548,6 +528,6 @@ def main() -> None:
     config = EnvironConfigFactory().create()
     logging.info("Loaded config: %r", config)
     loop = asyncio.get_event_loop()
-    setup_tracing(config)
+    setup_sentry(ignore_errors=[JobError, JobStorageTransactionError])
     app = loop.run_until_complete(create_app(config))
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)

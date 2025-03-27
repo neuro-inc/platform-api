@@ -5,15 +5,14 @@ from collections import defaultdict
 from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
-from decimal import Decimal
-from typing import Optional, Union
+from datetime import timedelta
 
 from aiohttp import ClientResponseError
 from neuro_admin_client import (
     AdminClient,
     ClusterUser,
     GetUserResponse,
+    Org,
     OrgCluster,
     OrgUser,
     ProjectUser,
@@ -28,7 +27,7 @@ from neuro_notifications_client import (
 from yarl import URL
 
 from platform_api.cluster import ClusterConfig, ClusterConfigRegistry, ClusterNotFound
-from platform_api.cluster_config import OrchestratorConfig
+from platform_api.cluster_config import OrchestratorConfig, VolumeConfig
 from platform_api.config import JobsConfig
 from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
@@ -92,7 +91,7 @@ class NoCreditsError(JobsServiceException):
 class UserClusterConfig:
     config: ClusterConfig
     # None value means the direct access to cluster without any or:
-    orgs: list[Optional[str]]
+    orgs: list[str | None]
 
 
 @dataclass(frozen=True)
@@ -131,7 +130,7 @@ class JobsService:
         self._api_base_url = api_base_url
 
     def _make_job(
-        self, record: JobRecord, cluster_config: Optional[ClusterConfig] = None
+        self, record: JobRecord, cluster_config: ClusterConfig | None = None
     ) -> Job:
         if cluster_config is not None:
             orchestrator_config = cluster_config.orchestrator
@@ -167,14 +166,11 @@ class JobsService:
         if running_count >= org_cluster.quota.total_running_jobs:
             raise RunningJobsQuotaExceededError.create_for_org(org_cluster.org_name)
 
-    async def _raise_for_no_credits(
-        self, cluster_entry: Union[ClusterUser, OrgCluster]
-    ) -> None:
-        if cluster_entry.balance.is_non_positive:
-            if isinstance(cluster_entry, ClusterUser):
-                raise NoCreditsError.create_for_user(cluster_entry.user_name)
-            else:
-                raise NoCreditsError.create_for_org(cluster_entry.org_name)
+    async def _raise_for_no_credits(self, org_entry: OrgUser | Org) -> None:
+        if org_entry.balance.is_non_positive:
+            if isinstance(org_entry, OrgUser):
+                raise NoCreditsError.create_for_user(org_entry.user_name)
+            raise NoCreditsError.create_for_org(org_entry.name)
 
     async def _make_pass_config_token(
         self, username: str, cluster_name: str, job_id: str
@@ -189,9 +185,9 @@ class JobsService:
         self,
         user: AuthUser,
         cluster_name: str,
-        org_name: Optional[str],
+        org_name: str | None,
         job_request: JobRequest,
-        project_name: Optional[str] = None,
+        project_name: str | None = None,
     ) -> JobRequest:
         if NEURO_PASSED_CONFIG in job_request.container.env:
             raise JobsServiceException(
@@ -224,57 +220,65 @@ class JobsService:
         user: AuthUser,
         cluster_name: str,
         *,
-        org_name: Optional[str] = None,
-        project_name: Optional[str] = None,
-        job_name: Optional[str] = None,
-        preset_name: Optional[str] = None,
+        org_name: str | None = None,
+        project_name: str | None = None,
+        job_name: str | None = None,
+        preset_name: str | None = None,
         tags: Sequence[str] = (),
         scheduler_enabled: bool = False,
         preemptible_node: bool = False,
         pass_config: bool = False,
         wait_for_jobs_quota: bool = False,
         privileged: bool = False,
-        schedule_timeout: Optional[float] = None,
-        max_run_time_minutes: Optional[int] = None,
+        schedule_timeout: float | None = None,
+        max_run_time_minutes: int | None = None,
         restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER,
         priority: JobPriority = JobPriority.NORMAL,
-        energy_schedule_name: Optional[str] = None,
+        energy_schedule_name: str | None = None,
     ) -> tuple[Job, Status]:
         project_name = project_name or user.name
         base_name = get_base_owner(
             user.name
         )  # SA has access to same clusters as a user
-        cluster_user = await self._admin_client.get_cluster_user(
-            user_name=base_name,
-            cluster_name=cluster_name,
-            org_name=org_name,
-        )
 
         if job_name is not None and maybe_job_id(job_name):
             raise JobsServiceException(
                 "Failed to create job: job name cannot start with 'job-' prefix."
             )
+
+        # check quotas for both a user and a cluster
+        cluster_user = await self._admin_client.get_cluster_user(
+            user_name=base_name,
+            cluster_name=cluster_name,
+            org_name=org_name,
+        )
         if not wait_for_jobs_quota:
             await self._raise_for_running_jobs_quota(cluster_user)
-        try:
-            await self._raise_for_no_credits(cluster_user)
-        except NoCreditsError:
-            await self._notifications_client.notify(
-                JobCannotStartNoCredits(
-                    user_id=user.name,
-                    cluster_name=cluster_name,
-                )
-            )
-            raise
+
         if org_name:
-            # check that OrgCluster itself has enough credits and quota:
             org_cluster = await self._admin_client.get_org_cluster(
                 cluster_name, org_name
             )
             if not wait_for_jobs_quota:
                 await self._raise_for_orgs_running_jobs_quota(org_cluster)
-            # TODO: add notification about org cluster credits exhausted
-            await self._raise_for_no_credits(org_cluster)
+            org_user = await self._admin_client.get_org_user(
+                org_name=org_name,
+                user_name=base_name,
+            )
+
+            try:
+                await self._raise_for_no_credits(org_user)
+            except NoCreditsError:
+                await self._notifications_client.notify(
+                    JobCannotStartNoCredits(
+                        user_id=user.name,
+                        cluster_name=cluster_name,
+                    )
+                )
+                raise
+
+            org = await self._admin_client.get_org(org_name)
+            await self._raise_for_no_credits(org)
 
         if pass_config:
             job_request = await self._setup_pass_config(
@@ -340,7 +344,7 @@ class JobsService:
                 f"Cluster '{record.cluster_name}' not found"
             ) from cluster_err
         except JobsStorageException as transaction_err:
-            logger.error(f"Failed to create job {job_id}: {transaction_err}")
+            logger.error("Failed to create job %s: %s", job_id, transaction_err)
             raise JobsServiceException(f"Failed to create job: {transaction_err}")
 
     async def get_job_status(self, job_id: str) -> JobStatus:
@@ -366,8 +370,8 @@ class JobsService:
     async def update_max_run_time(
         self,
         job_id: str,
-        max_run_time_minutes: Optional[int] = None,
-        additional_max_run_time_minutes: Optional[int] = None,
+        max_run_time_minutes: int | None = None,
+        additional_max_run_time_minutes: int | None = None,
     ) -> None:
         assert (
             max_run_time_minutes is not None
@@ -407,7 +411,7 @@ class JobsService:
         record = await self._jobs_storage.get_job(job_id)
         return await self._get_cluster_job(record)
 
-    async def cancel_job(self, job_id: str, reason: Optional[str] = None) -> None:
+    async def cancel_job(self, job_id: str, reason: str | None = None) -> None:
         for _ in range(self._max_deletion_attempts):
             try:
                 async with self._update_job_in_storage(job_id) as record:
@@ -415,7 +419,7 @@ class JobsService:
                         # the job has already finished. nothing to do here.
                         return
 
-                    logger.info(f"Canceling job {job_id} for reason {reason}")
+                    logger.info("Canceling job %s for reason %s", job_id, reason)
                     record.status_history.current = JobStatusItem.create(
                         JobStatus.CANCELLED, reason=reason
                     )
@@ -428,10 +432,10 @@ class JobsService:
     @asyncgeneratorcontextmanager
     async def iter_all_jobs(
         self,
-        job_filter: Optional[JobFilter] = None,
+        job_filter: JobFilter | None = None,
         *,
         reverse: bool = False,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> AsyncIterator[Job]:
         async with self._jobs_storage.iter_all_jobs(
             job_filter, reverse=reverse, limit=limit
@@ -440,7 +444,7 @@ class JobsService:
                 yield await self._get_cluster_job(record)
 
     async def get_all_jobs(
-        self, job_filter: Optional[JobFilter] = None, *, reverse: bool = False
+        self, job_filter: JobFilter | None = None, *, reverse: bool = False
     ) -> list[Job]:
         async with self.iter_all_jobs(job_filter, reverse=reverse) as it:
             return [job async for job in it]
@@ -455,7 +459,7 @@ class JobsService:
         raise JobError(f"no such job {job_name}")
 
     async def get_jobs_by_ids(
-        self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
+        self, job_ids: Iterable[str], job_filter: JobFilter | None = None
     ) -> list[Job]:
         records = await self._jobs_storage.get_jobs_by_ids(
             job_ids, job_filter=job_filter
@@ -464,15 +468,16 @@ class JobsService:
 
     async def get_user_config(self, user: AuthUser) -> UserConfig:
         response = await self._get_admin_user(user)
+        clusters = await self._get_user_cluster_configs(response)
         return UserConfig(
             orgs=response.orgs,
-            clusters=self._get_user_cluster_configs(response),
+            clusters=clusters,
             projects=response.projects,
         )
 
     async def get_user_cluster_configs(self, user: AuthUser) -> list[UserClusterConfig]:
         response = await self._get_admin_user(user)
-        return self._get_user_cluster_configs(response)
+        return await self._get_user_cluster_configs(response)
 
     async def _get_admin_user(self, user: AuthUser) -> GetUserResponse:
         try:
@@ -487,25 +492,80 @@ class JobsService:
                 raise
             return GetUserResponse(user=AdminUser(name=user.name, email=""))
 
-    def _get_user_cluster_configs(
+    async def _get_user_cluster_configs(
         self, response: GetUserResponse
     ) -> list[UserClusterConfig]:
         configs = []
+        cluster_configs = await self._get_user_cluster_configs_by_name(response)
         cluster_to_orgs = defaultdict(list)
         for user_cluster in response.clusters:
             cluster_to_orgs[user_cluster.cluster_name].append(user_cluster.org_name)
         for cluster_name, orgs in cluster_to_orgs.items():
+            if cluster_config := cluster_configs.get(cluster_name):
+                configs.append(UserClusterConfig(config=cluster_config, orgs=orgs))
+        return configs
+
+    async def _get_user_cluster_configs_by_name(
+        self, response: GetUserResponse
+    ) -> dict[str, ClusterConfig]:
+        cluster_configs = self._get_cluster_configs_by_name(response)
+        volumes_by_cluster = await self._get_user_storage_volumes_by_cluster_name(
+            response.user.name, list(cluster_configs.values())
+        )
+        for cluster_name, volumes in volumes_by_cluster.items():
+            cluster_configs[cluster_name] = cluster_configs[
+                cluster_name
+            ].with_storage_volumes(volumes)
+        return cluster_configs
+
+    def _get_cluster_configs_by_name(
+        self, response: GetUserResponse
+    ) -> dict[str, ClusterConfig]:
+        cluster_configs: dict[str, ClusterConfig] = {}
+        for cluster in response.clusters:
             try:
-                cluster_config = self._cluster_registry.get(cluster_name)
-                configs.append(
-                    UserClusterConfig(
-                        config=cluster_config,
-                        orgs=orgs,
-                    )
+                cluster_configs[cluster.cluster_name] = self._cluster_registry.get(
+                    cluster.cluster_name
                 )
             except ClusterNotFound:
                 pass
-        return configs
+        return cluster_configs
+
+    async def _get_user_storage_volumes_by_cluster_name(
+        self, user_name: str, cluster_configs: Sequence[ClusterConfig]
+    ) -> dict[str, list[VolumeConfig]]:
+        missing_storage_uris = await self._get_user_storage_volume_missing_storage_uris(
+            user_name, cluster_configs
+        )
+        volumes_by_cluster: dict[str, list[VolumeConfig]] = defaultdict(list)
+        for cluster_config in cluster_configs:
+            for volume in cluster_config.storage.volumes:
+                if not volume.path or (
+                    volume.path
+                    and f"storage://{cluster_config.name}{volume.path}"
+                    not in missing_storage_uris
+                ):
+                    volumes_by_cluster[cluster_config.name].append(volume)
+        return volumes_by_cluster
+
+    async def _get_user_storage_volume_missing_storage_uris(
+        self, user_name: str, cluster_configs: Sequence[ClusterConfig]
+    ) -> set[str]:
+        permissions = []
+        for cluster_config in cluster_configs:
+            for volume in cluster_config.storage.volumes:
+                if volume.path:
+                    permissions.append(
+                        Permission(
+                            f"storage://{cluster_config.name}{volume.path}", "read"
+                        )
+                    )
+        if not permissions:
+            return set()
+        missing_permissions = await self._auth_client.get_missing_permissions(
+            user_name, permissions
+        )
+        return {p.uri for p in missing_permissions}
 
     @asynccontextmanager
     async def _create_job_in_storage(
@@ -551,28 +611,8 @@ class JobsService:
     def jobs_storage(self) -> JobsStorage:
         return self._jobs_storage
 
-    async def update_job_billing(
-        self,
-        job_id: str,
-        last_billed: datetime,
-        fully_billed: bool,
-        new_charge: Decimal,
-    ) -> None:
-        async with self._jobs_storage.try_update_job(job_id) as record:
-            record.total_price_credits += new_charge
-            record.last_billed = last_billed
-            record.fully_billed = fully_billed
-
-    @asyncgeneratorcontextmanager
-    async def get_not_billed_jobs(self) -> AsyncIterator[Job]:
-        async with self._jobs_storage.iter_all_jobs(
-            JobFilter(fully_billed=False)
-        ) as it:
-            async for record in it:
-                yield await self._get_cluster_job(record)
-
     async def get_job_ids_for_drop(
-        self, *, delay: timedelta, limit: Optional[int] = None
+        self, *, delay: timedelta, limit: int | None = None
     ) -> list[str]:
         return [
             record.id
@@ -589,7 +629,7 @@ class JobsService:
             record.being_dropped = True
 
     async def drop_progress(
-        self, job_id: str, *, logs_removed: Optional[bool] = None
+        self, job_id: str, *, logs_removed: bool | None = None
     ) -> None:
         async with self._jobs_storage.try_update_job(job_id) as record:
             if not record.being_dropped:

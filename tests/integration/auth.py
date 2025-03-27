@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+from asyncio import timeout
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Protocol, cast
+from decimal import Decimal
+from pathlib import Path
+from typing import Protocol
 
 import aiodocker
 import pytest
 from aiohttp import ClientError, ClientResponseError
 from aiohttp.hdrs import AUTHORIZATION
-from async_timeout import timeout
 from jose import jwt
 from neuro_admin_client import (
     AdminClient,
@@ -23,14 +25,13 @@ from neuro_auth_client import AuthClient, Permission, User as AuthUser
 from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
-
 from tests.conftest import random_str
 from tests.integration.conftest import _TestConfigClient
 
 
 @pytest.fixture(scope="session")
 def auth_server_image_name() -> str:
-    with open("PLATFORMAUTHAPI_IMAGE") as f:
+    with Path("PLATFORMAUTHAPI_IMAGE").open() as f:
         return f.read().strip()
 
 
@@ -114,7 +115,7 @@ async def auth_config(auth_server: AuthConfig) -> AsyncIterator[AuthConfig]:
 
 
 @asynccontextmanager
-async def create_auth_client(config: AuthConfig) -> AsyncGenerator[AuthClient, None]:
+async def create_auth_client(config: AuthConfig) -> AsyncGenerator[AuthClient]:
     async with AuthClient(
         url=config.server_endpoint_url, token=config.service_token
     ) as client:
@@ -122,7 +123,7 @@ async def create_auth_client(config: AuthConfig) -> AsyncGenerator[AuthClient, N
 
 
 @pytest.fixture
-async def auth_client(auth_server: AuthConfig) -> AsyncGenerator[AuthClient, None]:
+async def auth_client(auth_server: AuthConfig) -> AsyncGenerator[AuthClient]:
     async with create_auth_client(auth_server) as client:
         yield client
 
@@ -162,17 +163,23 @@ def test_cluster_name() -> str:
     return "test-cluster"
 
 
+@pytest.fixture
+def test_org_name() -> str:
+    return "test-org"
+
+
 class UserFactory(Protocol):
     async def __call__(
         self,
         name: str | None = None,
+        # fmt: off
         clusters: (list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]])
         | None = None,
+        # fmt: on
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
         do_create_project: bool = True,
-    ) -> _User:
-        ...
+    ) -> _User: ...
 
 
 @pytest.fixture
@@ -183,12 +190,15 @@ async def regular_user_factory(
     token_factory: Callable[[str], str],
     admin_token: str,
     test_cluster_name: str,
+    test_org_name: str,
     admin_client_factory: Callable[[str], Awaitable[AdminClient]],
 ) -> UserFactory:
     async def _factory(
         name: str | None = None,
+        # fmt: off
         clusters: (list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]])
         | None = None,
+        # fmt: on
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
         do_create_project: bool = True,
@@ -200,14 +210,13 @@ async def regular_user_factory(
         await admin_client.create_user(name=name, email=f"{name}@email.com")
         user_token = token_factory(name)
         user_admin_client = await admin_client_factory(user_token)
+        admin_admin_client = await admin_client_factory(admin_token)
         for entry in clusters:
             org_name: str | None = None
             if len(entry) == 3:
-                cluster, balance, quota = cast(tuple[str, Balance, Quota], entry)
+                cluster, balance, quota = entry
             else:
-                cluster, org_name, balance, quota = cast(
-                    tuple[str, str, Balance, Quota], entry
-                )
+                cluster, org_name, balance, quota = entry
             try:
                 await admin_client.create_cluster(cluster)
             except ClientResponseError:
@@ -229,6 +238,7 @@ async def regular_user_factory(
                         org_name=org_name,
                         user_name=name,
                         role=org_user_role,
+                        balance=balance,
                     )
                 except ClientResponseError:
                     pass
@@ -239,13 +249,19 @@ async def regular_user_factory(
                     )
                 except ClientResponseError:
                     pass
+                try:
+                    await admin_admin_client.update_org_balance(
+                        org_name=org_name,
+                        credits=Decimal("100"),
+                    )
+                except ClientResponseError:
+                    pass
             try:
                 await admin_client.create_cluster_user(
                     cluster_name=cluster,
                     org_name=org_name,
                     role=cluster_user_role,
                     user_name=name,
-                    balance=balance,
                     quota=quota,
                 )
             except ClientResponseError:
@@ -270,8 +286,7 @@ class ServiceAccountFactory(Protocol):
         self,
         owner: _User,
         name: str | None = None,
-    ) -> _User:
-        ...
+    ) -> _User: ...
 
 
 @pytest.fixture

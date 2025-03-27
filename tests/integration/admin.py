@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+from asyncio import timeout
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import aiodocker
@@ -11,13 +13,10 @@ import aiohttp.web
 import pytest
 from aiohttp import ClientError, ClientResponseError
 from aiohttp.web_exceptions import HTTPCreated, HTTPNoContent, HTTPNotFound
-from async_timeout import timeout
 from neuro_admin_client import AdminClient
-from neuro_logging import make_request_logging_trace_config
 from yarl import URL
 
 from platform_api.config import AuthConfig
-
 from tests.integration.conftest import ApiRunner, _TestConfigClient
 from tests.integration.notifications import NotificationsServer
 
@@ -97,7 +96,7 @@ async def config_client(fake_config_app: URL) -> AsyncIterator[_TestConfigClient
 
 @pytest.fixture(scope="session")
 def admin_server_image_name() -> str:
-    with open("PLATFORMADMIN_IMAGE") as f:
+    with Path("PLATFORMADMIN_IMAGE").open() as f:
         return f.read().strip()
 
 
@@ -132,7 +131,7 @@ async def _admin_server_setup_db(
             f"NP_ADMIN_CONFIG_TOKEN={admin_token}",
             "NP_ADMIN_CONFIG_URL=http://host.docker.internal:8089",
             f"NP_ADMIN_POSTGRES_DSN={admin_postgres_dsn}",
-            f"NP_ADMIN_NOTIFICATIONS_URL=http://host.docker.internal:8083",
+            "NP_ADMIN_NOTIFICATIONS_URL=http://host.docker.internal:8083",
             "NP_ADMIN_NOTIFICATIONS_TOKEN=token",
         ],
     }
@@ -183,7 +182,7 @@ async def admin_server(
             f"NP_ADMIN_CONFIG_TOKEN={admin_token}",
             "NP_ADMIN_CONFIG_URL=http://host.docker.internal:8089",
             f"NP_ADMIN_POSTGRES_DSN={admin_postgres_dsn}",
-            f"NP_ADMIN_NOTIFICATIONS_URL=http://host.docker.internal:8083",
+            "NP_ADMIN_NOTIFICATIONS_URL=http://host.docker.internal:8083",
             "NP_ADMIN_NOTIFICATIONS_TOKEN=token",
             "NP_LOG_LEVEL=DEBUG",
         ],
@@ -235,12 +234,8 @@ async def admin_url(admin_server: URL) -> AsyncIterator[URL]:
 @asynccontextmanager
 async def create_admin_client(
     url: URL, service_token: str, *, do_create_compute_user: bool = False
-) -> AsyncGenerator[AdminClient, None]:
-    async with AdminClient(
-        base_url=url,
-        service_token=service_token,
-        trace_configs=[make_request_logging_trace_config()],
-    ) as client:
+) -> AsyncGenerator[AdminClient]:
+    async with AdminClient(base_url=url, service_token=service_token) as client:
         if do_create_compute_user:
             await create_compute_user(client)
         yield client
@@ -275,7 +270,7 @@ async def admin_client_factory(
 @pytest.fixture
 async def admin_client(
     admin_url: URL, auth_config: AuthConfig
-) -> AsyncGenerator[AdminClient, None]:
+) -> AsyncGenerator[AdminClient]:
     async with create_admin_client(
         admin_url, auth_config.service_token, do_create_compute_user=True
     ) as client:

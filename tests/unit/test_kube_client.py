@@ -1,46 +1,49 @@
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
 from platform_api.orchestrator.kube_client import (
     KubePreemption,
     KubernetesEvent,
+    LabelSelectorMatchExpression,
+    LabelSelectorTerm,
     Node,
     NodeAffinity,
     NodeCondition,
     NodeConditionType,
     NodePreferredSchedulingTerm,
     NodeResources,
-    NodeSelectorOperator,
-    NodeSelectorRequirement,
-    NodeSelectorTerm,
     NodeStatus,
+    PodAffinity,
+    PodAffinityTerm,
     PodCondition,
     PodConditionType,
     PodDescriptor,
+    PodPreferredSchedulingTerm,
     PodStatus,
     Resources,
+    SelectorOperator,
 )
 
 
-class TestNodeSelectorRequirement:
+class TestLabelSelectorMatchExpression:
     def test_blank_key(self) -> None:
         with pytest.raises(ValueError, match="blank key"):
-            NodeSelectorRequirement("", operator=NodeSelectorOperator.EXISTS)
+            LabelSelectorMatchExpression("", operator=SelectorOperator.EXISTS)
 
     def test_non_empty_values_with_exists(self) -> None:
         with pytest.raises(ValueError, match="values must be empty"):
-            NodeSelectorRequirement(
-                "key", operator=NodeSelectorOperator.EXISTS, values=["value"]
+            LabelSelectorMatchExpression(
+                "key", operator=SelectorOperator.EXISTS, values=["value"]
             )
 
     def test_create_in(self) -> None:
-        req = NodeSelectorRequirement.create_in("testkey", "testvalue")
-        assert req == NodeSelectorRequirement(
-            key="testkey", operator=NodeSelectorOperator.IN, values=["testvalue"]
+        req = LabelSelectorMatchExpression.create_in("testkey", "testvalue")
+        assert req == LabelSelectorMatchExpression(
+            key="testkey", operator=SelectorOperator.IN, values=["testvalue"]
         )
         assert req.to_primitive() == {
             "key": "testkey",
@@ -49,23 +52,23 @@ class TestNodeSelectorRequirement:
         }
 
     def test_create_exists(self) -> None:
-        req = NodeSelectorRequirement.create_exists("testkey")
-        assert req == NodeSelectorRequirement(
-            key="testkey", operator=NodeSelectorOperator.EXISTS
+        req = LabelSelectorMatchExpression.create_exists("testkey")
+        assert req == LabelSelectorMatchExpression(
+            key="testkey", operator=SelectorOperator.EXISTS
         )
         assert req.to_primitive() == {"key": "testkey", "operator": "Exists"}
 
     def test_create_does_not_exist(self) -> None:
-        req = NodeSelectorRequirement.create_does_not_exist("testkey")
-        assert req == NodeSelectorRequirement(
-            key="testkey", operator=NodeSelectorOperator.DOES_NOT_EXIST
+        req = LabelSelectorMatchExpression.create_does_not_exist("testkey")
+        assert req == LabelSelectorMatchExpression(
+            key="testkey", operator=SelectorOperator.DOES_NOT_EXIST
         )
         assert req.to_primitive() == {"key": "testkey", "operator": "DoesNotExist"}
 
     def test_create_gt(self) -> None:
-        req = NodeSelectorRequirement.create_gt("testkey", 1)
-        assert req == NodeSelectorRequirement(
-            key="testkey", operator=NodeSelectorOperator.GT, values=["1"]
+        req = LabelSelectorMatchExpression.create_gt("testkey", 1)
+        assert req == LabelSelectorMatchExpression(
+            key="testkey", operator=SelectorOperator.GT, values=["1"]
         )
         assert req.to_primitive() == {
             "key": "testkey",
@@ -74,9 +77,9 @@ class TestNodeSelectorRequirement:
         }
 
     def test_create_lt(self) -> None:
-        req = NodeSelectorRequirement.create_lt("testkey", 1)
-        assert req == NodeSelectorRequirement(
-            key="testkey", operator=NodeSelectorOperator.LT, values=["1"]
+        req = LabelSelectorMatchExpression.create_lt("testkey", 1)
+        assert req == LabelSelectorMatchExpression(
+            key="testkey", operator=SelectorOperator.LT, values=["1"]
         )
         assert req.to_primitive() == {
             "key": "testkey",
@@ -85,46 +88,46 @@ class TestNodeSelectorRequirement:
         }
 
     def test_in_requirement_is_satisfied(self) -> None:
-        req = NodeSelectorRequirement.create_in("testkey", "testvalue")
+        req = LabelSelectorMatchExpression.create_in("testkey", "testvalue")
 
         assert req.is_satisfied({"testkey": "testvalue"}) is True
         assert req.is_satisfied({"testkey": "testvalue2"}) is False
 
     def test_exists_requirement_is_satisfied(self) -> None:
-        req = NodeSelectorRequirement.create_exists("testkey")
+        req = LabelSelectorMatchExpression.create_exists("testkey")
 
         assert req.is_satisfied({"testkey": "testvalue"}) is True
         assert req.is_satisfied({"testkey2": "testvalue"}) is False
 
     def test_does_not_exist_requirement_is_satisfied(self) -> None:
-        req = NodeSelectorRequirement.create_does_not_exist("testkey2")
+        req = LabelSelectorMatchExpression.create_does_not_exist("testkey2")
 
         assert req.is_satisfied({"testkey": "testvalue"}) is True
         assert req.is_satisfied({"testkey2": "testvalue"}) is False
 
     def test_gt_requirement_is_satisfied(self) -> None:
-        req = NodeSelectorRequirement.create_gt("testkey", 1)
+        req = LabelSelectorMatchExpression.create_gt("testkey", 1)
 
         assert req.is_satisfied({"testkey": "2"}) is True
         assert req.is_satisfied({"testkey2": "1"}) is False
 
     def test_lt_requirement_is_satisfied(self) -> None:
-        req = NodeSelectorRequirement.create_lt("testkey", 1)
+        req = LabelSelectorMatchExpression.create_lt("testkey", 1)
 
         assert req.is_satisfied({"testkey": "0"}) is True
         assert req.is_satisfied({"testkey2": "1"}) is False
 
 
-class TestNodeSelectorTerm:
+class TestLabelSelectorTerm:
     def test_empty(self) -> None:
         with pytest.raises(ValueError, match="no expressions"):
-            NodeSelectorTerm([])
+            LabelSelectorTerm([])
 
     def test_is_satisfied(self) -> None:
-        term = NodeSelectorTerm(
+        term = LabelSelectorTerm(
             [
-                NodeSelectorRequirement.create_exists("job"),
-                NodeSelectorRequirement.create_in("zone", "us-east-1a"),
+                LabelSelectorMatchExpression.create_exists("job"),
+                LabelSelectorMatchExpression.create_in("zone", "us-east-1a"),
             ]
         )
 
@@ -138,11 +141,11 @@ class TestNodeAffinity:
             NodeAffinity()
 
     def test_is_satisfied(self) -> None:
-        term1 = NodeSelectorTerm(
-            [NodeSelectorRequirement.create_in("zone", "us-east-1a")]
+        term1 = LabelSelectorTerm(
+            [LabelSelectorMatchExpression.create_in("zone", "us-east-1a")]
         )
-        term2 = NodeSelectorTerm(
-            [NodeSelectorRequirement.create_in("zone", "us-east-1b")]
+        term2 = LabelSelectorTerm(
+            [LabelSelectorMatchExpression.create_in("zone", "us-east-1b")]
         )
         node_affinity = NodeAffinity(required=[term1, term2])
 
@@ -153,12 +156,18 @@ class TestNodeAffinity:
     def test_to_primitive(self) -> None:
         node_affinity = NodeAffinity(
             required=[
-                NodeSelectorTerm([NodeSelectorRequirement.create_exists("testkey")])
+                LabelSelectorTerm(
+                    [LabelSelectorMatchExpression.create_exists("testkey")]
+                )
             ],
             preferred=[
                 NodePreferredSchedulingTerm(
-                    NodeSelectorTerm(
-                        [NodeSelectorRequirement.create_does_not_exist("anotherkey")]
+                    LabelSelectorTerm(
+                        [
+                            LabelSelectorMatchExpression.create_does_not_exist(
+                                "anotherkey"
+                            )
+                        ]
                     )
                 )
             ],
@@ -180,6 +189,43 @@ class TestNodeAffinity:
                 }
             ],
         }
+
+
+class TestPodAffinity:
+    def test_to_privimive(self) -> None:
+        pod_affinity = PodAffinity(
+            preferred=[
+                PodPreferredSchedulingTerm(
+                    PodAffinityTerm(
+                        LabelSelectorTerm(
+                            [
+                                LabelSelectorMatchExpression.create_exists("mylabel"),
+                            ]
+                        )
+                    )
+                )
+            ]
+        )
+
+        assert pod_affinity.to_primitive() == {
+            "preferredDuringSchedulingIgnoredDuringExecution": [
+                {
+                    "podAffinityTerm": {
+                        "labelSelector": {
+                            "matchExpressions": [
+                                {"key": "mylabel", "operator": "Exists"}
+                            ],
+                        },
+                        "topologyKey": "kubernetes.io/hostname",
+                    },
+                    "weight": 100,
+                }
+            ]
+        }
+
+    def test_to_privimive_empty(self) -> None:
+        pod_affinity = PodAffinity()
+        assert pod_affinity.to_primitive() == {}
 
 
 class TestPodStatus:
@@ -240,9 +286,7 @@ class TestPodStatus:
         status = PodStatus.from_primitive(payload)
         assert len(status.conditions) == 3
         cond = status.conditions[1]
-        assert cond.transition_time == datetime(
-            2019, 6, 20, 11, 13, 37, tzinfo=timezone.utc
-        )
+        assert cond.transition_time == datetime(2019, 6, 20, 11, 13, 37, tzinfo=UTC)
         assert cond.reason == "PodCompleted"
         assert cond.message == ""
         assert cond.status is False
@@ -385,7 +429,7 @@ class TestPodCondition:
     def test_status_invalid(self) -> None:
         cond = PodCondition({"status": "123"})
         with pytest.raises(ValueError):
-            cond.status
+            _ = cond.status
 
 
 class TestKubernetesEvent:
@@ -422,18 +466,14 @@ class TestKubernetesEvent:
             "type": "Normal",
         }
         event = KubernetesEvent(data)
-        assert event.first_timestamp == datetime(
-            2019, 6, 20, 11, 3, 32, tzinfo=timezone.utc
-        )
-        assert event.last_timestamp == datetime(
-            2019, 6, 20, 11, 3, 33, tzinfo=timezone.utc
-        )
+        assert event.first_timestamp == datetime(2019, 6, 20, 11, 3, 32, tzinfo=UTC)
+        assert event.last_timestamp == datetime(2019, 6, 20, 11, 3, 33, tzinfo=UTC)
         assert event.count == 12
 
 
 class TestNodeCondition:
     def test_from_primitive_status_true(self) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         condition = NodeCondition.from_primitive(
             {
                 "type": "Ready",
@@ -447,7 +487,7 @@ class TestNodeCondition:
         )
 
     def test_from_primitive_status_false(self) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         condition = NodeCondition.from_primitive(
             {
                 "type": "Ready",
@@ -461,7 +501,7 @@ class TestNodeCondition:
         )
 
     def test_from_primitive_status_unknown(self) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         condition = NodeCondition.from_primitive(
             {
                 "type": "Ready",
@@ -487,7 +527,7 @@ class TestNodeCondition:
 
 class TestNodeStatus:
     def test_from_primitive(self) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         status = NodeStatus.from_primitive(
             {
                 "allocatable": {},
@@ -582,6 +622,9 @@ class TestNodeResources:
         resources = NodeResources.from_primitive({"cpu": "1", "memory": "4Gi"})
         assert resources == NodeResources(cpu=1, memory=4 * 2**30)
 
+        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4Ti"})
+        assert resources == NodeResources(cpu=1, memory=4 * 2**40)
+
         resources = NodeResources.from_primitive({"cpu": "1", "memory": "4000000k"})
         assert resources == NodeResources(cpu=1, memory=4000000 * 10**3)
 
@@ -591,36 +634,41 @@ class TestNodeResources:
         resources = NodeResources.from_primitive({"cpu": "1", "memory": "4G"})
         assert resources == NodeResources(cpu=1, memory=4 * 10**9)
 
-        with pytest.raises(ValueError, match="'4Ti' memory format is not supported"):
-            NodeResources.from_primitive({"cpu": "1", "memory": "4Ti"})
+        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4T"})
+        assert resources == NodeResources(cpu=1, memory=4 * 10**12)
+
+        with pytest.raises(ValueError, match="'4Pi' memory format is not supported"):
+            NodeResources.from_primitive({"cpu": "1", "memory": "4Pi"})
 
     def test_from_primitive_with_gpu(self) -> None:
         resources = NodeResources.from_primitive(
             {"cpu": "1", "memory": "4096Mi", "nvidia.com/gpu": "1"}
         )
 
-        assert resources == NodeResources(cpu=1, memory=4096 * 2**20, gpu=1)
+        assert resources == NodeResources(cpu=1, memory=4096 * 2**20, nvidia_gpu=1)
 
     def test_invalid_cpu(self) -> None:
-        with pytest.raises(ValueError, match="Invalid cpu"):
-            NodeResources(cpu=-1, memory=4096, gpu=1)
+        with pytest.raises(ValueError, match="Invalid cpu: -1"):
+            NodeResources(cpu=-1, memory=4096, nvidia_gpu=1)
 
     def test_invalid_memory(self) -> None:
-        with pytest.raises(ValueError, match="Invalid memory"):
-            NodeResources(cpu=1, memory=-4096, gpu=1)
+        with pytest.raises(ValueError, match="Invalid memory: -4096"):
+            NodeResources(cpu=1, memory=-4096, nvidia_gpu=1)
 
     def test_invalid_gpu(self) -> None:
-        with pytest.raises(ValueError, match="Invalid gpu"):
-            NodeResources(cpu=1, memory=4096, gpu=-1)
+        with pytest.raises(ValueError, match="Invalid nvidia gpu: -1"):
+            NodeResources(cpu=1, memory=4096, nvidia_gpu=-1)
 
     def test_are_sufficient(self) -> None:
-        r = NodeResources(cpu=1, memory=4096, gpu=1)
+        r = NodeResources(cpu=1, memory=4096, nvidia_gpu=1)
 
         pod = PodDescriptor(name="job", image="job")
         assert r.are_sufficient(pod) is True
 
         pod = PodDescriptor(
-            name="job", image="job", resources=Resources(cpu=1, memory=4096, gpu=1)
+            name="job",
+            image="job",
+            resources=Resources(cpu=1, memory=4096, nvidia_gpu=1),
         )
         assert r.are_sufficient(pod) is True
 
@@ -640,7 +688,9 @@ class TestNodeResources:
         assert r.are_sufficient(pod) is False
 
         pod = PodDescriptor(
-            name="job", image="job", resources=Resources(cpu=0.1, memory=128, gpu=2)
+            name="job",
+            image="job",
+            resources=Resources(cpu=0.1, memory=128, nvidia_gpu=2),
         )
         assert r.are_sufficient(pod) is False
 
@@ -677,19 +727,19 @@ class TestNode:
         node = Node(
             name="minikube",
             status=NodeStatus(
-                allocatable_resources=NodeResources(cpu=1, memory=1024, gpu=1)
+                allocatable_resources=NodeResources(cpu=1, memory=1024, nvidia_gpu=1)
             ),
         )
 
         free = node.get_free_resources(NodeResources(cpu=0.1, memory=128))
 
-        assert free == NodeResources(cpu=0.9, memory=896, gpu=1)
+        assert free == NodeResources(cpu=0.9, memory=896, nvidia_gpu=1)
 
     def test_get_free_resources_error(self) -> None:
         node = Node(
             name="minikube",
             status=NodeStatus(
-                allocatable_resources=NodeResources(cpu=1, memory=1024, gpu=1)
+                allocatable_resources=NodeResources(cpu=1, memory=1024, nvidia_gpu=1)
             ),
         )
 
@@ -703,8 +753,8 @@ PodFactory = Callable[..., PodDescriptor]
 @pytest.fixture
 async def pod_factory() -> PodFactory:
     def _create(
-        name: Optional[str] = None,
-        labels: Optional[dict[str, str]] = None,
+        name: str | None = None,
+        labels: dict[str, str] | None = None,
         cpu: float = 0.1,
         memory: int = 128,
         gpu: int = 1,
@@ -713,13 +763,12 @@ async def pod_factory() -> PodFactory:
         labels = labels or {}
         if idle:
             labels["platform.neuromation.io/idle"] = "true"
-        pod = PodDescriptor(
+        return PodDescriptor(
             name=name or f"pod-{uuid.uuid4()}",
             labels=labels,
             image="gcr.io/google_containers/pause:3.1",
-            resources=Resources(cpu=cpu, memory=memory, gpu=gpu),
+            resources=Resources(cpu=cpu, memory=memory, nvidia_gpu=gpu),
         )
-        return pod
 
     return _create
 

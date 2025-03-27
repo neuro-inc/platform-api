@@ -1,15 +1,13 @@
 import asyncio
 import functools
 import logging
-import sys
 from collections.abc import Callable, Coroutine, Iterable
-from contextlib import AbstractAsyncContextManager
-from types import TracebackType
-from typing import Any, Optional, TypeVar, Union
+from contextlib import AbstractAsyncContextManager, aclosing
+from typing import Any, TypeVar
 
 
 async def run_and_log_exceptions(
-    coros: Union[Coroutine[Any, Any, Any], Iterable[Coroutine[Any, Any, Any]]]
+    coros: Coroutine[Any, Any, Any] | Iterable[Coroutine[Any, Any, Any]],
 ) -> None:
     try:
         # Check is iterable
@@ -28,31 +26,11 @@ T_co = TypeVar("T_co", covariant=True)
 T_contra = TypeVar("T_contra", contravariant=True)
 
 
-if sys.version_info >= (3, 10):
-    from contextlib import aclosing
-else:
-
-    class aclosing(AbstractAsyncContextManager[T_co]):
-        def __init__(self, thing: T_co):
-            self.thing = thing
-
-        async def __aenter__(self) -> T_co:
-            return self.thing
-
-        async def __aexit__(
-            self,
-            exc_type: Optional[type[BaseException]],
-            exc: Optional[BaseException],
-            tb: Optional[TracebackType],
-        ) -> None:
-            await self.thing.aclose()  # type: ignore
-
-
 def asyncgeneratorcontextmanager(
-    func: Callable[..., T_co]
+    func: Callable[..., T_co],
 ) -> Callable[..., AbstractAsyncContextManager[T_co]]:
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> AbstractAsyncContextManager[T_co]:
-        return aclosing(func(*args, **kwargs))
+        return aclosing(func(*args, **kwargs))  # type: ignore
 
     return wrapper

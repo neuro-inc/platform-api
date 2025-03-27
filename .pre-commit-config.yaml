@@ -1,39 +1,13 @@
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: 'v4.4.0'
+  rev: 'v5.0.0'
   hooks:
+  - id: check-added-large-files
   - id: check-merge-conflict
     exclude: "rst$"
-- repo: https://github.com/asottile/yesqa
-  rev: v1.5.0
-  hooks:
-  - id: yesqa
-- repo: https://github.com/sondrelg/pep585-upgrade
-  rev: v1.0
-  hooks:
-  - id: upgrade-type-hints
-    args:
-    - --futures=true
-- repo: https://github.com/Zac-HD/shed
-  rev: 2023.6.1
-  hooks:
-  - id: shed
-    args:
-    - --refactor
-    - --py39-plus
-    types_or:
-    - python
-    - markdown
-    - rst
-- repo: https://github.com/PyCQA/flake8
-  rev: 6.1.0
-  hooks:
-  - id: flake8
-- repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: 'v4.4.0'
-  hooks:
   - id: check-case-conflict
   - id: check-json
+  - id: check-toml
   - id: check-xml
   - id: debug-statements
   - id: check-added-large-files
@@ -41,28 +15,39 @@ repos:
   - id: requirements-txt-fixer
   - id: trailing-whitespace
   - id: check-symlinks
-  - id: debug-statements
-# Another entry is required to apply file-contents-sorter to another file
+    exclude: ^charts/
+- repo: https://github.com/sondrelg/pep585-upgrade
+  rev: v1.0
+  hooks:
+  - id: upgrade-type-hints
+    args:
+    - --futures=true
+- repo: https://github.com/Zac-HD/shed
+  rev: 2024.10.1
+  hooks:
+  - id: shed
+    args:
+    - --refactor
+    - --py313-plus
+    types_or:
+    - python
+    - markdown
+    - rst
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.8.6
+  hooks:
+  - id: ruff-format
+  - id: ruff
+    args: [--fix, --exit-non-zero-on-fix]
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: 'v4.4.0'
+  rev: 'v5.0.0'
   hooks:
   - id: file-contents-sorter
     files: |
       docs/spelling_wordlist.txt|
       .gitignore
-# - repo: https://github.com/rhysd/actionlint
-#   rev: v1.6.8
-#   hooks:
-#   - id: actionlint-docker
-#     args:
-#     - -ignore
-#     - 'SC2155:'
-#     - -ignore
-#     - 'SC2086:'
-#     - -ignore
-#     - 'SC1004:'
 - repo: https://github.com/sirosen/check-jsonschema
-  rev: 0.24.1
+  rev: 0.30.0
   hooks:
   - id: check-github-actions
   - id: check-github-workflows

@@ -31,9 +31,13 @@ jobs:
   preemptibleTolerationKey:
   imagePullSecret:
 
+externalJobRunner:
+  image:
+    repository: ghcr.io/neuro-inc/externaljobrunner
+    tag: latest
+
 nodeLabels:
   job: platform.neuromation.io/job
-  gpu: platform.neuromation.io/accelerator
   preemptible: platform.neuromation.io/preemptible
   nodePool: platform.neuromation.io/nodepool
 
@@ -51,8 +55,6 @@ ingress:
   annotations: {}
 
 secrets: []
-
-zipkin: {}
 
 sentry: {}
 

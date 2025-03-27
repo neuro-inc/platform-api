@@ -103,6 +103,7 @@ class NodeResourcesHandler(EventHandler):
                 not pod.is_idle
                 and pod.status.is_scheduled
                 and not pod.status.is_terminated
+                and not pod.status.is_phase_failed
             ):
                 self._add_pod(pod)
 
@@ -110,7 +111,11 @@ class NodeResourcesHandler(EventHandler):
         pod = _Pod(event.resource)
         if pod.is_idle or not pod.status.is_scheduled:
             return
-        if event.type == WatchEventType.DELETED or pod.status.is_terminated:
+        if (
+            event.type == WatchEventType.DELETED
+            or pod.status.is_terminated
+            or pod.status.is_phase_failed
+        ):
             self._remove_pod(pod)
         else:
             self._add_pod(pod)
@@ -176,7 +181,9 @@ class KubeOrchestratorScheduler:
             for node in self._nodes_handler.get_ready_nodes():
                 if not pod.can_be_scheduled(node.labels):
                     logger.debug(
-                        "Pod %r cannot be scheduled onto node %r", pod.name, node.name
+                        "Pod %r cannot be scheduled to node %r due to labels mismatch",
+                        pod.name,
+                        node.name,
                     )
                     continue
                 requested = self._node_resources_handler.get_resource_requests(
@@ -186,14 +193,16 @@ class KubeOrchestratorScheduler:
                 free = node.get_free_resources(requested)
                 if free.are_sufficient(pod):
                     logger.debug(
-                        "Pod %r can be scheduled onto node %r", node.name, pod.name
+                        "Pod %r can be scheduled onto node %r", pod.name, node.name
                     )
                     schedulable_pods.append(pod)
                     if pod.resources:
                         scheduled[node.name] += NodeResources(
                             cpu=pod.resources.cpu,
                             memory=pod.resources.memory,
-                            gpu=pod.resources.gpu or 0,
+                            nvidia_gpu=pod.resources.nvidia_gpu or 0,
+                            amd_gpu=pod.resources.amd_gpu or 0,
+                            intel_gpu=pod.resources.intel_gpu or 0,
                         )
                     break
                 logger.debug(
@@ -259,7 +268,11 @@ class KubeOrchestratorPreemption:
             r = pod.resources
             if not r:
                 return (0, 0, 0.0)
-            return (r.gpu or 0, r.memory, r.cpu)
+            return (
+                (r.nvidia_gpu or 0) + (r.amd_gpu or 0) + (r.intel_gpu or 0),
+                r.memory,
+                r.cpu,
+            )
 
         pods_to_schedule = []
         for pod in pods:
@@ -305,12 +318,18 @@ class KubeOrchestratorPreemption:
         return None, []
 
     def _get_nodes(self, exclude: Iterable[Node]) -> list[Node]:
-        def _create_key(node: Node) -> tuple[int, int, float]:
+        def _create_key(node: Node) -> tuple[int, int, int, int, float]:
             requested = self._node_resources_handler.get_resource_requests(node.name)
             free = node.get_free_resources(requested)
             if not free:
-                return (0, 0, 0.0)
-            return (free.gpu or 0, free.memory, free.cpu)
+                return (0, 0, 0, 0, 0.0)
+            return (
+                free.nvidia_gpu or 0,
+                free.amd_gpu or 0,
+                free.intel_gpu or 0,
+                free.memory,
+                free.cpu,
+            )
 
         nodes = self._nodes_handler.get_ready_nodes()
         nodes = [n for n in nodes if n not in exclude]
@@ -328,5 +347,7 @@ class KubeOrchestratorPreemption:
         return NodeResources(
             cpu=max(0, required.cpu - free.cpu),
             memory=max(0, required.memory - free.memory),
-            gpu=max(0, (required.gpu or 0) - free.gpu),
+            nvidia_gpu=max(0, (required.nvidia_gpu or 0) - free.nvidia_gpu),
+            amd_gpu=max(0, (required.amd_gpu or 0) - free.amd_gpu),
+            intel_gpu=max(0, (required.intel_gpu or 0) - free.intel_gpu),
         )

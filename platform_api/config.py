@@ -4,7 +4,6 @@ from datetime import timedelta
 from decimal import Decimal
 from enum import Enum
 from pathlib import PurePath
-from typing import Optional
 
 from yarl import URL
 
@@ -29,12 +28,12 @@ class StorageConfig:
 
     type: StorageType = StorageType.HOST
 
-    nfs_server: Optional[str] = None
-    nfs_export_path: Optional[PurePath] = None
+    nfs_server: str | None = None
+    nfs_export_path: PurePath | None = None
 
-    pvc_name: Optional[str] = None
+    pvc_name: str | None = None
 
-    path: Optional[PurePath] = None
+    path: PurePath | None = None
 
     def __post_init__(self) -> None:
         self._check_nfs_attrs()
@@ -65,7 +64,7 @@ class StorageConfig:
     def create_nfs(
         cls,
         *,
-        path: Optional[PurePath] = None,
+        path: PurePath | None = None,
         nfs_server: str,
         nfs_export_path: PurePath,
     ) -> "StorageConfig":
@@ -81,7 +80,7 @@ class StorageConfig:
     def create_pvc(
         cls,
         *,
-        path: Optional[PurePath] = None,
+        path: PurePath | None = None,
         pvc_name: str,
     ) -> "StorageConfig":
         return cls(
@@ -97,7 +96,7 @@ class StorageConfig:
     def create_host(
         cls,
         *,
-        path: Optional[PurePath] = None,
+        path: PurePath | None = None,
         host_mount_path: PurePath,
     ) -> "StorageConfig":
         return cls(path=path, host_mount_path=host_mount_path, type=StorageType.HOST)
@@ -119,9 +118,9 @@ class RegistryConfig:
         return self.ger_registry_host(self.url)
 
     @classmethod
-    def ger_registry_host(self, url: URL) -> str:
+    def ger_registry_host(cls, url: URL) -> str:
         """Returns registry hostname with port (if specified)"""
-        port = url.explicit_port  # type: ignore
+        port = url.explicit_port
         suffix = f":{port}" if port is not None else ""
         return f"{url.host}{suffix}"
 
@@ -133,16 +132,9 @@ class ServerConfig:
 
 
 @dataclass(frozen=True)
-class ZipkinConfig:
-    url: URL
-    app_name: str
-    sample_rate: float = 0
-
-
-@dataclass(frozen=True)
 class AuthConfig:
-    server_endpoint_url: Optional[URL]
-    public_endpoint_url: Optional[URL]
+    server_endpoint_url: URL | None
+    public_endpoint_url: URL | None
     service_token: str = field(repr=False)
     service_name: str = "compute"
 
@@ -162,7 +154,7 @@ class OAuthConfig:
         URL("http://127.0.0.1:54542"),
     )
 
-    success_redirect_url: Optional[URL] = None
+    success_redirect_url: URL | None = None
 
 
 @dataclass(frozen=True)
@@ -177,7 +169,7 @@ class PostgresConfig:
     pool_max_size: int = 50
 
     connect_timeout_s: float = 60.0
-    command_timeout_s: Optional[float] = 60.0
+    command_timeout_s: float | None = 60.0
 
 
 @dataclass(frozen=True)
@@ -219,11 +211,6 @@ class JobPolicyEnforcerConfig:
 
 
 @dataclass(frozen=True)
-class CORSConfig:
-    allowed_origins: Sequence[str] = ()
-
-
-@dataclass(frozen=True)
 class JobsSchedulerConfig:
     # Minimal time that preepmtible job is guaranteed to run before suspended
     run_quantum_sec: float = 1 * 60 * 60  # 1h
@@ -247,14 +234,6 @@ class JobsSchedulerConfig:
 
 
 @dataclass(frozen=True)
-class SentryConfig:
-    dsn: URL
-    cluster_name: str
-    app_name: str
-    sample_rate: float = 0
-
-
-@dataclass(frozen=True)
 class Config:
     server: ServerConfig
 
@@ -265,18 +244,14 @@ class Config:
 
     api_base_url: URL
     config_url: URL
-    admin_url: Optional[URL]
-    admin_public_url: Optional[URL]
+    admin_url: URL | None
+    admin_public_url: URL | None
 
-    oauth: Optional[OAuthConfig] = None
+    oauth: OAuthConfig | None = None
 
     jobs: JobsConfig = JobsConfig()
-    cors: CORSConfig = CORSConfig()
 
     scheduler: JobsSchedulerConfig = JobsSchedulerConfig()
-
-    zipkin: Optional[ZipkinConfig] = None
-    sentry: Optional[SentryConfig] = None
 
 
 @dataclass(frozen=True)
@@ -287,7 +262,7 @@ class PollerConfig:
 
     auth: AuthConfig
 
-    admin_url: Optional[URL]
+    admin_url: URL | None
     config_url: URL
 
     registry_config: RegistryConfig
@@ -297,9 +272,6 @@ class PollerConfig:
     jobs: JobsConfig = JobsConfig()
 
     scheduler: JobsSchedulerConfig = JobsSchedulerConfig()
-
-    zipkin: Optional[ZipkinConfig] = None
-    sentry: Optional[SentryConfig] = None
 
 
 @dataclass(frozen=True)

@@ -2,34 +2,36 @@ import asyncio
 import base64
 import json
 import uuid
+from asyncio import timeout
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path, PurePath
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlsplit
 
 import aiohttp
 import aiohttp.pytest_plugin
 import aiohttp.web
 import pytest
-from async_timeout import timeout
 from yarl import URL
 
 from platform_api.cluster_config import (
     UTC,
+    AppsConfig,
     ClusterConfig,
     EnergyConfig,
     EnergySchedule,
     IngressConfig,
     OrchestratorConfig,
+    StorageConfig as ClusterStorageConfig,
+    VolumeConfig,
 )
 from platform_api.config import (
     AuthConfig,
     Config,
-    CORSConfig,
     DatabaseConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
@@ -102,8 +104,8 @@ async def kube_config_cluster_payload(kube_config_payload: dict[str, Any]) -> An
 
 @pytest.fixture(scope="session")
 def cert_authority_data_pem(
-    kube_config_cluster_payload: dict[str, Any]
-) -> Optional[str]:
+    kube_config_cluster_payload: dict[str, Any],
+) -> str | None:
     if "certificate-authority" in kube_config_cluster_payload:
         ca_path = kube_config_cluster_payload["certificate-authority"]
         if ca_path:
@@ -153,34 +155,44 @@ def registry_config(token_factory: Callable[[str], str]) -> RegistryConfig:
 @pytest.fixture(scope="session")
 def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]:
     def _f(**kwargs: Any) -> OrchestratorConfig:
-        defaults = dict(
-            jobs_domain_name_template="{job_id}.jobs.neu.ro",
-            jobs_internal_domain_name_template="{job_id}.platformapi-tests",
-            resource_pool_types=[
+        defaults = {
+            "jobs_domain_name_template": "{job_id}.jobs.neu.ro",
+            "jobs_internal_domain_name_template": "{job_id}.platformapi-tests",
+            "resource_pool_types": [
                 ResourcePoolType(
+                    name="cpu",
+                    min_size=1,
+                    max_size=2,
+                    idle_size=1,
                     cpu=1.0,
-                    available_cpu=1.0,
                     memory=2048 * 10**6,
-                    available_memory=2048 * 10**6,
+                    disk_size=150 * 10**9,
+                    cpu_min_watts=1,
+                    cpu_max_watts=2,
                 ),
                 ResourcePoolType(
+                    name="cpu-p",
+                    min_size=1,
+                    max_size=2,
                     cpu=1.0,
-                    available_cpu=1.0,
                     memory=2048 * 10**6,
-                    available_memory=2048 * 10**6,
+                    disk_size=150 * 10**9,
                     is_preemptible=True,
                 ),
                 ResourcePoolType(
+                    min_size=1,
+                    max_size=2,
                     cpu=100,
-                    available_cpu=100,
                     memory=500_000 * 10**6,
-                    available_memory=500_000 * 10**6,
+                    disk_size=150 * 10**9,
                 ),
                 ResourcePoolType(
+                    name="tpu",
+                    min_size=1,
+                    max_size=2,
                     cpu=1.0,
-                    available_cpu=1.0,
                     memory=2048 * 10**6,
-                    available_memory=2048 * 10**6,
+                    disk_size=150 * 10**9,
                     tpu=TPUResource(
                         ipv4_cidr_block="1.1.1.1/32",
                         types=("v2-8",),
@@ -188,58 +200,75 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     ),
                 ),
                 ResourcePoolType(
+                    name="gpu",
+                    min_size=1,
+                    max_size=2,
                     cpu=1.0,
-                    available_cpu=1.0,
                     memory=2048 * 10**6,
-                    available_memory=2048 * 10**6,
-                    gpu=1,
-                    gpu_model="gpumodel",
+                    disk_size=150 * 10**9,
+                    nvidia_gpu=1,
+                    amd_gpu=2,
+                    intel_gpu=3,
                 ),
             ],
-            presets=[
+            "presets": [
                 Preset(
                     name="gpu-small",
                     credits_per_hour=Decimal("10"),
-                    gpu=1,
+                    nvidia_gpu=1,
                     cpu=7,
                     memory=30720 * 10**6,
-                    gpu_model=GKEGPUModels.K80.value.id,
+                    nvidia_gpu_model=GKEGPUModels.K80.value.id,
+                    available_resource_pool_names=["gpu"],
+                ),
+                Preset(
+                    name="amd-gpu-small",
+                    credits_per_hour=Decimal("10"),
+                    amd_gpu=1,
+                    cpu=7,
+                    memory=30720 * 10**6,
+                    available_resource_pool_names=["gpu"],
                 ),
                 Preset(
                     name="gpu-large",
                     credits_per_hour=Decimal("10"),
-                    gpu=1,
+                    nvidia_gpu=1,
                     cpu=7,
                     memory=61440 * 10**6,
-                    gpu_model=GKEGPUModels.V100.value.id,
+                    nvidia_gpu_model=GKEGPUModels.V100.value.id,
+                    available_resource_pool_names=["gpu"],
                 ),
                 Preset(
                     name="gpu-large-p",
                     credits_per_hour=Decimal("10"),
-                    gpu=1,
+                    nvidia_gpu=1,
                     cpu=7,
                     memory=61440 * 10**6,
-                    gpu_model=GKEGPUModels.V100.value.id,
+                    nvidia_gpu_model=GKEGPUModels.V100.value.id,
                     scheduler_enabled=True,
                     preemptible_node=True,
+                    available_resource_pool_names=["gpu"],
                 ),
                 Preset(
                     name="cpu-micro",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
                     memory=100 * 10**6,
+                    available_resource_pool_names=["cpu"],
                 ),
                 Preset(
                     name="cpu-small",
                     credits_per_hour=Decimal("10"),
                     cpu=2,
                     memory=2048 * 10**6,
+                    available_resource_pool_names=["cpu"],
                 ),
                 Preset(
                     name="cpu-large",
                     credits_per_hour=Decimal("10"),
                     cpu=3,
                     memory=14336 * 10**6,
+                    available_resource_pool_names=["cpu"],
                 ),
                 Preset(
                     name="tpu",
@@ -247,12 +276,13 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     cpu=3,
                     memory=14336 * 10**6,
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),
+                    available_resource_pool_names=["tpu"],
                 ),
             ],
-            job_schedule_scaleup_timeout=5,
-            allow_privileged_mode=True,
-            allow_job_priority=True,
-        )
+            "job_schedule_scaleup_timeout": 5,
+            "allow_privileged_mode": True,
+            "allow_job_priority": True,
+        }
         kwargs = {**defaults, **kwargs}
         return OrchestratorConfig(**kwargs)
 
@@ -261,7 +291,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
 
 @pytest.fixture(scope="session")
 async def orchestrator_config(
-    orchestrator_config_factory: Callable[..., OrchestratorConfig]
+    orchestrator_config_factory: Callable[..., OrchestratorConfig],
 ) -> OrchestratorConfig:
     return orchestrator_config_factory()
 
@@ -270,23 +300,23 @@ async def orchestrator_config(
 def kube_config_factory(
     kube_config_cluster_payload: dict[str, Any],
     kube_config_user_payload: dict[str, Any],
-    cert_authority_data_pem: Optional[str],
+    cert_authority_data_pem: str | None,
 ) -> Iterator[Callable[..., KubeConfig]]:
     cluster = kube_config_cluster_payload
     user = kube_config_user_payload
 
     def _f(**kwargs: Any) -> KubeConfig:
-        defaults = dict(
-            jobs_ingress_class="nginx",
-            endpoint_url=cluster["server"],
-            auth_type=KubeClientAuthType.CERTIFICATE,
-            cert_authority_data_pem=cert_authority_data_pem,
-            cert_authority_path=None,  # disable, only `cert_authority_data_pem` works
-            auth_cert_path=user["client-certificate"],
-            auth_cert_key_path=user["client-key"],
-            node_label_gpu="gpu",
-            namespace="platformapi-tests",
-        )
+        defaults = {
+            "jobs_ingress_class": "nginx",
+            "endpoint_url": cluster["server"],
+            "auth_type": KubeClientAuthType.CERTIFICATE,
+            "cert_authority_data_pem": cert_authority_data_pem,
+            # disable, only `cert_authority_data_pem` works
+            "cert_authority_path": None,
+            "auth_cert_path": user["client-certificate"],
+            "auth_cert_key_path": user["client-key"],
+            "namespace": "platformapi-tests",
+        }
         kwargs = {**defaults, **kwargs}
         return KubeConfig(**kwargs)
 
@@ -321,15 +351,19 @@ def kube_job_nodes_factory(
                 labels[kube_config.node_label_preemptible] = "true"
             capacity = {
                 "pods": "110",
-                "cpu": int(pool_type.available_cpu or 0),
-                "memory": f"{pool_type.available_memory}",
-                "nvidia.com/gpu": pool_type.gpu or 0,
+                "cpu": int(pool_type.cpu or 0),
+                "memory": f"{pool_type.memory}",
+                "nvidia.com/gpu": pool_type.nvidia_gpu or 0,
             }
             taints = [
                 NodeTaint(key=kube_config.jobs_pod_job_toleration_key, value="true")
             ]
-            if pool_type.gpu:
-                taints.append(NodeTaint(key=Resources.gpu_key, value="present"))
+            if pool_type.nvidia_gpu:
+                taints.append(NodeTaint(key=Resources.nvidia_gpu_key, value="present"))
+            if pool_type.amd_gpu:
+                taints.append(NodeTaint(key=Resources.amd_gpu_key, value="present"))
+            if pool_type.intel_gpu:
+                taints.append(NodeTaint(key=Resources.intel_gpu_key, value="present"))
             try:
                 await kube_client.create_node(
                     pool_type.name, capacity=capacity, labels=labels, taints=taints
@@ -365,8 +399,8 @@ class MyKubeClient(KubeClient):
         self,
         pvc_name: str,
         namespace: str,
-        storage: Optional[int] = None,
-        labels: Optional[Mapping[str, str]] = None,
+        storage: int | None = None,
+        labels: Mapping[str, str] | None = None,
     ) -> None:
         url = self._generate_all_pvcs_url(namespace)
         storage = storage or 1024 * 1024
@@ -395,7 +429,7 @@ class MyKubeClient(KubeClient):
         self._check_status_payload(payload)
 
     async def update_or_create_secret(
-        self, secret_name: str, namespace: str, data: Optional[dict[str, str]] = None
+        self, secret_name: str, namespace: str, data: dict[str, str] | None = None
     ) -> None:
         url = self._generate_all_secrets_url(namespace)
         data = data or {}
@@ -416,13 +450,21 @@ class MyKubeClient(KubeClient):
         timeout_s: float = 5.0,
         interval_s: float = 1.0,
     ) -> None:
-        raw_pod: Optional[dict[str, Any]] = None
+        raw_pod: dict[str, Any] | None = None
         try:
             async with timeout(timeout_s):
                 while True:
                     raw_pod = await self.get_raw_pod(pod_name)
                     if node_name:
-                        pod_has_node = raw_pod["spec"].get("nodeName") == node_name
+                        pod_at_node = raw_pod["spec"].get("nodeName")
+                        if pod_at_node == node_name:
+                            pod_has_node = True
+                        else:
+                            pod_has_node = False
+                            print(
+                                f"Pod was scheudled to wrong node: {pod_at_node}, "
+                                f"expected: {node_name}"
+                            )
                     else:
                         pod_has_node = bool(raw_pod["spec"].get("nodeName"))
                     pod_is_scheduled = "PodScheduled" in [
@@ -433,7 +475,7 @@ class MyKubeClient(KubeClient):
                     if pod_has_node and pod_is_scheduled:
                         return
                     await asyncio.sleep(interval_s)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             if raw_pod:
                 print("Node:", raw_pod["spec"].get("nodeName"))
                 print("Phase:", raw_pod["status"]["phase"])
@@ -452,11 +494,11 @@ class MyKubeClient(KubeClient):
                     cpu = resource_requests.get("cpu")
                     memory = resource_requests.get("memory")
                     print(
-                        f'  {pod["metadata"]["name"]:40s}',
+                        f"  {pod['metadata']['name']:40s}",
                         f"{str(cpu):5s}",
                         f"{str(memory):10s}",
-                        f'{pod["status"]["phase"]:9s}',
-                        f'{str(pod["spec"].get("nodeName"))}',
+                        f"{pod['status']['phase']:9s}",
+                        f"{str(pod['spec'].get('nodeName'))}",
                     )
             pytest.fail("Pod unscheduled")
 
@@ -471,12 +513,12 @@ class MyKubeClient(KubeClient):
                     except JobNotFoundException:
                         return
                     await asyncio.sleep(interval_s)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pytest.fail("Pod still exists")
 
     async def create_triggered_scaleup_event(self, pod_id: str) -> None:
         url = f"{self._namespace_url}/events"
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)  # noqa: UP017
         now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         data = {
             "apiVersion": "v1",
@@ -515,7 +557,7 @@ class MyKubeClient(KubeClient):
 
     async def create_failed_attach_volume_event(self, pod_id: str) -> None:
         url = f"{self._namespace_url}/events"
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)  # noqa: UP017
         now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         data = {
             "apiVersion": "v1",
@@ -552,12 +594,41 @@ class MyKubeClient(KubeClient):
 
         await self._request(method="POST", url=url, json=data)
 
+    async def add_node_labels(self, node_name: str, labels: dict[str, Any]) -> None:
+        node = await self.get_node(node_name)
+
+        new_labels = node.labels.copy()
+        new_labels.update(labels)
+
+        await self._request(
+            method="PATCH",
+            url=self._generate_node_url(node_name),
+            headers={"content-type": "application/merge-patch+json"},
+            json={"metadata": {"labels": new_labels}},
+        )
+
+    async def remove_node_labels(self, node_name: str, label_keys: list[str]) -> None:
+        node = await self.get_node(node_name)
+
+        new_labels = {
+            label: value
+            for label, value in node.labels.items()
+            if label not in label_keys
+        }
+
+        await self._request(
+            method="PATCH",
+            url=self._generate_node_url(node_name),
+            headers={"content-type": "application/merge-patch+json"},
+            json={"metadata": {"labels": new_labels}},
+        )
+
 
 @pytest.fixture(scope="session")
 async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeClient]:
-    def _f(custom_kube_config: Optional[KubeConfig] = None) -> MyKubeClient:
+    def _f(custom_kube_config: KubeConfig | None = None) -> MyKubeClient:
         config = custom_kube_config or kube_config
-        kube_client = MyKubeClient(
+        return MyKubeClient(
             base_url=config.endpoint_url,
             auth_type=config.auth_type,
             cert_authority_data_pem=config.cert_authority_data_pem,
@@ -569,14 +640,13 @@ async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeCl
             read_timeout_s=config.client_read_timeout_s,
             conn_pool_size=config.client_conn_pool_size,
         )
-        return kube_client
 
     return _f
 
 
 @pytest.fixture(scope="session")
 async def kube_client(
-    kube_client_factory: Callable[..., MyKubeClient]
+    kube_client_factory: Callable[..., MyKubeClient],
 ) -> AsyncIterator[KubeClient]:
     async with kube_client_factory() as kube_client:
         yield kube_client
@@ -589,7 +659,7 @@ async def nfs_volume_server(kube_client: MyKubeClient) -> Any:
 
 
 @pytest.fixture(scope="session")
-def storage_config_nfs(nfs_volume_server: Optional[str]) -> StorageConfig:
+def storage_config_nfs(nfs_volume_server: str | None) -> StorageConfig:
     assert nfs_volume_server
     return StorageConfig.create_nfs(
         nfs_server=nfs_volume_server, nfs_export_path=PurePath("/var/storage")
@@ -605,14 +675,14 @@ async def kube_orchestrator_factory(
     kube_client: KubeClient,
 ) -> Callable[..., KubeOrchestrator]:
     def _f(**kwargs: Any) -> KubeOrchestrator:
-        defaults = dict(
-            cluster_name="default",
-            storage_configs=[storage_config_host],
-            registry_config=registry_config,
-            orchestrator_config=orchestrator_config,
-            kube_config=kube_config,
-            kube_client=kube_client,
-        )
+        defaults = {
+            "cluster_name": "default",
+            "storage_configs": [storage_config_host],
+            "registry_config": registry_config,
+            "orchestrator_config": orchestrator_config,
+            "kube_config": kube_config,
+            "kube_client": kube_client,
+        }
         kwargs = {**defaults, **kwargs}
         return KubeOrchestrator(**kwargs)
 
@@ -673,7 +743,6 @@ def default_node_capacity() -> dict[str, Any]:
 
 @pytest.fixture
 async def kube_node_gpu(
-    kube_config: KubeConfig,
     kube_client: MyKubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
     default_node_capacity: dict[str, Any],
@@ -681,11 +750,9 @@ async def kube_node_gpu(
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)
 
-    assert kube_config.node_label_gpu is not None
-    labels = {kube_config.node_label_gpu: "gpumodel"}
-    taints = [NodeTaint(key=Resources.gpu_key, value="present")]
+    taints = [NodeTaint(key=Resources.nvidia_gpu_key, value="present")]
     await kube_client.create_node(
-        node_name, capacity=default_node_capacity, labels=labels, taints=taints
+        node_name, capacity=default_node_capacity, taints=taints
     )
 
     yield node_name
@@ -714,7 +781,7 @@ async def kube_node_tpu(
 
 @pytest.fixture
 def kube_config_node_preemptible(
-    kube_config_factory: Callable[..., KubeConfig]
+    kube_config_factory: Callable[..., KubeConfig],
 ) -> KubeConfig:
     return kube_config_factory(
         node_label_preemptible="preemptible",
@@ -774,10 +841,10 @@ async def pod_factory(
 
     async def _create(
         image: str,
-        command: Optional[list[str]] = None,
+        command: list[str] | None = None,
         cpu: float = 0.1,
         memory: int = 128 * 10**6,
-        labels: Optional[dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
         wait: bool = True,
         wait_timeout_s: float = 60,
         idle: bool = False,
@@ -837,7 +904,6 @@ def config_factory(
             jobs=jobs_config,
             job_policy_enforcer=job_policy_enforcer,
             notifications=notifications_config,
-            cors=CORSConfig(allowed_origins=["https://neu.ro"]),
             config_url=config_url,
             admin_url=admin_url,
             admin_public_url=admin_url,
@@ -864,6 +930,8 @@ def cluster_config_factory(
         )
         return ClusterConfig(
             name=cluster_name,
+            location="eu-west-4",
+            logo_url=URL("https://logo.url"),
             orchestrator=orchestrator_config,
             ingress=ingress_config,
             timezone=UTC,
@@ -873,6 +941,18 @@ def cluster_config_factory(
                     EnergySchedule.create_default(timezone=UTC, name="green"),
                 ]
             ),
+            storage=ClusterStorageConfig(
+                volumes=[
+                    VolumeConfig(
+                        name="default",
+                        path=None,
+                        credits_per_hour_per_gb=Decimal("100"),
+                    )
+                ]
+            ),
+            apps=AppsConfig(
+                apps_hostname_templates=["{app_name}.apps.dev.neu.ro"],
+            ),
         )
 
     return _f
@@ -880,7 +960,7 @@ def cluster_config_factory(
 
 @pytest.fixture
 def cluster_config(
-    cluster_config_factory: Callable[..., ClusterConfig]
+    cluster_config_factory: Callable[..., ClusterConfig],
 ) -> ClusterConfig:
     return cluster_config_factory()
 
@@ -892,7 +972,7 @@ def config(config_factory: Callable[..., Config]) -> Config:
 
 @pytest.fixture
 def config_with_oauth(
-    config_factory: Callable[..., Config], oauth_config_dev: Optional[OAuthConfig]
+    config_factory: Callable[..., Config], oauth_config_dev: OAuthConfig | None
 ) -> Config:
     return config_factory(oauth=oauth_config_dev)
 
@@ -926,7 +1006,7 @@ class ApiRunner:
 
         self._api_address_future: asyncio.Future[ApiAddress] = asyncio.Future()
         self._cleanup_future: asyncio.Future[None] = asyncio.Future()
-        self._task: Optional[asyncio.Task[None]] = None
+        self._task: asyncio.Task[None] | None = None
 
     async def _run(self) -> None:
         async with create_local_app_server(self._app, port=self._port) as api_address:

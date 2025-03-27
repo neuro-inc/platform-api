@@ -3,7 +3,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import Enum
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -40,9 +39,17 @@ class Preset:
     memory: int
     scheduler_enabled: bool = False
     preemptible_node: bool = False
-    gpu: Optional[int] = None
-    gpu_model: Optional[str] = None
-    tpu: Optional[TPUPreset] = None
+    nvidia_gpu: int | None = None
+    amd_gpu: int | None = None
+    intel_gpu: int | None = None
+    nvidia_gpu_model: str | None = None
+    amd_gpu_model: str | None = None
+    intel_gpu_model: str | None = None
+    gpu_model: str | None = None  # TODO: deprecated
+    tpu: TPUPreset | None = None
+    is_external_job: bool = False
+    resource_pool_names: Sequence[str] = ()
+    available_resource_pool_names: Sequence[str] = ()
 
 
 @dataclass(frozen=True)
@@ -58,18 +65,26 @@ class ResourcePoolType:
 
     # default_factory is used only in tests
     name: str = field(default_factory=lambda: str(uuid.uuid4()))
-    is_preemptible: Optional[bool] = False
-    cpu: Optional[float] = None
-    available_cpu: Optional[float] = None
-    memory: Optional[int] = None
-    available_memory: Optional[int] = None
-    gpu: Optional[int] = None
-    gpu_model: Optional[str] = None
-    disk_gb: Optional[int] = None
-    min_size: Optional[int] = None
-    max_size: Optional[int] = None
-    tpu: Optional[TPUResource] = None
+    is_preemptible: bool | None = False
+    cpu: float | None = None
+    available_cpu: float | None = None
+    memory: int | None = None
+    available_memory: int | None = None
+    nvidia_gpu: int | None = None
+    nvidia_gpu_model: str | None = None
+    amd_gpu: int | None = None
+    amd_gpu_model: str | None = None
+    intel_gpu: int | None = None
+    intel_gpu_model: str | None = None
+    disk_size: int | None = None
+    available_disk_size: int | None = None
+    min_size: int | None = None
+    max_size: int | None = None
+    idle_size: int | None = None
+    tpu: TPUResource | None = None
+    cpu_min_watts: float | None = None
+    cpu_max_watts: float | None = None
 
-    def __post_init__(self) -> None:
-        if self.gpu and not self.gpu_model:
-            raise ValueError("GPU model unspecified")
+    @property
+    def has_gpu(self) -> bool:
+        return bool(self.nvidia_gpu or self.amd_gpu or self.intel_gpu)

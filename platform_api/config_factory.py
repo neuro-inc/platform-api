@@ -3,7 +3,6 @@ import pathlib
 from collections.abc import Sequence
 from decimal import Decimal
 from pathlib import PurePath
-from typing import Optional
 
 from yarl import URL
 
@@ -12,7 +11,6 @@ from alembic.config import Config as AlembicConfig
 from .config import (
     AuthConfig,
     Config,
-    CORSConfig,
     DatabaseConfig,
     JobPolicyEnforcerConfig,
     JobsConfig,
@@ -23,17 +21,15 @@ from .config import (
     PollerConfig,
     PostgresConfig,
     RegistryConfig,
-    SentryConfig,
     ServerConfig,
     StorageConfig,
     StorageType,
-    ZipkinConfig,
 )
 from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
 
 
 class EnvironConfigFactory:
-    def __init__(self, environ: Optional[dict[str, str]] = None):
+    def __init__(self, environ: dict[str, str] | None = None):
         self._environ = environ or os.environ
 
     def _get_bool(self, name: str, default: bool = False) -> bool:
@@ -42,12 +38,11 @@ class EnvironConfigFactory:
             return default
         return value.lower() in ("true", "1", "yes", "y")
 
-    def _get_url(self, name: str) -> Optional[URL]:
+    def _get_url(self, name: str) -> URL | None:
         value = self._environ[name]
         if value == "-":
             return None
-        else:
-            return URL(value)
+        return URL(value)
 
     def create(self) -> Config:
         auth = self.create_auth()
@@ -65,30 +60,10 @@ class EnvironConfigFactory:
             job_policy_enforcer=self.create_job_policy_enforcer(),
             scheduler=self.create_job_scheduler(),
             notifications=self.create_notifications(),
-            cors=self.create_cors(),
             config_url=config_url,
             admin_url=admin_url,
             admin_public_url=admin_public_url,
             api_base_url=api_base_url,
-            zipkin=self.create_zipkin("platform-api"),
-            sentry=self.create_sentry("platform-api"),
-        )
-
-    def create_sentry(self, default_app_name: str) -> Optional[SentryConfig]:
-        if "NP_SENTRY_DSN" not in self._environ:
-            return None
-
-        dsn = URL(self._environ["NP_SENTRY_DSN"])
-        app_name = self._environ.get("NP_SENTRY_APP_NAME", default_app_name)
-        cluster_name = self._environ["NP_SENTRY_CLUSTER_NAME"]
-        sample_rate = float(
-            self._environ.get("NP_SENTRY_SAMPLE_RATE", SentryConfig.sample_rate)
-        )
-        return SentryConfig(
-            dsn=dsn,
-            cluster_name=cluster_name,
-            app_name=app_name,
-            sample_rate=sample_rate,
         )
 
     def create_poller(self) -> PollerConfig:
@@ -106,8 +81,6 @@ class EnvironConfigFactory:
             config_url=config_url,
             admin_url=admin_url,
             cluster_name=cluster_name,
-            zipkin=self.create_zipkin("platform-api-poller"),
-            sentry=self.create_sentry("platform-api-poller"),
             registry_config=self.create_registry(),
             storage_configs=self.create_storages(),
             kube_config=self.create_kube(),
@@ -183,18 +156,7 @@ class EnvironConfigFactory:
             public_endpoint_url=public_endpoint_url,
         )
 
-    def create_zipkin(self, default_app_name: str) -> Optional[ZipkinConfig]:
-        if "NP_ZIPKIN_URL" not in self._environ:
-            return None
-
-        url = URL(self._environ["NP_ZIPKIN_URL"])
-        app_name = self._environ.get("NP_ZIPKIN_APP_NAME", default_app_name)
-        sample_rate = float(
-            self._environ.get("NP_ZIPKIN_SAMPLE_RATE", ZipkinConfig.sample_rate)
-        )
-        return ZipkinConfig(url=url, app_name=app_name, sample_rate=sample_rate)
-
-    def try_create_oauth(self) -> Optional[OAuthConfig]:
+    def try_create_oauth(self) -> OAuthConfig | None:
         auth_url = self._environ.get("NP_OAUTH_AUTH_URL")
         token_url = self._environ.get("NP_OAUTH_TOKEN_URL")
         logout_url = self._environ.get("NP_OAUTH_LOGOUT_URL")
@@ -226,13 +188,6 @@ class EnvironConfigFactory:
         url = URL(self._environ.get("NP_NOTIFICATIONS_URL", ""))
         token = self._environ.get("NP_NOTIFICATIONS_TOKEN", "")
         return NotificationsConfig(url=url, token=token)
-
-    def create_cors(self) -> CORSConfig:
-        origins: Sequence[str] = CORSConfig.allowed_origins
-        origins_str = self._environ.get("NP_CORS_ORIGINS", "").strip()
-        if origins_str:
-            origins = origins_str.split(",")
-        return CORSConfig(allowed_origins=origins)
 
     def create_postgres(self) -> PostgresConfig:
         try:
@@ -321,11 +276,14 @@ class EnvironConfigFactory:
             jobs_pod_priority_class_name=self._environ.get(
                 "NP_KUBE_POD_PRIORITY_CLASS_NAME"
             ),
-            node_label_gpu=self._environ.get("NP_KUBE_NODE_LABEL_GPU"),
             node_label_preemptible=self._environ.get("NP_KUBE_NODE_LABEL_PREEMPTIBLE"),
             node_label_job=self._environ.get("NP_KUBE_NODE_LABEL_JOB"),
             node_label_node_pool=self._environ.get("NP_KUBE_NODE_LABEL_NODE_POOL"),
             image_pull_secret_name=self._environ.get("NP_KUBE_IMAGE_PULL_SECRET"),
+            external_job_runner_image=self._environ.get(
+                "NP_KUBE_EXTERNAL_JOB_RUNNER_IMAGE",
+                KubeConfig.external_job_runner_image,
+            ),
         )
 
     def create_registry(self) -> RegistryConfig:

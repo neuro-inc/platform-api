@@ -3,7 +3,7 @@ import logging
 from collections.abc import Mapping
 from datetime import timedelta
 from pathlib import PurePath
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp
 from iso8601 import iso8601
@@ -76,8 +76,12 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
         return ContainerResources(
             cpu=data["cpu"],
             memory=data["memory"],
-            gpu=data.get("gpu"),
-            gpu_model_id=data.get("gpu_model"),
+            nvidia_gpu=data.get("nvidia_gpu"),
+            amd_gpu=data.get("amd_gpu"),
+            intel_gpu=data.get("intel_gpu"),
+            nvidia_gpu_model=data.get("nvidia_gpu_model") or data.get("gpu_model"),
+            amd_gpu_model=data.get("amd_gpu_model"),
+            intel_gpu_model=data.get("intel_gpu_model"),
             shm=data.get("shm"),
             tpu=tpu,
         )
@@ -156,14 +160,14 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
 
 
 class HttpJobsPollerApi(JobsPollerApi):
-    _client: Optional[aiohttp.ClientSession] = None
+    _client: aiohttp.ClientSession | None = None
 
     def __init__(
         self,
         url: URL,
         token: str,
         cluster_name: str,
-        trace_configs: Optional[list[aiohttp.TraceConfig]] = None,
+        trace_configs: list[aiohttp.TraceConfig] | None = None,
     ):
         self._base_url = url
         self._token = token
@@ -189,7 +193,7 @@ class HttpJobsPollerApi(JobsPollerApi):
         await self.init()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.close()
 
     async def get_unfinished_jobs(self) -> list[JobRecord]:
@@ -257,8 +261,8 @@ class JobsPoller:
         self._cluster_updater = cluster_updater
         self._interval_s = interval_s
 
-        self._is_active: Optional[asyncio.Future[None]] = None
-        self._task: Optional[asyncio.Future[None]] = None
+        self._is_active: asyncio.Future[None] | None = None
+        self._task: asyncio.Future[None] | None = None
 
     async def start(self) -> None:
         logger.info("Starting jobs polling")
@@ -268,7 +272,7 @@ class JobsPoller:
         await self.start()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.stop()
 
     async def _init_task(self) -> None:

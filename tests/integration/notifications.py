@@ -21,7 +21,7 @@ class NotificationsServer(NamedTuple):
 
     @property
     def requests(self) -> tuple[tuple[str, Any]]:
-        return tuple(request for request in self.app["requests"])  # type: ignore
+        return tuple(request for request in self.app["requests"])
 
     def remove_requests(self) -> None:
         self.app["requests"].clear()

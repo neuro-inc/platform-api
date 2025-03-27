@@ -1,8 +1,7 @@
 import json
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from platform_api.orchestrator.job import JobRecord
 from platform_api.orchestrator.job_request import JobError
@@ -72,10 +71,10 @@ class InMemoryJobsStorage(JobsStorage):
     @asyncgeneratorcontextmanager
     async def iter_all_jobs(
         self,
-        job_filter: Optional[JobFilter] = None,
+        job_filter: JobFilter | None = None,
         *,
         reverse: bool = False,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> AsyncIterator[JobRecord]:
         # Accumulate results in a list to avoid RuntimeError when
         # the self._job_records dictionary is modified during iteration
@@ -93,7 +92,7 @@ class InMemoryJobsStorage(JobsStorage):
             yield job
 
     async def get_jobs_by_ids(
-        self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
+        self, job_ids: Iterable[str], job_filter: JobFilter | None = None
     ) -> list[JobRecord]:
         jobs = []
         for job_id in job_ids:
@@ -116,9 +115,9 @@ class InMemoryJobsStorage(JobsStorage):
         self,
         *,
         delay: timedelta = timedelta(),
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> list[JobRecord]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         jobs = []
         async with self.iter_all_jobs() as it:
             async for job in it:

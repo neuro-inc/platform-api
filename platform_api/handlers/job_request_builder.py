@@ -68,11 +68,15 @@ def create_resources_from_payload(payload: dict[str, Any]) -> ContainerResources
         tpu = create_tpu_resource_from_payload(payload["tpu"])
     return ContainerResources(
         cpu=payload["cpu"],
-        memory=payload["memory"]
-        if "memory" in payload
-        else payload["memory_mb"] * 2**20,
-        gpu=payload.get("gpu"),
-        gpu_model_id=payload.get("gpu_model"),
+        memory=(
+            payload["memory"] if "memory" in payload else payload["memory_mb"] * 2**20
+        ),
+        nvidia_gpu=payload.get("nvidia_gpu"),
+        amd_gpu=payload.get("amd_gpu"),
+        intel_gpu=payload.get("intel_gpu"),
+        nvidia_gpu_model=payload.get("nvidia_gpu_model") or payload.get("gpu_model"),
+        amd_gpu_model=payload.get("amd_gpu_model"),
+        intel_gpu_model=payload.get("intel_gpu_model"),
         shm=payload.get("shm"),
         tpu=tpu,
     )

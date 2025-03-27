@@ -3,7 +3,7 @@ import base64
 import json
 from collections.abc import AsyncIterator, Callable
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from unittest import mock
@@ -63,7 +63,7 @@ class MockJobsScheduler(JobsScheduler):
     def __init__(
         self, *, admin_client: AdminClient, cluster_holder: ClusterHolder
     ) -> None:
-        self._now = datetime.now(timezone.utc)
+        self._now = datetime.now(UTC)
         super().__init__(
             config=JobsSchedulerConfig(
                 is_waiting_min_time_sec=1,
@@ -1510,14 +1510,19 @@ class TestJobsService:
         balance: Balance,
         user_factory: UserFactory,
         test_cluster: str,
+        test_org: str,
     ) -> None:
-        user = await user_factory("testuser", [(test_cluster, balance, Quota())])
+        user = await user_factory(
+            "testuser", [(test_cluster, test_org, balance, Quota())]
+        )
         request = job_request_factory(with_gpu=True)
 
         with pytest.raises(
             NoCreditsError, match=f"No credits left for user '{user.name}'"
         ):
-            await jobs_service.create_job(request, user, cluster_name=test_cluster)
+            await jobs_service.create_job(
+                request, user, cluster_name=test_cluster, org_name=test_org
+            )
 
     @pytest.mark.parametrize(
         "balance",
@@ -1620,64 +1625,6 @@ class TestJobsService:
         await jobs_service.create_job(
             request, user=user, cluster_name=test_cluster, wait_for_jobs_quota=True
         )
-
-    async def test_job_billing_defaults(
-        self,
-        jobs_service: JobsService,
-        mock_job_request: JobRequest,
-        test_user: AuthUser,
-        test_cluster: str,
-    ) -> None:
-        job, _ = await jobs_service.create_job(
-            job_request=mock_job_request, user=test_user, cluster_name=test_cluster
-        )
-        assert not job.fully_billed
-        assert job.last_billed is None
-        assert job.total_price_credits == Decimal("0")
-
-    async def test_job_update_billing(
-        self,
-        jobs_service: JobsService,
-        mock_job_request: JobRequest,
-        test_user: AuthUser,
-        test_cluster: str,
-    ) -> None:
-        job, _ = await jobs_service.create_job(
-            job_request=mock_job_request, user=test_user, cluster_name=test_cluster
-        )
-        now = datetime.now(timezone.utc)
-        await jobs_service.update_job_billing(
-            job.id, last_billed=now, fully_billed=False, new_charge=Decimal("5.00")
-        )
-
-        await jobs_service.update_job_billing(
-            job.id, last_billed=now, fully_billed=True, new_charge=Decimal("6.11")
-        )
-        job = await jobs_service.get_job(job.id)
-        assert job.fully_billed
-        assert job.last_billed == now
-        assert job.total_price_credits == Decimal("11.11")
-
-    async def test_get_not_billed_jobs(
-        self,
-        jobs_service: JobsService,
-        job_request_factory: Callable[..., JobRequest],
-        test_user: AuthUser,
-        test_cluster: str,
-    ) -> None:
-        job1, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
-        )
-        job2, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
-        )
-        now = datetime.now(timezone.utc)
-        await jobs_service.update_job_billing(
-            job1.id, last_billed=now, fully_billed=True, new_charge=Decimal("5.00")
-        )
-        async with jobs_service.get_not_billed_jobs() as it:
-            job_ids = [job.id async for job in it]
-        assert job_ids == [job2.id]
 
 
 class TestJobsServiceCluster:
@@ -2108,14 +2055,19 @@ class TestJobServiceNotification:
         mock_notifications_client: MockNotificationsClient,
         user_factory: UserFactory,
         test_cluster: str,
+        test_org: str,
     ) -> None:
         user = await user_factory(
-            "testuser", [(test_cluster, Balance(credits=Decimal("0")), Quota())]
+            "testuser",
+            [(test_cluster, test_org, Balance(credits=Decimal("0")), Quota())],
         )
 
         with pytest.raises(NoCreditsError):
             await jobs_service.create_job(
-                job_request=mock_job_request, user=user, cluster_name=test_cluster
+                job_request=mock_job_request,
+                user=user,
+                cluster_name=test_cluster,
+                org_name=test_org,
             )
 
         assert mock_notifications_client.sent_notifications == [
@@ -2400,7 +2352,7 @@ class TestJobServiceNotification:
 class TestScheduledJobsService:
     @pytest.fixture
     def cluster_config(self, cluster_config: ClusterConfig) -> ClusterConfig:
-        cluster_config = replace(
+        return replace(
             cluster_config,
             orchestrator=replace(
                 cluster_config.orchestrator,
@@ -2416,7 +2368,6 @@ class TestScheduledJobsService:
                 ],
             ),
         )
-        return cluster_config
 
     @pytest.fixture
     def mock_orchestrator(
@@ -3046,9 +2997,7 @@ class TestScheduledJobsService:
         test_cluster: str,
     ) -> None:
         # Sunday
-        test_scheduler.set_current_datetime(
-            datetime(2023, 1, 1, 0, 0, tzinfo=timezone.utc)
-        )
+        test_scheduler.set_current_datetime(datetime(2023, 1, 1, 0, 0, tzinfo=UTC))
 
         job1, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
@@ -3068,9 +3017,7 @@ class TestScheduledJobsService:
         assert not job1.materialized
 
         # Monday 00:00
-        test_scheduler.set_current_datetime(
-            datetime(2023, 1, 2, 0, 0, tzinfo=timezone.utc)
-        )
+        test_scheduler.set_current_datetime(datetime(2023, 1, 2, 0, 0, tzinfo=UTC))
 
         await jobs_poller_service.update_jobs_statuses()
 
@@ -3087,9 +3034,7 @@ class TestScheduledJobsService:
         assert job1.status == JobStatus.RUNNING
 
         # Monday 06:00
-        test_scheduler.set_current_datetime(
-            datetime(2023, 1, 2, 6, 0, tzinfo=timezone.utc)
-        )
+        test_scheduler.set_current_datetime(datetime(2023, 1, 2, 6, 0, tzinfo=UTC))
 
         await jobs_poller_service.update_jobs_statuses()
 
@@ -3099,9 +3044,7 @@ class TestScheduledJobsService:
         assert not job1.materialized
 
         # Next Monday 00:00
-        test_scheduler.set_current_datetime(
-            datetime(2023, 1, 9, 0, 0, tzinfo=timezone.utc)
-        )
+        test_scheduler.set_current_datetime(datetime(2023, 1, 9, 0, 0, tzinfo=UTC))
 
         await jobs_poller_service.update_jobs_statuses()
 

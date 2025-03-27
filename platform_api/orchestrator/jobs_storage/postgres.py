@@ -1,8 +1,8 @@
-from collections.abc import AsyncIterator, Iterable, Mapping, Set
+from collections.abc import AsyncIterator, Iterable, Mapping, Set as AbstractSet
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, Union
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as sapg
@@ -62,7 +62,7 @@ class JobTables:
 
 
 class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
-    def __init__(self, engine: AsyncEngine, tables: Optional[JobTables] = None) -> None:
+    def __init__(self, engine: AsyncEngine, tables: JobTables | None = None) -> None:
         super().__init__(engine)
         self._tables = tables or JobTables.create()
 
@@ -111,7 +111,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         return f"id={values['id']}"
 
     async def _select_row(
-        self, job_id: str, conn: Optional[AsyncConnection] = None
+        self, job_id: str, conn: AsyncConnection | None = None
     ) -> Row:
         query = self._tables.jobs.select(self._tables.jobs.c.id == job_id)
         record = await self._fetchrow(query, conn=conn)
@@ -120,7 +120,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         return record
 
     async def _insert_values(
-        self, values: Mapping[str, Any], conn: Optional[AsyncConnection] = None
+        self, values: Mapping[str, Any], conn: AsyncConnection | None = None
     ) -> None:
         query = self._tables.jobs.insert().values(values)
         try:
@@ -147,10 +147,9 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
                             project_name=project_name,
                             found_job_id=record["id"],
                         )
-                    else:
-                        # Conflicted entry gone. Retry insert. Possible infinite
-                        # loop has very low probability
-                        await self._insert_values(values, conn=conn)
+                    # Conflicted entry gone. Retry insert. Possible infinite
+                    # loop has very low probability
+                    await self._insert_values(values, conn=conn)
                 # Conflicting id case:
                 raise JobStorageTransactionError(
                     "Job {" + self._make_description(values) + "} has changed"
@@ -240,10 +239,10 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
     @asyncgeneratorcontextmanager
     async def iter_all_jobs(
         self,
-        job_filter: Optional[JobFilter] = None,
+        job_filter: JobFilter | None = None,
         *,
         reverse: bool = False,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> AsyncIterator[JobRecord]:
         query = self._tables.jobs.select()
         if job_filter is not None:
@@ -259,7 +258,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
                 yield self._record_to_job(record)
 
     async def get_jobs_by_ids(
-        self, job_ids: Iterable[str], job_filter: Optional[JobFilter] = None
+        self, job_ids: Iterable[str], job_filter: JobFilter | None = None
     ) -> list[JobRecord]:
         if job_filter is None:
             job_filter = JobFilter()
@@ -274,8 +273,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
                 all_jobs.append(job)
         # Restore ordering
         id_to_job = {job.id: job for job in all_jobs}
-        all_jobs = [id_to_job[job_id] for job_id in job_ids if job_id in id_to_job]
-        return all_jobs
+        return [id_to_job[job_id] for job_id in job_ids if job_id in id_to_job]
 
     async def get_jobs_for_deletion(
         self, *, delay: timedelta = timedelta()
@@ -295,14 +293,13 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         self,
         *,
         delay: timedelta = timedelta(),
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> list[JobRecord]:
         job_filter = JobFilter(
             statuses={JobStatus(item) for item in JobStatus.finished_values()},
             materialized=False,
-            fully_billed=True,
         )
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         query = (
             self._tables.jobs.select()
             .where(self._clause_for_filter(job_filter))
@@ -318,16 +315,18 @@ class JobFilterClauseBuilder:
         self._clauses: list[sasql.ClauseElement] = []
         self._tables = tables
 
-    def filter_statuses(self, statuses: Set[JobStatus]) -> None:
+    def filter_statuses(self, statuses: AbstractSet[JobStatus]) -> None:
         self._clauses.append(self._tables.jobs.c.status.in_(statuses))
 
-    def filter_owners(self, owners: Set[str]) -> None:
+    def filter_owners(self, owners: AbstractSet[str]) -> None:
         self._clauses.append(self._tables.jobs.c.owner.in_(owners))
 
-    def filter_base_owners(self, base_owners: Set[str]) -> None:
+    def filter_base_owners(self, base_owners: AbstractSet[str]) -> None:
         self._clauses.append(self._create_base_owner_clause(base_owners))
 
-    def _create_base_owner_clause(self, base_owners: Set[str]) -> sasql.ClauseElement:
+    def _create_base_owner_clause(
+        self, base_owners: AbstractSet[str]
+    ) -> sasql.ClauseElement:
         return func.split_part(self._tables.jobs.c.owner, "/", 1).in_(base_owners)
 
     def filter_clusters(self, clusters: ClusterOrgProjectNameSet) -> None:
@@ -384,10 +383,10 @@ class JobFilterClauseBuilder:
             )
         self._clauses.append(or_(*cluster_clauses))
 
-    def filter_projects(self, projects: Set[str]) -> None:
+    def filter_projects(self, projects: AbstractSet[str]) -> None:
         self._clauses.append(self._tables.jobs.c.project_name.in_(projects))
 
-    def filter_orgs(self, orgs: Set[Optional[str]]) -> None:
+    def filter_orgs(self, orgs: AbstractSet[str | None]) -> None:
         not_null_orgs = [org for org in orgs if org is not None]
         or_clauses = []
         if not_null_orgs:
@@ -399,10 +398,10 @@ class JobFilterClauseBuilder:
     def filter_name(self, name: str) -> None:
         self._clauses.append(self._tables.jobs.c.name == name)
 
-    def filter_ids(self, ids: Set[str]) -> None:
+    def filter_ids(self, ids: AbstractSet[str]) -> None:
         self._clauses.append(self._tables.jobs.c.id.in_(ids))
 
-    def filter_tags(self, tags: Set[str]) -> None:
+    def filter_tags(self, tags: AbstractSet[str]) -> None:
         self._clauses.append(self._tables.jobs.c.tags.contains(list(tags)))
 
     def filter_since(self, since: datetime) -> None:
@@ -421,16 +420,13 @@ class JobFilterClauseBuilder:
     def filter_materialized(self, materialized: bool) -> None:
         self._filter_bool_from_payload("materialized", materialized)
 
-    def filter_fully_billed(self, fully_billed: bool) -> None:
-        self._filter_bool_from_payload("fully_billed", fully_billed)
-
     def filter_being_dropped(self, being_dropped: bool) -> None:
         self._filter_bool_from_payload("being_dropped", being_dropped)
 
     def filter_logs_removed(self, logs_removed: bool) -> None:
         self._filter_bool_from_payload("logs_removed", logs_removed)
 
-    def filter_org_project_hash(self, org_project_hash: Union[bytes, str]) -> None:
+    def filter_org_project_hash(self, org_project_hash: bytes | str) -> None:
         if isinstance(org_project_hash, str):
             org_project_hash = bytes.fromhex(org_project_hash)
         self._clauses.append(self._tables.jobs.c.org_project_hash == org_project_hash)
@@ -463,8 +459,6 @@ class JobFilterClauseBuilder:
             builder.filter_tags(job_filter.tags)
         if job_filter.materialized is not None:
             builder.filter_materialized(job_filter.materialized)
-        if job_filter.fully_billed is not None:
-            builder.filter_fully_billed(job_filter.fully_billed)
         if job_filter.being_dropped is not None:
             builder.filter_being_dropped(job_filter.being_dropped)
         if job_filter.logs_removed is not None:

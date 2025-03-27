@@ -1,6 +1,6 @@
 from datetime import timedelta
 from itertools import islice
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -20,7 +20,6 @@ from platform_api.orchestrator.jobs_storage import (
     JobStorageTransactionError,
 )
 from platform_api.orchestrator.jobs_storage.postgres import PostgresJobsStorage
-
 from tests.conftest import not_raises
 
 
@@ -34,7 +33,10 @@ class TestJobsStorage:
     def _create_job_request(self, with_gpu: bool = False) -> JobRequest:
         if with_gpu:
             resources = ContainerResources(
-                cpu=0.1, memory=256 * 10**6, gpu=1, gpu_model_id="nvidia-tesla-k80"
+                cpu=0.1,
+                memory=256 * 10**6,
+                nvidia_gpu=1,
+                nvidia_gpu_model="nvidia-tesla-k80",
             )
         else:
             resources = ContainerResources(cpu=0.1, memory=256 * 10**6)
@@ -51,12 +53,12 @@ class TestJobsStorage:
         )
 
     def _create_pending_job(
-        self, owner: str = "compute", job_name: Optional[str] = None, **kwargs: Any
+        self, owner: str = "compute", job_name: str | None = None, **kwargs: Any
     ) -> JobRecord:
         return self._create_job(owner=owner, name=job_name, **kwargs)
 
     def _create_running_job(
-        self, owner: str = "compute", job_name: Optional[str] = None, **kwargs: Any
+        self, owner: str = "compute", job_name: str | None = None, **kwargs: Any
     ) -> JobRecord:
         kwargs.setdefault("materialized", True)
         return self._create_job(
@@ -64,7 +66,7 @@ class TestJobsStorage:
         )
 
     def _create_succeeded_job(
-        self, owner: str = "compute", job_name: Optional[str] = None, **kwargs: Any
+        self, owner: str = "compute", job_name: str | None = None, **kwargs: Any
     ) -> JobRecord:
         kwargs.setdefault("materialized", True)
         return self._create_job(
@@ -72,7 +74,7 @@ class TestJobsStorage:
         )
 
     def _create_failed_job(
-        self, owner: str = "compute", job_name: Optional[str] = None, **kwargs: Any
+        self, owner: str = "compute", job_name: str | None = None, **kwargs: Any
     ) -> JobRecord:
         kwargs.setdefault("materialized", True)
         return self._create_job(
@@ -80,7 +82,7 @@ class TestJobsStorage:
         )
 
     def _create_cancelled_job(
-        self, owner: str = "compute", job_name: Optional[str] = None, **kwargs: Any
+        self, owner: str = "compute", job_name: str | None = None, **kwargs: Any
     ) -> JobRecord:
         return self._create_job(
             name=job_name, status=JobStatus.CANCELLED, owner=owner, **kwargs
@@ -717,7 +719,7 @@ class TestJobsStorage:
     async def test_get_all_with_filters(
         self,
         owners: tuple[str, ...],
-        name: Optional[str],
+        name: str | None,
         statuses: tuple[JobStatus, ...],
         storage: JobsStorage,
     ) -> None:
@@ -750,18 +752,6 @@ class TestJobsStorage:
             ((), (succ, fail, runn)),
             ((), (succ, fail, runn, pend)),
             ((), (succ, canc, fail, runn, pend)),
-            (("user1",), ()),
-            (("user1",), (pend,)),
-            (("user1",), (pend, runn)),
-            (("user1",), (succ, fail)),
-            (("user1",), (succ, fail, runn, pend)),
-            (("user1",), (succ, canc, fail, runn, pend)),
-            (("user1", "user2"), ()),
-            (("user1", "user2"), (pend,)),
-            (("user1", "user2"), (pend, runn)),
-            (("user1", "user2"), (succ, fail)),
-            (("user1", "user2"), (succ, fail, runn, pend)),
-            (("user1", "user2"), (succ, canc, fail, runn, pend)),
             (("user1",), ()),
             (("user1",), (pend,)),
             (("user1",), (pend, runn)),
@@ -825,7 +815,7 @@ class TestJobsStorage:
     )
     async def test_get_all_filter_by_name_with_no_owner(
         self,
-        name: Optional[str],
+        name: str | None,
         statuses: tuple[JobStatus, ...],
         storage: JobsStorage,
     ) -> None:
@@ -1150,19 +1140,6 @@ class TestJobsStorage:
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == set()
 
-    async def test_get_all_filter_by_fully_billed(self, storage: JobsStorage) -> None:
-        jobs = [
-            self._create_job(fully_billed=True),
-            self._create_job(fully_billed=False),
-            self._create_job(fully_billed=True),
-        ]
-        for job in jobs:
-            async with storage.try_create_job(job):
-                pass
-        job_filter = JobFilter(fully_billed=True)
-        job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
-        assert job_ids == [jobs[0].id, jobs[2].id]
-
     async def test_get_all_filter_by_being_dropped(self, storage: JobsStorage) -> None:
         jobs = [
             self._create_job(being_dropped=True),
@@ -1364,7 +1341,7 @@ class TestJobsStorage:
         jobs = await storage.get_unfinished_jobs()
         assert len(jobs) == 2
         assert [job.id for job in jobs] == [pending_job.id, running_job.id]
-        assert all([not job.is_finished for job in jobs])
+        assert all(not job.is_finished for job in jobs)
 
     async def test_get_for_deletion_empty(self, storage: JobsStorage) -> None:
         jobs = await storage.get_jobs_for_deletion()
@@ -1400,22 +1377,14 @@ class TestJobsStorage:
         now_f = lambda: now  # noqa
         f1 = lambda: now - timedelta(days=1)  # noqa
         f2 = lambda: now - timedelta(days=2)  # noqa
-        f3 = lambda: now - timedelta(days=3)  # noqa
 
         deleted_job_1 = self._create_succeeded_job(
             materialized=False,
-            fully_billed=True,
             current_datetime_factory=f1,
         )
         deleted_job_2 = self._create_succeeded_job(
             materialized=False,
-            fully_billed=True,
             current_datetime_factory=f2,
-        )
-        deleted_job_3 = self._create_succeeded_job(
-            materialized=False,
-            fully_billed=False,
-            current_datetime_factory=f3,
         )
         for job in [
             pending_job,
@@ -1423,7 +1392,6 @@ class TestJobsStorage:
             succeeded_job,
             deleted_job_1,
             deleted_job_2,
-            deleted_job_3,
         ]:
             await storage.set_job(job)
 

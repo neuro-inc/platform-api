@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp
 from multidict import CIMultiDict
@@ -15,7 +15,7 @@ class ConfigClient:
         self,
         *,
         base_url: URL,
-        service_token: Optional[str] = None,
+        service_token: str | None = None,
         conn_timeout_s: int = 300,
         read_timeout_s: int = 100,
         conn_pool_size: int = 100,
@@ -27,13 +27,13 @@ class ConfigClient:
         self._read_timeout_s = read_timeout_s
         self._conn_pool_size = conn_pool_size
         self._trace_configs = trace_configs
-        self._client: Optional[aiohttp.ClientSession] = None
+        self._client: aiohttp.ClientSession | None = None
 
     async def __aenter__(self) -> "ConfigClient":
         self._init()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.aclose()
 
     async def aclose(self) -> None:
@@ -56,8 +56,8 @@ class ConfigClient:
             trace_configs=list(self._trace_configs),
         )
 
-    def _generate_headers(self, token: Optional[str] = None) -> "CIMultiDict[str]":
-        headers: "CIMultiDict[str]" = CIMultiDict()
+    def _generate_headers(self, token: str | None = None) -> CIMultiDict[str]:
+        headers: CIMultiDict[str] = CIMultiDict()
         if token:
             headers["Authorization"] = f"Bearer {token}"
         return headers
@@ -79,7 +79,7 @@ class ConfigClient:
             payload = await response.json()
             return ClusterConfigFactory().create_cluster_configs(payload)
 
-    async def get_cluster(self, name: str) -> Optional[ClusterConfig]:
+    async def get_cluster(self, name: str) -> ClusterConfig | None:
         async with self._request(
             "GET", f"clusters/{name}", params={"include": "config"}
         ) as response:

@@ -1,11 +1,10 @@
 import asyncio
 import json
 import re
-from collections import defaultdict
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import AbstractAsyncContextManager
 from decimal import Decimal
-from typing import Any, Optional, cast
+from typing import Any, cast
 from unittest import mock
 
 import aiohttp.web
@@ -31,10 +30,8 @@ from neuro_auth_client import Permission
 from yarl import URL
 
 from platform_api.cluster import ClusterConfigRegistry
-from platform_api.cluster_config import ClusterConfig
 from platform_api.config import Config
 from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
-
 from tests.conftest import random_str
 from tests.integration.api import ApiConfig, AuthApiConfig, JobsClient
 from tests.integration.auth import AuthClient, ServiceAccountFactory, UserFactory, _User
@@ -67,8 +64,8 @@ def cluster_configs_payload() -> list[dict[str, Any]]:
                 "job_internal_hostname_template": "{job_id}.platformapi-tests",
                 "resource_pool_types": [
                     {"name": "node-pool1"},
-                    {"name": "node-pool1", "gpu": 0},
-                    {"name": "node-pool1", "gpu": 1, "gpu_model": "nvidia-tesla-v100"},
+                    {"name": "node-pool1", "nvidia_gpu": 0},
+                    {"name": "node-pool1", "nvidia_gpu": 1},
                 ],
                 "is_http_ingress_secure": True,
             },
@@ -78,6 +75,7 @@ def cluster_configs_payload() -> list[dict[str, Any]]:
             "blob_storage": {"url": "https://dev.neu.ro/api/v1/blob"},
             "disks": {"url": "https://dev.neu.ro/api/v1/disk"},
             "buckets": {"url": "https://dev.neu.ro/api/v1/buckets"},
+            "apps": {"apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"]},
         }
     ]
 
@@ -93,67 +91,6 @@ class TestApi:
         async with client.get(api.ping_url) as response:
             assert response.status == HTTPOk.status_code, await response.text()
             assert "platform-api" in response.headers["X-Service-Version"]
-
-    async def test_ping_unknown_origin(
-        self, api: ApiConfig, client: aiohttp.ClientSession
-    ) -> None:
-        async with client.get(
-            api.ping_url, headers={"Origin": "http://unknown"}
-        ) as response:
-            assert response.status == HTTPOk.status_code, await response.text()
-            assert "Access-Control-Allow-Origin" not in response.headers
-
-    async def test_ping_allowed_origin(
-        self, api: ApiConfig, client: aiohttp.ClientSession
-    ) -> None:
-        async with client.get(
-            api.ping_url, headers={"Origin": "https://neu.ro"}
-        ) as resp:
-            assert resp.status == HTTPOk.status_code, await resp.text()
-            assert resp.headers["Access-Control-Allow-Origin"] == "https://neu.ro"
-            assert resp.headers["Access-Control-Allow-Credentials"] == "true"
-            assert resp.headers["Access-Control-Expose-Headers"]
-
-    async def test_ping_options_no_headers(
-        self, api: ApiConfig, client: aiohttp.ClientSession
-    ) -> None:
-        async with client.options(api.ping_url) as resp:
-            assert resp.status == HTTPForbidden.status_code, await resp.text()
-            assert await resp.text() == (
-                "CORS preflight request failed: "
-                "origin header is not specified in the request"
-            )
-
-    async def test_ping_options_unknown_origin(
-        self, api: ApiConfig, client: aiohttp.ClientSession
-    ) -> None:
-        async with client.options(
-            api.ping_url,
-            headers={
-                "Origin": "http://unknown",
-                "Access-Control-Request-Method": "GET",
-            },
-        ) as resp:
-            assert resp.status == HTTPForbidden.status_code, await resp.text()
-            assert await resp.text() == (
-                "CORS preflight request failed: "
-                "origin 'http://unknown' is not allowed"
-            )
-
-    async def test_ping_options(
-        self, api: ApiConfig, client: aiohttp.ClientSession
-    ) -> None:
-        async with client.options(
-            api.ping_url,
-            headers={
-                "Origin": "https://neu.ro",
-                "Access-Control-Request-Method": "GET",
-            },
-        ) as resp:
-            assert resp.status == HTTPOk.status_code, await resp.text()
-            assert resp.headers["Access-Control-Allow-Origin"] == "https://neu.ro"
-            assert resp.headers["Access-Control-Allow-Credentials"] == "true"
-            assert resp.headers["Access-Control-Allow-Methods"] == "GET"
 
     async def test_config_unauthorized(
         self, api: ApiConfig, client: aiohttp.ClientSession
@@ -182,7 +119,7 @@ class TestApi:
 
             try:
                 await asyncio.wait_for(_loop(), timeout=5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 assert names == cluster_registry.cluster_names
 
         async with create_config_api(cluster_configs_payload):
@@ -242,6 +179,8 @@ class TestApi:
             expected_cluster_payload = {
                 "name": "test-cluster",
                 "orgs": mock.ANY,
+                "location": "eu-west-4",
+                "logo_url": "https://logo.url",
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
@@ -250,6 +189,75 @@ class TestApi:
                 "metrics_url": "https://neu.ro/api/v1/metrics",
                 "disks_url": "https://neu.ro/api/v1/disk",
                 "buckets_url": "https://neu.ro/api/v1/buckets",
+                "resource_pool_types": [
+                    {
+                        "name": "cpu",
+                        "min_size": 1,
+                        "max_size": 2,
+                        "idle_size": 1,
+                        "cpu": 1.0,
+                        "available_cpu": 1.0,
+                        "memory": 2048 * 10**6,
+                        "available_memory": 2048 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                        "cpu_min_watts": 1,
+                        "cpu_max_watts": 2,
+                    },
+                    {
+                        "name": "cpu-p",
+                        "min_size": 1,
+                        "max_size": 2,
+                        "cpu": 1.0,
+                        "available_cpu": 1.0,
+                        "memory": 2048 * 10**6,
+                        "available_memory": 2048 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                        "is_preemptible": True,
+                    },
+                    {
+                        "name": mock.ANY,
+                        "min_size": 1,
+                        "max_size": 2,
+                        "cpu": 100,
+                        "available_cpu": 100,
+                        "memory": 500_000 * 10**6,
+                        "available_memory": 500_000 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                    },
+                    {
+                        "name": "tpu",
+                        "min_size": 1,
+                        "max_size": 2,
+                        "cpu": 1.0,
+                        "available_cpu": 1.0,
+                        "memory": 2048 * 10**6,
+                        "available_memory": 2048 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                        "tpu": {
+                            "ipv4_cidr_block": "1.1.1.1/32",
+                            "types": ["v2-8"],
+                            "software_versions": ["1.14"],
+                        },
+                    },
+                    {
+                        "name": "gpu",
+                        "min_size": 1,
+                        "max_size": 2,
+                        "cpu": 1.0,
+                        "available_cpu": 1.0,
+                        "memory": 2048 * 10**6,
+                        "available_memory": 2048 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                        "nvidia_gpu": 1,
+                        "amd_gpu": 2,
+                        "intel_gpu": 3,
+                    },
+                ],
                 "resource_presets": [
                     {
                         "name": "gpu-small",
@@ -258,11 +266,27 @@ class TestApi:
                         "memory": 30720 * 10**6,
                         "memory_mb": 29296,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
+                        "nvidia_gpu_model": "nvidia-tesla-k80",
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
+                    },
+                    {
+                        "name": "amd-gpu-small",
+                        "credits_per_hour": "10",
+                        "cpu": 7,
+                        "memory": 30720 * 10**6,
+                        "memory_mb": 29296,
+                        "amd_gpu": 1,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large",
@@ -271,11 +295,14 @@ class TestApi:
                         "memory": 61440000000,
                         "memory_mb": 58593,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
+                        "nvidia_gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large-p",
@@ -284,11 +311,14 @@ class TestApi:
                         "memory": 61440000000,
                         "memory_mb": 58593,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
+                        "nvidia_gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": True,
                         "preemptible_node": True,
                         "is_preemptible": True,
                         "is_preemptible_node_required": True,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "cpu-micro",
@@ -300,6 +330,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-small",
@@ -311,6 +342,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-large",
@@ -322,6 +354,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "tpu",
@@ -334,6 +367,7 @@ class TestApi:
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
+                        "available_resource_pool_names": ["tpu"],
                     },
                 ],
                 "timezone": "UTC",
@@ -419,13 +453,20 @@ class TestApi:
                         ],
                     },
                 ],
+                "storage_volumes": [
+                    {
+                        "name": "default",
+                        "credits_per_hour_per_gb": "100",
+                    }
+                ],
+                "apps": {"apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"]},
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
                 "admin_url": f"{admin_url}",
                 "clusters": [
                     expected_cluster_payload,
-                    {**expected_cluster_payload, **{"name": "testcluster2"}},
+                    {**expected_cluster_payload, "name": "testcluster2"},
                 ],
                 "orgs": [],
                 "projects": [],
@@ -470,6 +511,8 @@ class TestApi:
             result = await resp.json()
             expected_cluster_payload = {
                 "name": "test-cluster",
+                "location": "eu-west-4",
+                "logo_url": "https://logo.url",
                 "orgs": mock.ANY,
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
@@ -479,6 +522,75 @@ class TestApi:
                 "metrics_url": "https://neu.ro/api/v1/metrics",
                 "disks_url": "https://neu.ro/api/v1/disk",
                 "buckets_url": "https://neu.ro/api/v1/buckets",
+                "resource_pool_types": [
+                    {
+                        "name": "cpu",
+                        "min_size": 1,
+                        "max_size": 2,
+                        "idle_size": 1,
+                        "cpu": 1.0,
+                        "available_cpu": 1.0,
+                        "memory": 2048 * 10**6,
+                        "available_memory": 2048 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                        "cpu_min_watts": 1,
+                        "cpu_max_watts": 2,
+                    },
+                    {
+                        "name": "cpu-p",
+                        "min_size": 1,
+                        "max_size": 2,
+                        "cpu": 1.0,
+                        "available_cpu": 1.0,
+                        "memory": 2048 * 10**6,
+                        "available_memory": 2048 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                        "is_preemptible": True,
+                    },
+                    {
+                        "name": mock.ANY,
+                        "min_size": 1,
+                        "max_size": 2,
+                        "cpu": 100,
+                        "available_cpu": 100,
+                        "memory": 500_000 * 10**6,
+                        "available_memory": 500_000 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                    },
+                    {
+                        "name": "tpu",
+                        "min_size": 1,
+                        "max_size": 2,
+                        "cpu": 1.0,
+                        "available_cpu": 1.0,
+                        "memory": 2048 * 10**6,
+                        "available_memory": 2048 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                        "tpu": {
+                            "ipv4_cidr_block": "1.1.1.1/32",
+                            "types": ["v2-8"],
+                            "software_versions": ["1.14"],
+                        },
+                    },
+                    {
+                        "name": "gpu",
+                        "min_size": 1,
+                        "max_size": 2,
+                        "cpu": 1.0,
+                        "available_cpu": 1.0,
+                        "memory": 2048 * 10**6,
+                        "available_memory": 2048 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                        "nvidia_gpu": 1,
+                        "amd_gpu": 2,
+                        "intel_gpu": 3,
+                    },
+                ],
                 "resource_presets": [
                     {
                         "name": "gpu-small",
@@ -487,11 +599,27 @@ class TestApi:
                         "memory": 30720 * 10**6,
                         "memory_mb": 29296,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
+                        "nvidia_gpu_model": "nvidia-tesla-k80",
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
+                    },
+                    {
+                        "name": "amd-gpu-small",
+                        "credits_per_hour": "10",
+                        "cpu": 7,
+                        "memory": 30720 * 10**6,
+                        "memory_mb": 29296,
+                        "amd_gpu": 1,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large",
@@ -500,11 +628,14 @@ class TestApi:
                         "memory": 61440000000,
                         "memory_mb": 58593,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
+                        "nvidia_gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large-p",
@@ -513,11 +644,14 @@ class TestApi:
                         "memory": 61440000000,
                         "memory_mb": 58593,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
+                        "nvidia_gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": True,
                         "preemptible_node": True,
                         "is_preemptible": True,
                         "is_preemptible_node_required": True,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "cpu-micro",
@@ -529,6 +663,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-small",
@@ -540,6 +675,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-large",
@@ -551,6 +687,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "tpu",
@@ -563,10 +700,13 @@ class TestApi:
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
+                        "available_resource_pool_names": ["tpu"],
                     },
                 ],
                 "timezone": "UTC",
                 "energy_schedules": mock.ANY,
+                "storage_volumes": mock.ANY,
+                "apps": {"apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"]},
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -633,6 +773,8 @@ class TestApi:
             result = await resp.json()
             expected_cluster_payload = {
                 "name": "test-cluster",
+                "location": "eu-west-4",
+                "logo_url": "https://logo.url",
                 "orgs": mock.ANY,
                 "registry_url": "https://registry.dev.neuromation.io",
                 "storage_url": "https://neu.ro/api/v1/storage",
@@ -642,6 +784,75 @@ class TestApi:
                 "metrics_url": "https://neu.ro/api/v1/metrics",
                 "disks_url": "https://neu.ro/api/v1/disk",
                 "buckets_url": "https://neu.ro/api/v1/buckets",
+                "resource_pool_types": [
+                    {
+                        "name": "cpu",
+                        "min_size": 1,
+                        "max_size": 2,
+                        "idle_size": 1,
+                        "cpu": 1.0,
+                        "available_cpu": 1.0,
+                        "memory": 2048 * 10**6,
+                        "available_memory": 2048 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                        "cpu_min_watts": 1,
+                        "cpu_max_watts": 2,
+                    },
+                    {
+                        "name": "cpu-p",
+                        "min_size": 1,
+                        "max_size": 2,
+                        "cpu": 1.0,
+                        "available_cpu": 1.0,
+                        "memory": 2048 * 10**6,
+                        "available_memory": 2048 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                        "is_preemptible": True,
+                    },
+                    {
+                        "name": mock.ANY,
+                        "min_size": 1,
+                        "max_size": 2,
+                        "cpu": 100,
+                        "available_cpu": 100,
+                        "memory": 500_000 * 10**6,
+                        "available_memory": 500_000 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                    },
+                    {
+                        "name": "tpu",
+                        "min_size": 1,
+                        "max_size": 2,
+                        "cpu": 1.0,
+                        "available_cpu": 1.0,
+                        "memory": 2048 * 10**6,
+                        "available_memory": 2048 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                        "tpu": {
+                            "ipv4_cidr_block": "1.1.1.1/32",
+                            "types": ["v2-8"],
+                            "software_versions": ["1.14"],
+                        },
+                    },
+                    {
+                        "name": "gpu",
+                        "min_size": 1,
+                        "max_size": 2,
+                        "cpu": 1.0,
+                        "available_cpu": 1.0,
+                        "memory": 2048 * 10**6,
+                        "available_memory": 2048 * 10**6,
+                        "disk_size": 150 * 10**9,
+                        "available_disk_size": 150 * 10**9,
+                        "nvidia_gpu": 1,
+                        "amd_gpu": 2,
+                        "intel_gpu": 3,
+                    },
+                ],
                 "resource_presets": [
                     {
                         "name": "gpu-small",
@@ -650,11 +861,27 @@ class TestApi:
                         "memory": 30720 * 10**6,
                         "memory_mb": 29296,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-k80",
+                        "nvidia_gpu_model": "nvidia-tesla-k80",
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
+                    },
+                    {
+                        "name": "amd-gpu-small",
+                        "credits_per_hour": "10",
+                        "cpu": 7,
+                        "memory": 30720 * 10**6,
+                        "memory_mb": 29296,
+                        "amd_gpu": 1,
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large",
@@ -663,11 +890,14 @@ class TestApi:
                         "memory": 61440000000,
                         "memory_mb": 58593,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
+                        "nvidia_gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "gpu-large-p",
@@ -676,11 +906,14 @@ class TestApi:
                         "memory": 61440000000,
                         "memory_mb": 58593,
                         "gpu": 1,
+                        "nvidia_gpu": 1,
                         "gpu_model": "nvidia-tesla-v100",
+                        "nvidia_gpu_model": "nvidia-tesla-v100",
                         "scheduler_enabled": True,
                         "preemptible_node": True,
                         "is_preemptible": True,
                         "is_preemptible_node_required": True,
+                        "available_resource_pool_names": ["gpu"],
                     },
                     {
                         "name": "cpu-micro",
@@ -692,6 +925,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-small",
@@ -703,6 +937,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "cpu-large",
@@ -714,6 +949,7 @@ class TestApi:
                         "preemptible_node": False,
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["cpu"],
                     },
                     {
                         "name": "tpu",
@@ -726,10 +962,13 @@ class TestApi:
                         "is_preemptible": False,
                         "is_preemptible_node_required": False,
                         "tpu": {"type": "v2-8", "software_version": "1.14"},
+                        "available_resource_pool_names": ["tpu"],
                     },
                 ],
                 "timezone": "UTC",
                 "energy_schedules": mock.ANY,
+                "storage_volumes": mock.ANY,
+                "apps": {"apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"]},
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -1187,8 +1426,8 @@ class TestJobs:
             job_submit: dict[str, Any],
             user: _User,
             *,
-            secret_env: Optional[dict[str, str]] = None,
-            secret_volumes: Optional[dict[str, str]] = None,
+            secret_env: dict[str, str] | None = None,
+            secret_volumes: dict[str, str] | None = None,
         ) -> None:
             job_id = ""
             try:
@@ -1228,7 +1467,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         key, value = "key1", "value1"
         await regular_secrets_client.create_secret(key, value)
@@ -1252,7 +1491,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         secret_name, secret_value = "key1", "value1"
         secret_path = "/etc/foo/file.txt"
@@ -1353,7 +1592,7 @@ class TestJobs:
         secrets_client_factory: Callable[
             [_User], AbstractAsyncContextManager[SecretsClient]
         ],
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         org_user = await regular_user_factory(
             clusters=[
@@ -1386,7 +1625,7 @@ class TestJobs:
         service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         secrets_client_factory: Callable[[_User], SecretsClient],
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
@@ -1440,7 +1679,7 @@ class TestJobs:
         service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         secrets_client_factory: Callable[[_User], SecretsClient],
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
@@ -2067,7 +2306,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         user = regular_user
         key_1, key_2 = "key_1", "key_2"
@@ -2107,7 +2346,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         """Mount multiple different secrets as both secret env and
         secret volumes in a single job.
@@ -2177,7 +2416,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         """Same secret key is allowed to be mounted as a secret volume
         and a secret env simultaneously.
@@ -2234,7 +2473,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         user = regular_user
         key_1, key_2, key_3 = "key_1", "key_2", "key_3"
@@ -2279,7 +2518,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         user = regular_user
         key_1, key_2, key_3 = "key_1", "key_2", "key_3"
@@ -2324,7 +2563,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         user = regular_user
         key_1, key_2, key_3 = "key_1", "key_2", "key_3"
@@ -2369,7 +2608,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_secrets_client: SecretsClient,
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         user = regular_user
         key_1, key_2 = "key_1", "key_2"
@@ -2598,7 +2837,7 @@ class TestJobs:
         ],
         secret_kind: str,
         share_secret: Callable[..., Awaitable[None]],
-        _run_job_with_secrets: Callable[..., Awaitable[None]],
+        _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         cluster_name = test_cluster_name
         usr_1 = await regular_user_factory(
@@ -2700,8 +2939,7 @@ class TestJobs:
             assert resp.status == HTTPBadRequest.status_code, await resp.text()
             msg = await resp.json()
             err = (
-                "Invalid URI scheme: "
-                f"\\\\*'{wrong_scheme}\\\\*' != \\\\*'secret\\\\*'"
+                f"Invalid URI scheme: \\\\*'{wrong_scheme}\\\\*' != \\\\*'secret\\\\*'"
             )
             assert re.search(err, msg["error"]), msg
 
@@ -2894,7 +3132,7 @@ class TestJobs:
         url = api.jobs_base_url
         job_submit["container"]["volumes"] = [
             {
-                "src_storage_uri": "storage://wrong-cluster/" f"{regular_user.name}",
+                "src_storage_uri": f"storage://wrong-cluster/{regular_user.name}",
                 "dst_path": "/var/storage",
                 "read_only": False,
             }
@@ -3354,9 +3592,17 @@ class TestJobs:
         regular_user_factory: UserFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         test_cluster_name: str,
+        test_org_name: str,
     ) -> None:
         user = await regular_user_factory(
-            clusters=[(test_cluster_name, Balance(credits=Decimal("100")), Quota())]
+            clusters=[
+                (
+                    test_cluster_name,
+                    test_org_name,
+                    Balance(credits=Decimal("100")),
+                    Quota(),
+                )
+            ]
         )
         url = api.jobs_base_url
         job_request = job_request_factory()
@@ -3379,9 +3625,10 @@ class TestJobs:
         regular_user_factory: UserFactory,
         credits: Decimal,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         user = await regular_user_factory(
-            clusters=[(cluster_name, Balance(credits=credits), Quota())]
+            clusters=[(cluster_name, test_org_name, Balance(credits=credits), Quota())]
         )
         url = api.jobs_base_url
         job_request = job_request_factory()
@@ -3718,7 +3965,7 @@ class TestJobs:
 
         org_user = await regular_user_factory(
             clusters=[
-                ("test-cluster", Balance(), Quota()),
+                ("test-cluster", "org", Balance(), Quota()),
                 ("test-cluster", "org1", Balance(), Quota()),
                 ("test-cluster", "org2", Balance(), Quota()),
             ],
@@ -5340,39 +5587,7 @@ class TestJobs:
             "priority": "normal",
         }
 
-    async def test_job_create_unknown_gpu_model(
-        self,
-        jobs_client: JobsClient,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        regular_user: _User,
-        kube_node_gpu: str,
-    ) -> None:
-        request_payload = {
-            "container": {
-                "image": "ubuntu:20.10",
-                "command": "true",
-                "resources": {
-                    "cpu": 0.1,
-                    "memory_mb": 32,
-                    "gpu": 1,
-                    "gpu_model": "unknown",
-                },
-            }
-        }
-
-        async with client.post(
-            api.jobs_base_url, headers=regular_user.headers, json=request_payload
-        ) as response:
-            response_text = await response.text()
-            assert response.status == HTTPBadRequest.status_code, response_text
-            data = await response.json()
-            assert re.search(
-                r"\\*'gpu_model\\*': DataError\(\"value doesn\\*'t match",
-                data["error"],
-            ), data
-
-    async def test_create_gpu_model(
+    async def test_create_gpu(
         self,
         jobs_client: JobsClient,
         api: ApiConfig,
@@ -5389,8 +5604,7 @@ class TestJobs:
                     "cpu": 0.1,
                     "memory_mb": 32,
                     "memory": 32 * 2**20,
-                    "gpu": 1,
-                    "gpu_model": "gpumodel",
+                    "nvidia_gpu": 1,
                 },
             }
         }
@@ -5435,7 +5649,7 @@ class TestJobs:
                         "memory": 32 * 2**20,
                         "memory_mb": 32,
                         "gpu": 1,
-                        "gpu_model": "gpumodel",
+                        "nvidia_gpu": 1,
                     },
                     "volumes": [],
                 },
@@ -5622,121 +5836,6 @@ class TestRuntimeLimitEnforcer:
 
         await user_jobs_client.delete_job(job_2["id"], assert_success=False)
         await user_jobs_client.delete_job(job_3["id"], assert_success=False)
-
-
-class TestBillingEnforcer:
-    async def test_enforce_billing(
-        self,
-        api: ApiConfig,
-        config: Config,
-        cluster_config: ClusterConfig,
-        client: aiohttp.ClientSession,
-        job_submit: dict[str, Any],
-        jobs_client_factory: Callable[[_User], JobsClient],
-        regular_user_factory: Callable[[], Awaitable[_User]],
-        admin_client: AdminClient,
-        cluster_name: str,
-    ) -> None:
-        durations = [30, 25, 20, 15, 10, 5]
-
-        test_jobs: list[tuple[dict[str, Any], _User, JobsClient, int]] = []
-        for duration in durations:
-            job_submit["container"]["command"] = f"sleep {duration}s"
-            user = await regular_user_factory()
-            user_jobs_client = jobs_client_factory(user)
-            test_jobs.append(
-                (
-                    await user_jobs_client.create_job(job_submit),
-                    user,
-                    user_jobs_client,
-                    duration,
-                )
-            )
-
-        for job, _, user_jobs_client, _ in test_jobs:
-            await user_jobs_client.long_polling_by_job_id(
-                job_id=job["id"],
-                status="succeeded",
-            )
-
-        # Wait for 7 ticks for jobs to become charged
-        await asyncio.sleep(config.job_policy_enforcer.interval_sec * 7)
-
-        user_to_charge: dict[str, Decimal] = defaultdict(Decimal)
-        for cluster_user in await admin_client.list_cluster_users(cluster_name):
-            user_to_charge[cluster_user.user_name] = cluster_user.balance.spent_credits
-
-        per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
-        second = Decimal("1") / 3600
-        for _, user, _, duration in test_jobs:
-            real_charge = user_to_charge[user.name]
-            expected_charge = duration * second * per_hour
-            # As we track runtime using jobs poller, the tracked runtime
-            # will have some drift from real value
-            allowed_drift = 8 * second * per_hour
-            assert abs(expected_charge - real_charge) < allowed_drift, (
-                f"Wrong charge for duration {duration}: "
-                f"delta from right value is {expected_charge - real_charge}"
-            )
-
-    async def test_enforce_billing_with_org(
-        self,
-        api: ApiConfig,
-        config: Config,
-        cluster_config: ClusterConfig,
-        client: aiohttp.ClientSession,
-        job_submit: dict[str, Any],
-        jobs_client_factory: Callable[[_User], JobsClient],
-        regular_user_factory: UserFactory,
-        admin_client: AdminClient,
-        cluster_name: str,
-    ) -> None:
-        durations = [30, 25, 20, 15, 10, 5]
-
-        test_jobs: list[tuple[dict[str, Any], _User, JobsClient, int]] = []
-        for duration in durations:
-            job_submit["container"]["command"] = f"sleep {duration}s"
-            user = await regular_user_factory(
-                clusters=[(cluster_name, "org", Balance(), Quota())]
-            )
-            user_jobs_client = jobs_client_factory(user)
-            test_jobs.append(
-                (
-                    await user_jobs_client.create_job(job_submit),
-                    user,
-                    user_jobs_client,
-                    duration,
-                )
-            )
-
-        for job, _, user_jobs_client, _ in test_jobs:
-            await user_jobs_client.long_polling_by_job_id(
-                job_id=job["id"],
-                status="succeeded",
-            )
-
-        # Wait for 7 ticks for jobs to become charged
-        await asyncio.sleep(config.job_policy_enforcer.interval_sec * 7)
-
-        user_to_charge: dict[str, Decimal] = defaultdict(Decimal)
-        for cluster_user in await admin_client.list_cluster_users(cluster_name):
-            if cluster_user.org_name == "org":
-                user_to_charge[
-                    cluster_user.user_name
-                ] = cluster_user.balance.spent_credits
-
-        per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
-        second = Decimal("1") / 3600
-        for _, user, _, duration in test_jobs:
-            real_charge = user_to_charge[user.name]
-            expected_charge = duration * second * per_hour
-            # As we track runtime using jobs poller, the tracked runtime
-            # will have some drift from real value
-            allowed_drift = 5 * second * per_hour
-            assert abs(expected_charge - real_charge) < allowed_drift, (
-                f"Wrong charge for duration {duration}: "
-                f"delta from right value is {expected_charge - real_charge}"
-            )
 
 
 class TestRetentionEnforcer:

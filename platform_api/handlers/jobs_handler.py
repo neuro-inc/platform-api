@@ -2,9 +2,9 @@ import asyncio
 import json
 import logging
 from collections import defaultdict
-from collections.abc import AsyncIterator, Sequence, Set
+from collections.abc import AsyncIterator, Sequence, Set as AbstractSet
 from dataclasses import dataclass, replace
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp.web
 import iso8601
@@ -76,22 +76,21 @@ logger = logging.getLogger(__name__)
 def create_job_request_validator(
     *,
     allow_flat_structure: bool = False,
-    allowed_gpu_models: Sequence[str],
     allowed_tpu_resources: Sequence[TPUResource],
     cluster_name: str,
-    org_name: Optional[str],
+    org_name: str | None,
     storage_scheme: str = "storage",
     allowed_energy_schedule_names: Sequence[str] = (),
 ) -> t.Trafaret:
     def _check_no_schedule_timeout_for_scheduled_jobs(
-        payload: dict[str, Any]
+        payload: dict[str, Any],
     ) -> dict[str, Any]:
         if "schedule_timeout" in payload and payload["scheduler_enabled"]:
             raise t.DataError("schedule_timeout is not allowed for scheduled jobs")
         return payload
 
     def _check_scheduler_enabled_for_energy_schedule_name(
-        payload: dict[str, Any]
+        payload: dict[str, Any],
     ) -> dict[str, Any]:
         if payload.get("energy_schedule_name") and not payload["scheduler_enabled"]:
             raise t.DataError("energy_schedule_name requires scheduler_enabled")
@@ -99,22 +98,21 @@ def create_job_request_validator(
 
     container_validator = create_container_request_validator(
         allow_volumes=True,
-        allowed_gpu_models=allowed_gpu_models,
         allowed_tpu_resources=allowed_tpu_resources,
         storage_scheme=storage_scheme,
         cluster_name=cluster_name,
     )
 
     def multiname_key(
-        name: str, keys: Sequence[str], default: Any, trafaret: t.Trafaret
+        name: str, keys: Sequence[str], default: Any, trafaret_func: t.Trafaret
     ) -> t.Key:
         _empty = object()
 
         def _take_first(data: dict[str, Any]) -> dict[str, Any]:
             for key in keys:
                 if data[key] is not _empty:
-                    return trafaret(data[key])
-            return trafaret(default)
+                    return trafaret_func(data[key])
+            return trafaret_func(default)
 
         return t.keys.subdict(
             name,
@@ -133,10 +131,11 @@ def create_job_request_validator(
             t.Key("pass_config", optional=True, default=False): t.Bool,
             t.Key("wait_for_jobs_quota", optional=True, default=False): t.Bool,
             t.Key("privileged", optional=True, default=False): t.Bool,
+            # fmt: off
             t.Key(
                 "priority", optional=True, default=JobPriority.NORMAL.to_name()
-            ): t.Enum(*(p.to_name() for p in JobPriority))
-            >> JobPriority.from_name,
+            ): t.Enum(*(p.to_name() for p in JobPriority)) >> JobPriority.from_name,
+            # fmt: on
             t.Key("schedule_timeout", optional=True): t.Float(gte=1, lt=30 * 24 * 3600),
             t.Key("max_run_time_minutes", optional=True): t.Int(gte=1),
             t.Key("cluster_name", default=cluster_name): t.Atom(cluster_name),
@@ -154,13 +153,13 @@ def create_job_request_validator(
             "scheduler_enabled",
             ["scheduler_enabled", "is_preemptible"],
             default=False,
-            trafaret=t.Bool(),
+            trafaret_func=t.Bool(),
         ),
         multiname_key(
             "preemptible_node",
             ["preemptible_node", "is_preemptible_node_required"],
             default=False,
-            trafaret=t.Bool(),
+            trafaret_func=t.Bool(),
         ),
     )
     # Either flat structure or payload with container field are allowed
@@ -216,9 +215,20 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
             "memory": preset.memory,
             "shm": shm,
         }
-        if preset.gpu:
-            container_resources["gpu"] = preset.gpu
-            container_resources["gpu_model"] = preset.gpu_model
+        if preset.nvidia_gpu:
+            container_resources["nvidia_gpu"] = preset.nvidia_gpu
+        if preset.amd_gpu:
+            container_resources["amd_gpu"] = preset.amd_gpu
+        if preset.intel_gpu:
+            container_resources["intel_gpu"] = preset.intel_gpu
+        nvidia_gpu_model = preset.nvidia_gpu_model or preset.gpu_model
+        if nvidia_gpu_model:
+            container_resources["gpu_model"] = nvidia_gpu_model
+            container_resources["nvidia_gpu_model"] = nvidia_gpu_model
+        if preset.amd_gpu_model:
+            container_resources["amd_gpu_model"] = preset.amd_gpu_model
+        if preset.intel_gpu_model:
+            container_resources["intel_gpu_model"] = preset.intel_gpu_model
         if preset.tpu:
             container_resources["tpu"] = {
                 "type": preset.tpu.type,
@@ -230,16 +240,13 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
             payload["resources"] = container_resources
         return payload
 
-    validator = (
-        t.Call(_check_no_resources) >> _check_preset_exists >> _set_preset_resources
-    )
-    return validator
+    return t.Call(_check_no_resources) >> _check_preset_exists >> _set_preset_resources
 
 
 def create_job_cluster_org_name_validator(
     *,
     default_cluster_name: str,
-    default_org_name: Optional[str],
+    default_org_name: str | None,
     default_project_name: str,
 ) -> t.Trafaret:
     return t.Dict(
@@ -380,10 +387,20 @@ def convert_job_container_to_json(container: Container) -> dict[str, Any]:
         "memory": container.resources.memory,
         "memory_mb": container.resources.memory // 2**20,
     }
-    if container.resources.gpu is not None:
-        resources["gpu"] = container.resources.gpu
-    if container.resources.gpu_model_id:
-        resources["gpu_model"] = container.resources.gpu_model_id
+    if container.resources.nvidia_gpu is not None:
+        resources["nvidia_gpu"] = container.resources.nvidia_gpu
+        resources["gpu"] = container.resources.nvidia_gpu
+    if container.resources.amd_gpu is not None:
+        resources["amd_gpu"] = container.resources.amd_gpu
+    if container.resources.intel_gpu is not None:
+        resources["intel_gpu"] = container.resources.intel_gpu
+    if container.resources.nvidia_gpu_model:
+        resources["gpu_model"] = container.resources.nvidia_gpu_model
+        resources["nvidia_gpu_model"] = container.resources.nvidia_gpu_model
+    if container.resources.amd_gpu_model:
+        resources["amd_gpu_model"] = container.resources.amd_gpu_model
+    if container.resources.intel_gpu_model:
+        resources["intel_gpu_model"] = container.resources.intel_gpu_model
     if container.resources.shm is not None:
         resources["shm"] = container.resources.shm
     if container.resources.tpu:
@@ -478,7 +495,7 @@ def convert_job_to_job_response(job: Job) -> dict[str, Any]:
         "materialized": job.materialized,
         "being_dropped": job.being_dropped,
         "logs_removed": job.logs_removed,
-        "total_price_credits": str(job.total_price_credits),
+        "total_price_credits": str(job.get_total_price_credits()),
         "price_credits_per_hour": str(job.price_credits_per_hour),
         "priority": job.priority.to_name(),
     }
@@ -524,7 +541,7 @@ def infer_permissions_from_container(
     container: Container,
     registry_host: str,
     cluster_name: str,
-    org_name: Optional[str],
+    org_name: str | None,
     *,
     project_name: str,
 ) -> list[Permission]:
@@ -559,8 +576,8 @@ def infer_permissions_from_container(
 def make_job_uri(
     user: AuthUser,
     cluster_name: str,
-    org_name: Optional[str],
-    project_name: Optional[str] = None,
+    org_name: str | None,
+    project_name: str | None = None,
 ) -> URL:
     return (
         URL.build(scheme="job", host=cluster_name)
@@ -625,15 +642,10 @@ class JobsHandler:
         self,
         cluster_config: ClusterConfig,
         allow_flat_structure: bool = False,
-        org_name: Optional[str] = None,
+        org_name: str | None = None,
     ) -> t.Trafaret:
-        resource_pool_types = cluster_config.orchestrator.resource_pool_types
-        gpu_models = list(
-            {rpt.gpu_model for rpt in resource_pool_types if rpt.gpu_model}
-        )
         return create_job_request_validator(
             allow_flat_structure=allow_flat_structure,
-            allowed_gpu_models=gpu_models,
             allowed_tpu_resources=cluster_config.orchestrator.tpu_resources,
             cluster_name=cluster_config.name,
             org_name=org_name,
@@ -645,7 +657,7 @@ class JobsHandler:
         self,
         user_cluster_configs: Sequence[UserClusterConfig],
         cluster_name: str,
-        org_name: Optional[str],
+        org_name: str | None,
     ) -> ClusterConfig:
         for user_cluster_config in user_cluster_configs:
             if user_cluster_config.config.name == cluster_name:
@@ -830,7 +842,9 @@ class JobsHandler:
 
         try:
             bulk_job_filter = BulkJobFilterBuilder(
-                query_filter=self._job_filter_factory.create_from_query(request.query),
+                query_filter=self._job_filter_factory.create_from_query(
+                    request.query  # type: ignore
+                ),
                 access_tree=tree,
             ).build()
         except JobFilterException:
@@ -839,7 +853,7 @@ class JobsHandler:
             )
 
         reverse = _parse_bool(request.query.get("reverse", "0"))
-        limit: Optional[int] = None
+        limit: int | None = None
         if "limit" in request.query:
             limit = int(request.query["limit"])
             if limit <= 0:
@@ -882,18 +896,18 @@ class JobsHandler:
                     await response.write(json.dumps(payload).encode())
                 await response.write_eof()
                 return response
-            else:
-                response_payload = {
-                    "jobs": [convert_job_to_job_response(job) async for job in jobs]
-                }
-                self._bulk_jobs_response_validator.check(response_payload)
-                return aiohttp.web.json_response(
-                    data=response_payload, status=aiohttp.web.HTTPOk.status_code
-                )
+
+            response_payload = {
+                "jobs": [convert_job_to_job_response(job) async for job in jobs]
+            }
+            self._bulk_jobs_response_validator.check(response_payload)
+            return aiohttp.web.json_response(
+                data=response_payload, status=aiohttp.web.HTTPOk.status_code
+            )
 
     @asyncgeneratorcontextmanager
     async def _iter_filtered_jobs(
-        self, bulk_job_filter: "BulkJobFilter", reverse: bool, limit: Optional[int]
+        self, bulk_job_filter: "BulkJobFilter", reverse: bool, limit: int | None
     ) -> AsyncIterator[Job]:
         def job_key(job: Job) -> tuple[float, str, Job]:
             return job.status_history.created_at_timestamp, job.id, job
@@ -1138,7 +1152,7 @@ class JobFilterFactory:
             **bool_filters,  # type: ignore
         )
 
-    def _parse_org_name(self, org_name: str) -> Optional[str]:
+    def _parse_org_name(self, org_name: str) -> str | None:
         return (
             None
             if org_name.upper() == NO_ORG
@@ -1148,10 +1162,10 @@ class JobFilterFactory:
 
 @dataclass(frozen=True)
 class BulkJobFilter:
-    bulk_filter: Optional[JobFilter]
+    bulk_filter: JobFilter | None
 
     shared_ids: set[str]
-    shared_ids_filter: Optional[JobFilter]
+    shared_ids_filter: JobFilter | None
 
 
 class BulkJobFilterBuilder:
@@ -1164,11 +1178,11 @@ class BulkJobFilterBuilder:
         self._has_access_to_all: bool = False
         self._has_clusters_shared_all: bool = False
         self._has_orgs_shared_all: bool = False
-        self._clusters_shared_any: dict[
-            str, dict[Optional[str], dict[str, set[str]]]
-        ] = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
+        self._clusters_shared_any: dict[str, dict[str | None, dict[str, set[str]]]] = (
+            defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
+        )
         self._projects_shared_any: set[str] = set()
-        self._orgs_shared_any: set[Optional[str]] = set()
+        self._orgs_shared_any: set[str | None] = set()
         self._shared_ids: set[str] = set()
 
     def build(self) -> BulkJobFilter:
@@ -1251,7 +1265,7 @@ class BulkJobFilterBuilder:
         self,
         tree: ClientAccessSubTreeView,
         cluster_name: str,
-        org_name: Optional[str],
+        org_name: str | None,
     ) -> None:
         for project, sub_tree in tree.children.items():
             if not sub_tree.can_list():
@@ -1278,7 +1292,7 @@ class BulkJobFilterBuilder:
         self,
         tree: ClientAccessSubTreeView,
         cluster_name: str,
-        org_name: Optional[str],
+        org_name: str | None,
         project_name: str,
     ) -> None:
         for name, sub_tree in tree.children.items():
@@ -1301,7 +1315,7 @@ class BulkJobFilterBuilder:
                     name
                 )
 
-    def _create_bulk_filter(self) -> Optional[JobFilter]:
+    def _create_bulk_filter(self) -> JobFilter | None:
         if not (
             self._has_access_to_all
             or self._clusters_shared_any
@@ -1348,7 +1362,10 @@ class BulkJobFilterBuilder:
         return bulk_filter
 
     def _optimize_clusters_projects(
-        self, orgs: Set[Optional[str]], projects: Set[str], name: Optional[str]
+        self,
+        orgs: AbstractSet[str | None],
+        projects: AbstractSet[str],
+        name: str | None,
     ) -> None:
         if orgs or projects or name:
             names = {name}
@@ -1376,10 +1393,10 @@ def _parse_bool(value: str) -> bool:
     value = value.lower()
     if value in ("0", "false"):
         return False
-    elif value in ("1", "true"):
+    if value in ("1", "true"):
         return True
-    else:
-        raise ValueError('Required "0", "1", "false" or "true"')
+
+    raise ValueError('Required "0", "1", "false" or "true"')
 
 
 def _permission_to_primitive(perm: Permission) -> dict[str, str]:

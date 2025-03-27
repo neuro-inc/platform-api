@@ -1,14 +1,11 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
 from decimal import Decimal
 from typing import Any
-from unittest import mock
 
 import aiohttp.web
 import pytest
 from neuro_admin_client import Balance, Quota
-from neuro_notifications_client import CreditsWillRunOutSoon, JobCannotStartNoCredits
-
-from platform_api.config import Config
+from neuro_notifications_client import JobCannotStartNoCredits
 
 from .api import ApiConfig, JobsClient
 from .auth import UserFactory, _User
@@ -25,9 +22,17 @@ class TestCannotStartJobNoCredits:
         regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
         test_cluster_name: str,
+        test_org_name: str,
     ) -> None:
         user = await regular_user_factory(
-            clusters=[(test_cluster_name, Balance(credits=Decimal("100")), Quota())]
+            clusters=[
+                (
+                    test_cluster_name,
+                    test_org_name,
+                    Balance(credits=Decimal("100")),
+                    Quota(),
+                )
+            ]
         )
         url = api.jobs_base_url
         job_request = job_request_factory()
@@ -35,7 +40,7 @@ class TestCannotStartJobNoCredits:
             await response.read()
         # Notification will be sent in graceful app shutdown
         await api.runner.close()
-        for slug, request in mock_notifications_server.requests:
+        for slug, _request in mock_notifications_server.requests:
             if slug == JobCannotStartNoCredits.slug():
                 raise AssertionError("Unexpected JobCannotStartQuotaReached sent")
 
@@ -48,9 +53,17 @@ class TestCannotStartJobNoCredits:
         regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
         test_cluster_name: str,
+        test_org_name: str,
     ) -> None:
         user = await regular_user_factory(
-            clusters=[(test_cluster_name, Balance(credits=Decimal("0")), Quota())]
+            clusters=[
+                (
+                    test_cluster_name,
+                    test_org_name,
+                    Balance(credits=Decimal("0")),
+                    Quota(),
+                )
+            ]
         )
         url = api.jobs_base_url
         job_request = job_request_factory()
@@ -123,7 +136,7 @@ class TestJobTransition:
         # Notification will be sent in graceful app shutdown
         await api.runner.close()
 
-        for slug, payload in mock_notifications_server.requests:
+        for slug, _payload in mock_notifications_server.requests:
             if slug == "job-transition":
                 raise AssertionError("Unexpected JobTransition sent")
 
@@ -206,40 +219,3 @@ class TestJobTransition:
             else:
                 raise AssertionError(f"Unexpected JobTransition payload: {payload}")
         assert states == {"pending", "failed"}
-
-
-class TestCreditsWillRunOutSoon:
-    async def test_sent_if_credits_less_then_threshold(
-        self,
-        config: Config,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        job_request_factory: Callable[[], dict[str, Any]],
-        jobs_client_factory: Callable[[_User], JobsClient],
-        regular_user_factory: UserFactory,
-        mock_notifications_server: NotificationsServer,
-        test_cluster_name: str,
-    ) -> None:
-        threshold = config.job_policy_enforcer.credit_notification_threshold
-
-        user = await regular_user_factory(
-            clusters=[(test_cluster_name, Balance(credits=threshold / 2), Quota())]
-        )
-
-        jobs_client = jobs_client_factory(user)
-        job_request = job_request_factory()
-        job_request["container"]["command"] = "sleep 5s"  # Let job run for some time
-        job_data = await jobs_client.create_job(job_request)
-        await jobs_client.long_polling_by_job_id(job_data["id"], "succeeded")
-
-        # Notification will be sent in graceful app shutdown
-        await api.runner.close()
-
-        assert (
-            CreditsWillRunOutSoon.slug(),
-            {
-                "user_id": user.name,
-                "cluster_name": user.cluster_name,
-                "credits": mock.ANY,
-            },
-        ) in mock_notifications_server.requests

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 Callback = Callable[[], None]
 
 
-class Subscription(ABC):
+class Subscription(ABC):  # noqa: B024
     async def is_alive(self) -> bool:
         return False
 
@@ -72,7 +72,7 @@ class PostgresChannelNotifier(Notifier):
 
     async def notify(self) -> None:
         async with self._raw_connect() as raw_conn:
-            logger.info(f"Notifying channel {self._channel!r}")
+            logger.info("Notifying channel %r", self._channel)
             await raw_conn.fetch(f"NOTIFY {self._channel}")
 
     class _Subscription(Subscription):
@@ -94,22 +94,22 @@ class PostgresChannelNotifier(Notifier):
     ) -> AsyncIterator[Subscription]:
         def _listener(*args: Any, **kwargs: Any) -> None:
             logger.info(
-                f"{type(self).__qualname__}: Notified "
-                f"from channel {self._channel!r}"
+                "%s: Notified from channel %r", type(self).__qualname__, self._channel
             )
             listener()
 
         async with self._raw_connect() as raw_conn:
             logger.info(
-                f"{type(self).__qualname__}: Subscribing to channel {self._channel!r}"
+                "%s: Subscribing to channel %r", type(self).__qualname__, self._channel
             )
             await raw_conn.add_listener(self._channel, _listener)
             try:
                 yield PostgresChannelNotifier._Subscription(raw_conn)
             finally:
                 logger.info(
-                    f"{type(self).__qualname__}: Unsubscribing "
-                    f"from channel {self._channel!r}"
+                    "%s: Unsubscribing from channel %r",
+                    type(self).__qualname__,
+                    self._channel,
                 )
                 await raw_conn.remove_listener(self._channel, _listener)
 
@@ -123,8 +123,8 @@ class ResubscribingNotifier(Notifier):
         await self._inner_notifier.notify()
 
     class _Subscription(Subscription):
-        _inner_manager: Optional[AbstractAsyncContextManager[Subscription]] = None
-        _subscription: Optional[Subscription] = None
+        _inner_manager: AbstractAsyncContextManager[Subscription] | None = None
+        _subscription: Subscription | None = None
         _task: Optional["asyncio.Task[None]"] = None
 
         def __init__(
@@ -164,7 +164,8 @@ class ResubscribingNotifier(Notifier):
                         raise
                     except Exception:
                         logger.exception(
-                            f"{type(self).__qualname__}: Failed to cleanup subscription"
+                            "%s: Failed to cleanup subscription",
+                            type(self).__qualname__,
                         )
                     await asyncio.shield(self._setup_subscription())
 
@@ -173,7 +174,7 @@ class ResubscribingNotifier(Notifier):
             self._task = asyncio.create_task(self._checker_task())
             return self
 
-        async def __aexit__(self, *args: Any) -> None:
+        async def __aexit__(self, *args: object) -> None:
             assert self._task
             self._task.cancel()
             with suppress(asyncio.CancelledError):

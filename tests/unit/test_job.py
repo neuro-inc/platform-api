@@ -1,9 +1,10 @@
 import dataclasses
 import hashlib
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import PurePath
-from typing import Any, Optional
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -62,7 +63,7 @@ class TestContainer:
             resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         with pytest.raises(JobError, match="invalid command format"):
-            container.command_list
+            _ = container.command_list
 
     def test_entrypoint_list_invalid(self) -> None:
         container = Container(
@@ -71,7 +72,7 @@ class TestContainer:
             resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         with pytest.raises(JobError, match="invalid command format"):
-            container.entrypoint_list
+            _ = container.entrypoint_list
 
     def test_entrypoint_list_non_empty(self) -> None:
         container = Container(
@@ -280,7 +281,13 @@ class TestContainerBuilder:
             "command": "testcommand",
             "working_dir": "/working/dir",
             "env": {"TESTVAR": "testvalue"},
-            "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
+            "resources": {
+                "cpu": 0.1,
+                "memory_mb": 128,
+                "nvidia_gpu": 1,
+                "amd_gpu": 2,
+                "intel_gpu": 3,
+            },
             "http": {"port": 80},
             "volumes": [
                 {
@@ -305,7 +312,12 @@ class TestContainerBuilder:
                 )
             ],
             resources=ContainerResources(
-                cpu=0.1, memory=128 * 2**20, gpu=1, shm=None
+                cpu=0.1,
+                memory=128 * 2**20,
+                nvidia_gpu=1,
+                amd_gpu=2,
+                intel_gpu=3,
+                shm=None,
             ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
@@ -319,7 +331,13 @@ class TestContainerBuilder:
                 "command": "testcommand",
                 "working_dir": "/working/dir",
                 "env": {"TESTVAR": "testvalue"},
-                "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
+                "resources": {
+                    "cpu": 0.1,
+                    "memory_mb": 128,
+                    "nvidia_gpu": 1,
+                    "amd_gpu": 2,
+                    "intel_gpu": 3,
+                },
                 "http": {"port": 80},
                 "volumes": [
                     {
@@ -345,7 +363,12 @@ class TestContainerBuilder:
                 )
             ],
             resources=ContainerResources(
-                cpu=0.1, memory=128 * 2**20, gpu=1, shm=None
+                cpu=0.1,
+                memory=128 * 2**20,
+                nvidia_gpu=1,
+                amd_gpu=2,
+                intel_gpu=3,
+                shm=None,
             ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
@@ -357,7 +380,9 @@ class TestContainerBuilder:
             "resources": {
                 "cpu": 0.1,
                 "memory_mb": 128,
-                "gpu": 1,
+                "nvidia_gpu": 1,
+                "amd_gpu": 2,
+                "intel_gpu": 3,
                 "gpu_model": "gpumodel",
             },
         }
@@ -365,7 +390,12 @@ class TestContainerBuilder:
         assert container == Container(
             image="testimage",
             resources=ContainerResources(
-                cpu=0.1, memory=128 * 2**20, gpu=1, gpu_model_id="gpumodel"
+                cpu=0.1,
+                memory=128 * 2**20,
+                nvidia_gpu=1,
+                amd_gpu=2,
+                intel_gpu=3,
+                nvidia_gpu_model="gpumodel",
             ),
         )
 
@@ -393,7 +423,7 @@ class TestContainerBuilder:
             "image": "testimage",
             "command": "testcommand",
             "env": {"TESTVAR": "testvalue"},
-            "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1, "shm": True},
+            "resources": {"cpu": 0.1, "memory_mb": 128, "shm": False},
             "http": {"port": 80},
             "volumes": [
                 {
@@ -415,9 +445,7 @@ class TestContainerBuilder:
                     read_only=True,
                 )
             ],
-            resources=ContainerResources(
-                cpu=0.1, memory=128 * 2**20, gpu=1, shm=True
-            ),
+            resources=ContainerResources(cpu=0.1, memory=128 * 2**20, shm=False),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
         )
 
@@ -427,7 +455,7 @@ class TestContainerBuilder:
             "entrypoint": "testentrypoint",
             "command": "testcommand",
             "env": {"TESTVAR": "testvalue"},
-            "resources": {"cpu": 0.1, "memory_mb": 128, "gpu": 1},
+            "resources": {"cpu": 0.1, "memory_mb": 128},
             "http": {"port": 80},
             "volumes": [],
             "tty": True,
@@ -439,9 +467,7 @@ class TestContainerBuilder:
             command="testcommand",
             env={"TESTVAR": "testvalue"},
             volumes=[],
-            resources=ContainerResources(
-                cpu=0.1, memory=128 * 2**20, gpu=1, shm=None
-            ),
+            resources=ContainerResources(cpu=0.1, memory=128 * 2**20),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=True,
         )
@@ -472,7 +498,7 @@ def job_request_payload() -> dict[str, Any]:
 
 @pytest.fixture
 def job_payload(job_request_payload: Any) -> dict[str, Any]:
-    finished_at_str = datetime.now(timezone.utc).isoformat()
+    finished_at_str = datetime.now(UTC).isoformat()
     return {
         "id": "testjob",
         "request": job_request_payload,
@@ -527,7 +553,11 @@ class TestJob:
         container = Container(
             image="testimage",
             resources=ContainerResources(
-                cpu=1, memory=64 * 10**6, gpu=1, gpu_model_id="nvidia-tesla-k80"
+                cpu=1,
+                memory=64 * 10**6,
+                nvidia_gpu=1,
+                amd_gpu=2,
+                nvidia_gpu_model="nvidia-tesla-k80",
             ),
         )
         return JobRequest(
@@ -560,7 +590,7 @@ class TestJob:
 
     @classmethod
     def _create_http_host_named_suffix(
-        cls, org_name: Optional[str], project_name: str
+        cls, org_name: str | None, project_name: str
     ) -> str:
         hasher = hashlib.new("sha256")
         org_name = org_name or NO_ORG
@@ -607,7 +637,8 @@ class TestJob:
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
         )
-        assert not job.has_gpu
+        assert not job.has_nvidia_gpu
+        assert not job.has_amd_gpu
 
     def test_job_has_gpu_true(
         self, mock_orchestrator: MockOrchestrator, job_request_with_gpu: JobRequest
@@ -618,30 +649,11 @@ class TestJob:
                 request=job_request_with_gpu, cluster_name="test-cluster"
             ),
         )
-        assert job.has_gpu
+        assert job.has_nvidia_gpu
+        assert job.has_amd_gpu
 
     def _mocked_datetime_factory(self) -> datetime:
         return datetime(year=2019, month=1, day=1)
-
-    def test_job_gpu_model_id(
-        self, mock_orchestrator: MockOrchestrator, job_request_with_gpu: JobRequest
-    ) -> None:
-        job = Job(
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request_with_gpu, cluster_name="test-cluster"
-            ),
-        )
-        assert job.gpu_model_id == "nvidia-tesla-k80"
-
-    def test_job_gpu_model_id_none(
-        self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
-    ) -> None:
-        job = Job(
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
-        )
-        assert job.gpu_model_id is None
 
     @pytest.fixture
     def job_factory(
@@ -875,6 +887,24 @@ class TestJob:
         assert job.http_url == "http://testjob.jobs"
         assert job.http_url_named == f"http://test-job-name--{suffix}.jobs"
 
+    def test_job__get_total_price_credits(
+        self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]
+    ) -> None:
+        time_now = self._mocked_datetime_factory()
+
+        started_ago_delta = timedelta(hours=1)  # job started 1 hour ago: pending
+        pending_delta = timedelta(minutes=15)  # after 15 min: running (still running)
+
+        pending_at = time_now - started_ago_delta
+        running_at = pending_at + pending_delta
+        items = [
+            JobStatusItem.create(JobStatus.PENDING, transition_time=pending_at),
+            JobStatusItem.create(JobStatus.RUNNING, transition_time=running_at),
+        ]
+        job = job_factory(JobStatusHistory(items))
+
+        assert job.get_total_price_credits() == Decimal("7.5")
+
     def test_to_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
@@ -904,7 +934,6 @@ class TestJob:
             "request": job_request.to_primitive(),
             "status": "failed",
             "materialized": False,
-            "fully_billed": False,
             "finished_at": expected_finished_at,
             "statuses": [
                 {
@@ -926,7 +955,6 @@ class TestJob:
             "schedule_timeout": 15,
             "restart_policy": "never",
             "privileged": False,
-            "total_price_credits": "0",
             "priority": 0,
             "energy_schedule_name": "default",
         }
@@ -959,7 +987,6 @@ class TestJob:
                 }
             ],
             "materialized": False,
-            "fully_billed": False,
             "finished_at": None,
             "scheduler_enabled": False,
             "preemptible_node": False,
@@ -967,7 +994,6 @@ class TestJob:
             "max_run_time_minutes": 500,
             "restart_policy": "never",
             "privileged": False,
-            "total_price_credits": "0",
             "priority": 0,
             "energy_schedule_name": "default",
         }
@@ -1035,7 +1061,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
@@ -1063,7 +1089,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
@@ -1079,7 +1105,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.preset_name == "cpu-small"
@@ -1095,7 +1121,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
@@ -1104,7 +1130,7 @@ class TestJob:
     def test_from_primitive_with_statuses(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
-        finished_at_str = datetime.now(timezone.utc).isoformat()
+        finished_at_str = datetime.now(UTC).isoformat()
         payload = {
             "id": "testjob",
             "request": job_request_payload,
@@ -1135,7 +1161,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
@@ -1161,7 +1187,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command is None
@@ -1179,7 +1205,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command == "arg1 arg2 arg3"
@@ -1197,7 +1223,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command is None
@@ -1215,7 +1241,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command == "arg1 arg2 arg3"
@@ -1231,7 +1257,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
             "max_run_time_minutes": 100,
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
@@ -1247,7 +1273,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
             "max_run_time_minutes": None,
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
@@ -1263,7 +1289,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
             "max_run_time_minutes": None,
             "org_name": "some-random-213-tenant-id",
         }
@@ -1279,7 +1305,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
             "priority": 1,
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
@@ -1295,7 +1321,7 @@ class TestJob:
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
             "max_run_time_minutes": None,
             "org_project_hash": "0123456789",
         }
@@ -1348,7 +1374,7 @@ class TestJob:
     def test_to_and_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
     ) -> None:
-        finished_at_str = datetime.now(timezone.utc).isoformat()
+        finished_at_str = datetime.now(UTC).isoformat()
         current_status_item = {
             "status": "failed",
             "transition_time": finished_at_str,
@@ -1365,14 +1391,12 @@ class TestJob:
             "status": current_status_item["status"],
             "statuses": [current_status_item],
             "materialized": False,
-            "fully_billed": False,
             "finished_at": finished_at_str,
             "scheduler_enabled": False,
             "preemptible_node": False,
             "pass_config": False,
             "restart_policy": str(JobRestartPolicy.ALWAYS),
             "privileged": False,
-            "total_price_credits": "0",
             "priority": 0,
             "energy_schedule_name": "green",
         }
@@ -1629,7 +1653,7 @@ class TestContainerHTTPServer:
 
 class TestJobStatusItem:
     def test_from_primitive(self) -> None:
-        transition_time = datetime.now(timezone.utc)
+        transition_time = datetime.now(UTC)
         payload = {
             "status": "succeeded",
             "transition_time": transition_time.isoformat(),
@@ -1646,7 +1670,7 @@ class TestJobStatusItem:
         assert item.exit_code == 0
 
     def test_from_primitive_without_exit_code(self) -> None:
-        transition_time = datetime.now(timezone.utc)
+        transition_time = datetime.now(UTC)
         payload = {
             "status": "succeeded",
             "transition_time": transition_time.isoformat(),
@@ -1664,7 +1688,7 @@ class TestJobStatusItem:
     def test_to_primitive(self) -> None:
         item = JobStatusItem(
             status=JobStatus.SUCCEEDED,
-            transition_time=datetime.now(timezone.utc),
+            transition_time=datetime.now(UTC),
             exit_code=321,
         )
         assert item.to_primitive() == {
@@ -1682,11 +1706,11 @@ class TestJobStatusItem:
 
     def test_eq_different_times(self) -> None:
         old_item = JobStatusItem.create(
-            JobStatus.RUNNING, transition_time=datetime.now(timezone.utc)
+            JobStatus.RUNNING, transition_time=datetime.now(UTC)
         )
         new_item = JobStatusItem.create(
             JobStatus.RUNNING,
-            transition_time=datetime.now(timezone.utc) + timedelta(days=1),
+            transition_time=datetime.now(UTC) + timedelta(days=1),
         )
         assert old_item == new_item
 

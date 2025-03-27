@@ -1,33 +1,20 @@
 import asyncio
 import datetime
-import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import replace
 from decimal import Decimal
-from typing import Any, Optional
 
 import pytest
 from neuro_admin_client import AdminClient, Balance, Quota
 from neuro_auth_client import User as AuthUser
-from neuro_notifications_client import CreditsWillRunOutSoon
 from yarl import URL
 
 from platform_api.cluster import ClusterConfigRegistry
-from platform_api.cluster_config import ClusterConfig
 from platform_api.config import JobPolicyEnforcerConfig
-from platform_api.orchestrator.billing_log.service import BillingLogService
-from platform_api.orchestrator.billing_log.storage import (
-    BillingLogEntry,
-    BillingLogStorage,
-    BillingLogSyncRecord,
-    InMemoryBillingLogStorage,
-)
 from platform_api.orchestrator.job import Job, JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_policy_enforcer import (
-    BillingEnforcer,
     CreditsLimitEnforcer,
-    CreditsNotificationsEnforcer,
     JobPolicyEnforcePoller,
     JobPolicyEnforcer,
     RetentionPolicyEnforcer,
@@ -37,12 +24,9 @@ from platform_api.orchestrator.job_policy_enforcer import (
 from platform_api.orchestrator.job_request import JobRequest, JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
-from platform_api.utils.update_notifier import InMemoryNotifier
-
 from tests.unit.conftest import (
     MockAdminClient,
     MockAuthClient,
-    MockNotificationsClient,
     OrgFactory,
     UserFactory,
 )
@@ -83,7 +67,7 @@ class TestRuntimeLimitEnforcer:
             max_run_time_minutes=5,
             cluster_name="test-cluster",
         )
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         before_2_mins = now - datetime.timedelta(minutes=2)
         await jobs_service.set_job_status(
             job.id, JobStatusItem(JobStatus.RUNNING, transition_time=before_2_mins)
@@ -107,7 +91,7 @@ class TestRuntimeLimitEnforcer:
             cluster_name="test-cluster",
             max_run_time_minutes=1,
         )
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         before_2_mins = now - datetime.timedelta(minutes=2)
         await jobs_service.set_job_status(
             job.id, JobStatusItem(JobStatus.RUNNING, transition_time=before_2_mins)
@@ -228,20 +212,20 @@ class TestJobPolicyEnforcePoller:
 
 
 class TestHasCreditsEnforcer:
-    @pytest.fixture()
+    @pytest.fixture
     def has_credits_enforcer(
         self, jobs_service: JobsService, mock_admin_client: AdminClient
     ) -> CreditsLimitEnforcer:
         return CreditsLimitEnforcer(jobs_service, mock_admin_client)
 
-    @pytest.fixture()
+    @pytest.fixture
     def make_jobs(
         self,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
-    ) -> Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]]:
+    ) -> Callable[[AuthUser, str | None, int], Awaitable[list[Job]]]:
         async def _make_jobs(
-            user: AuthUser, org_name: Optional[str], count: int
+            user: AuthUser, org_name: str | None, count: int
         ) -> list[Job]:
             return [
                 (
@@ -257,7 +241,7 @@ class TestHasCreditsEnforcer:
 
         return _make_jobs
 
-    @pytest.fixture()
+    @pytest.fixture
     def check_not_cancelled(
         self, jobs_service: JobsService
     ) -> Callable[[Iterable[Job]], Awaitable[None]]:
@@ -268,11 +252,11 @@ class TestHasCreditsEnforcer:
 
         return _check
 
-    @pytest.fixture()
+    @pytest.fixture
     def check_cancelled(
         self, jobs_service: JobsService
     ) -> Callable[[Iterable[Job]], Awaitable[None]]:
-        async def _check(jobs: Iterable[Job], reason: Optional[str] = None) -> None:
+        async def _check(jobs: Iterable[Job], reason: str | None = None) -> None:
             for job in jobs:
                 job = await jobs_service.get_job(job.id)
                 assert job.status == JobStatus.CANCELLED
@@ -284,7 +268,7 @@ class TestHasCreditsEnforcer:
         self,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         user_factory: UserFactory,
         test_cluster: str,
@@ -301,7 +285,7 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         user_factory: UserFactory,
         test_cluster: str,
@@ -321,7 +305,7 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         credits: Decimal,
         mock_admin_client: MockAdminClient,
@@ -342,7 +326,7 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         mock_admin_client: MockAdminClient,
     ) -> None:
@@ -357,7 +341,7 @@ class TestHasCreditsEnforcer:
         self,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         org_factory: OrgFactory,
         user_factory: UserFactory,
@@ -378,7 +362,7 @@ class TestHasCreditsEnforcer:
         test_user: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_not_cancelled: Callable[[Iterable[Job]], Awaitable[None]],
         org_factory: OrgFactory,
         user_factory: UserFactory,
@@ -404,7 +388,7 @@ class TestHasCreditsEnforcer:
         test_user_with_org: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         credits: Decimal,
         mock_admin_client: MockAdminClient,
@@ -426,7 +410,7 @@ class TestHasCreditsEnforcer:
         test_user_with_org: AuthUser,
         has_credits_enforcer: CreditsLimitEnforcer,
         mock_auth_client: MockAuthClient,
-        make_jobs: Callable[[AuthUser, Optional[str], int], Awaitable[list[Job]]],
+        make_jobs: Callable[[AuthUser, str | None, int], Awaitable[list[Job]]],
         check_cancelled: Callable[[Iterable[Job], str], Awaitable[None]],
         mock_admin_client: MockAdminClient,
     ) -> None:
@@ -436,230 +420,6 @@ class TestHasCreditsEnforcer:
         await has_credits_enforcer.enforce()
 
         await check_cancelled(jobs, JobStatusReason.QUOTA_EXHAUSTED)
-
-
-class TestBillingEnforcer:
-    @pytest.fixture()
-    def billing_log_storage(self) -> BillingLogStorage:
-        return InMemoryBillingLogStorage()
-
-    @pytest.fixture()
-    async def billing_service(
-        self, billing_log_storage: BillingLogStorage
-    ) -> AsyncIterator[BillingLogService]:
-        async with BillingLogService(
-            storage=billing_log_storage,
-            new_entry=InMemoryNotifier(),
-            entry_done=InMemoryNotifier(),
-        ) as service:
-            yield service
-
-    async def test_jobs_charged(
-        self,
-        test_user: AuthUser,
-        jobs_service: JobsService,
-        cluster_config: ClusterConfig,
-        billing_service: BillingLogService,
-        billing_log_storage: BillingLogStorage,
-        job_request_factory: Callable[[], JobRequest],
-    ) -> None:
-        enforcer = BillingEnforcer(jobs_service, billing_service)
-        job, _ = await jobs_service.create_job(
-            job_request_factory(), test_user, cluster_name="test-cluster"
-        )
-        now = datetime.datetime.now(datetime.timezone.utc)
-        before_1_5_hour = now - datetime.timedelta(hours=1, minutes=30)
-        await jobs_service.set_job_status(
-            job.id, JobStatusItem(JobStatus.RUNNING, transition_time=before_1_5_hour)
-        )
-
-        per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
-        second = Decimal("1") / 3600
-        await enforcer.enforce()
-        async with billing_log_storage.iter_entries() as it:
-            entries = [entry async for entry in it]
-        assert len(entries) == 1
-        assert entries[0].job_id == job.id
-        assert entries[0].charge >= Decimal("1.5") * per_hour
-        assert entries[0].charge <= (Decimal("1.5") + second) * per_hour
-        assert not entries[0].fully_billed
-
-    async def test_idempotency_key_unique(
-        self,
-        test_user: AuthUser,
-        jobs_service: JobsService,
-        cluster_config: ClusterConfig,
-        billing_service: BillingLogService,
-        billing_log_storage: BillingLogStorage,
-        job_request_factory: Callable[[], JobRequest],
-    ) -> None:
-        enforcer = BillingEnforcer(jobs_service, billing_service)
-        job, _ = await jobs_service.create_job(
-            job_request_factory(), test_user, cluster_name="test-cluster"
-        )
-        now = datetime.datetime.now(datetime.timezone.utc)
-        await jobs_service.set_job_status(
-            job.id, JobStatusItem(JobStatus.RUNNING, transition_time=now)
-        )
-        await billing_log_storage.get_or_create_sync_record()
-        for index in range(1000):
-            await enforcer.enforce()
-            await billing_log_storage.update_sync_record(
-                BillingLogSyncRecord(index + 1)
-            )
-            await billing_service._entry_done_notifier.notify()
-        async with billing_log_storage.iter_entries() as it:
-            keys = {entry.idempotency_key async for entry in it}
-        assert len(keys) == 1000
-
-    async def test_jobs_charged_fully(
-        self,
-        test_user: AuthUser,
-        jobs_service: JobsService,
-        cluster_config: ClusterConfig,
-        billing_service: BillingLogService,
-        billing_log_storage: BillingLogStorage,
-        job_request_factory: Callable[[], JobRequest],
-    ) -> None:
-        enforcer = BillingEnforcer(jobs_service, billing_service)
-        job, _ = await jobs_service.create_job(
-            job_request_factory(), test_user, cluster_name="test-cluster"
-        )
-        now = datetime.datetime.now(datetime.timezone.utc)
-        await jobs_service.set_job_status(
-            job.id, JobStatusItem(JobStatus.SUCCEEDED, now)
-        )
-
-        await enforcer.enforce()
-        async with billing_log_storage.iter_entries() as it:
-            entries = [entry async for entry in it]
-        assert len(entries) == 1
-        assert entries[0].fully_billed
-
-    async def test_waits_for_previous_entry(
-        self,
-        test_user: AuthUser,
-        jobs_service: JobsService,
-        cluster_config: ClusterConfig,
-        billing_service: BillingLogService,
-        billing_log_storage: BillingLogStorage,
-        job_request_factory: Callable[[], JobRequest],
-    ) -> None:
-        enforcer = BillingEnforcer(jobs_service, billing_service)
-        job, _ = await jobs_service.create_job(
-            job_request_factory(), test_user, cluster_name="test-cluster"
-        )
-        now = datetime.datetime.now(datetime.timezone.utc)
-        await jobs_service.set_job_status(
-            job.id, JobStatusItem(JobStatus.RUNNING, transition_time=now)
-        )
-        entry = BillingLogEntry(
-            job_id=job.id,
-            charge=Decimal(1),
-            fully_billed=False,
-            idempotency_key="key",
-            last_billed=now,
-        )
-        async with billing_service.entries_inserter() as inserter:
-            await inserter.insert([entry])
-        # Should not proceed if there is pending item
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(enforcer.enforce(), timeout=0.2)
-        # Should unblock and proceed when item is done
-        task = asyncio.create_task(enforcer.enforce())
-        await jobs_service.update_job_billing(
-            job_id=entry.job_id,
-            last_billed=entry.last_billed,
-            fully_billed=entry.fully_billed,
-            new_charge=entry.charge,
-        )
-        await asyncio.sleep(1)
-        await billing_log_storage.get_or_create_sync_record()
-        await billing_log_storage.update_sync_record(BillingLogSyncRecord(1))
-        await billing_service._entry_done_notifier.notify()
-        await asyncio.wait_for(task, timeout=0.2)
-        async with billing_log_storage.iter_entries() as it:
-            entries = [entry async for entry in it]
-        assert len(entries) == 2
-
-        per_hour = cluster_config.orchestrator.presets[0].credits_per_hour
-        second = Decimal("1") / 3600
-
-        assert entries[1].charge >= second * per_hour
-        assert entries[1].charge <= 2 * second * per_hour
-        assert not entries[1].fully_billed
-
-        delta = entries[1].last_billed - entries[0].last_billed
-        assert (
-            int(delta.total_seconds() * 1e6) / Decimal(1e6) / 3600 * per_hour
-            == entries[1].charge
-        )
-
-
-class TestCreditsNotificationEnforcer:
-    async def test_credits_almost_run_out_user_notified(
-        self,
-        jobs_service: JobsService,
-        mock_admin_client: AdminClient,
-        mock_notifications_client: MockNotificationsClient,
-        job_request_factory: Callable[[], JobRequest],
-        user_factory: UserFactory,
-        test_cluster: str,
-    ) -> None:
-        user = await user_factory(
-            "some-user", [(test_cluster, Balance(credits=Decimal("10.00")), Quota())]
-        )
-
-        enforcer = CreditsNotificationsEnforcer(
-            jobs_service,
-            mock_admin_client,
-            mock_notifications_client,
-            notification_threshold=Decimal("2000"),
-        )
-        job, _ = await jobs_service.create_job(
-            job_request_factory(), user, cluster_name="test-cluster"
-        )
-        await enforcer.enforce()
-        assert (
-            CreditsWillRunOutSoon(
-                user_id=user.name,
-                cluster_name="test-cluster",
-                credits=Decimal("10"),
-            )
-            in mock_notifications_client.sent_notifications
-        )
-
-    async def test_no_credits_not_notified(
-        self,
-        jobs_service: JobsService,
-        mock_admin_client: AdminClient,
-        mock_notifications_client: MockNotificationsClient,
-        job_request_factory: Callable[[], JobRequest],
-        caplog: Any,
-        user_factory: UserFactory,
-        test_cluster: str,
-    ) -> None:
-        user = await user_factory(
-            "some-user", [(test_cluster, Balance(credits=None), Quota())]
-        )
-
-        enforcer = CreditsNotificationsEnforcer(
-            jobs_service,
-            mock_admin_client,
-            mock_notifications_client,
-            notification_threshold=Decimal("2000"),
-        )
-        job, _ = await jobs_service.create_job(
-            job_request_factory(), user, cluster_name="test-cluster"
-        )
-        await enforcer.enforce()
-        assert not any(
-            isinstance(notification, CreditsWillRunOutSoon)
-            for notification in mock_notifications_client.sent_notifications
-        )
-        assert not any(
-            record.levelno >= logging.ERROR for record in caplog.records
-        ), list(caplog.records)
 
 
 class TestStopOnClusterRemoveEnforcer:
@@ -761,7 +521,7 @@ class TestRetentionPolicyEnforcer:
             job_request_factory(), test_user, cluster_name="test-cluster"
         )
 
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         await jobs_service.set_job_status(
             job.id,
             JobStatusItem(
@@ -786,7 +546,7 @@ class TestRetentionPolicyEnforcer:
             job_request_factory(), test_user, cluster_name="test-cluster"
         )
 
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         await jobs_service.set_job_status(
             job.id,
             JobStatusItem(

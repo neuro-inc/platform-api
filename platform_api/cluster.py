@@ -3,7 +3,6 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
-from typing import Any, Optional
 
 from aiorwlock import RWLock
 
@@ -73,8 +72,8 @@ class ClusterUpdater:
         self._config = config
         self._config_client = config_client
 
-        self._is_active: Optional[asyncio.Future[None]] = None
-        self._task: Optional[asyncio.Future[None]] = None
+        self._is_active: asyncio.Future[None] | None = None
+        self._task: asyncio.Future[None] | None = None
 
     async def start(self) -> None:
         logger.info("Starting Cluster Updater")
@@ -84,7 +83,7 @@ class ClusterUpdater:
         await self.start()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.stop()
 
     async def _init_task(self) -> None:
@@ -147,7 +146,7 @@ class SingleClusterUpdater:
             await self._cluster_holder.update(cluster_config)
         else:
             logger.warning(
-                f"Was unable to fetch config for cluster {self._cluster_name}"
+                "Was unable to fetch config for cluster %s", self._cluster_name
             )
             await self._cluster_holder.clean()
 
@@ -155,13 +154,13 @@ class SingleClusterUpdater:
 class ClusterHolder:
     def __init__(self, *, factory: ClusterFactory) -> None:
         self._factory = factory
-        self._cluster: Optional[Cluster] = None
+        self._cluster: Cluster | None = None
         self._lock = RWLock()
 
     async def __aenter__(self) -> "ClusterHolder":
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.clean()
 
     async def update(
@@ -177,23 +176,23 @@ class ClusterHolder:
             await self._init_cluster(self._cluster)
 
     async def _init_cluster(self, cluster: Cluster) -> None:
-        logger.info(f"Initializing cluster '{cluster.name}'")
+        logger.info("Initializing cluster '%s'", cluster.name)
         try:
             await cluster.init()
         except Exception:
-            logger.info(f"Failed to initialize cluster '{cluster.name}'")
+            logger.info("Failed to initialize cluster '%s'", cluster.name)
             raise
-        logger.info(f"Initialized cluster '{cluster.name}'")
+        logger.info("Initialized cluster '%s'", cluster.name)
 
     async def _close_cluster(self, cluster: Cluster) -> None:
-        logger.info(f"Closing cluster '{cluster.name}'")
+        logger.info("Closing cluster '%s'", cluster.name)
         try:
             await cluster.close()
         except asyncio.CancelledError:  # pragma: no cover
             raise
         except Exception:
-            logger.exception(f"Failed to close cluster '{cluster.name}'")
-        logger.info(f"Closed cluster '{cluster.name}'")
+            logger.exception("Failed to close cluster '%s'", cluster.name)
+        logger.info("Closed cluster '%s'", cluster.name)
 
     @asynccontextmanager
     async def get(self) -> AsyncIterator[Cluster]:

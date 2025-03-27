@@ -5,7 +5,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
-from typing import Any, Optional, Union
+from typing import Any
 
 from yarl import URL
 
@@ -46,7 +46,11 @@ class ContainerVolume:
     def create(
         cls, uri: str, dst_path: PurePath, read_only: bool = False
     ) -> "ContainerVolume":
-        return cls(uri=URL(uri), dst_path=dst_path, read_only=read_only)
+        return cls(
+            uri=URL(uri.replace("%2f", "/").replace("%2F", "/")),
+            dst_path=dst_path,
+            read_only=read_only,
+        )
 
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "ContainerVolume":
@@ -78,7 +82,7 @@ class Disk:
         )
 
     @classmethod
-    def create(cls, disk_uri: Union[str, URL]) -> "Disk":
+    def create(cls, disk_uri: str | URL) -> "Disk":
         # Note: format of `disk_uri` is enforced by validators
         uri = URL(disk_uri)
         cluster_name = uri.host
@@ -139,7 +143,7 @@ class Secret:
         )
 
     @classmethod
-    def create(cls, secret_uri: Union[str, URL]) -> "Secret":
+    def create(cls, secret_uri: str | URL) -> "Secret":
         # Note: format of `secret_uri` is enforced by validators
         uri = URL(secret_uri)
         cluster_name = uri.host
@@ -190,10 +194,14 @@ class ContainerTPUResource:
 class ContainerResources:
     cpu: float
     memory: int
-    gpu: Optional[int] = None
-    gpu_model_id: Optional[str] = None
-    shm: Optional[bool] = None
-    tpu: Optional[ContainerTPUResource] = None
+    nvidia_gpu: int | None = None
+    amd_gpu: int | None = None
+    intel_gpu: int | None = None
+    nvidia_gpu_model: str | None = None
+    amd_gpu_model: str | None = None
+    intel_gpu_model: str | None = None
+    shm: bool | None = None
+    tpu: ContainerTPUResource | None = None
 
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "ContainerResources":
@@ -202,32 +210,58 @@ class ContainerResources:
             tpu = ContainerTPUResource.from_primitive(payload["tpu"])
         return cls(
             cpu=payload["cpu"],
-            memory=payload["memory"]
-            if "memory" in payload
-            else payload["memory_mb"] * 2**20,
-            gpu=payload.get("gpu"),
-            gpu_model_id=payload.get("gpu_model_id"),
+            memory=(
+                payload["memory"]
+                if "memory" in payload
+                else payload["memory_mb"] * 2**20
+            ),
+            nvidia_gpu=payload.get("nvidia_gpu") or payload.get("gpu"),
+            amd_gpu=payload.get("amd_gpu"),
+            intel_gpu=payload.get("intel_gpu"),
+            nvidia_gpu_model=(
+                payload.get("nvidia_gpu_model") or payload.get("gpu_model_id")
+            ),
+            amd_gpu_model=payload.get("amd_gpu_model"),
+            intel_gpu_model=payload.get("intel_gpu_model"),
             shm=payload.get("shm"),
             tpu=tpu,
         )
 
     def to_primitive(self) -> dict[str, Any]:
         payload: dict[str, Any] = {"cpu": self.cpu, "memory": self.memory}
-        if self.gpu is not None:
-            payload["gpu"] = self.gpu
-            payload["gpu_model_id"] = self.gpu_model_id
+        if self.nvidia_gpu is not None:
+            payload["nvidia_gpu"] = self.nvidia_gpu
+            payload["gpu"] = self.nvidia_gpu
+        if self.amd_gpu is not None:
+            payload["amd_gpu"] = self.amd_gpu
+        if self.intel_gpu is not None:
+            payload["intel_gpu"] = self.intel_gpu
+        if self.nvidia_gpu_model:
+            # todo: gpu_model_id is deprecated. it is here for a backward compatability
+            payload["gpu_model_id"] = self.nvidia_gpu_model
+            payload["nvidia_gpu_model"] = self.nvidia_gpu_model
+        if self.amd_gpu_model:
+            payload["amd_gpu_model"] = self.amd_gpu_model
+        if self.intel_gpu_model:
+            payload["intel_gpu_model"] = self.intel_gpu_model
         if self.shm is not None:
             payload["shm"] = self.shm
         if self.tpu:
             payload["tpu"] = self.tpu.to_primitive()
         return payload
 
+    @property
+    def require_gpu(self) -> bool:
+        return bool(self.nvidia_gpu or self.amd_gpu or self.intel_gpu)
+
     def check_fit_into_pool_type(self, pool_type: ResourcePoolType) -> bool:
-        if not pool_type.available_cpu or not pool_type.available_memory:
+        available_cpu = pool_type.available_cpu or pool_type.cpu
+        available_memory = pool_type.available_memory or pool_type.memory
+        if not available_cpu or not available_memory:
             return False
         return (
-            self.cpu <= pool_type.available_cpu
-            and self.memory <= pool_type.available_memory
+            self.cpu <= available_cpu
+            and self.memory <= available_memory
             and self._check_gpu(pool_type)
             and self._check_tpu(pool_type)
         )
@@ -240,31 +274,43 @@ class ContainerResources:
             and self._check_tpu_preset(preset)
         )
 
-    def _check_gpu(self, entry: Union[ResourcePoolType, Preset]) -> bool:
-        if not self.gpu:
-            # container does not need GPU. we are good regardless of presence
-            # of GPU in the pool type.
+    def _check_gpu(self, entry: ResourcePoolType | Preset) -> bool:
+        if not self.require_gpu:
+            # container does not need GPU.
+            # we are good regardless of the presence of GPU in the pool type.
             return True
 
         # container needs GPU
-
-        if not entry.gpu:
+        if self.nvidia_gpu and not self._gpu_match(
+            resources_gpu=self.nvidia_gpu,
+            resources_gpu_model=self.nvidia_gpu_model,
+            entry_gpu=entry.nvidia_gpu,
+            entry_gpu_model=entry.nvidia_gpu_model,
+        ):
             return False
 
-        if entry.gpu < self.gpu:
+        if self.amd_gpu and not self._gpu_match(
+            resources_gpu=self.amd_gpu,
+            resources_gpu_model=self.amd_gpu_model,
+            entry_gpu=entry.amd_gpu,
+            entry_gpu_model=entry.amd_gpu_model,
+        ):
             return False
 
-        if not self.gpu_model_id:
-            # container needs any GPU model
-            return True
+        if self.intel_gpu and not self._gpu_match(
+            resources_gpu=self.intel_gpu,
+            resources_gpu_model=self.intel_gpu_model,
+            entry_gpu=entry.intel_gpu,
+            entry_gpu_model=entry.intel_gpu_model,
+        ):
+            return False
 
-        assert entry.gpu_model
-        return self.gpu_model_id == entry.gpu_model
+        return True
 
     def _check_tpu(self, pool_type: ResourcePoolType) -> bool:
         if not self.tpu:
-            # container does not need TPU. we are good regardless of presence
-            # of TPU in the pool type.
+            # container does not need TPU.
+            # we are good regardless of the presence of TPU in the pool type.
             return True
 
         # container needs TPU
@@ -276,6 +322,29 @@ class ContainerResources:
             self.tpu.type in pool_type.tpu.types
             and self.tpu.software_version in pool_type.tpu.software_versions
         )
+
+    @staticmethod
+    def _gpu_match(
+        resources_gpu: int,
+        resources_gpu_model: str | None,
+        entry_gpu: int | None,
+        entry_gpu_model: str | None,
+    ) -> bool:
+        """
+        Ensures that the resource GPU requirement matches
+        with the entry (preset or resource pool) GPUs
+        """
+        if not entry_gpu:
+            # entry doesn't have the same GPU make
+            return False
+        if entry_gpu < resources_gpu:
+            # entry has less GPU than resources requires
+            return False
+        if not resources_gpu_model:
+            # ready to exit. resources doesn't required a specific GPU model
+            return True
+        # resource requires a specific model. therefore, we compare them
+        return entry_gpu_model == resources_gpu_model
 
     def _check_tpu_preset(self, preset: Preset) -> bool:
         if not self.tpu:
@@ -316,16 +385,16 @@ class ContainerHTTPServer:
 class Container:
     image: str
     resources: ContainerResources
-    entrypoint: Optional[str] = None
-    command: Optional[str] = None
+    entrypoint: str | None = None
+    command: str | None = None
     env: dict[str, str] = field(default_factory=dict)
     volumes: list[ContainerVolume] = field(default_factory=list)
     secret_env: dict[str, Secret] = field(default_factory=dict)
     secret_volumes: list[SecretContainerVolume] = field(default_factory=list)
     disk_volumes: list[DiskContainerVolume] = field(default_factory=list)
-    http_server: Optional[ContainerHTTPServer] = None
+    http_server: ContainerHTTPServer | None = None
     tty: bool = False
-    working_dir: Optional[str] = None
+    working_dir: str | None = None
 
     def belongs_to_registry(self, registry_host: str) -> bool:
         prefix = f"{registry_host}/"
@@ -362,7 +431,7 @@ class Container:
         return list(set(env_uris + vol_uris))
 
     @property
-    def port(self) -> Optional[int]:
+    def port(self) -> int | None:
         if self.http_server:
             return self.http_server.port
         return None
@@ -479,11 +548,11 @@ class Container:
 class JobRequest:
     job_id: str
     container: Container
-    description: Optional[str] = None
+    description: str | None = None
 
     @classmethod
     def create(
-        cls, container: Container, description: Optional[str] = None
+        cls, container: Container, description: str | None = None
     ) -> "JobRequest":
         return cls(
             job_id=f"job-{uuid.uuid4()}", description=description, container=container

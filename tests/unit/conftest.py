@@ -5,7 +5,7 @@ from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
 from functools import partial
 from pathlib import Path
-from typing import Any, Optional, Union, cast
+from typing import Any
 
 import pytest
 from aiohttp import ClientResponseError
@@ -16,7 +16,11 @@ from neuro_admin_client import (
     ClusterUser,
     ClusterUserRoleType,
     ClusterUserWithInfo,
+    Org,
     OrgCluster,
+    OrgUser,
+    OrgUserRoleType,
+    OrgUserWithInfo,
     Quota,
     User,
     UserInfo,
@@ -34,11 +38,13 @@ from platform_api.cluster import (
 )
 from platform_api.cluster_config import (
     UTC,
+    AppsConfig,
     EnergyConfig,
     EnergySchedule,
     EnergySchedulePeriod,
     IngressConfig,
     OrchestratorConfig,
+    StorageConfig,
 )
 from platform_api.config import JobsConfig, JobsSchedulerConfig, RegistryConfig
 from platform_api.orchestrator.base import Orchestrator
@@ -72,11 +78,11 @@ class MockOrchestrator(Orchestrator):
     def __init__(self, config: ClusterConfig) -> None:
         self._config = config
         self._mock_status_to_return = JobStatus.PENDING
-        self._mock_reason_to_return: Optional[str] = JobStatusReason.CONTAINER_CREATING
-        self._mock_exit_code_to_return: Optional[int] = None
+        self._mock_reason_to_return: str | None = JobStatusReason.CONTAINER_CREATING
+        self._mock_exit_code_to_return: int | None = None
         self._mock_statuses: dict[str, JobStatus] = {}
-        self._mock_reasons: dict[str, Optional[str]] = {}
-        self._mock_exit_codes: dict[str, Optional[int]] = {}
+        self._mock_reasons: dict[str, str | None] = {}
+        self._mock_exit_codes: dict[str, int | None] = {}
         self.raise_on_get_job_status = False
         self.raise_on_start_job_status = False
         self.raise_on_preempt_jobs = False
@@ -84,7 +90,8 @@ class MockOrchestrator(Orchestrator):
         self.raise_on_delete = False
         self.delete_job_exc_factory = self._create_delete_job_exc
         self.current_datetime_factory: Callable[[], datetime] = partial(
-            datetime.now, timezone.utc
+            datetime.now,
+            timezone.utc,  # noqa: UP017
         )
         self._deleted_job_ids: list[str] = []
         self._preemptible_job_ids: list[str] = []
@@ -98,10 +105,10 @@ class MockOrchestrator(Orchestrator):
     def _get_status(self, job_id: str) -> JobStatus:
         return self._mock_statuses.get(job_id, self._mock_status_to_return)
 
-    def _get_exit_code(self, job_id: str) -> Optional[int]:
+    def _get_exit_code(self, job_id: str) -> int | None:
         return self._mock_exit_codes.get(job_id, self._mock_exit_code_to_return)
 
-    def _get_reason(self, job_id: str) -> Optional[str]:
+    def _get_reason(self, job_id: str) -> str | None:
         return self._mock_reasons.get(job_id, self._mock_reason_to_return)
 
     async def start_job(self, job: Job) -> JobStatus:
@@ -143,10 +150,10 @@ class MockOrchestrator(Orchestrator):
     def update_status_to_return(self, new_status: JobStatus) -> None:
         self._mock_status_to_return = new_status
 
-    def update_reason_to_return(self, new_reason: Optional[str]) -> None:
+    def update_reason_to_return(self, new_reason: str | None) -> None:
         self._mock_reason_to_return = new_reason
 
-    def update_exit_code_to_return(self, new_exit_code: Optional[int]) -> None:
+    def update_exit_code_to_return(self, new_exit_code: int | None) -> None:
         self._mock_exit_code_to_return = new_exit_code
 
     def update_status_to_return_single(
@@ -155,12 +162,12 @@ class MockOrchestrator(Orchestrator):
         self._mock_statuses[job_id] = new_status
 
     def update_reason_to_return_single(
-        self, job_id: str, new_reason: Optional[str]
+        self, job_id: str, new_reason: str | None
     ) -> None:
         self._mock_reasons[job_id] = new_reason
 
     def update_exit_code_to_return_single(
-        self, job_id: str, new_exit_code: Optional[int]
+        self, job_id: str, new_exit_code: int | None
     ) -> None:
         self._mock_exit_codes[job_id] = new_exit_code
 
@@ -172,7 +179,7 @@ class MockOrchestrator(Orchestrator):
     async def get_missing_disks(self, disks: list[Disk]) -> list[Disk]:
         return []
 
-    def update_preemptible_jobs(self, *jobs: Union[Job, list[Job]]) -> None:
+    def update_preemptible_jobs(self, *jobs: Job | list[Job]) -> None:
         self._preemptible_job_ids = []
         for job in jobs:
             if isinstance(job, Job):
@@ -187,7 +194,7 @@ class MockOrchestrator(Orchestrator):
             raise JobError("Failed to suspend jobs")
         return [job for job in preemptible_jobs if job.id in self._preemptible_job_ids]
 
-    def update_scheduled_jobs(self, *jobs: Union[Job, list[Job]]) -> None:
+    def update_scheduled_jobs(self, *jobs: Job | list[Job]) -> None:
         self._scheduled_job_ids = []
         for job in jobs:
             if isinstance(job, Job):
@@ -198,7 +205,7 @@ class MockOrchestrator(Orchestrator):
     async def get_scheduled_jobs(self, jobs: list[Job]) -> list[Job]:
         return [job for job in jobs if job.id in self._scheduled_job_ids]
 
-    def update_schedulable_jobs(self, *jobs: Union[Job, list[Job]]) -> None:
+    def update_schedulable_jobs(self, *jobs: Job | list[Job]) -> None:
         self._schedulable_job_ids = []
         for job in jobs:
             if isinstance(job, Job):
@@ -247,7 +254,7 @@ class MockAuthClient(AuthClient):
         self._grants: list[tuple[str, Sequence[Permission]]] = []
         self._revokes: list[tuple[str, Sequence[str]]] = []
 
-    async def get_user(self, name: str, token: Optional[str] = None) -> AuthUser:
+    async def get_user(self, name: str, token: str | None = None) -> AuthUser:
         return self.user_to_return
 
     @property
@@ -259,20 +266,20 @@ class MockAuthClient(AuthClient):
         return self._revokes
 
     async def grant_user_permissions(
-        self, name: str, permissions: Sequence[Permission], token: Optional[str] = None
+        self, name: str, permissions: Sequence[Permission], token: str | None = None
     ) -> None:
         self._grants.append((name, permissions))
 
     async def revoke_user_permissions(
-        self, name: str, resources_uris: Sequence[str], token: Optional[str] = None
+        self, name: str, resources_uris: Sequence[str], token: str | None = None
     ) -> None:
         self._revokes.append((name, resources_uris))
 
     async def get_user_token(
         self,
         name: str,
-        new_token_uri: Optional[str] = None,
-        token: Optional[str] = None,
+        new_token_uri: str | None = None,
+        token: str | None = None,
     ) -> str:
         return f"token-{name}"
 
@@ -280,12 +287,12 @@ class MockAuthClient(AuthClient):
 class MockAdminClient(AdminClientDummy):
     def __init__(self) -> None:
         self.users: dict[str, User] = {}
+        self.orgs: dict[str, list[Org]] = defaultdict(list)
         self.cluster_users: dict[str, list[ClusterUser]] = defaultdict(list)
+        self.org_users: dict[str, list[OrgUser]] = defaultdict(list)
         self.org_clusters: dict[str, list[OrgCluster]] = defaultdict(list)
-        self.spending_log: list[
-            tuple[str, Optional[str], str, Decimal, Optional[str]]
-        ] = []
-        self.debts_log: list[tuple[str, str, Decimal, str]] = []
+        self.spending_log: list[tuple[str, str | None, str, Decimal, str | None]] = []
+        self.debts_log: list[tuple[str, Decimal, str, str | None, str | None]] = []
         self.raise_404: bool = False
 
     async def get_user_with_clusters(self, name: str) -> tuple[User, list[ClusterUser]]:
@@ -293,16 +300,16 @@ class MockAdminClient(AdminClientDummy):
             raise ClientResponseError(None, (), status=404)  # type: ignore
         return self.users[name], self.cluster_users[name]
 
-    async def charge_cluster_user(  # type: ignore
+    async def charge_cluster_user(
         self,
         cluster_name: str,
         user_name: str,
         amount: Decimal,
         *,
         with_user_info: bool = False,
-        idempotency_key: Optional[str] = None,
-        org_name: Optional[str] = None,
-    ) -> Union[ClusterUser, ClusterUserWithInfo]:
+        idempotency_key: str | None = None,
+        org_name: str | None = None,
+    ) -> ClusterUser | ClusterUserWithInfo:
         if self.raise_404:
             raise ClientResponseError(None, (), status=404)  # type: ignore
         self.spending_log.append(
@@ -315,19 +322,22 @@ class MockAdminClient(AdminClientDummy):
     async def add_debt(
         self,
         cluster_name: str,
-        username: str,
         credits: Decimal,
         idempotency_key: str,
+        org_name: str | None = None,
+        username: str | None = None,
     ) -> None:
-        self.debts_log.append((cluster_name, username, credits, idempotency_key))
+        self.debts_log.append(
+            (cluster_name, credits, idempotency_key, org_name, username)
+        )
 
     async def get_cluster_user(  # type: ignore
         self,
         cluster_name: str,
         user_name: str,
         with_user_info: bool = False,
-        org_name: Optional[str] = None,
-    ) -> Union[ClusterUser, ClusterUserWithInfo]:
+        org_name: str | None = None,
+    ) -> ClusterUser | ClusterUserWithInfo:
         for cluster_user in self.cluster_users.get(user_name, []):
             if (
                 cluster_user.cluster_name == cluster_name
@@ -353,6 +363,29 @@ class MockAdminClient(AdminClientDummy):
         for org_cluster in self.org_clusters.get(org_name, []):
             if org_cluster.cluster_name == cluster_name:
                 return org_cluster
+        raise ClientResponseError(None, (), status=404)  # type: ignore
+
+    async def get_org_user(  # type: ignore
+        self, org_name: str, user_name: str, with_user_info: bool = False
+    ) -> OrgUser | OrgUserWithInfo:
+        for org_user in self.org_users.get(user_name, []):
+            if org_user.org_name == org_name:
+                if with_user_info:
+                    return org_user.add_info(
+                        UserInfo(
+                            email=self.users[user_name].email,
+                            first_name=self.users[user_name].first_name,
+                            last_name=self.users[user_name].last_name,
+                            created_at=self.users[user_name].created_at,
+                        )
+                    )
+                return org_user
+        raise ClientResponseError(None, (), status=404)  # type: ignore
+
+    async def get_org(self, name: str) -> Org:
+        for org in self.orgs.get(name, []):
+            if org.name == name:
+                return org
         raise ClientResponseError(None, (), status=404)  # type: ignore
 
 
@@ -382,8 +415,7 @@ def job_request_factory() -> Callable[[], JobRequest]:
     ) -> JobRequest:
         cont_kwargs: dict[str, Any] = {"cpu": cpu, "memory": memory}
         if with_gpu:
-            cont_kwargs["gpu"] = 1
-            cont_kwargs["gpu_model_id"] = "nvidia-tesla-k80"
+            cont_kwargs["nvidia_gpu"] = 1
 
         return JobRequest.create(
             Container(image="testimage", resources=ContainerResources(**cont_kwargs))
@@ -392,7 +424,7 @@ def job_request_factory() -> Callable[[], JobRequest]:
     return factory
 
 
-@pytest.fixture()
+@pytest.fixture
 def cert_authority_path(tmp_path: Path) -> str:
     ca_path = tmp_path / "ca.crt"
     ca_path.write_text(CA_DATA_PEM)
@@ -470,6 +502,8 @@ def cluster_config() -> ClusterConfig:
                 )
             ]
         ),
+        storage=StorageConfig(volumes=()),
+        apps=AppsConfig(apps_hostname_templates=[]),
     )
 
 
@@ -593,7 +627,7 @@ def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
 
 
 UserFactory = Callable[
-    [str, list[Union[tuple[str, Balance, Quota], tuple[str, str, Balance, Quota]]]],
+    [str, list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]]],
     Awaitable[AuthUser],
 ]
 
@@ -604,19 +638,15 @@ def user_factory(
 ) -> UserFactory:
     async def _factory(
         name: str,
-        clusters: list[
-            Union[tuple[str, Balance, Quota], tuple[str, str, Balance, Quota]]
-        ],
+        clusters: list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]],
     ) -> AuthUser:
         mock_admin_client.users[name] = User(name=name, email=f"{name}@domain.com")
         for entry in clusters:
-            org_name: Optional[str] = None
+            org_name: str | None = None
             if len(entry) == 3:
-                cluster, balance, quota = cast(tuple[str, Balance, Quota], entry)
+                cluster, balance, quota = entry
             else:
-                cluster, org_name, balance, quota = cast(
-                    tuple[str, str, Balance, Quota], entry
-                )
+                cluster, org_name, balance, quota = entry
             mock_admin_client.cluster_users[name].append(
                 ClusterUser(
                     user_name=name,
@@ -627,6 +657,16 @@ def user_factory(
                     org_name=org_name,
                 )
             )
+            if org_name:
+                mock_admin_client.orgs[org_name].append(Org(name=org_name))
+                mock_admin_client.org_users[name].append(
+                    OrgUser(
+                        org_name=org_name,
+                        user_name=name,
+                        role=OrgUserRoleType.USER,
+                        balance=balance,
+                    )
+                )
         return AuthUser(name=name)
 
     return _factory
@@ -642,6 +682,12 @@ def org_factory(
     async def _factory(name: str, clusters: list[tuple[str, Balance, Quota]]) -> str:
         mock_admin_client.users[name] = User(name=name, email=f"{name}@domain.com")
         for cluster, balance, quota in clusters:
+            mock_admin_client.orgs[name].append(
+                Org(
+                    name=name,
+                    balance=balance,
+                )
+            )
             mock_admin_client.org_clusters[name].append(
                 OrgCluster(
                     cluster_name=cluster,

@@ -65,12 +65,13 @@ def create_pod() -> PodFactory:
         is_scheduled: bool = False,
         is_running: bool = False,
         is_terminated: bool = False,
+        is_failed: bool = False,
     ) -> dict[str, Any]:
         pod = PodDescriptor(
             name or f"pod-{uuid.uuid4()}",
             labels=labels or {},
             image="gcr.io/google_containers/pause:3.1",
-            resources=Resources(cpu=cpu, memory=memory, gpu=gpu),
+            resources=Resources(cpu=cpu, memory=memory, nvidia_gpu=gpu),
         )
         raw_pod = pod.to_primitive()
         raw_pod["metadata"]["creationTimestamp"] = datetime.now().isoformat()
@@ -102,6 +103,11 @@ def create_pod() -> PodFactory:
                 "conditions": [scheduled_condition],
             }
             raw_pod["spec"]["nodeName"] = node_name
+        if is_failed:
+            raw_pod["status"] = {
+                "phase": "Failed",
+                "reason": "OutOfcpu",
+            }
         return raw_pod
 
     return _create
@@ -191,7 +197,7 @@ class TestNodeResourcesHandler:
 
         assert handler.get_pod_node_name("job") == "minikube"
         resources = handler.get_resource_requests("minikube")
-        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, gpu=1)
+        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, nvidia_gpu=1)
 
     async def test_init_running(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
@@ -205,9 +211,9 @@ class TestNodeResourcesHandler:
 
         assert handler.get_pod_node_name("job") == "minikube"
         resources = handler.get_resource_requests("minikube")
-        assert resources == NodeResources(cpu=0.2, memory=256 * 10**6, gpu=1)
+        assert resources == NodeResources(cpu=0.2, memory=256 * 10**6, nvidia_gpu=1)
         resources = handler.get_resource_requests("minikube2")
-        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, gpu=1)
+        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, nvidia_gpu=1)
 
     async def test_init_succeeded(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
@@ -254,7 +260,7 @@ class TestNodeResourcesHandler:
 
         assert handler.get_pod_node_name("job") == "minikube"
         resources = handler.get_resource_requests("minikube")
-        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, gpu=1)
+        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, nvidia_gpu=1)
 
     async def test_handle_added_running_multiple_times(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
@@ -268,7 +274,7 @@ class TestNodeResourcesHandler:
 
         assert handler.get_pod_node_name("job") == "minikube"
         resources = handler.get_resource_requests("minikube")
-        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, gpu=1)
+        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, nvidia_gpu=1)
 
     async def test_handle_modified_succeeded(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
@@ -322,7 +328,7 @@ class TestNodeResourcesHandler:
 
         assert handler.get_pod_node_name("job") is None
         resources = handler.get_resource_requests("minikube")
-        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, gpu=0)
+        assert resources == NodeResources(cpu=0.1, memory=128 * 10**6, nvidia_gpu=0)
 
     async def test_handle_deleted_last(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
@@ -344,6 +350,23 @@ class TestNodeResourcesHandler:
             PodWatchEvent.create_deleted(create_pod(is_terminated=True))
         )
 
+        resources = handler.get_resource_requests("minikube")
+        assert resources == NodeResources()
+
+    async def test_handle_failed(
+        self, handler: NodeResourcesHandler, create_pod: PodFactory
+    ) -> None:
+        await handler.handle(
+            PodWatchEvent.create_added(create_pod("job", is_scheduled=True))
+        )
+
+        await handler.handle(
+            PodWatchEvent.create_modified(
+                create_pod("job", is_scheduled=True, is_failed=True)
+            )
+        )
+
+        assert handler.get_pod_node_name("job") is None
         resources = handler.get_resource_requests("minikube")
         assert resources == NodeResources()
 

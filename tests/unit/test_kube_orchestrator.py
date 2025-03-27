@@ -42,11 +42,14 @@ from platform_api.orchestrator.kube_orchestrator import (
     IngressRule,
     JobStatusItemFactory,
     KubeOrchestrator,
+    LabelSelectorMatchExpression,
+    LabelSelectorTerm,
     NfsVolume,
     NodeAffinity,
-    NodeSelectorRequirement,
-    NodeSelectorTerm,
+    PodAffinity,
+    PodAffinityTerm,
     PodDescriptor,
+    PodPreferredSchedulingTerm,
     PodStatus,
     PVCVolume,
     Service,
@@ -97,7 +100,7 @@ class TestVolume:
         mount = volume.create_mount(container_volume)
         assert mount.volume == volume
         assert mount.mount_path == PurePath("/container/path/to/dir")
-        assert mount.sub_path == PurePath("")
+        assert mount.sub_path == PurePath()
         assert not mount.read_only
 
     def test_create_mount_with_mount_sub_path(self) -> None:
@@ -121,7 +124,7 @@ class TestVolume:
         mount = volume.create_mount(container_volume, PurePath("sub/dir"))
         assert mount.volume == volume
         assert mount.mount_path == PurePath("/dev/shm/sub/dir")
-        assert mount.sub_path == PurePath("")
+        assert mount.sub_path == PurePath()
         assert not mount.read_only
 
 
@@ -243,8 +246,8 @@ class TestPodDescriptor:
             image="testimage",
             node_affinity=NodeAffinity(
                 required=[
-                    NodeSelectorTerm(
-                        [NodeSelectorRequirement.create_in("node-pool", "cpu")]
+                    LabelSelectorTerm(
+                        [LabelSelectorMatchExpression.create_in("node-pool", "cpu")]
                     )
                 ]
             ),
@@ -271,8 +274,8 @@ class TestPodDescriptor:
             node_selector={"job": "true"},
             node_affinity=NodeAffinity(
                 required=[
-                    NodeSelectorTerm(
-                        [NodeSelectorRequirement.create_in("node-pool", "cpu")]
+                    LabelSelectorTerm(
+                        [LabelSelectorMatchExpression.create_in("node-pool", "cpu")]
                     )
                 ]
             ),
@@ -347,19 +350,41 @@ class TestPodDescriptor:
         ]
         node_affinity = NodeAffinity(
             required=[
-                NodeSelectorTerm([NodeSelectorRequirement.create_exists("testkey")])
+                LabelSelectorTerm(
+                    [LabelSelectorMatchExpression.create_exists("testkey")]
+                )
+            ]
+        )
+        pod_affinity = PodAffinity(
+            preferred=[
+                PodPreferredSchedulingTerm(
+                    weight=150,
+                    pod_affinity_term=PodAffinityTerm(
+                        topologyKey="sometopologykey",
+                        namespaces=["some", "namespace"],
+                        label_selector=LabelSelectorTerm(
+                            match_expressions=[
+                                LabelSelectorMatchExpression.create_exists("keya"),
+                                LabelSelectorMatchExpression.create_in(
+                                    "keyb", "v1", "v2"
+                                ),
+                            ]
+                        ),
+                    ),
+                )
             ]
         )
         pod = PodDescriptor(
             name="testname",
             image="testimage",
             env={"TESTVAR": "testvalue"},
-            resources=Resources(cpu=0.5, memory=1024 * 10**6, gpu=1),
+            resources=Resources(cpu=0.5, memory=1024 * 10**6, nvidia_gpu=1),
             port=1234,
             tty=True,
             node_selector={"label": "value"},
             tolerations=tolerations,
             node_affinity=node_affinity,
+            pod_affinity=pod_affinity,
             labels={"testlabel": "testvalue"},
             annotations={"testa": "testv"},
             priority_class_name="testpriority",
@@ -418,7 +443,28 @@ class TestPodDescriptor:
                 "affinity": {
                     "nodeAffinity": {
                         "requiredDuringSchedulingIgnoredDuringExecution": mock.ANY
-                    }
+                    },
+                    "podAffinity": {
+                        "preferredDuringSchedulingIgnoredDuringExecution": [
+                            {
+                                "weight": 150,
+                                "podAffinityTerm": {
+                                    "topologyKey": "sometopologykey",
+                                    "namespaces": ["some", "namespace"],
+                                    "labelSelector": {
+                                        "matchExpressions": [
+                                            {"key": "keya", "operator": "Exists"},
+                                            {
+                                                "key": "keyb",
+                                                "operator": "In",
+                                                "values": ["v1", "v2"],
+                                            },
+                                        ]
+                                    },
+                                },
+                            }
+                        ],
+                    },
                 },
                 "priorityClassName": "testpriority",
             },
@@ -429,7 +475,7 @@ class TestPodDescriptor:
             name="testname",
             image="testimage",
             env={"TESTVAR": "testvalue"},
-            resources=Resources(cpu=0.5, memory=1024 * 10**6, gpu=1),
+            resources=Resources(cpu=0.5, memory=1024 * 10**6, nvidia_gpu=1),
             port=1234,
             readiness_probe=True,
         )
@@ -482,7 +528,7 @@ class TestPodDescriptor:
             name="testname",
             image="testimage",
             env={"TESTVAR": "testvalue"},
-            resources=Resources(cpu=0.5, memory=1024 * 10**6, gpu=1),
+            resources=Resources(cpu=0.5, memory=1024 * 10**6, nvidia_gpu=1),
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
@@ -532,7 +578,7 @@ class TestPodDescriptor:
             name="testname",
             image="testimage",
             env={"TESTVAR": "testvalue"},
-            resources=Resources(cpu=0.5, memory=1024 * 10**6, gpu=1),
+            resources=Resources(cpu=0.5, memory=1024 * 10**6, nvidia_gpu=1),
             port=1234,
             volumes=[dev_shm],
             volume_mounts=[dev_shm.create_mount(container_volume)],
@@ -589,7 +635,9 @@ class TestPodDescriptor:
             command="testcommand 123",
             working_dir="/working/dir",
             env={"TESTVAR": "testvalue"},
-            resources=ContainerResources(cpu=1, memory=128 * 10**6, gpu=1),
+            resources=ContainerResources(
+                cpu=1, memory=128 * 10**6, nvidia_gpu=1, amd_gpu=2
+            ),
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
@@ -600,9 +648,13 @@ class TestPodDescriptor:
         assert pod.args == ["testcommand", "123"]
         assert pod.env == {"TESTVAR": "testvalue"}
         assert pod.env_list == [{"name": "TESTVAR", "value": "testvalue"}]
-        assert pod.resources == Resources(cpu=1, memory=128 * 10**6, gpu=1)
+        assert pod.resources == Resources(
+            cpu=1, memory=128 * 10**6, nvidia_gpu=1, amd_gpu=2
+        )
         assert pod.priority_class_name == "testpriority"
         assert pod.working_dir == "/working/dir"
+        assert not pod.node_affinity
+        assert not pod.pod_affinity
 
     def test_from_job_request_tpu(self) -> None:
         container = Container(
@@ -643,7 +695,7 @@ class TestPodDescriptor:
         container = Container(
             image="testimage",
             command="testcommand 123",
-            resources=ContainerResources(cpu=1, memory=128 * 10**6, gpu=1),
+            resources=ContainerResources(cpu=1, memory=128 * 10**6),
             volumes=[
                 ContainerVolume(
                     uri=URL("storage://cluster/user1"),
@@ -931,7 +983,7 @@ class TestResources:
         }
 
     def test_to_primitive_gpu(self) -> None:
-        resources = Resources(cpu=0.5, memory=1024 * 10**6, gpu=2)
+        resources = Resources(cpu=0.5, memory=1024 * 10**6, nvidia_gpu=2)
         assert resources.to_primitive() == {
             "requests": {"cpu": "500m", "memory": "1024000000", "nvidia.com/gpu": 2},
             "limits": {"cpu": "500m", "memory": "1024000000", "nvidia.com/gpu": 2},
@@ -973,9 +1025,13 @@ class TestResources:
         }
 
     def test_from_container_resources(self) -> None:
-        container_resources = ContainerResources(cpu=1, memory=128 * 10**6, gpu=1)
+        container_resources = ContainerResources(
+            cpu=1, memory=128 * 10**6, nvidia_gpu=1, amd_gpu=2
+        )
         resources = Resources.from_container_resources(container_resources)
-        assert resources == Resources(cpu=1, memory=128 * 10**6, gpu=1)
+        assert resources == Resources(
+            cpu=1, memory=128 * 10**6, nvidia_gpu=1, amd_gpu=2
+        )
 
     def test_from_container_resources_tpu(self) -> None:
         container_resources = ContainerResources(
@@ -1029,6 +1085,11 @@ class TestResources:
         assert resources == Resources(cpu=1, memory=4 * 2**30)
 
         resources = Resources.from_primitive(
+            {"requests": {"cpu": "1", "memory": "4Ti"}}
+        )
+        assert resources == Resources(cpu=1, memory=4 * 2**40)
+
+        resources = Resources.from_primitive(
             {"requests": {"cpu": "1", "memory": "4000000k"}}
         )
         assert resources == Resources(cpu=1, memory=4000000 * 10**3)
@@ -1041,15 +1102,18 @@ class TestResources:
         resources = Resources.from_primitive({"requests": {"cpu": "1", "memory": "4G"}})
         assert resources == Resources(cpu=1, memory=4 * 10**9)
 
-        with pytest.raises(ValueError, match="'4Ti' memory format is not supported"):
-            Resources.from_primitive({"requests": {"cpu": "1", "memory": "4Ti"}})
+        resources = Resources.from_primitive({"requests": {"cpu": "1", "memory": "4T"}})
+        assert resources == Resources(cpu=1, memory=4 * 10**12)
+
+        with pytest.raises(ValueError, match="'4Pi' memory format is not supported"):
+            Resources.from_primitive({"requests": {"cpu": "1", "memory": "4Pi"}})
 
     def test_from_primitive_gpu(self) -> None:
         resources = Resources.from_primitive(
             {"requests": {"cpu": "1", "memory": "4096Mi", "nvidia.com/gpu": "1"}}
         )
 
-        assert resources == Resources(cpu=1, memory=4096 * 2**20, gpu=1)
+        assert resources == Resources(cpu=1, memory=4096 * 2**20, nvidia_gpu=1)
 
     def test_from_primitive_tpu(self) -> None:
         resources = Resources.from_primitive(
@@ -1713,7 +1777,7 @@ class TestContainerStatus:
         assert not status.is_terminated
 
         with pytest.raises(AssertionError):
-            status.exit_code
+            _ = status.exit_code
 
     @pytest.mark.parametrize(
         "payload", ({"state": {"waiting": {"reason": "NOT CREATING"}}},)

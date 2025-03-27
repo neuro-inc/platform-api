@@ -1,7 +1,7 @@
 import shlex
 from collections.abc import Sequence
 from pathlib import PurePath
-from typing import Any, Optional, Union
+from typing import Any, Optional
 from urllib.parse import unquote, urlsplit
 
 import trafaret as t
@@ -33,7 +33,7 @@ OptionalString = t.String(allow_blank=True) | t.Null
 
 
 def create_job_name_validator(
-    max_length: Optional[int] = JOB_NAME_MAX_LENGTH,
+    max_length: int | None = JOB_NAME_MAX_LENGTH,
 ) -> t.Trafaret:
     return t.Null | t.String(min_length=3, max_length=max_length) & t.Regexp(
         JOB_NAME_PATTERN
@@ -93,7 +93,7 @@ def create_job_history_validator() -> t.Trafaret:
     )
 
 
-def _check_dots_in_path(path: Union[str, PurePath]) -> None:
+def _check_dots_in_path(path: str | PurePath) -> None:
     if ".." in PurePath(path).parts:
         raise t.DataError(f"Invalid path: '{path}'")
 
@@ -102,8 +102,8 @@ def create_path_uri_validator(
     storage_scheme: str,
     cluster_name: str = "",
     check_cluster: bool = True,
-    assert_username: Optional[str] = None,
-    assert_parts_count_ge: Optional[int] = None,
+    assert_username: str | None = None,
+    assert_parts_count_ge: int | None = None,
 ) -> t.Trafaret:
     assert storage_scheme
     if check_cluster:
@@ -159,16 +159,14 @@ def create_mount_path_validator() -> t.Trafaret:
 
 
 def _validate_unique_volume_paths(
-    volumes: Sequence[dict[str, Any]]
+    volumes: Sequence[dict[str, Any]],
 ) -> Sequence[dict[str, Any]]:
     paths: set[str] = set()
     for volume in volumes:
         path = volume["dst_path"]
         if path in paths:
             raise t.DataError(
-                "destination path '{path}' was encountered multiple times".format(
-                    path=path
-                )
+                f"destination path '{path}' was encountered multiple times"
             )
         paths.add(path)
     return volumes
@@ -180,8 +178,8 @@ def create_volumes_validator(
     storage_scheme: str = "storage",
     cluster_name: str = "",
     check_cluster: bool = True,
-    assert_username: Optional[str] = None,
-    assert_parts_count_ge: Optional[int] = None,
+    assert_username: str | None = None,
+    assert_parts_count_ge: int | None = None,
 ) -> t.Trafaret:
     template_dict = {
         uri_key: create_path_uri_validator(
@@ -201,8 +199,6 @@ def create_volumes_validator(
 
 def create_resources_validator(
     *,
-    allow_any_gpu_models: bool = False,
-    allowed_gpu_models: Optional[Sequence[str]] = None,
     allow_any_tpu: bool = False,
     allowed_tpu_resources: Sequence[TPUResource] = (),
 ) -> t.Trafaret:
@@ -224,19 +220,20 @@ def create_resources_validator(
         allow_any=allow_any_tpu, allowed=allowed_tpu_resources
     )
 
-    gpu_validator = t.Int(gte=0)
-    if allow_any_gpu_models:
-        gpu_model_validator = t.String
-    else:
-        gpu_model_validator = t.Enum(*(allowed_gpu_models or []))
-
     validators = [
         common_resources_validator,
         common_resources_validator
         + t.Dict(
             {
-                "gpu": gpu_validator,
-                t.Key("gpu_model", optional=True): gpu_model_validator,
+                # TODO: deprecated, remove
+                t.Key("gpu", to_name="nvidia_gpu", optional=True): t.Int(gte=0),
+                t.Key("nvidia_gpu", optional=True): t.Int(gte=0),
+                t.Key("amd_gpu", optional=True): t.Int(gte=0),
+                t.Key("intel_gpu", optional=True): t.Int(gte=0),
+                t.Key("gpu_model", to_name="nvidia_gpu_model", optional=True): t.String,
+                t.Key("nvidia_gpu_model", optional=True): t.String,
+                t.Key("amd_gpu_model", optional=True): t.String,
+                t.Key("intel_gpu_model", optional=True): t.String,
             }
         ),
     ]
@@ -249,7 +246,7 @@ def create_resources_validator(
 
 def create_tpu_validator(
     *, allow_any: bool = False, allowed: Sequence[TPUResource] = ()
-) -> Optional[t.Trafaret]:
+) -> Optional[t.Trafaret]:  # noqa: UP007
     if allow_any:
         return t.Dict({"type": t.String, "software_version": t.String})
 
@@ -272,8 +269,6 @@ def create_tpu_validator(
 def create_container_validator(
     *,
     allow_volumes: bool = False,
-    allow_any_gpu_models: bool = False,
-    allowed_gpu_models: Optional[Sequence[str]] = None,
     allow_any_tpu: bool = False,
     allowed_tpu_resources: Sequence[TPUResource] = (),
     allow_any_command: bool = False,
@@ -300,8 +295,6 @@ def create_container_validator(
                 t.String, t.String(allow_blank=True)
             ),
             "resources": create_resources_validator(
-                allow_any_gpu_models=allow_any_gpu_models,
-                allowed_gpu_models=allowed_gpu_models,
                 allow_any_tpu=allow_any_tpu,
                 allowed_tpu_resources=allowed_tpu_resources,
             ),
@@ -363,7 +356,6 @@ def create_container_validator(
 def create_container_request_validator(
     *,
     allow_volumes: bool = False,
-    allowed_gpu_models: Optional[Sequence[str]] = None,
     allow_any_tpu: bool = False,
     allowed_tpu_resources: Sequence[TPUResource] = (),
     storage_scheme: str = "storage",
@@ -371,7 +363,6 @@ def create_container_request_validator(
 ) -> t.Trafaret:
     return create_container_validator(
         allow_volumes=allow_volumes,
-        allowed_gpu_models=allowed_gpu_models,
         allow_any_tpu=allow_any_tpu,
         allowed_tpu_resources=allowed_tpu_resources,
         storage_scheme=storage_scheme,
@@ -383,14 +374,13 @@ def create_container_request_validator(
 def create_container_response_validator() -> t.Trafaret:
     return create_container_validator(
         allow_volumes=True,
-        allow_any_gpu_models=True,
         allow_any_tpu=True,
         allow_any_command=True,
         check_cluster=False,
     )
 
 
-def sanitize_dns_name(value: str) -> Optional[str]:
+def sanitize_dns_name(value: str) -> str | None:
     """This is a TEMPORARY METHOD used to sanitize DNS names so that they are parseable
     by the client (issue #642).
     :param value: String representing a DNS name

@@ -5,9 +5,8 @@ from collections import defaultdict
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from functools import partial
-from typing import Optional, Union
 
 from aiohttp import ClientResponseError
 from neuro_admin_client import AdminClient
@@ -25,7 +24,7 @@ from platform_api.config import JobsConfig, JobsSchedulerConfig
 from ..utils.asyncio import run_and_log_exceptions
 from ..utils.retry import retries
 from .base import Orchestrator
-from .job import Job, JobRecord, JobStatusItem, JobStatusReason
+from .job import Job, JobPriority, JobRecord, JobStatusItem, JobStatusReason
 from .job_request import (
     JobAlreadyExistsException,
     JobError,
@@ -49,7 +48,7 @@ class SchedulingResult:
     jobs_to_suspend: list[JobRecord] = field(default_factory=list)
 
 
-current_datetime_factory = partial(datetime.now, timezone.utc)
+current_datetime_factory = partial(datetime.now, UTC)
 
 
 class JobsScheduler:
@@ -67,8 +66,8 @@ class JobsScheduler:
         self._current_datetime_factory = current_datetime_factory
 
     async def _get_user_running_jobs_quota(
-        self, username: str, cluster: str, org_name: Optional[str]
-    ) -> Optional[int]:
+        self, username: str, cluster: str, org_name: str | None
+    ) -> int | None:
         try:
             base_name = username.split("/", 1)[0]  # SA same quota as user
             cluster_user = await self._admin_client.get_cluster_user(
@@ -83,8 +82,8 @@ class JobsScheduler:
             return cluster_user.quota.total_running_jobs
 
     async def _get_org_running_jobs_quota(
-        self, cluster: str, org_name: Optional[str]
-    ) -> Optional[int]:
+        self, cluster: str, org_name: str | None
+    ) -> int | None:
         if org_name is None:
             return None
         try:
@@ -108,16 +107,16 @@ class JobsScheduler:
         jobs_to_update: list[JobRecord] = []
 
         # Grouping by (username, cluster_name, org_name):
-        grouped_jobs: dict[
-            tuple[str, str, Optional[str]], list[JobRecord]
-        ] = defaultdict(list)
+        grouped_jobs: dict[tuple[str, str, str | None], list[JobRecord]] = defaultdict(
+            list
+        )
         for record in unfinished:
             grouped_jobs[(record.owner, record.cluster_name, record.org_name)].append(
                 record
             )
 
         def _filter_our_for_quota(
-            quota: Optional[int], jobs: list[JobRecord]
+            quota: int | None, jobs: list[JobRecord]
         ) -> list[JobRecord]:
             if quota is not None:
                 materialized_jobs = [job for job in jobs if job.materialized]
@@ -130,8 +129,7 @@ class JobsScheduler:
                     )
                     result += not_materialized[:free_places]
                 return result
-            else:
-                return jobs
+            return jobs
 
         # Filter jobs by user quota
         for (username, cluster, org_name), jobs in grouped_jobs.items():
@@ -139,9 +137,9 @@ class JobsScheduler:
             jobs_to_update.extend(_filter_our_for_quota(quota, jobs))
 
         # Grouping by (cluster_name, org_name):
-        grouped_by_org_jobs: dict[
-            tuple[str, Optional[str]], list[JobRecord]
-        ] = defaultdict(list)
+        grouped_by_org_jobs: dict[tuple[str, str | None], list[JobRecord]] = (
+            defaultdict(list)
+        )
         for record in jobs_to_update:
             grouped_by_org_jobs[(record.cluster_name, record.org_name)].append(record)
         jobs_to_update = []
@@ -153,7 +151,7 @@ class JobsScheduler:
 
         return jobs_to_update
 
-    async def _get_cluster_config(self) -> Optional[ClusterConfig]:
+    async def _get_cluster_config(self) -> ClusterConfig | None:
         try:
             async with self._cluster_holder.get() as cluster:
                 return cluster.config
@@ -164,7 +162,7 @@ class JobsScheduler:
         self,
         *,
         job: JobRecord,
-        cluster_config: Optional[ClusterConfig],
+        cluster_config: ClusterConfig | None,
         current_time: datetime,
     ) -> bool:
         if (
@@ -199,6 +197,7 @@ class JobsScheduler:
                 continue
             jobs_to_start.append(job)
 
+        max_job_to_start_priority = JobPriority.LOW
         if jobs_to_start:
             max_job_to_start_priority = max(job.priority for job in jobs_to_start)
 
@@ -256,22 +255,24 @@ class JobsScheduler:
 
 
 class JobsPollerApi(abc.ABC):
+    @abc.abstractmethod
     async def get_unfinished_jobs(self) -> list[JobRecord]:
         raise NotImplementedError
 
+    @abc.abstractmethod
     async def get_jobs_for_deletion(self, *, delay: timedelta) -> list[JobRecord]:
         raise NotImplementedError
 
+    @abc.abstractmethod
     async def push_status(self, job_id: str, status: JobStatusItem) -> None:
         raise NotImplementedError
 
+    @abc.abstractmethod
     async def set_materialized(self, job_id: str, materialized: bool) -> None:
         raise NotImplementedError
 
 
-async def _revoke_pass_config(
-    auth_client: AuthClient, job: Union[JobRecord, Job]
-) -> None:
+async def _revoke_pass_config(auth_client: AuthClient, job: JobRecord | Job) -> None:
     if job.pass_config:
         token_uri = f"token://{job.cluster_name}/job/{job.id}"
         try:
@@ -360,7 +361,7 @@ class JobsPollerService:
             )
         )
 
-    def _make_job(self, record: JobRecord, cluster: Optional[Cluster] = None) -> Job:
+    def _make_job(self, record: JobRecord, cluster: Cluster | None = None) -> Job:
         if cluster is not None:
             orchestrator_config = cluster.config.orchestrator
         else:
@@ -580,7 +581,7 @@ class JobsPollerService:
                 status_item = job.status_history.current
                 job.materialized = True
             except JobAlreadyExistsException:
-                logger.info(f"Job '{job.id}' already exists.")
+                logger.info("Job '%s' already exists.", job.id)
                 status_item = job.status_history.current
                 job.materialized = True
             except JobError as exc:
@@ -639,7 +640,7 @@ class JobsPollerService:
             # the job may have been changed and a retry is needed.
             pass
 
-    async def _revoke_pass_config(self, job: Union[JobRecord, Job]) -> None:
+    async def _revoke_pass_config(self, job: JobRecord | Job) -> None:
         await _revoke_pass_config(self._auth_client, job)
 
     async def _delete_cluster_job(self, record: JobRecord) -> None:

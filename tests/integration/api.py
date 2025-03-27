@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 from collections.abc import AsyncIterator, Callable
-from typing import Any, NamedTuple, Optional
+from typing import Any, NamedTuple
 
 import aiohttp
 import aiohttp.web
@@ -96,7 +96,6 @@ async def api(
             scheduler=config.scheduler,
             config_url=config.config_url,
             admin_url=config.admin_url,
-            sentry=config.sentry,
             registry_config=registry_config,
             storage_configs=[storage_config_host],
             kube_config=kube_config,
@@ -135,7 +134,6 @@ async def api_with_oauth(
             scheduler=config_with_oauth.scheduler,
             config_url=config_with_oauth.config_url,
             admin_url=config_with_oauth.admin_url,
-            sentry=config_with_oauth.sentry,
             registry_config=registry_config,
             storage_configs=[storage_config_host],
             kube_config=kube_config,
@@ -178,7 +176,7 @@ class JobsClient:
             assert result["status"] == "pending"
             return result
 
-    async def get_all_jobs(self, params: Optional[Any] = None) -> list[dict[str, Any]]:
+    async def get_all_jobs(self, params: Any | None = None) -> list[dict[str, Any]]:
         url = self._api_config.jobs_base_url
         headers = self._headers.copy()
         headers["Accept"] = "application/x-ndjson"
@@ -196,19 +194,18 @@ class JobsClient:
     async def get_job_by_id(
         self,
         job_id: str,
-        headers: Optional[dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         url = self._api_config.generate_job_url(job_id)
         async with self._client.get(url, headers=headers or self._headers) as response:
             response_text = await response.text()
             assert response.status == HTTPOk.status_code, response_text
-            result = await response.json()
-        return result
+            return await response.json()
 
     async def get_job_materialized_by_id(
         self,
         job_id: str,
-        headers: Optional[dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
     ) -> bool:
         url = (
             self._api_config.generate_job_url(job_id)
@@ -226,7 +223,7 @@ class JobsClient:
         interval_s: float = 0.5,
         max_time: float = 300,
         unreachable_optimization: bool = True,
-        headers: Optional[dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         # A little optimization with unreachable statuses
         unreachable_statuses_map: dict[str, list[str]] = {
@@ -304,7 +301,7 @@ class JobsClient:
         self,
         job_id: str,
         assert_success: bool = True,
-        headers: Optional[dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         url = self._api_config.generate_job_url(job_id)
         async with self._client.delete(
@@ -319,7 +316,7 @@ class JobsClient:
         self,
         job_id: str,
         assert_success: bool = True,
-        headers: Optional[dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         url = self._api_config.generate_job_url(job_id) + "/drop"
         async with self._client.post(url, headers=headers or self._headers) as response:
@@ -331,9 +328,9 @@ class JobsClient:
     async def drop_progress(
         self,
         job_id: str,
-        logs_removed: Optional[bool] = None,
+        logs_removed: bool | None = None,
         assert_success: bool = True,
-        headers: Optional[dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         url = self._api_config.generate_job_url(job_id) + "/drop_progress"
         payload = {}
@@ -413,7 +410,7 @@ async def infinite_job(
 
 @pytest.fixture
 def job_request_factory() -> Callable[[], dict[str, Any]]:
-    def _factory(cluster_name: Optional[str] = None) -> dict[str, Any]:
+    def _factory(cluster_name: str | None = None) -> dict[str, Any]:
         # Note: Optional fields (as "name") should not have a value here
         request = {
             "container": {
@@ -433,6 +430,6 @@ def job_request_factory() -> Callable[[], dict[str, Any]]:
 
 @pytest.fixture
 async def job_submit(
-    job_request_factory: Callable[[], dict[str, Any]]
+    job_request_factory: Callable[[], dict[str, Any]],
 ) -> dict[str, Any]:
     return job_request_factory()
