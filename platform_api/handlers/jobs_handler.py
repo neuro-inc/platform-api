@@ -462,9 +462,7 @@ def convert_disk_volume_to_json(volume: DiskContainerVolume) -> dict[str, Any]:
 
 
 def convert_job_to_job_response(job: Job) -> dict[str, Any]:
-    assert job.cluster_name, (
-        "empty cluster name must be already replaced with `default`"
-    )
+    assert job.cluster_name
     history = job.status_history
     current_status = history.current
     response_payload: dict[str, Any] = {

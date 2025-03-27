@@ -4634,11 +4634,9 @@ class TestJobs:
             url = api.jobs_base_url
             async with client.post(
                 url, headers=regular_user.headers, json=job_submit
-            ) as response:
-                assert response.status == HTTPAccepted.status_code, (
-                    await response.text()
-                )
-                result = await response.json()
+            ) as resp:
+                assert resp.status == HTTPAccepted.status_code, await resp.text()
+                result = await resp.json()
                 assert result["status"] in ["pending"]
                 job_id = result["id"]
                 await jobs_client.long_polling_by_job_id(
@@ -4952,15 +4950,13 @@ class TestJobs:
         url = api.generate_job_url(job_id) + "/status"
         headers = compute_user.headers
         payload = {"status": "failed"}
-        async with client.put(url, headers=headers, json=payload) as response:
-            if response.status == HTTPConflict.status_code:
-                result = await response.json()
+        async with client.put(url, headers=headers, json=payload) as resp:
+            if resp.status == HTTPConflict.status_code:
+                result = await resp.json()
                 assert result["error"] == f"Job {{id={job_id}}} has changed"
                 ok = False
             else:
-                assert response.status == HTTPNoContent.status_code, (
-                    await response.text()
-                )
+                assert resp.status == HTTPNoContent.status_code, await resp.text()
                 ok = True
 
         if ok:
@@ -4991,15 +4987,13 @@ class TestJobs:
             "description": "test_set_job_status",
             "exit_code": 42,
         }
-        async with client.put(url, headers=headers, json=payload) as response:
-            if response.status == HTTPConflict.status_code:
-                result = await response.json()
+        async with client.put(url, headers=headers, json=payload) as resp:
+            if resp.status == HTTPConflict.status_code:
+                result = await resp.json()
                 assert result["error"] == f"Job {{id={job_id}}} has changed"
                 ok = False
             else:
-                assert response.status == HTTPNoContent.status_code, (
-                    await response.text()
-                )
+                assert resp.status == HTTPNoContent.status_code, await resp.text()
                 ok = True
 
         if ok:
