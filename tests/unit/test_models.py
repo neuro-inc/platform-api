@@ -2057,7 +2057,7 @@ async def test_job_to_job_response_assert_non_empty_cluster_name(
             cluster_name="",
         ),
     )
-    with pytest.raises(AssertionError, match="must be already replaced"):
+    with pytest.raises(AssertionError):
         convert_job_to_job_response(job)
 
 

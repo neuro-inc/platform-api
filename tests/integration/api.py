@@ -304,13 +304,9 @@ class JobsClient:
         headers: dict[str, str] | None = None,
     ) -> None:
         url = self._api_config.generate_job_url(job_id)
-        async with self._client.delete(
-            url, headers=headers or self._headers
-        ) as response:
+        async with self._client.delete(url, headers=headers or self._headers) as resp:
             if assert_success:
-                assert (
-                    response.status == HTTPNoContent.status_code
-                ), await response.text()
+                assert resp.status == HTTPNoContent.status_code, await resp.text()
 
     async def drop_job(
         self,
@@ -319,11 +315,9 @@ class JobsClient:
         headers: dict[str, str] | None = None,
     ) -> None:
         url = self._api_config.generate_job_url(job_id) + "/drop"
-        async with self._client.post(url, headers=headers or self._headers) as response:
+        async with self._client.post(url, headers=headers or self._headers) as resp:
             if assert_success:
-                assert (
-                    response.status == HTTPNoContent.status_code
-                ), await response.text()
+                assert resp.status == HTTPNoContent.status_code, await resp.text()
 
     async def drop_progress(
         self,
@@ -338,11 +332,9 @@ class JobsClient:
             payload["logs_removed"] = logs_removed
         async with self._client.post(
             url, json=payload, headers=headers or self._headers
-        ) as response:
+        ) as resp:
             if assert_success:
-                assert (
-                    response.status == HTTPNoContent.status_code
-                ), await response.text()
+                assert resp.status == HTTPNoContent.status_code, await resp.text()
 
 
 @pytest.fixture

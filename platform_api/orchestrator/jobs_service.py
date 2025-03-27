@@ -191,7 +191,7 @@ class JobsService:
     ) -> JobRequest:
         if NEURO_PASSED_CONFIG in job_request.container.env:
             raise JobsServiceException(
-                f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' " "already specified"
+                f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' already specified"
             )
         token = await self._make_pass_config_token(
             user.name, cluster_name, job_request.job_id

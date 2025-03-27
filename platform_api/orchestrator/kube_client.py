@@ -1975,8 +1975,7 @@ class KubeClient:
     @property
     def _networking_v1_namespace_url(self) -> str:
         return (
-            f"{self._base_url}/apis/networking.k8s.io/v1"
-            f"/namespaces/{self._namespace}"
+            f"{self._base_url}/apis/networking.k8s.io/v1/namespaces/{self._namespace}"
         )
 
     @property

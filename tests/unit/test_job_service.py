@@ -509,8 +509,7 @@ class TestJobsService:
         mock_job_request.container.env[NEURO_PASSED_CONFIG] = "anything"
         with pytest.raises(
             JobsServiceException,
-            match=f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' "
-            "already specified",
+            match=f"Cannot pass config: ENV '{NEURO_PASSED_CONFIG}' already specified",
         ):
             await jobs_service.create_job(
                 job_request=mock_job_request,
