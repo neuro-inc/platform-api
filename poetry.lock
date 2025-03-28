@@ -1381,14 +1381,14 @@ sentry-sdk = ">=2.19.2,<2.20"
 
 [[package]]
 name = "neuro-notifications-client"
-version = "22.6.2"
+version = "25.3.0"
 description = "Notifications client for Neu.ro platform services"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "neuro-notifications-client-22.6.2.tar.gz", hash = "sha256:258e1dfe49a52b797fe8120e4c7d7b376654fd53efd2d43ffb7e9757fd3b9b34"},
-    {file = "neuro_notifications_client-22.6.2-py3-none-any.whl", hash = "sha256:898d6dd23475d51e4f121901eb897dee136128a08a79b7bb5aaaf72e325b22da"},
+    {file = "neuro_notifications_client-25.3.0-py3-none-any.whl", hash = "sha256:3e0a9b0d7bffad14bafb4e0c5fd0a53bd25a2bb82ab94770866f7089bc808bdb"},
+    {file = "neuro_notifications_client-25.3.0.tar.gz", hash = "sha256:3f78e0c2ae8ed17643be988aca9ef824688d73a534d034418f74a0be3d7168f7"},
 ]
 
 [package.dependencies]
@@ -2412,4 +2412,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<4.0"
-content-hash = "9e29ae60a7440938e286429cdfe79ead7c7310efea1f8df28bfab5a440ccc36f"
+content-hash = "7feec0aca2457a374e4e9777d3fcf7213136740f30fa280c6c52814280c3576f"
