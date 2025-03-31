@@ -619,13 +619,6 @@ def jobs_poller_service(
     )
 
 
-@pytest.fixture(scope="session")
-def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
-    loop = asyncio.get_event_loop()
-    yield loop
-    loop.close()
-
-
 UserFactory = Callable[
     [str, list[tuple[str, Balance, Quota] | tuple[str, str, Balance, Quota]]],
     Awaitable[AuthUser],
