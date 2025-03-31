@@ -55,6 +55,7 @@ pytest-timeout="2.3.1"
 pytest-aiohttp="1.1.0"
 requests="2.32.3"
 ruff = "0.8.5"
+pytest-retry = "^1.7.0"
 
 [tool.ruff]
 target-version = "py313"
@@ -110,6 +111,8 @@ keep-runtime-typing = true
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
 asyncio_mode = "auto"
+retries = 3
+retry_delay = 15
 testpaths = "tests"
 filterwarnings = """
     error
