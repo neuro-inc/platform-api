@@ -46,12 +46,12 @@ optional = true
 
 [tool.poetry.group.dev.dependencies]
 mypy= "1.15.0"
-pre-commit="3.4.0"
+pre-commit="4.2.0"
 aiodocker="0.21.0"
 pytest="8.3.5"
 pytest-asyncio="0.25.3"
 pytest-cov="6.0.0"
-pytest-timeout="2.2.0"
+pytest-timeout="2.3.1"
 pytest-aiohttp="1.1.0"
 requests="2.32.3"
 ruff = "0.8.5"
