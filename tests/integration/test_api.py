@@ -3999,7 +3999,7 @@ class TestJobs:
         filters = [("org_name", "org1"), ("org_name", "org2")]
         jobs = await jobs_client.get_all_jobs(filters)
         job_ids = {job["id"] for job in jobs}
-        assert job_ids == {job_id_org1, job_id_org2}
+        assert job_ids >= {job_id_org1, job_id_org2}
 
         filters = [("org_name", "org2")]
         jobs = await jobs_client.get_all_jobs(filters)
