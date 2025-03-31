@@ -58,9 +58,6 @@ jobs:
       run: make setup
     - name: Run unit tests
       run: make test_unit
-    - name: Re-run unit tests the failing tests with maximum verbosity
-      if: failure()
-      run: make test_unit_rerun_failures
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
@@ -117,9 +114,6 @@ jobs:
       run: make docker_pull_test_images
     - name: Run integration tests
       run: make test_integration
-    - name: Re-run integration tests the failing tests with maximum verbosity
-      if: failure()
-      run: make test_integration_rerun_failures
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
