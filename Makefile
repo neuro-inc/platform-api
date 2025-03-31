@@ -35,11 +35,19 @@ endif
 
 .PHONY: test_unit
 test_unit:
-	poetry run pytest -vv --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-unit.xml tests/unit
+	poetry run pytest --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-unit.xml tests/unit
+
+.PHONY: test_unit_rerun_failures
+test_unit_rerun_failures:
+	poetry run pytest -vvvs --lf --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-unit.xml tests/unit
 
 .PHONY: test_integration
 test_integration:
-	poetry run pytest -vv --maxfail=3 --durations=20 --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-integration.xml tests/integration
+	poetry run pytest --maxfail=3 --durations=20 --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-integration.xml tests/integration
+
+.PHONY: test_integration_rerun_failures
+test_integration_rerun_failures:
+	poetry run pytest -vvvs --lf --maxfail=3 --durations=20 --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-integration.xml tests/integration
 
 .PHONY: docker_build
 docker_build: .python-version dist
