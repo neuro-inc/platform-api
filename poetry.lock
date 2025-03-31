@@ -152,18 +152,18 @@ speedups = ["Brotli ; platform_python_implementation == \"CPython\"", "aiodns (>
 
 [[package]]
 name = "aiohttp-cors"
-version = "0.7.0"
+version = "0.8.0"
 description = "CORS support for aiohttp"
 optional = false
 python-versions = "*"
 groups = ["main"]
 files = [
-    {file = "aiohttp-cors-0.7.0.tar.gz", hash = "sha256:4d39c6d7100fd9764ed1caf8cebf0eb01bf5e3f24e2e073fda6234bc48b19f5d"},
-    {file = "aiohttp_cors-0.7.0-py3-none-any.whl", hash = "sha256:0451ba59fdf6909d0e2cd21e4c0a43752bc0703d33fc78ae94d9d9321710193e"},
+    {file = "aiohttp_cors-0.8.0-py3-none-any.whl", hash = "sha256:b656eeadb84c8fc6771b07460419b100f20dee1d6bf403505b5bd347894c7941"},
+    {file = "aiohttp_cors-0.8.0.tar.gz", hash = "sha256:ec70f38432c938e39d240ff38a7d789a5aa0a18087882c12d6cc141eef1144f6"},
 ]
 
 [package.dependencies]
-aiohttp = ">=1.1"
+aiohttp = ">=3.9"
 
 [[package]]
 name = "aiohttp-security"
@@ -2430,4 +2430,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<4.0"
-content-hash = "997116b3043c9524e59f78dd4108b1731ec39183c300fa2a37237d2b5f21f279"
+content-hash = "7b29268d1f15046a8c06988bf2b77e303b2cae2d26c61d13170b3c6fd4d4a622"
