@@ -1,6 +1,5 @@
-import asyncio
 from collections import defaultdict
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
 from functools import partial
