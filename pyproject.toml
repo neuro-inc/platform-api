@@ -50,7 +50,7 @@ mypy= "1.15.0"
 pre-commit="4.2.0"
 aiodocker="0.21.0"
 pytest="8.3.5"
-pytest-asyncio="0.25.3"
+pytest-asyncio="0.26.0"
 pytest-cov="6.0.0"
 pytest-timeout="2.3.1"
 pytest-aiohttp="1.1.0"
@@ -111,6 +111,7 @@ keep-runtime-typing = true
 
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
+asyncio_default_test_loop_scope = "session"
 asyncio_mode = "auto"
 retries = 3
 retry_delay = 15
