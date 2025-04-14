@@ -1,7 +1,7 @@
 """change materialized index
 
-Revision ID: 4d851c8afb11
-Revises: bff7b93a59c2
+Revision ID: 0004
+Revises: 0003
 Create Date: 2020-11-27 16:33:40.235283
 
 """
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "4d851c8afb11"
-down_revision = "bff7b93a59c2"
+revision = "0004"
+down_revision = "0003"
 branch_labels = None
 depends_on = None
 

@@ -2185,7 +2185,7 @@ class TestJobsServiceCluster:
         mock_api_base: URL,
         user_factory: UserFactory,
         test_cluster: str,
-        org_factory,
+        org_factory: OrgFactory,
         test_project: str,
     ) -> None:
         jobs_service = JobsService(

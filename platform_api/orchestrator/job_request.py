@@ -9,6 +9,7 @@ from typing import Any
 
 from yarl import URL
 
+from platform_api.config import NO_ORG_NORMALIZED
 from platform_api.resource import Preset, ResourcePoolType
 
 
@@ -81,6 +82,26 @@ class Disk:
             URL.build(scheme="disk", host=self.cluster_name) / self.path / self.disk_id
         )
 
+    def to_permission_uri(self) -> str:
+        """
+        Permission URI must not include a `no-org`.
+        This method can be removed whenever we'll get rid of `no-org` concept.
+        """
+        joined_path = self.path
+        if "/" in self.path:
+            path = []
+            org_name, project_name, *parts = self.path.split("/")
+            if org_name == NO_ORG_NORMALIZED:
+                path.extend([project_name, *parts])
+            else:
+                path.extend([org_name, project_name, *parts])
+            joined_path = "/".join(path)
+        return str(
+            URL.build(scheme="disk", host=self.cluster_name)
+            / joined_path
+            / self.disk_id
+        )
+
     @classmethod
     def create(cls, disk_uri: str | URL) -> "Disk":
         # Note: format of `disk_uri` is enforced by validators
@@ -133,7 +154,8 @@ class Secret:
 
     @property
     def k8s_secret_name(self) -> str:
-        return f"project--{self.path.replace('/', '--')}--secrets"
+        path = self.path_with_org(self.path)
+        return f"project--{path.replace('/', '--')}--secrets"
 
     def to_uri(self) -> URL:
         return (
@@ -150,6 +172,12 @@ class Secret:
         assert cluster_name, uri  # for lint
         path, _, secret_key = uri.path.lstrip("/").rpartition("/")
         return cls(secret_key=secret_key, cluster_name=cluster_name, path=path)
+
+    @staticmethod
+    def path_with_org(path: str) -> str:
+        if "/" not in path:
+            path = f"{NO_ORG_NORMALIZED}/{path}"
+        return path
 
 
 @dataclass(frozen=True)
@@ -416,13 +444,15 @@ class Container:
     def get_path_to_secrets(self) -> dict[str, list[Secret]]:
         path_to_secrets: dict[str, list[Secret]] = defaultdict(list)
         for secret in self.get_secrets():
-            path_to_secrets[secret.path].append(secret)
+            path = secret.path_with_org(secret.path)
+            path_to_secrets[path].append(secret)
         return path_to_secrets
 
     def get_path_to_secret_volumes(self) -> dict[str, list[SecretContainerVolume]]:
         user_volumes: dict[str, list[SecretContainerVolume]] = defaultdict(list)
         for volume in self.secret_volumes:
-            user_volumes[volume.secret.path].append(volume)
+            path = volume.secret.path_with_org(volume.secret.path)
+            user_volumes[path].append(volume)
         return user_volumes
 
     def get_secret_uris(self) -> Sequence[URL]:
