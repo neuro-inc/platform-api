@@ -101,7 +101,7 @@ async def disk_server_url(
             "NP_DISK_API_K8S_AUTH_TYPE=none",
             # From `tests/k8s/storageclass.yml`:
             "NP_DISK_API_K8S_STORAGE_CLASS=test-storage-class",
-            "NP_DISK_API_STORAGE_LIMIT_PER_USER=104857600",  # 100mb
+            "NP_DISK_API_STORAGE_LIMIT_PER_PROJECT=104857600",  # 100mb
             f"NP_CLUSTER_NAME={test_cluster_name}",
         ],
     }
@@ -166,9 +166,18 @@ class DiskAPIClient:
             txt = await resp.text()
             assert txt == "Pong"
 
-    async def create_disk(self, storage: int, org_name: str | None = None) -> Disk:
+    async def create_disk(
+        self, storage: int, project_name: str, org_name: str | None = None
+    ) -> Disk:
         url = self._base_url / "disk"
-        payload = {"storage": storage, "org_name": org_name}
+        payload = {
+            "storage": storage,
+            "project_name": project_name,
+            # "org_name": org_name
+        }
+        if org_name:
+            payload["org_name"] = org_name
+
         async with self._client.post(url, json=payload) as resp:
             assert resp.status == 201, await resp.text()
             data = await resp.json()

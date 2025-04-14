@@ -16,6 +16,7 @@ import aiohttp
 import aiohttp.pytest_plugin
 import aiohttp.web
 import pytest
+from apolo_kube_client.errors import ResourceExists
 from yarl import URL
 
 from platform_api.cluster_config import (
@@ -45,7 +46,6 @@ from platform_api.config import (
 from platform_api.config_client import ConfigClient
 from platform_api.orchestrator.job_request import JobNotFoundException
 from platform_api.orchestrator.kube_client import (
-    AlreadyExistsException,
     KubeClient,
     NodeTaint,
     PodDescriptor,
@@ -368,7 +368,7 @@ def kube_job_nodes_factory(
                 await kube_client.create_node(
                     pool_type.name, capacity=capacity, labels=labels, taints=taints
                 )
-            except AlreadyExistsException:
+            except ResourceExists:
                 # there can be multiple kube_orchestrator created in tests (for tests
                 # and for tests cleanup)
                 pass
@@ -416,8 +416,8 @@ class MyKubeClient(KubeClient):
                 "storageClassName": "test-storage-class",
             },
         }
-        payload = await self._request(method="POST", url=url, json=primitive)
-        self._check_status_payload(payload)
+        payload = await self.post(url=url, json=primitive)
+        self._raise_for_status(payload)
         self._created_pvcs.append(pvc_name)
 
     async def delete_pvc(
@@ -425,8 +425,8 @@ class MyKubeClient(KubeClient):
         pvc_name: str,
     ) -> None:
         url = self._generate_pvc_url(pvc_name)
-        payload = await self._request(method="DELETE", url=url)
-        self._check_status_payload(payload)
+        payload = await self.delete(url=url)
+        self._raise_for_status(payload)
 
     async def update_or_create_secret(
         self, secret_name: str, namespace: str, data: dict[str, str] | None = None
@@ -440,11 +440,12 @@ class MyKubeClient(KubeClient):
             "data": data,
             "type": "Opaque",
         }
-        payload = await self._request(method="POST", url=url, json=primitive)
-        self._check_status_payload(payload)
+        payload = await self.post(url=url, json=primitive)
+        self._raise_for_status(payload)
 
     async def wait_pod_scheduled(
         self,
+        namespace: str,
         pod_name: str,
         node_name: str = "",
         timeout_s: float = 5.0,
@@ -454,7 +455,7 @@ class MyKubeClient(KubeClient):
         try:
             async with timeout(timeout_s):
                 while True:
-                    raw_pod = await self.get_raw_pod(pod_name)
+                    raw_pod = await self.get_raw_pod(namespace, pod_name)
                     if node_name:
                         pod_at_node = raw_pod["spec"].get("nodeName")
                         if pod_at_node == node_name:
@@ -503,13 +504,17 @@ class MyKubeClient(KubeClient):
             pytest.fail("Pod unscheduled")
 
     async def wait_pod_non_existent(
-        self, pod_name: str, timeout_s: float = 5.0, interval_s: float = 1.0
+        self,
+        namespace: str,
+        pod_name: str,
+        timeout_s: float = 5.0,
+        interval_s: float = 1.0,
     ) -> None:
         try:
             async with timeout(timeout_s):
                 while True:
                     try:
-                        await self.get_pod(pod_name)
+                        await self.get_pod(namespace, pod_name)
                     except JobNotFoundException:
                         return
                     await asyncio.sleep(interval_s)
@@ -517,7 +522,7 @@ class MyKubeClient(KubeClient):
             pytest.fail("Pod still exists")
 
     async def create_triggered_scaleup_event(self, pod_id: str) -> None:
-        url = f"{self._namespace_url}/events"
+        url = f"{self.namespace_url}/events"
         now = datetime.now(timezone.utc)  # noqa: UP017
         now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         data = {
@@ -553,10 +558,10 @@ class MyKubeClient(KubeClient):
             "type": "Normal",
         }
 
-        await self._request(method="POST", url=url, json=data)
+        await self.post(url=url, json=data)
 
     async def create_failed_attach_volume_event(self, pod_id: str) -> None:
-        url = f"{self._namespace_url}/events"
+        url = f"{self.namespace_url}/events"
         now = datetime.now(timezone.utc)  # noqa: UP017
         now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         data = {
@@ -592,7 +597,7 @@ class MyKubeClient(KubeClient):
             "type": "Warning",
         }
 
-        await self._request(method="POST", url=url, json=data)
+        await self.post(url=url, json=data)
 
     async def add_node_labels(self, node_name: str, labels: dict[str, Any]) -> None:
         node = await self.get_node(node_name)
@@ -600,8 +605,7 @@ class MyKubeClient(KubeClient):
         new_labels = node.labels.copy()
         new_labels.update(labels)
 
-        await self._request(
-            method="PATCH",
+        await self.patch(
             url=self._generate_node_url(node_name),
             headers={"content-type": "application/merge-patch+json"},
             json={"metadata": {"labels": new_labels}},
@@ -616,8 +620,7 @@ class MyKubeClient(KubeClient):
             if label not in label_keys
         }
 
-        await self._request(
-            method="PATCH",
+        await self.patch(
             url=self._generate_node_url(node_name),
             headers={"content-type": "application/merge-patch+json"},
             json={"metadata": {"labels": new_labels}},
@@ -826,7 +829,7 @@ async def delete_pod_later(
 
     for pod in pods:
         try:
-            await kube_client.delete_pod(kube_client.default_namespace, pod.name)
+            await kube_client.delete_pod(kube_client.namespace, pod.name)
         except Exception:
             pass
 
@@ -862,10 +865,12 @@ async def pod_factory(
             command=command or [],
             resources=Resources(cpu=cpu, memory=memory),
         )
-        pod = await kube_client.create_pod(pod)
+        pod = await kube_client.create_pod(kube_client.namespace, pod)
         await delete_pod_later(pod)
         if wait:
-            await kube_client.wait_pod_is_running(pod.name, timeout_s=wait_timeout_s)
+            await kube_client.wait_pod_is_running(
+                kube_client.namespace, pod.name, timeout_s=wait_timeout_s
+            )
         return pod
 
     return _create
@@ -994,6 +999,8 @@ async def create_local_app_server(
         site = aiohttp.web.TCPSite(runner, api_address.host, api_address.port)
         await site.start()
         yield api_address
+    except Exception:
+        pass
     finally:
         await runner.shutdown()
         await runner.cleanup()

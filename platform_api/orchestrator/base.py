@@ -38,5 +38,7 @@ class Orchestrator(ABC):
         pass
 
     @abstractmethod
-    async def get_missing_disks(self, namespace: str, disks: list[Disk]) -> list[Disk]:
+    async def get_missing_disks(
+        self, namespace: str, org_name: str, project_name: str, disks: list[Disk]
+    ) -> list[Disk]:
         pass

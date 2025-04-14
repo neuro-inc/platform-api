@@ -9,6 +9,12 @@ from pathlib import PurePath
 from typing import Any
 
 import aiohttp
+from apolo_kube_client.apolo import create_namespace
+from apolo_kube_client.errors import (
+    KubeClientException,
+    ResourceExists,
+    ResourceNotFound,
+)
 
 from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import NO_ORG, RegistryConfig, StorageConfig
@@ -26,8 +32,6 @@ from .job_request import (
     JobUnschedulableException,
 )
 from .kube_client import (
-    AlreadyExistsException,
-    ConflictException,
     DockerRegistrySecret,
     HostVolume,
     IngressRule,
@@ -38,7 +42,6 @@ from .kube_client import (
     NodeAffinity,
     NodePreferredSchedulingTerm,
     NodeWatcher,
-    NotFoundException,
     PathVolume,
     PodAffinity,
     PodAffinityTerm,
@@ -51,7 +54,6 @@ from .kube_client import (
     Resources,
     SecretVolume,
     Service,
-    StatusException,
     Toleration,
     VolumeMount,
 )
@@ -286,16 +288,6 @@ class KubeOrchestrator(Orchestrator):
     def _get_project_resource_name(self, job: Job) -> str:
         return (self._project_prefix + job.org_project_hash.hex()).lower()
 
-    async def _create_namespace(self, job: Job) -> None:
-        labels = self._get_org_project_labels(job)
-        try:
-            await self._client.create_namespace(
-                name=job.namespace,
-                labels=labels,
-            )
-        except (AlreadyExistsException, ConflictException):
-            pass
-
     async def _create_docker_secret(self, job: Job) -> DockerRegistrySecret:
         secret = DockerRegistrySecret(
             name=self._get_docker_secret_name(job),
@@ -320,7 +312,7 @@ class KubeOrchestrator(Orchestrator):
                 org_project_labels=org_project_labels,
             )
             logger.info("Created default network policy for user '%s'", job.owner)
-        except AlreadyExistsException:
+        except ResourceExists:
             logger.info(
                 "Default network policy for user '%s' already exists.", job.owner
             )
@@ -343,7 +335,7 @@ class KubeOrchestrator(Orchestrator):
             logger.info(
                 "Created default network policy for org=%s project=%s", org, project
             )
-        except AlreadyExistsException:
+        except ResourceExists:
             logger.info(
                 "Default network policy for project org=%s project=%s already exists.",
                 org,
@@ -378,7 +370,7 @@ class KubeOrchestrator(Orchestrator):
                 job.namespace,
                 name,
             )
-        except NotFoundException:
+        except ResourceNotFound:
             logger.info("Network policy %s not found", name)
         except Exception as e:
             logger.error("Failed to remove network policy %s: %s", name, e)
@@ -579,7 +571,9 @@ class KubeOrchestrator(Orchestrator):
     def _get_pod_restart_policy(self, job: Job) -> PodRestartPolicy:
         return self._restart_policy_map[job.restart_policy]
 
-    async def get_missing_disks(self, namespace: str, disks: list[Disk]) -> list[Disk]:
+    async def get_missing_disks(
+        self, namespace: str, org_name: str, project_name: str, disks: list[Disk]
+    ) -> list[Disk]:
         assert disks, "no disks"
         missing = []
         for disk in disks:
@@ -588,22 +582,15 @@ class KubeOrchestrator(Orchestrator):
                     disk.disk_id,
                     namespace,
                 )
-                pvc_user: str = pvc["metadata"]["labels"][
-                    "platform.neuromation.io/user"
-                ]
                 pvc_project: str = pvc["metadata"]["labels"].get(
                     "platform.neuromation.io/project"
                 )
                 pvc_org: str | None = pvc["metadata"]["labels"].get(
                     "platform.neuromation.io/disk-api-org-name"
                 )
-                pvc_path = pvc_project or pvc_user
-                pvc_path = pvc_path.replace("--", "/")
-                if pvc_org:
-                    pvc_path = f"{pvc_org}/{pvc_path}"
-                if disk.path != pvc_path:
+                if pvc_project != project_name and pvc_org != org_name:
                     missing.append(disk)
-            except (StatusException, KeyError):
+            except (KubeClientException, KeyError):
                 missing.append(disk)
         return sorted(missing, key=lambda disk: disk.disk_id)
 
@@ -618,7 +605,7 @@ class KubeOrchestrator(Orchestrator):
             missing = set(secret_names) - set(keys)
             return sorted(missing)
 
-        except StatusException:
+        except KubeClientException:
             return secret_names
 
     def _get_service_name_for_named(self, job: Job) -> str:
@@ -630,7 +617,11 @@ class KubeOrchestrator(Orchestrator):
         """
         tolerate_unreachable_node: used only in tests
         """
-        await self._create_namespace(job)
+        await create_namespace(
+            self._client,
+            org_name=job.org_name or NO_ORG,
+            project_name=job.project_name,
+        )
         await self._create_docker_secret(job)
         await self._create_user_network_policy(job)
         await self._create_project_network_policy(job)
@@ -656,8 +647,11 @@ class KubeOrchestrator(Orchestrator):
             if job.has_http_server_exposed:
                 logger.info("Starting Ingress for %s", job.id)
                 await self._create_ingress(job, service)
-        except AlreadyExistsException as e:
+        except ResourceExists as e:
             raise JobAlreadyExistsException(str(e))
+        except Exception as e:
+            logger.exception("unhandled error")
+            raise e
 
         job.status_history.current = await self._get_job_status(job, pod)
         return job.status
@@ -798,7 +792,7 @@ class KubeOrchestrator(Orchestrator):
         try:
             port = int(job.env.get("EXTERNAL_JOB_RUNNER_PORT", 8080))
             status_url = f"http://{job.internal_hostname}:{port}/api/v1/status"
-            resp = await self._client.request("GET", status_url, raise_for_status=True)
+            resp = await self._client.get(status_url, raise_for_status=True)
             return JobStatusItem.create(
                 JobStatus(resp["status"]),
                 transition_time=now,
@@ -948,7 +942,7 @@ class KubeOrchestrator(Orchestrator):
     async def _create_service(
         self, namespace: str, pod: PodDescriptor, name: str | None = None
     ) -> Service:
-        service = Service.create_headless_for_pod(pod)
+        service = Service.create_headless_for_pod(namespace, pod)
         if name is not None:
             service = service.make_named(name)
         return await self._client.create_service(namespace, service)
@@ -968,7 +962,7 @@ class KubeOrchestrator(Orchestrator):
     ) -> None:
         try:
             await self._client.delete_service(namespace=namespace, name=name, uid=uid)
-        except NotFoundException:
+        except ResourceNotFound:
             if ignore_missing:
                 return
             logger.exception("Failed to remove service %s", name)

@@ -11,6 +11,7 @@ from functools import partial
 from typing import Any
 
 import iso8601
+from apolo_kube_client.apolo import generate_namespace_name
 from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig
@@ -25,7 +26,6 @@ from .job_request import (
     JobRequest,
     JobStatus,
 )
-from .kube_client import generate_namespace_name
 
 JOB_NAME_SEPARATOR = "--"
 
@@ -290,6 +290,7 @@ class JobRecord:
     cluster_name: str
     project_name: str
     org_project_hash: bytes
+    namespace: str
     org_name: str | None = None
     name: str | None = None
     preset_name: str | None = None
@@ -336,9 +337,14 @@ class JobRecord:
             kwargs["owner"] = orphaned_job_owner
         if not kwargs.get("project_name"):
             kwargs["project_name"] = get_base_owner(kwargs["owner"])
+
+        org_name = kwargs.get("org_name")
+        project_name = kwargs["project_name"]
+
         kwargs["org_project_hash"] = cls._create_org_project_hash(
-            kwargs.get("org_name"), kwargs["project_name"]
+            org_name, project_name
         )
+        kwargs["namespace"] = generate_namespace_name(org_name or NO_ORG, project_name)
         return cls(**kwargs)
 
     @classmethod
@@ -486,6 +492,7 @@ class JobRecord:
             "cluster_name": self.cluster_name,
             "project_name": self.project_name,
             "org_project_hash": self.org_project_hash.hex(),
+            "namespace": self.namespace,
             "request": self.request.to_primitive(),
             "status": self.status.value,
             "statuses": statuses,
@@ -552,6 +559,7 @@ class JobRecord:
             org_name=org_name,
             project_name=project_name,
             org_project_hash=org_project_hash,
+            namespace=payload["namespace"],
             scheduler_enabled=payload.get("scheduler_enabled", None)
             or payload.get("is_preemptible", False),
             preemptible_node=payload.get("preemptible_node", None)
@@ -966,8 +974,7 @@ class Job:
 
     @property
     def namespace(self) -> str:
-        org_name = self.org_name or NO_ORG
-        return generate_namespace_name(org_name, self.project_name)
+        return self._record.namespace
 
     def to_primitive(self) -> dict[str, Any]:
         return self._record.to_primitive()

@@ -172,11 +172,13 @@ class MockOrchestrator(Orchestrator):
         self._mock_exit_codes[job_id] = new_exit_code
 
     async def get_missing_secrets(
-        self, user_name: str, secret_names: list[str]
+        self, namespace: str, user_name: str, secret_names: list[str]
     ) -> list[str]:
         return []
 
-    async def get_missing_disks(self, namespace: str, disks: list[Disk]) -> list[Disk]:
+    async def get_missing_disks(
+        self, namespace: str, org_name: str, project_name: str, disks: list[Disk]
+    ) -> list[Disk]:
         return []
 
     def update_preemptible_jobs(self, *jobs: Job | list[Job]) -> None:
