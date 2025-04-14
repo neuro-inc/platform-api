@@ -8,5 +8,5 @@ dependencies:
     version: "1.0.1"
     repository: https://neuro-inc.github.io/helm-charts
   - name: postgres-db-init
-    version: "1.2.15"
+    version: "1.2.18"
     repository: https://neuro-inc.github.io/helm-charts
