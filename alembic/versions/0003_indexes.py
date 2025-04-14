@@ -1,7 +1,7 @@
 """indexes
 
-Revision ID: bff7b93a59c2
-Revises: 81675d81a9c7
+Revision ID: 0003
+Revises: 0002
 Create Date: 2020-10-28 15:52:26.052408
 
 """
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "bff7b93a59c2"
-down_revision = "e62854f697b3"
+revision = "0003"
+down_revision = "0002"
 branch_labels = None
 depends_on = None
 

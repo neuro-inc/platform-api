@@ -1,7 +1,7 @@
 """add retention index
 
-Revision ID: 0ee42d5f1908
-Revises: 1497c0e2f5a2
+Revision ID: 0011
+Revises: 0010
 Create Date: 2021-07-09 16:46:45.289722
 
 """
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "0ee42d5f1908"
-down_revision = "1497c0e2f5a2"
+revision = "0011"
+down_revision = "0010"
 branch_labels = None
 depends_on = None
 

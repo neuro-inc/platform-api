@@ -31,6 +31,7 @@ from yarl import URL
 
 from platform_api.cluster import ClusterConfigRegistry
 from platform_api.config import Config
+from platform_api.orchestrator.job import get_base_owner
 from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
 from tests.conftest import random_str
 from tests.integration.api import ApiConfig, AuthApiConfig, JobsClient
@@ -1470,7 +1471,9 @@ class TestJobs:
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         key, value = "key1", "value1"
-        await regular_secrets_client.create_secret(key, value)
+        await regular_secrets_client.create_secret(
+            key, value, project_name=regular_user.name
+        )
 
         user = regular_user
         secret_env = {
@@ -1496,7 +1499,9 @@ class TestJobs:
         secret_name, secret_value = "key1", "value1"
         secret_path = "/etc/foo/file.txt"
 
-        await regular_secrets_client.create_secret(secret_name, secret_value)
+        await regular_secrets_client.create_secret(
+            secret_name, secret_value, project_name=regular_user.name
+        )
 
         user = regular_user
         secret_uri = f"secret://{user.cluster_name}/{user.name}/{secret_name}"
@@ -1547,7 +1552,9 @@ class TestJobs:
         secret_path = "/etc/foo/file.txt"
 
         async with secrets_client_factory(org_user) as secrets_api:
-            await secrets_api.create_secret(secret_name, secret_value, org_name="org")
+            await secrets_api.create_secret(
+                secret_name, secret_value, project_name=org_user.name, org_name="org"
+            )
 
         user = org_user
         secret_uri = f"secret://{user.cluster_name}/org/{user.name}/{secret_name}"
@@ -1602,7 +1609,12 @@ class TestJobs:
         secret_name, secret_value = "key1", "value1"
 
         async with secrets_client_factory(org_user) as secrets_api:
-            await secrets_api.create_secret(secret_name, secret_value, org_name="org")
+            await secrets_api.create_secret(
+                secret_name,
+                secret_value,
+                project_name=org_user.name,
+                org_name="org",
+            )
 
         secret_env = {
             "ENV_SECRET": f"secret://{org_user.cluster_name}/org/"
@@ -1630,16 +1642,19 @@ class TestJobs:
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
         )
+        project_name = get_base_owner(service_user.name)
         jobs_client = jobs_client_factory(service_user)
 
         secret_name, secret_value = "key1", "value1"
         secret_path = "/etc/foo/file.txt"
 
         async with secrets_client_factory(service_user) as secrets_client:
-            await secrets_client.create_secret(secret_name, secret_value)
+            await secrets_client.create_secret(
+                secret_name, secret_value, project_name=project_name
+            )
 
         secret_uri = (
-            f"secret://{service_user.cluster_name}/{service_user.name}/{secret_name}"
+            f"secret://{service_user.cluster_name}/{project_name}/{secret_name}"
         )
         secret_volumes = [
             {"src_secret_uri": secret_uri, "dst_path": secret_path},
@@ -1684,15 +1699,16 @@ class TestJobs:
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
         )
+        project_name = get_base_owner(service_user.name)
 
         key, value = "key1", "value1"
 
         async with secrets_client_factory(service_user) as secrets_client:
-            await secrets_client.create_secret(key, value)
+            await secrets_client.create_secret(key, value, project_name=project_name)
 
         secret_env = {
             "ENV_SECRET": f"secret://{service_user.cluster_name}/"
-            f"{service_user.name}/{key}",
+            f"{project_name}/{key}",
         }
         job_submit["container"]["secret_env"] = secret_env
 
@@ -1712,7 +1728,10 @@ class TestJobs:
     ) -> None:
         disk_path = "/mnt/disk"
 
-        disk = await regular_disk_api_client.create_disk(storage=1024 * 1024)
+        disk = await regular_disk_api_client.create_disk(
+            storage=1024 * 1024,
+            project_name=regular_user.name,
+        )
 
         disk_volumes = [
             {
@@ -1769,7 +1788,11 @@ class TestJobs:
         disk_path = "/mnt/disk"
 
         async with disk_client_factory(org_user) as disk_api:
-            disk = await disk_api.create_disk(storage=1024 * 1024, org_name="org")
+            disk = await disk_api.create_disk(
+                storage=1024 * 1024,
+                project_name=org_user.name,
+                org_name="org",
+            )
 
         disk_volumes = [
             {
@@ -1825,7 +1848,10 @@ class TestJobs:
         jobs_client = jobs_client_factory(service_user)
         disk_path = "/mnt/disk"
         async with disk_client_factory(service_user) as disk_client:
-            disk = await disk_client.create_disk(storage=1024 * 1024)
+            disk = await disk_client.create_disk(
+                storage=1024 * 1024,
+                project_name=service_user.name.split("/")[0],
+            )
 
         disk_volumes = [
             {
@@ -1875,7 +1901,10 @@ class TestJobs:
         disk_path1 = "/mnt/disk1"
         disk_path2 = "/mnt/disk2"
 
-        disk = await regular_disk_api_client.create_disk(storage=1024 * 1024)
+        disk = await regular_disk_api_client.create_disk(
+            storage=1024 * 1024,
+            project_name=regular_user.name,
+        )
 
         disk_volumes = [
             {
@@ -1930,8 +1959,14 @@ class TestJobs:
         disk_path1 = "/mnt/disk1"
         disk_path2 = "/mnt/disk2"
 
-        disk1 = await regular_disk_api_client.create_disk(storage=1024 * 1024)
-        disk2 = await regular_disk_api_client.create_disk(storage=1024 * 1024)
+        disk1 = await regular_disk_api_client.create_disk(
+            storage=1024 * 1024,
+            project_name=regular_user.name,
+        )
+        disk2 = await regular_disk_api_client.create_disk(
+            storage=1024 * 1024,
+            project_name=regular_user.name,
+        )
 
         disk_volumes = [
             {
@@ -1990,7 +2025,10 @@ class TestJobs:
         file_name = "test.txt"
         value = "value"
 
-        disk = await regular_disk_api_client.create_disk(storage=1024 * 1024)
+        disk = await regular_disk_api_client.create_disk(
+            storage=1024 * 1024,
+            project_name=regular_user.name,
+        )
 
         disk_volumes = [
             {
@@ -2052,7 +2090,10 @@ class TestJobs:
         value = "value"
         expected_string = value * jobs_in_race
 
-        disk = await regular_disk_api_client.create_disk(storage=1024 * 1024)
+        disk = await regular_disk_api_client.create_disk(
+            storage=1024 * 1024,
+            project_name=regular_user.name,
+        )
 
         disk_volumes = [
             {
@@ -2152,7 +2193,10 @@ class TestJobs:
         usr_2 = await regular_user_factory(clusters=[(cluster, Balance(), Quota())])
 
         async with disk_client_factory(usr_1) as disk_client:
-            disk = await disk_client.create_disk(storage=1024 * 1024)
+            disk = await disk_client.create_disk(
+                storage=1024 * 1024,
+                project_name=usr_1.name,
+            )
 
         disk_volumes = [
             {
@@ -2168,7 +2212,7 @@ class TestJobs:
             assert resp.status == HTTPForbidden.status_code, await resp.text()
             result = await resp.json()
             perm = {
-                "uri": str(disk.to_uri()),
+                "uri": str(disk.to_permission_uri()),
                 "action": "read" if read_only else "write",
             }
             assert perm in result["missing"]
@@ -2312,8 +2356,12 @@ class TestJobs:
         key_1, key_2 = "key_1", "key_2"
         secret_value_1 = "value1"
         secret_value_2 = "value2"
-        await regular_secrets_client.create_secret(key_1, secret_value_1)
-        await regular_secrets_client.create_secret(key_2, secret_value_2)
+        await regular_secrets_client.create_secret(
+            key_1, secret_value_1, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_2, secret_value_2, project_name=user.name
+        )
 
         secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
         secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
@@ -2357,12 +2405,24 @@ class TestJobs:
         key_a, key_b, key_c = "key_a", "key_b", "key_c"
         value_1, value_2, value_3 = "value_1", "value_2", "value_3"
         value_a, value_b, value_c = "value_a", "value_b", "value_c"
-        await regular_secrets_client.create_secret(key_1, value_1)
-        await regular_secrets_client.create_secret(key_2, value_2)
-        await regular_secrets_client.create_secret(key_3, value_3)
-        await regular_secrets_client.create_secret(key_a, value_a)
-        await regular_secrets_client.create_secret(key_b, value_b)
-        await regular_secrets_client.create_secret(key_c, value_c)
+        await regular_secrets_client.create_secret(
+            key_1, value_1, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_2, value_2, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_3, value_3, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_a, value_a, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_b, value_b, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_c, value_c, project_name=user.name
+        )
 
         secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
         secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
@@ -2426,9 +2486,15 @@ class TestJobs:
         secret_value_common = "value1"
         secret_value_env = "value2"
         secret_value_vol = "value3"
-        await regular_secrets_client.create_secret(key_common, secret_value_common)
-        await regular_secrets_client.create_secret(key_env, secret_value_env)
-        await regular_secrets_client.create_secret(key_vol, secret_value_vol)
+        await regular_secrets_client.create_secret(
+            key_common, secret_value_common, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_env, secret_value_env, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_vol, secret_value_vol, project_name=user.name
+        )
 
         secret_uri_common = f"secret://{user.cluster_name}/{user.name}/{key_common}"
         secret_uri_env = f"secret://{user.cluster_name}/{user.name}/{key_env}"
@@ -2480,9 +2546,15 @@ class TestJobs:
         secret_value_1 = "value1"
         secret_value_2 = "value2"
         secret_value_3 = "value3"
-        await regular_secrets_client.create_secret(key_1, secret_value_1)
-        await regular_secrets_client.create_secret(key_2, secret_value_2)
-        await regular_secrets_client.create_secret(key_3, secret_value_3)
+        await regular_secrets_client.create_secret(
+            key_1, secret_value_1, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_2, secret_value_2, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_3, secret_value_3, project_name=user.name
+        )
 
         secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
         secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
@@ -2525,9 +2597,15 @@ class TestJobs:
         secret_value_1 = "value1"
         secret_value_2 = "value2"
         secret_value_3 = "value3"
-        await regular_secrets_client.create_secret(key_1, secret_value_1)
-        await regular_secrets_client.create_secret(key_2, secret_value_2)
-        await regular_secrets_client.create_secret(key_3, secret_value_3)
+        await regular_secrets_client.create_secret(
+            key_1, secret_value_1, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_2, secret_value_2, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_3, secret_value_3, project_name=user.name
+        )
 
         secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
         secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
@@ -2570,9 +2648,15 @@ class TestJobs:
         secret_value_1 = "value1"
         secret_value_2 = "value2"
         secret_value_3 = "value3"
-        await regular_secrets_client.create_secret(key_1, secret_value_1)
-        await regular_secrets_client.create_secret(key_2, secret_value_2)
-        await regular_secrets_client.create_secret(key_3, secret_value_3)
+        await regular_secrets_client.create_secret(
+            key_1, secret_value_1, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_2, secret_value_2, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_3, secret_value_3, project_name=user.name
+        )
 
         secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
         secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
@@ -2614,8 +2698,12 @@ class TestJobs:
         key_1, key_2 = "key_1", "key_2"
         secret_value_1 = "value1"
         secret_value_2 = "value2"
-        await regular_secrets_client.create_secret(key_1, secret_value_1)
-        await regular_secrets_client.create_secret(key_2, secret_value_2)
+        await regular_secrets_client.create_secret(
+            key_1, secret_value_1, project_name=user.name
+        )
+        await regular_secrets_client.create_secret(
+            key_2, secret_value_2, project_name=user.name
+        )
 
         secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
         secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
@@ -2701,7 +2789,9 @@ class TestJobs:
         secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/key2"
         secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/key1"
 
-        await regular_secrets_client.create_secret("key3", "value1")
+        await regular_secrets_client.create_secret(
+            "key3", "value1", project_name=user.name
+        )
 
         if secret_kind == "secret_env":
             secret_env = {
@@ -2746,7 +2836,9 @@ class TestJobs:
         secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/key2"
         secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/key1"
 
-        await regular_secrets_client.create_secret("key1", "value1")
+        await regular_secrets_client.create_secret(
+            "key1", "value1", project_name=user.name
+        )
 
         if secret_kind == "secret_env":
             secret_env = {
@@ -2796,10 +2888,10 @@ class TestJobs:
         key_1, key_2 = "key_1", "key_2"
 
         async with secrets_client_factory(usr_1) as sec_client:
-            await sec_client.create_secret(key_1, "value1")
+            await sec_client.create_secret(key_1, "value1", project_name=usr_1.name)
 
         async with secrets_client_factory(usr_1) as sec_client:
-            await sec_client.create_secret(key_2, "value2")
+            await sec_client.create_secret(key_2, "value2", project_name=usr_1.name)
 
         secret_uri_1 = f"secret://{cluster}/{usr_1.name}/{key_1}"
         secret_uri_2 = f"secret://{cluster}/{usr_2.name}/{key_2}"
@@ -2837,6 +2929,7 @@ class TestJobs:
         ],
         secret_kind: str,
         share_secret: Callable[..., Awaitable[None]],
+        share_project: Callable[..., Awaitable[None]],
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
         cluster_name = test_cluster_name
@@ -2852,12 +2945,12 @@ class TestJobs:
         value_1, value_2, value_3 = "value_1", "value_2", "value_3"
         value_a, value_b, value_c = "value_a", "value_b", "value_c"
         async with secrets_client_factory(usr_1) as sec_client:
-            await sec_client.create_secret(key_1, value_1)
-            await sec_client.create_secret(key_2, value_2)
-            await sec_client.create_secret(key_3, value_3)
-            await sec_client.create_secret(key_a, value_a)
-            await sec_client.create_secret(key_b, value_b)
-            await sec_client.create_secret(key_c, value_c)
+            await sec_client.create_secret(key_1, value_1, project_name=usr_1.name)
+            await sec_client.create_secret(key_2, value_2, project_name=usr_1.name)
+            await sec_client.create_secret(key_3, value_3, project_name=usr_1.name)
+            await sec_client.create_secret(key_a, value_a, project_name=usr_1.name)
+            await sec_client.create_secret(key_b, value_b, project_name=usr_1.name)
+            await sec_client.create_secret(key_c, value_c, project_name=usr_1.name)
 
         for key in (key_1, key_2, key_3, key_a, key_b, key_c):
             await share_secret(usr_1, usr_2, key)
@@ -2901,6 +2994,8 @@ class TestJobs:
         )
         cmd = f"bash -c '{asserts}'"
         job_submit["container"]["command"] = cmd
+        job_submit["project_name"] = usr_1.name
+        await share_project(usr_1, usr_2, usr_1.name)
 
         await _run_job_with_secrets(
             job_submit, usr_2, secret_env=secret_env, secret_volumes=secret_volumes
@@ -4074,6 +4169,21 @@ class TestJobs:
             await auth_client.grant_user_permissions(
                 follower.name, [permission], token=owner.token
             )
+
+        yield _impl
+
+    @pytest.fixture
+    async def share_project(
+        self, auth_client: AuthClient, cluster_name: str
+    ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
+        async def _impl(owner: _User, follower: _User, project_name: str) -> None:
+            for action in ("read", "write"):
+                permission = Permission(
+                    uri=f"job://{cluster_name}/{project_name}", action=action
+                )
+                await auth_client.grant_user_permissions(
+                    follower.name, [permission], token=owner.token
+                )
 
         yield _impl
 
@@ -5368,6 +5478,7 @@ class TestJobs:
                 "cluster_name": "test-cluster",
                 "project_name": regular_user.name,
                 "org_project_hash": mock.ANY,
+                "namespace": mock.ANY,
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "statuses": [
@@ -5427,6 +5538,7 @@ class TestJobs:
             "cluster_name": "test-cluster",
             "project_name": regular_user.name,
             "org_project_hash": mock.ANY,
+            "namespace": mock.ANY,
             "internal_hostname": f"{job_id}.platformapi-tests",
             "status": "succeeded",
             "statuses": mock.ANY,
@@ -5524,6 +5636,7 @@ class TestJobs:
             "cluster_name": "test-cluster",
             "project_name": regular_user.name,
             "org_project_hash": mock.ANY,
+            "namespace": mock.ANY,
             "status": "failed",
             "statuses": mock.ANY,
             "internal_hostname": f"{job_id}.platformapi-tests",
@@ -5616,6 +5729,7 @@ class TestJobs:
                 "cluster_name": "test-cluster",
                 "project_name": regular_user.name,
                 "org_project_hash": mock.ANY,
+                "namespace": mock.ANY,
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "statuses": [
@@ -5725,6 +5839,7 @@ class TestJobs:
                 "cluster_name": "test-cluster",
                 "project_name": regular_user.name,
                 "org_project_hash": mock.ANY,
+                "namespace": mock.ANY,
                 "internal_hostname": f"{job_id}.platformapi-tests",
                 "status": "pending",
                 "statuses": [
