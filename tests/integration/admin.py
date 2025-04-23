@@ -11,6 +11,7 @@ from typing import Any
 import aiodocker
 import aiohttp.web
 import pytest
+from aiodocker.types import JSONObject
 from aiohttp import ClientError, ClientResponseError
 from aiohttp.web_exceptions import HTTPCreated, HTTPNoContent, HTTPNotFound
 from neuro_admin_client import AdminClient
@@ -113,7 +114,7 @@ async def _admin_server_setup_db(
 ) -> None:
     image_name = admin_server_image_name
     container_name = "admin_migrations"
-    container_config = {
+    container_config: JSONObject = {
         "Image": image_name,
         "AttachStdout": False,
         "AttachStderr": False,
@@ -165,7 +166,7 @@ async def admin_server(
 ) -> AsyncIterator[URL]:
     image_name = admin_server_image_name
     container_name = "admin_server"
-    container_config = {
+    container_config: JSONObject = {
         "Image": image_name,
         "AttachStdout": False,
         "AttachStderr": False,
@@ -222,7 +223,9 @@ async def create_admin_url(
     container: aiodocker.containers.DockerContainer,
 ) -> URL:
     host = "0.0.0.0"
-    port = int((await container.port(8080))[0]["HostPort"])
+    val = await container.port(8080)
+    assert val is not None
+    port = int(val[0]["HostPort"])
     return URL(f"http://{host}:{port}/apis/admin/v1")
 
 

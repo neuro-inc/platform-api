@@ -11,6 +11,7 @@ from typing import Protocol
 
 import aiodocker
 import pytest
+from aiodocker.types import JSONObject
 from aiohttp import ClientError, ClientResponseError
 from aiohttp.hdrs import AUTHORIZATION
 from jose import jwt
@@ -41,7 +42,7 @@ async def auth_server(
 ) -> AsyncIterator[AuthConfig]:
     image_name = auth_server_image_name
     container_name = "auth_server"
-    container_config = {
+    container_config: JSONObject = {
         "Image": image_name,
         "AttachStdout": False,
         "AttachStderr": False,
@@ -98,7 +99,9 @@ async def create_auth_config(
     container: aiodocker.containers.DockerContainer,
 ) -> AuthConfig:
     host = "0.0.0.0"
-    port = int((await container.port(8080))[0]["HostPort"])
+    val = await container.port(8080)
+    assert val is not None
+    port = int(val[0]["HostPort"])
     url = URL(f"http://{host}:{port}")
     token = create_token("compute")
     public_endpoint_url = URL("https://neu.ro/api/v1/users")

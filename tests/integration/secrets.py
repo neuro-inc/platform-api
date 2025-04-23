@@ -10,6 +10,7 @@ import aiodocker
 import aiodocker.containers
 import aiohttp
 import pytest
+from aiodocker.types import JSONObject
 from aiohttp import ClientError
 from yarl import URL
 
@@ -85,7 +86,7 @@ async def secrets_server_url(
     image_name = secrets_server_image_name
     container_name = "secrets_server"
     auth_server_container_name = "auth_server"
-    container_config = {
+    container_config: JSONObject = {
         "Image": image_name,
         "AttachStdout": False,
         "AttachStderr": False,
@@ -135,7 +136,9 @@ async def secrets_server_url(
 
 async def create_secrets_url(container: aiodocker.containers.DockerContainer) -> URL:
     host = "0.0.0.0"
-    port = int((await container.port(8080))[0]["HostPort"])
+    val = await container.port(8080)
+    assert val is not None
+    port = int(val[0]["HostPort"])
     return URL(f"http://{host}:{port}")
 
 

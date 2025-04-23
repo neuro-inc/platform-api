@@ -5,6 +5,7 @@ import aiodocker
 import aiodocker.containers
 import asyncpg
 import pytest
+from aiodocker.types import JSONObject
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from platform_api.config import PostgresConfig
@@ -18,7 +19,7 @@ async def admin_postgres_dsn(
 ) -> AsyncIterator[str]:
     image_name = "postgres:12.11"
     container_name = "postgres-admin"
-    container_config = {
+    container_config: JSONObject = {
         "Image": image_name,
         "AttachStdout": False,
         "AttachStderr": False,
@@ -63,7 +64,7 @@ async def postgres_dsn(
 ) -> AsyncIterator[str]:
     image_name = "postgres:12.11"
     container_name = "postgres"
-    container_config = {
+    container_config: JSONObject = {
         "Image": image_name,
         "AttachStdout": False,
         "AttachStderr": False,
@@ -103,7 +104,9 @@ async def postgres_dsn(
 
 async def _make_postgres_dsn(container: aiodocker.containers.DockerContainer) -> str:
     host = "0.0.0.0"
-    port = int((await container.port(5432))[0]["HostPort"])
+    val = await container.port(5432)
+    assert val is not None
+    port = int(val[0]["HostPort"])
     return f"postgresql+asyncpg://postgres@{host}:{port}/postgres"
 
 
