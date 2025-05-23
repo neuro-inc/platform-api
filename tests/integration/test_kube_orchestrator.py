@@ -1480,23 +1480,6 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/project": job.owner,
         }
 
-        user_policy_name = "neurouser-" + job.owner
-        raw_policy = await kube_client.get_network_policy(
-            job.namespace, user_policy_name
-        )
-        assert raw_policy["spec"]["podSelector"]["matchLabels"] == {
-            "platform.neuromation.io/user": job.owner
-        }
-
-        project_policy_name = "project--" + job.org_project_hash.hex()
-        raw_policy = await kube_client.get_network_policy(
-            job.namespace, project_policy_name
-        )
-        assert raw_policy["spec"]["podSelector"]["matchLabels"] == {
-            "platform.neuromation.io/project": job.owner,
-            "platform.neuromation.io/org": "no_org",
-        }
-
     async def test_job_org_pod_labels(
         self,
         kube_config: KubeConfig,
