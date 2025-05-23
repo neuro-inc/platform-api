@@ -300,48 +300,6 @@ class KubeOrchestrator(Orchestrator):
         await self._client.update_docker_secret(secret, create_non_existent=True)
         return secret
 
-    async def _create_user_network_policy(self, job: Job) -> None:
-        name = self._get_user_resource_name(job)
-        pod_labels = self._get_user_pod_labels(job)
-        org_project_labels = self._get_org_project_labels(job)
-        try:
-            await self._client.create_default_network_policy(
-                job.namespace,
-                name,
-                pod_labels=pod_labels,
-                org_project_labels=org_project_labels,
-            )
-            logger.info("Created default network policy for user '%s'", job.owner)
-        except ResourceExists:
-            logger.info(
-                "Default network policy for user '%s' already exists.", job.owner
-            )
-
-    async def _create_project_network_policy(self, job: Job) -> None:
-        name = self._get_project_resource_name(job)
-        pod_labels = self._get_project_pod_labels(job)
-        pod_labels.update(self._get_org_pod_labels(job))
-        org_project_labels = self._get_org_project_labels(job)
-
-        project = job.project_name
-        org = job.org_name or NO_ORG
-        try:
-            await self._client.create_default_network_policy(
-                job.namespace,
-                name,
-                pod_labels=pod_labels,
-                org_project_labels=org_project_labels,
-            )
-            logger.info(
-                "Created default network policy for org=%s project=%s", org, project
-            )
-        except ResourceExists:
-            logger.info(
-                "Default network policy for project org=%s project=%s already exists.",
-                org,
-                project,
-            )
-
     async def _create_pod_network_policy(self, job: Job) -> None:
         tpu_ipv4_cidr_block = self._orchestrator_config.tpu_ipv4_cidr_block
         if not job.request.container.resources.tpu or not tpu_ipv4_cidr_block:
@@ -623,8 +581,7 @@ class KubeOrchestrator(Orchestrator):
             project_name=job.project_name,
         )
         await self._create_docker_secret(job)
-        await self._create_user_network_policy(job)
-        await self._create_project_network_policy(job)
+
         try:
             await self._create_pod_network_policy(job)
 
