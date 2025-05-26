@@ -839,7 +839,8 @@ class Job:
     @property
     def http_host(self) -> str:
         return self._orchestrator_config.jobs_domain_name_template.format(
-            job_id=self.id
+            job_id=self.id,
+            namespace=self.namespace,
         )
 
     @property
@@ -852,7 +853,8 @@ class Job:
         if not self.is_named:
             return None
         return self._orchestrator_config.jobs_domain_name_template.format(
-            job_id=self.host_segment_named
+            job_id=self.host_segment_named,
+            namespace=self.namespace,
         )
 
     @property
@@ -888,13 +890,15 @@ class Job:
     def init_job_internal_hostnames(self) -> None:
         self._record.internal_hostname = (
             self._orchestrator_config.jobs_internal_domain_name_template.format(
-                job_id=self.id
+                job_id=self.id,
+                namespace=self.namespace,
             )
         )
         if self.is_named:
             self._record.internal_hostname_named = (
                 self._orchestrator_config.jobs_internal_domain_name_template.format(
-                    job_id=self.host_segment_named
+                    job_id=self.host_segment_named,
+                    namespace=self.namespace,
                 )
             )
 
