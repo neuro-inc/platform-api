@@ -1707,8 +1707,7 @@ class TestJobs:
             await secrets_client.create_secret(key, value, project_name=project_name)
 
         secret_env = {
-            "ENV_SECRET": f"secret://{service_user.cluster_name}/"
-            f"{project_name}/{key}",
+            "ENV_SECRET": f"secret://{service_user.cluster_name}/{project_name}/{key}",
         }
         job_submit["container"]["secret_env"] = secret_env
 

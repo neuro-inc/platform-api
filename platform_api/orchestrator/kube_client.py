@@ -1841,19 +1841,10 @@ class KubeClient(ApoloKubeClient):
         return f"{url}/{service_name}"
 
     def _generate_networking_v1_namespace_url(self, namespace: str) -> str:
-        return f"{self._base_url}/apis/networking.k8s.io/v1" f"/namespaces/{namespace}"
+        return f"{self._base_url}/apis/networking.k8s.io/v1/namespaces/{namespace}"
 
     def _generate_networking_v1beta1_namespace_url(self, namespace: str) -> str:
-        return (
-            f"{self._base_url}/apis/networking.k8s.io/v1beta1"
-            f"/namespaces/{namespace}"
-        )
-
-    @property
-    def _networking_v1_namespace_url(self) -> str:
-        return (
-            f"{self._base_url}/apis/networking.k8s.io/v1/namespaces/{self._namespace}"
-        )
+        return f"{self._base_url}/apis/networking.k8s.io/v1beta1/namespaces/{namespace}"
 
     def _generate_ingresses_url(self, namespace: str) -> str:
         if self._api_resources.has_networking_v1_ingress:
