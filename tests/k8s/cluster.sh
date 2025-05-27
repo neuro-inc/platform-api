@@ -10,9 +10,9 @@ function k8s::install_minikube {
 }
 
 function k8s::start {
-    modprobe br_netfilter
-    echo 1 > /proc/sys/net/bridge/bridge-nf-call-iptables
-    echo 1 > /proc/sys/net/ipv4/ip_forward
+    sudo modprobe br_netfilter
+    echo 1 | sudo tee -a /proc/sys/net/bridge/bridge-nf-call-iptables
+    echo 1 | sudo tee -a /proc/sys/net/ipv4/ip_forward
 
     export KUBECONFIG=$HOME/.kube/config
     mkdir -p $(dirname $KUBECONFIG)
