@@ -10,9 +10,17 @@ function k8s::install_minikube {
 }
 
 function k8s::start {
+    # ----- Kernel prerequisites for the none driver ----------------------------
+    echo "• Enabling br_netfilter and required sysctl flags …"
     sudo modprobe br_netfilter
-    echo 1 | sudo tee -a /proc/sys/net/bridge/bridge-nf-call-iptables
-    echo 1 | sudo tee -a /proc/sys/net/ipv4/ip_forward
+    sudo sysctl -w \
+        net.bridge.bridge-nf-call-iptables=1 \
+        net.bridge.bridge-nf-call-ip6tables=1 \
+        net.ipv4.ip_forward=1
+
+    # ----- Disable swap (kubeadm requirement) -----------------------------------
+    echo "• Disabling swap …"
+    sudo swapoff -a
 
     export KUBECONFIG=$HOME/.kube/config
     mkdir -p $(dirname $KUBECONFIG)
