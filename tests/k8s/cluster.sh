@@ -28,7 +28,6 @@ function k8s::start {
 
     sudo -E minikube start \
         --driver=none \
-        --kubernetes-version '1.23.3' \
         --install-addons=true \
         --addons=ingress \
         --feature-gates=DevicePlugins=true \
