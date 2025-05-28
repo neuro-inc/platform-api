@@ -20,7 +20,7 @@ aiohttp = {version = "^3.11.18", extras = ["speedups"]}
 iso8601 = ">=2.1.0"
 trafaret = "2.1.1"
 neuro-auth-client = "24.8.0"
-cryptography = "44.0.3"
+cryptography = "45.0.3"
 aiorwlock = "1.4.0"
 neuro-notifications-client = "25.3.0"
 neuro-logging = "25.1.0"
