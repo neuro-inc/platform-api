@@ -30,7 +30,7 @@ sqlalchemy = "1.4.54"
 alembic = "1.15.2"
 psycopg2-binary = "2.9.10"
 typing-extensions = "4.13.2"
-neuro-admin-client = "25.1.1"
+neuro-admin-client = "25.5.0"
 yarl = "1.18.3"
 python-jose = ">=3.4.0"
 
