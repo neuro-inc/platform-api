@@ -1,7 +1,7 @@
 """add org/project hash column
 
-Revision ID: 631e12f654a4
-Revises: adac6355fbe3
+Revision ID: 0016
+Revises: 0015
 Create Date: 2023-07-03 13:15:13.812736
 
 """
@@ -12,8 +12,8 @@ import sqlalchemy.dialects.postgresql as sapg
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "631e12f654a4"
-down_revision = "adac6355fbe3"
+revision = "0016"
+down_revision = "0015"
 branch_labels = None
 depends_on = None
 

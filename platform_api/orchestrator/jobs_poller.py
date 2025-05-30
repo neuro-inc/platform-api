@@ -124,7 +124,7 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
             http_server=http_server,
         )
 
-    project_name = payload.get("project_name") or payload["owner"]
+    project_name = payload["project_name"]
     return JobRecord(
         request=JobRequest(
             job_id=payload["id"],
@@ -139,6 +139,7 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
         org_name=payload.get("org_name"),
         project_name=project_name,
         org_project_hash=bytes.fromhex(payload["org_project_hash"]),
+        namespace=payload["namespace"],
         name=payload.get("name"),
         preset_name=payload.get("preset_name"),
         tags=payload.get("tags", []),

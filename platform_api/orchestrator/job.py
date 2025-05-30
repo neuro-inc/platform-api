@@ -11,6 +11,7 @@ from functools import partial
 from typing import Any
 
 import iso8601
+from apolo_kube_client.apolo import generate_namespace_name
 from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig
@@ -289,6 +290,7 @@ class JobRecord:
     cluster_name: str
     project_name: str
     org_project_hash: bytes
+    namespace: str
     org_name: str | None = None
     name: str | None = None
     preset_name: str | None = None
@@ -335,9 +337,14 @@ class JobRecord:
             kwargs["owner"] = orphaned_job_owner
         if not kwargs.get("project_name"):
             kwargs["project_name"] = get_base_owner(kwargs["owner"])
+
+        org_name = kwargs.get("org_name")
+        project_name = kwargs["project_name"]
+
         kwargs["org_project_hash"] = cls._create_org_project_hash(
-            kwargs.get("org_name"), kwargs["project_name"]
+            org_name, project_name
         )
+        kwargs["namespace"] = generate_namespace_name(org_name or NO_ORG, project_name)
         return cls(**kwargs)
 
     @classmethod
@@ -485,6 +492,7 @@ class JobRecord:
             "cluster_name": self.cluster_name,
             "project_name": self.project_name,
             "org_project_hash": self.org_project_hash.hex(),
+            "namespace": self.namespace,
             "request": self.request.to_primitive(),
             "status": self.status.value,
             "statuses": statuses,
@@ -533,7 +541,7 @@ class JobRecord:
         )
         owner = payload.get("owner") or orphaned_job_owner
         org_name = payload.get("org_name", None)
-        project_name = payload.get("project_name") or get_base_owner(owner)
+        project_name = payload["project_name"]
         org_project_hash = payload.get("org_project_hash")
         if org_project_hash and isinstance(org_project_hash, str):
             org_project_hash = bytes.fromhex(org_project_hash)
@@ -551,6 +559,7 @@ class JobRecord:
             org_name=org_name,
             project_name=project_name,
             org_project_hash=org_project_hash,
+            namespace=payload["namespace"],
             scheduler_enabled=payload.get("scheduler_enabled", None)
             or payload.get("is_preemptible", False),
             preemptible_node=payload.get("preemptible_node", None)
@@ -830,7 +839,8 @@ class Job:
     @property
     def http_host(self) -> str:
         return self._orchestrator_config.jobs_domain_name_template.format(
-            job_id=self.id
+            job_id=self.id,
+            namespace=self.namespace,
         )
 
     @property
@@ -843,7 +853,8 @@ class Job:
         if not self.is_named:
             return None
         return self._orchestrator_config.jobs_domain_name_template.format(
-            job_id=self.host_segment_named
+            job_id=self.host_segment_named,
+            namespace=self.namespace,
         )
 
     @property
@@ -879,13 +890,15 @@ class Job:
     def init_job_internal_hostnames(self) -> None:
         self._record.internal_hostname = (
             self._orchestrator_config.jobs_internal_domain_name_template.format(
-                job_id=self.id
+                job_id=self.id,
+                namespace=self.namespace,
             )
         )
         if self.is_named:
             self._record.internal_hostname_named = (
                 self._orchestrator_config.jobs_internal_domain_name_template.format(
-                    job_id=self.host_segment_named
+                    job_id=self.host_segment_named,
+                    namespace=self.namespace,
                 )
             )
 
@@ -962,6 +975,10 @@ class Job:
     @property
     def priority(self) -> JobPriority:
         return self._record.priority
+
+    @property
+    def namespace(self) -> str:
+        return self._record.namespace
 
     def to_primitive(self) -> dict[str, Any]:
         return self._record.to_primitive()

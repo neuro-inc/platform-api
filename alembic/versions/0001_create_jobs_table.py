@@ -1,6 +1,6 @@
 """create jobs table
 
-Revision ID: eaa33ba10d63
+Revision ID: 0001
 Revises:
 Create Date: 2020-08-17 12:04:17.252280
 
@@ -12,7 +12,7 @@ import sqlalchemy.dialects.postgresql as sapg
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "eaa33ba10d63"
+revision = "0001"
 down_revision = None
 branch_labels = None
 depends_on = None
