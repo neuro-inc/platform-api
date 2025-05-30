@@ -2219,7 +2219,7 @@ class TestJobsServiceCluster:
 
         job = await jobs_service.get_job(job.id)
         assert job.cluster_name == "missing"
-        assert job.http_host == f"{job.id}.missing-cluster"
+        assert job.http_host == f"{job.id}.{job.namespace}.missing-cluster"
         assert job.http_host_named is None
 
     async def test_delete_missing_cluster(
