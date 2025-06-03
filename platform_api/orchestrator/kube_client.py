@@ -3,7 +3,6 @@ import asyncio
 import enum
 import json
 import logging
-import ssl
 from asyncio import timeout
 from base64 import b64encode
 from collections.abc import AsyncIterator, Callable, Sequence
@@ -11,12 +10,20 @@ from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
-from pathlib import Path, PurePath
+from pathlib import PurePath
 from typing import Any, ClassVar, NoReturn, Optional
-from urllib.parse import urlsplit
 
 import aiohttp
 import iso8601
+from apolo_kube_client.client import KubeClient as ApoloKubeClient
+from apolo_kube_client.errors import (
+    KubeClientException,
+    KubeClientExpired,
+    KubeClientUnauthorized,
+    ResourceExists,
+    ResourceGone,
+    ResourceNotFound,
+)
 from yarl import URL
 
 from .job_request import (
@@ -42,41 +49,9 @@ class ServiceType(str, enum.Enum):
     LOAD_BALANCER = "LoadBalancer"
 
 
-class KubeClientException(Exception):
-    pass
-
-
-class StatusException(KubeClientException):
-    pass
-
-
-class AlreadyExistsException(StatusException):
-    pass
-
-
-class NotFoundException(StatusException):
-    pass
-
-
-class ConflictException(StatusException):
-    pass
-
-
-class ResourceGoneException(KubeClientException):
-    pass
-
-
-class KubeClientUnauthorizedException(KubeClientException):
-    pass
-
-
-class ExpiredException(KubeClientException):
-    pass
-
-
 def _raise_status_job_exception(pod: dict[str, Any], job_id: str | None) -> NoReturn:
     if pod["code"] == 409:
-        raise AlreadyExistsException(pod.get("reason", "job already exists"))
+        raise ResourceExists(pod.get("reason", "job already exists"))
     if pod["code"] == 404:
         raise JobNotFoundException(f"job {job_id} was not found")
     if pod["code"] == 422:
@@ -440,6 +415,7 @@ class Resources:
 
 @dataclass(frozen=True)
 class Service:
+    namespace: str
     name: str
     target_port: int | None
     uid: str | None = None
@@ -461,7 +437,10 @@ class Service:
 
     def to_primitive(self) -> dict[str, Any]:
         service_descriptor: dict[str, Any] = {
-            "metadata": {"name": self.name},
+            "metadata": {
+                "namespace": self.namespace,
+                "name": self.name,
+            },
             "spec": {
                 "type": self.service_type.value,
                 "ports": [],
@@ -480,8 +459,9 @@ class Service:
         return service_descriptor
 
     @classmethod
-    def create_for_pod(cls, pod: "PodDescriptor") -> "Service":
+    def create_for_pod(cls, namespace: str, pod: "PodDescriptor") -> "Service":
         return cls(
+            namespace=namespace,
             name=pod.name,
             selector=pod.labels,
             target_port=pod.port,
@@ -489,9 +469,10 @@ class Service:
         )
 
     @classmethod
-    def create_headless_for_pod(cls, pod: "PodDescriptor") -> "Service":
+    def create_headless_for_pod(cls, namespace: str, pod: "PodDescriptor") -> "Service":
         http_port = pod.port or cls.port
         return cls(
+            namespace=namespace,
             name=pod.name,
             selector=pod.labels,
             cluster_ip="None",
@@ -516,6 +497,7 @@ class Service:
         http_payload = cls._find_port_by_name("http", payload["spec"]["ports"])
         service_type = payload["spec"].get("type", Service.service_type.value)
         return cls(
+            namespace=payload["metadata"]["namespace"],
             name=payload["metadata"]["name"],
             uid=payload["metadata"]["uid"],
             selector=payload["spec"].get("selector", {}),
@@ -1794,83 +1776,14 @@ class WatchEvent:
         return cls(type=WatchEventType.DELETED, resource=resource)
 
 
-class KubeClient:
+class KubeClient(ApoloKubeClient):
     def __init__(
         self,
-        *,
-        base_url: str,
-        namespace: str,
-        cert_authority_path: str | None = None,
-        cert_authority_data_pem: str | None = None,
-        auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE,
-        auth_cert_path: str | None = None,
-        auth_cert_key_path: str | None = None,
-        token: str | None = None,
-        token_path: str | None = None,
-        token_update_interval_s: int = 300,
-        conn_timeout_s: int = 300,
-        read_timeout_s: int = 100,
-        conn_pool_size: int = 100,
-        trace_configs: list[aiohttp.TraceConfig] | None = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
-        self._base_url = base_url
-        self._namespace = namespace
-
+        super().__init__(*args, **kwargs)
         self._api_resources: APIResources = APIResources()
-
-        self._cert_authority_data_pem = cert_authority_data_pem
-        self._cert_authority_path = cert_authority_path
-
-        self._auth_type = auth_type
-        self._auth_cert_path = auth_cert_path
-        self._auth_cert_key_path = auth_cert_key_path
-        self._token = token
-        self._token_path = token_path
-        self._token_update_interval_s = token_update_interval_s
-
-        self._conn_timeout_s = conn_timeout_s
-        self._read_timeout_s = read_timeout_s
-        self._conn_pool_size = conn_pool_size
-        self._trace_configs = trace_configs
-
-        self._client: aiohttp.ClientSession | None = None
-        self._token_updater_task: asyncio.Task[None] | None = None
-
-    @property
-    def _is_ssl(self) -> bool:
-        return urlsplit(self._base_url).scheme == "https"
-
-    def _create_ssl_context(self) -> ssl.SSLContext | None:
-        if not self._is_ssl:
-            return None
-        ssl_context = ssl.create_default_context(
-            cafile=self._cert_authority_path, cadata=self._cert_authority_data_pem
-        )
-        if self._auth_type == KubeClientAuthType.CERTIFICATE:
-            ssl_context.load_cert_chain(
-                self._auth_cert_path,  # type: ignore
-                self._auth_cert_key_path,
-            )
-        return ssl_context
-
-    async def init(self) -> None:
-        if self._client:
-            return
-        connector = aiohttp.TCPConnector(
-            limit=self._conn_pool_size,
-            ssl=self._create_ssl_context(),  # type: ignore
-        )
-        if self._token_path:
-            self._token = Path(self._token_path).read_text()
-            self._token_updater_task = asyncio.create_task(self._start_token_updater())
-        timeout = aiohttp.ClientTimeout(
-            connect=self._conn_timeout_s, total=self._read_timeout_s
-        )
-        self._client = aiohttp.ClientSession(
-            connector=connector,
-            timeout=timeout,
-            trace_configs=self._trace_configs,
-        )
 
     async def init_api_resources(self) -> None:
         for gv in APIResources.group_versions:
@@ -1880,128 +1793,74 @@ class KubeClient:
                 if ex.status != 404:
                     raise
 
-    async def _start_token_updater(self) -> None:
-        if not self._token_path:
-            return
-        while True:
-            try:
-                token = Path(self._token_path).read_text()
-                if token != self._token:
-                    self._token = token
-                    logger.info("Kube token was refreshed")
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                logger.exception("Failed to update kube token: %s", exc)
-            await asyncio.sleep(self._token_update_interval_s)
-
-    async def close(self) -> None:
-        if self._client:
-            await self._client.close()
-            self._client = None
-        if self._token_updater_task:
-            self._token_updater_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await self._token_updater_task
-            self._token_updater_task = None
-
     async def __aenter__(self) -> "KubeClient":
         await self.init()
         await self.init_api_resources()
         return self
 
-    async def __aexit__(self, *args: object) -> None:
-        await self.close()
-
-    @property
-    def _api_v1_url(self) -> str:
-        return f"{self._base_url}/api/v1"
-
-    @property
-    def _apis_networking_v1_url(self) -> str:
-        return f"{self._base_url}/apis/networking.k8s.io/v1"
-
-    def _generate_namespace_url(self, namespace_name: str) -> str:
-        return f"{self._api_v1_url}/namespaces/{namespace_name}"
-
-    @property
-    def _namespace_url(self) -> str:
-        return self._generate_namespace_url(self._namespace)
-
-    @property
-    def _pods_url(self) -> str:
-        return f"{self._namespace_url}/pods"
-
     @property
     def _all_pods_url(self) -> str:
-        return f"{self._api_v1_url}/pods"
+        return f"{self.api_v1_url}/pods"
 
-    def _generate_pod_url(self, pod_id: str) -> str:
-        return f"{self._pods_url}/{pod_id}"
+    def _generate_pod_url(self, namespace: str, pod_id: str) -> str:
+        pods_url = self._generate_pods_url(namespace)
+        return f"{pods_url}/{pod_id}"
 
-    def _generate_pods_url(self, all_namespaces: bool = False) -> str:
-        return self._all_pods_url if all_namespaces else self._pods_url
-
-    def _generate_all_network_policies_url(
-        self, namespace_name: str | None = None
+    def _generate_pods_url(
+        self, namespace: str | None = None, all_namespaces: bool = False
     ) -> str:
-        namespace_name = namespace_name or self._namespace
-        namespace_url = f"{self._apis_networking_v1_url}/namespaces/{namespace_name}"
-        return f"{namespace_url}/networkpolicies"
+        if all_namespaces or not namespace:
+            return self._all_pods_url
+        namespace_url = self.generate_namespace_url(namespace)
+        return f"{namespace_url}/pods"
 
-    def _generate_network_policy_url(
-        self, name: str, namespace_name: str | None = None
-    ) -> str:
-        all_nps_url = self._generate_all_network_policies_url(namespace_name)
+    def _generate_network_policy_url(self, name: str, namespace_name: str) -> str:
+        all_nps_url = self.generate_network_policy_url(namespace_name)
         return f"{all_nps_url}/{name}"
 
     def _generate_endpoint_url(self, name: str, namespace: str) -> str:
-        return f"{self._generate_namespace_url(namespace)}/endpoints/{name}"
+        return f"{self.generate_namespace_url(namespace)}/endpoints/{name}"
 
     @property
     def _nodes_url(self) -> str:
-        return f"{self._api_v1_url}/nodes"
+        return f"{self.api_v1_url}/nodes"
 
     def _generate_node_url(self, name: str) -> str:
         return f"{self._nodes_url}/{name}"
 
-    @property
-    def _networking_v1beta1_namespace_url(self) -> str:
-        return (
-            f"{self._base_url}/apis/networking.k8s.io/v1beta1"
-            f"/namespaces/{self._namespace}"
-        )
+    def _generate_ingress_url(self, namespace: str, ingress_name: str) -> str:
+        url = self._generate_ingresses_url(namespace)
+        return f"{url}/{ingress_name}"
 
-    @property
-    def _networking_v1_namespace_url(self) -> str:
-        return (
-            f"{self._base_url}/apis/networking.k8s.io/v1/namespaces/{self._namespace}"
-        )
+    def _generate_services_url(self, namespace: str) -> str:
+        url = self.generate_namespace_url(namespace)
+        return f"{url}/services"
 
-    @property
-    def _ingresses_url(self) -> str:
+    def _generate_service_url(self, namespace: str, service_name: str) -> str:
+        url = self._generate_services_url(namespace)
+        return f"{url}/{service_name}"
+
+    def _generate_networking_v1_namespace_url(self, namespace: str) -> str:
+        return f"{self._base_url}/apis/networking.k8s.io/v1/namespaces/{namespace}"
+
+    def _generate_networking_v1beta1_namespace_url(self, namespace: str) -> str:
+        return f"{self._base_url}/apis/networking.k8s.io/v1beta1/namespaces/{namespace}"
+
+    def _generate_ingresses_url(self, namespace: str) -> str:
         if self._api_resources.has_networking_v1_ingress:
-            return f"{self._networking_v1_namespace_url}/ingresses"
-        return f"{self._networking_v1beta1_namespace_url}/ingresses"
-
-    def _generate_ingress_url(self, ingress_name: str) -> str:
-        return f"{self._ingresses_url}/{ingress_name}"
-
-    @property
-    def _services_url(self) -> str:
-        return f"{self._namespace_url}/services"
-
-    def _generate_service_url(self, service_name: str) -> str:
-        return f"{self._services_url}/{service_name}"
+            url = self._generate_networking_v1_namespace_url(namespace)
+        else:
+            url = self._generate_networking_v1beta1_namespace_url(namespace)
+        return f"{url}/ingresses"
 
     def _generate_all_secrets_url(self, namespace_name: str | None = None) -> str:
         namespace_name = namespace_name or self._namespace
-        namespace_url = self._generate_namespace_url(namespace_name)
+        namespace_url = self.generate_namespace_url(namespace_name)
         return f"{namespace_url}/secrets"
 
     def _generate_all_pvcs_url(self, namespace_name: str | None = None) -> str:
         namespace_name = namespace_name or self._namespace
-        namespace_url = self._generate_namespace_url(namespace_name)
+        namespace_url = self.generate_namespace_url(namespace_name)
         return f"{namespace_url}/persistentvolumeclaims"
 
     def _generate_secret_url(
@@ -2022,18 +1881,6 @@ class KubeClient:
             headers["Authorization"] = "Bearer " + self._token
         return headers
 
-    async def _request(
-        self, *args: Any, check_status_payload: bool = True, **kwargs: Any
-    ) -> dict[str, Any]:
-        headers = self._create_headers(kwargs.pop("headers", None))
-        assert self._client
-        async with self._client.request(*args, headers=headers, **kwargs) as response:
-            payload = await response.json()
-            logging.debug("k8s response payload: %s", payload)
-            if check_status_payload:
-                self._check_status_payload(payload)
-            return payload
-
     async def _watch(
         self,
         url: str,
@@ -2052,23 +1899,20 @@ class KubeClient:
             timeout=aiohttp.ClientTimeout(),
         ) as response:
             if response.status == 410:
-                raise ResourceGoneException
+                raise ResourceGone
             async for line in response.content:
                 payload = json.loads(line)
-                self._check_status_payload(payload)
+                self._raise_for_status(payload)
                 if WatchEvent.is_error(payload):
-                    self._check_status_payload(payload["object"])
+                    self._raise_for_status(payload["object"])
                 if WatchBookmarkEvent.is_bookmark(payload):
                     yield WatchBookmarkEvent.from_primitive(payload)
                 else:
                     yield WatchEvent.from_primitive(payload)
 
-    async def request(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        return await self._request(*args, check_status_payload=False, **kwargs)
-
     async def get_api_resource(self, group_version: str) -> APIResource:
         url = f"{self._base_url}/apis/{group_version}"
-        payload = await self._request(method="GET", url=url, raise_for_status=True)
+        payload = await self.get(url=url, raise_for_status=True)
         return APIResource.from_primitive(payload)
 
     async def _delete_resource_url(self, url: str, uid: str | None = None) -> None:
@@ -2076,17 +1920,17 @@ class KubeClient:
         if uid:
             request_payload = {"preconditions": {"uid": uid}}
         try:
-            await self._request(method="DELETE", url=url, json=request_payload)
-        except ConflictException as e:
+            await self.delete(url=url, json=request_payload)
+        except ResourceExists as e:
             # This might happen if we try to remove resource by it's name, but
             # different UID, see https://github.com/neuro-inc/platform-api/pull/1525
-            raise NotFoundException(str(e))
+            raise ResourceNotFound(str(e))
 
     async def get_endpoint(
         self, name: str, namespace: str | None = None
     ) -> dict[str, Any]:
         url = self._generate_endpoint_url(name, namespace or self._namespace)
-        return await self._request(method="GET", url=url)
+        return await self.get(url=url)
 
     async def create_node(
         self,
@@ -2108,14 +1952,14 @@ class KubeClient:
             },
         }
         url = self._nodes_url
-        await self._request(method="POST", url=url, json=payload)
+        await self.post(url=url, json=payload)
 
     async def delete_node(self, name: str) -> None:
         url = self._generate_node_url(name)
         await self._delete_resource_url(url)
 
     async def get_nodes(self) -> Sequence[Node]:
-        payload = await self._request(method="GET", url=self._nodes_url)
+        payload = await self.get(url=self._nodes_url)
         assert payload["kind"] == "NodeList"
         nodes = []
         for item in payload["items"]:
@@ -2123,7 +1967,7 @@ class KubeClient:
         return nodes
 
     async def get_node(self, name: str) -> Node:
-        payload = await self._request(method="GET", url=self._generate_node_url(name))
+        payload = await self.get(url=self._generate_node_url(name))
         return Node.from_primitive(payload)
 
     async def get_raw_nodes(self, labels: dict[str, str] | None = None) -> ListResult:
@@ -2132,7 +1976,7 @@ class KubeClient:
             params["labelSelector"] = ",".join(
                 "=".join(item) for item in labels.items()
             )
-        payload = await self._request(method="GET", url=self._nodes_url, params=params)
+        payload = await self.get(url=self._nodes_url, params=params)
         return ListResult.from_primitive(payload)
 
     async def watch_nodes(
@@ -2148,55 +1992,65 @@ class KubeClient:
         async for event in self._watch(self._nodes_url, params, resource_version):
             yield event
 
-    async def create_pod(self, descriptor: PodDescriptor) -> PodDescriptor:
-        payload = await self._request(
-            method="POST",
-            url=self._pods_url,
+    async def create_pod(
+        self, namespace: str, descriptor: PodDescriptor
+    ) -> PodDescriptor:
+        url = self._generate_pods_url(namespace)
+        payload = await self.post(
+            url=url,
             json=descriptor.to_primitive(),
-            check_status_payload=False,
+            raise_for_status=False,
         )
         return PodDescriptor.from_primitive(payload)
 
     async def set_raw_pod_status(
-        self, name: str, payload: dict[str, Any]
+        self,
+        namespace: str,
+        name: str,
+        payload: dict[str, Any],
     ) -> dict[str, Any]:
-        url = self._generate_pod_url(name) + "/status"
-        return await self._request(method="PUT", url=url, json=payload)
+        url = self._generate_pod_url(namespace, name) + "/status"
+        return await self.put(url=url, json=payload)
 
-    async def get_pod(self, pod_name: str) -> PodDescriptor:
-        url = self._generate_pod_url(pod_name)
-        payload = await self._request(
-            method="GET",
+    async def get_pod(self, namespace: str, pod_name: str) -> PodDescriptor:
+        url = self._generate_pod_url(namespace, pod_name)
+        payload = await self.get(
             url=url,
-            check_status_payload=False,
+            raise_for_status=False,
         )
         return PodDescriptor.from_primitive(payload)
 
-    async def get_raw_pod(self, name: str) -> dict[str, Any]:
-        url = self._generate_pod_url(name)
-        return await self._request(method="GET", url=url)
+    async def get_raw_pod(self, namespace: str, name: str) -> dict[str, Any]:
+        url = self._generate_pod_url(namespace, name)
+        return await self.get(url=url)
 
     async def get_raw_pods(self, all_namespaces: bool = False) -> ListResult:
-        url = self._generate_pods_url(all_namespaces)
-        payload = await self._request(method="GET", url=url)
+        url = self._generate_pods_url(all_namespaces=all_namespaces)
+        payload = await self.get(url=url)
         assert payload["kind"] == "PodList"
         return ListResult.from_primitive(payload)
 
     async def watch_pods(
         self, all_namespaces: bool = False, resource_version: str | None = None
     ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
-        url = self._generate_pods_url(all_namespaces)
+        url = self._generate_pods_url(all_namespaces=all_namespaces)
         async for event in self._watch(url, resource_version=resource_version):
             yield event
 
-    async def get_pod_status(self, pod_id: str) -> PodStatus:
-        pod = await self.get_pod(pod_id)
+    async def get_pod_status(
+        self,
+        namespace: str,
+        pod_id: str,
+    ) -> PodStatus:
+        pod = await self.get_pod(namespace, pod_id)
         if pod.status is None:
             raise ValueError("Missing pod status")
         return pod.status
 
-    async def delete_pod(self, pod_name: str, force: bool = False) -> PodStatus:
-        url = self._generate_pod_url(pod_name)
+    async def delete_pod(
+        self, namespace: str, pod_name: str, *, force: bool = False
+    ) -> PodStatus:
+        url = self._generate_pod_url(namespace, pod_name)
         request_payload = None
         if force:
             request_payload = {
@@ -2204,26 +2058,27 @@ class KubeClient:
                 "kind": "DeleteOptions",
                 "gracePeriodSeconds": 0,
             }
-        payload = await self._request(
-            method="DELETE",
+        payload = await self.delete(
             url=url,
             json=request_payload,
-            check_status_payload=False,
+            raise_for_status=False,
         )
         pod = PodDescriptor.from_primitive(payload)
         return pod.status  # type: ignore
 
-    async def delete_all_pods(self, *, labels: dict[str, str]) -> None:
+    async def delete_all_pods(self, namespace: str, *, labels: dict[str, str]) -> None:
+        url = self._generate_pods_url(namespace)
         params: dict[str, str] = {}
         if labels:
             params["labelSelector"] = ",".join(
                 "=".join(item) for item in labels.items()
             )
-        await self._request(method="DELETE", url=self._pods_url, params=params)
+        await self.delete(url=url, params=params)
 
     async def create_ingress(
         self,
         name: str,
+        namespace: str,
         ingress_class: str | None = None,
         rules: list[IngressRule] | None = None,
         annotations: dict[str, str] | None = None,
@@ -2243,135 +2098,119 @@ class KubeClient:
             payload = ingress.to_v1_primitive()
         else:
             payload = ingress.to_v1beta1_primitive()
-        payload = await self._request(
-            method="POST", url=self._ingresses_url, json=payload
-        )
+
+        url = self._generate_ingresses_url(namespace)
+        payload = await self.post(url=url, json=payload)
         return Ingress.from_primitive(payload)
 
-    async def get_ingress(self, name: str) -> Ingress:
-        url = self._generate_ingress_url(name)
-        payload = await self._request(method="GET", url=url)
+    async def get_ingress(self, namespace: str, name: str) -> Ingress:
+        url = self._generate_ingress_url(namespace, name)
+        payload = await self.get(url=url)
         return Ingress.from_primitive(payload)
 
     async def delete_all_ingresses(
-        self, *, labels: dict[str, str] | None = None
+        self, namespace: str, *, labels: dict[str, str] | None = None
     ) -> None:
         params: dict[str, str] = {}
         if labels:
             params["labelSelector"] = ",".join(
                 "=".join(item) for item in labels.items()
             )
-        await self._request(method="DELETE", url=self._ingresses_url, params=params)
+        url = self._generate_ingresses_url(namespace)
+        await self.delete(url=url, params=params)
 
-    async def delete_ingress(self, name: str) -> None:
-        url = self._generate_ingress_url(name)
-        await self._request(method="DELETE", url=url)
+    async def delete_ingress(self, namespace: str, name: str) -> None:
+        url = self._generate_ingress_url(namespace, name)
+        await self.delete(url=url)
 
-    def _check_status_payload(self, payload: dict[str, Any]) -> None:
-        if payload.get("kind") == "Status":
-            if payload["status"] == "Failure":
-                reason = payload.get("reason")
-                if reason == "AlreadyExists":
-                    raise AlreadyExistsException(payload["reason"])
-                if reason == "NotFound":
-                    raise NotFoundException(payload["reason"])
-                if reason == "Gone":
-                    raise ResourceGoneException(payload["reason"])
-                if reason == "Unauthorized":
-                    raise KubeClientUnauthorizedException(payload["reason"])
-                if reason == "Expired":
-                    raise ExpiredException(payload["reason"])
-                if reason == "Conflict":
-                    raise ConflictException(payload["reason"])
-                raise StatusException(payload["reason"])
-
-    async def add_ingress_rule(self, name: str, rule: IngressRule) -> Ingress:
+    async def add_ingress_rule(
+        self, namespace: str, name: str, rule: IngressRule
+    ) -> Ingress:
         # TODO (A Danshyn 06/13/18): test if does not exist already
-        url = self._generate_ingress_url(name)
+        url = self._generate_ingress_url(namespace, name)
         headers = {"Content-Type": "application/json-patch+json"}
         if self._api_resources.has_networking_v1_ingress:
             rule_payload = rule.to_v1_primitive()
         else:
             rule_payload = rule.to_v1beta1_primitive()
         patches = [{"op": "add", "path": "/spec/rules/-", "value": rule_payload}]
-        payload = await self._request(
-            method="PATCH", url=url, headers=headers, json=patches
-        )
+        payload = await self.patch(url=url, headers=headers, json=patches)
         return Ingress.from_primitive(payload)
 
-    async def remove_ingress_rule(self, name: str, host: str) -> Ingress:
+    async def remove_ingress_rule(
+        self, namespace: str, name: str, host: str
+    ) -> Ingress:
         # TODO (A Danshyn 06/13/18): this one should have a retry in case of
         # a race condition
-        ingress = await self.get_ingress(name)
+        ingress = await self.get_ingress(namespace, name)
         rule_index = ingress.find_rule_index_by_host(host)
         if rule_index < 0:
-            raise StatusException("NotFound")
-        url = self._generate_ingress_url(name)
+            raise KubeClientException("NotFound")
+        url = self._generate_ingress_url(namespace, name)
         rule = [
             {"op": "test", "path": f"/spec/rules/{rule_index}/host", "value": host},
             {"op": "remove", "path": f"/spec/rules/{rule_index}"},
         ]
         headers = {"Content-Type": "application/json-patch+json"}
-        payload = await self._request(
-            method="PATCH", url=url, headers=headers, json=rule
-        )
+        payload = await self.patch(url=url, headers=headers, json=rule)
         return Ingress.from_primitive(payload)
 
-    async def create_service(self, service: Service) -> Service:
-        url = self._services_url
-        payload = await self._request(
-            method="POST", url=url, json=service.to_primitive()
-        )
+    async def create_service(self, namespace: str, service: Service) -> Service:
+        url = self._generate_services_url(namespace)
+        payload = await self.post(url=url, json=service.to_primitive())
         return Service.from_primitive(payload)
 
-    async def get_service(self, name: str) -> Service:
-        url = self._generate_service_url(name)
-        payload = await self._request(method="GET", url=url)
+    async def get_service(self, namespace: str, name: str) -> Service:
+        url = self._generate_service_url(namespace, name)
+        payload = await self.get(url=url)
         return Service.from_primitive(payload)
 
-    async def list_services(self, labels: dict[str, str]) -> list[Service]:
-        url = self._services_url
+    async def list_services(
+        self, namespace: str, labels: dict[str, str]
+    ) -> list[Service]:
+        url = self._generate_services_url(namespace)
         label_selector = ",".join(f"{label}={value}" for label, value in labels.items())
-        payload = await self._request(
-            method="GET", url=url, params={"labelSelector": label_selector}
-        )
+        payload = await self.get(url=url, params={"labelSelector": label_selector})
         return [Service.from_primitive(item) for item in payload["items"]]
 
-    async def delete_service(self, name: str, uid: str | None = None) -> None:
-        url = self._generate_service_url(name)
+    async def delete_service(
+        self, namespace: str, name: str, uid: str | None = None
+    ) -> None:
+        url = self._generate_service_url(namespace, name)
         await self._delete_resource_url(url, uid)
 
     async def delete_all_services(
-        self, *, labels: dict[str, str] | None = None
+        self, namespace: str, *, labels: dict[str, str] | None = None
     ) -> None:
+        url = self._generate_services_url(namespace)
         params: dict[str, str] = {}
         if labels:
             params["labelSelector"] = ",".join(
                 "=".join(item) for item in labels.items()
             )
-        await self._request(method="DELETE", url=self._services_url, params=params)
+        await self.delete(url=url, params=params)
 
     async def create_docker_secret(self, secret: DockerRegistrySecret) -> None:
         url = self._generate_all_secrets_url(secret.namespace)
-        await self._request(method="POST", url=url, json=secret.to_primitive())
+        await self.post(url=url, json=secret.to_primitive())
 
     async def update_docker_secret(
         self, secret: DockerRegistrySecret, create_non_existent: bool = False
     ) -> None:
         try:
             url = self._generate_secret_url(secret.name, secret.namespace)
-            await self._request(method="PUT", url=url, json=secret.to_primitive())
-        except StatusException as exc:
-            if exc.args[0] != "NotFound" or not create_non_existent:
-                raise
-
-            await self.create_docker_secret(secret)
+            await self.put(url=url, json=secret.to_primitive())
+        except KubeClientException as e:
+            if isinstance(e, ResourceNotFound) and create_non_existent:
+                await self.create_docker_secret(secret)
+            else:
+                raise e
 
     async def get_raw_secret(
         self, secret_name: str, namespace_name: str | None = None
     ) -> dict[str, Any]:
         url = self._generate_secret_url(secret_name, namespace_name)
-        return await self._request(method="GET", url=url)
+        return await self.get(url=url)
 
     async def delete_secret(
         self, secret_name: str, namespace_name: str | None = None
@@ -2383,7 +2222,7 @@ class KubeClient:
         self, pvc_name: str, namespace_name: str | None = None
     ) -> dict[str, Any]:
         url = self._generate_pvc_url(pvc_name, namespace_name)
-        return await self._request(method="GET", url=url)
+        return await self.get(url=url)
 
     async def get_pod_events(
         self, pod_id: str, namespace: str
@@ -2395,12 +2234,16 @@ class KubeClient:
                 f",involvedObject.name={pod_id}"
             )
         }
-        url = f"{self._api_v1_url}/namespaces/{namespace}/events"
-        payload = await self._request(method="GET", url=url, params=params)
+        url = f"{self.api_v1_url}/namespaces/{namespace}/events"
+        payload = await self.get(url=url, params=params)
         return [KubernetesEvent(item) for item in payload.get("items", [])]
 
     async def wait_pod_is_running(
-        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+        self,
+        namespace: str,
+        pod_name: str,
+        timeout_s: float = 10.0 * 60,
+        interval_s: float = 1.0,
     ) -> None:
         """Wait until the pod transitions from the waiting state.
 
@@ -2409,13 +2252,17 @@ class KubeClient:
         """
         async with timeout(timeout_s):
             while True:
-                pod_status = await self.get_pod_status(pod_name)
+                pod_status = await self.get_pod_status(namespace, pod_name)
                 if not pod_status.is_waiting:
                     return
                 await asyncio.sleep(interval_s)
 
     async def wait_pod_is_terminated(
-        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+        self,
+        namespace: str,
+        pod_name: str,
+        timeout_s: float = 10.0 * 60,
+        interval_s: float = 1.0,
     ) -> None:
         """Wait until the pod transitions to the terminated state.
 
@@ -2424,13 +2271,17 @@ class KubeClient:
         """
         async with timeout(timeout_s):
             while True:
-                pod_status = await self.get_pod_status(pod_name)
+                pod_status = await self.get_pod_status(namespace, pod_name)
                 if pod_status.is_terminated:
                     return
                 await asyncio.sleep(interval_s)
 
     async def wait_pod_is_finished(
-        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+        self,
+        namespace: str,
+        pod_name: str,
+        timeout_s: float = 10.0 * 60,
+        interval_s: float = 1.0,
     ) -> None:
         """Wait until the pod is finished.
 
@@ -2439,28 +2290,32 @@ class KubeClient:
         """
         async with timeout(timeout_s):
             while True:
-                pod_status = await self.get_pod_status(pod_name)
+                pod_status = await self.get_pod_status(namespace, pod_name)
                 if pod_status.phase in ("Succeeded", "Failed"):
                     return
                 await asyncio.sleep(interval_s)
 
     async def wait_pod_is_deleted(
-        self, pod_name: str, timeout_s: float = 10.0 * 60, interval_s: float = 1.0
+        self,
+        namespace: str,
+        pod_name: str,
+        timeout_s: float = 10.0 * 60,
+        interval_s: float = 1.0,
     ) -> None:
         async with timeout(timeout_s):
             while True:
                 try:
-                    await self.get_pod(pod_name)
+                    await self.get_pod(namespace, pod_name)
                     await asyncio.sleep(interval_s)
                 except JobNotFoundException:
                     return
 
     async def create_default_network_policy(
         self,
+        namespace: str,
         name: str,
         pod_labels: dict[str, str],
         org_project_labels: dict[str, str],
-        namespace_name: str | None = None,
     ) -> dict[str, Any]:
         assert pod_labels
         # https://tools.ietf.org/html/rfc1918#section-3
@@ -2500,16 +2355,16 @@ class KubeClient:
             },
         ]
         return await self.create_egress_network_policy(
-            name, pod_labels=pod_labels, rules=rules, namespace_name=namespace_name
+            namespace, name, pod_labels=pod_labels, rules=rules
         )
 
     async def create_egress_network_policy(
         self,
+        namespace: str,
         name: str,
         *,
         pod_labels: dict[str, str],
         rules: list[dict[str, Any]],
-        namespace_name: str | None = None,
         labels: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         assert pod_labels
@@ -2526,25 +2381,29 @@ class KubeClient:
                 "egress": rules,
             },
         }
-        url = self._generate_all_network_policies_url(namespace_name)
-        return await self._request(method="POST", url=url, json=request_payload)
+        url = self.generate_network_policy_url(namespace)
+        return await self.post(url=url, json=request_payload)
 
     async def get_network_policy(
-        self, name: str, namespace_name: str | None = None
+        self,
+        namespace: str,
+        name: str,
     ) -> dict[str, Any]:
-        url = self._generate_network_policy_url(name, namespace_name)
-        return await self._request(method="GET", url=url)
+        url = self._generate_network_policy_url(name, namespace)
+        return await self.get(url=url)
 
     async def delete_network_policy(
-        self, name: str, namespace_name: str | None = None
+        self,
+        namespace: str,
+        name: str,
     ) -> None:
-        url = self._generate_network_policy_url(name, namespace_name)
+        url = self._generate_network_policy_url(name, namespace)
         await self._delete_resource_url(url)
 
     async def delete_all_network_policies(
         self,
+        namespace: str,
         *,
-        namespace_name: str | None = None,
         labels: dict[str, str] | None = None,
     ) -> None:
         params: dict[str, str] = {}
@@ -2552,9 +2411,8 @@ class KubeClient:
             params["labelSelector"] = ",".join(
                 "=".join(item) for item in labels.items()
             )
-        await self._request(
-            method="DELETE",
-            url=self._generate_all_network_policies_url(namespace_name),
+        await self.delete(
+            url=self.generate_network_policy_url(namespace),
             params=params,
         )
 
@@ -2611,11 +2469,11 @@ class Watcher(abc.ABC):
                         continue
                     for handler in self._handlers:
                         await handler.handle(event)
-            except KubeClientUnauthorizedException as exc:
+            except KubeClientUnauthorized as exc:
                 logger.info("Kube client unauthorized", exc_info=exc)
-            except ExpiredException as exc:
+            except KubeClientExpired as exc:
                 logger.info("Kube token expired", exc_info=exc)
-            except ResourceGoneException as exc:
+            except ResourceGone as exc:
                 logger.warning("Resource gone", exc_info=exc)
             except aiohttp.ClientError as exc:
                 logger.warning("Watch client error", exc_info=exc)

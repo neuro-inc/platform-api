@@ -236,7 +236,7 @@ class TestSecret:
     def test_k8s_secret_name(self) -> None:
         uri = "secret://test-cluster/test-user/test-secret%252d"
         sec = Secret.create(uri)
-        assert sec.k8s_secret_name == "project--test-user--secrets"
+        assert sec.k8s_secret_name == "project--no-org--test-user--secrets"
 
     def test_to_uri(self) -> None:
         uri = "secret://test-cluster/test-user/test-secret%252d"
@@ -530,7 +530,12 @@ def job_request() -> JobRequest:
 
 class TestJobRecord:
     def test_should_be_deleted_pending(self, job_request: JobRequest) -> None:
-        record = JobRecord.create(request=job_request, cluster_name="test-cluster")
+        record = JobRecord.create(
+            request=job_request,
+            cluster_name="test-cluster",
+            org_name="test-org",
+            project_name="test-proj",
+        )
         assert not record.finished_at
         assert not record.should_be_deleted(delay=timedelta(60))
 
@@ -541,6 +546,8 @@ class TestJobRecord:
             status=JobStatus.FAILED,
             request=job_request,
             cluster_name="test-cluster",
+            org_name="test-org",
+            project_name="test-proj",
             materialized=True,
         )
         assert record.finished_at
@@ -584,7 +591,9 @@ class TestJob:
     ) -> None:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
+            record=JobRecord.create(
+                request=job_request, cluster_name="test-cluster", org_name="test-org"
+            ),
         )
         assert job.http_host == "testjob.jobs"
 
@@ -625,6 +634,7 @@ class TestJob:
             record=JobRecord.create(
                 request=job_request,
                 cluster_name="test-cluster",
+                org_name="test-org",
                 name="test-job-name-123",
             ),
         )
@@ -635,7 +645,9 @@ class TestJob:
     ) -> None:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
+            record=JobRecord.create(
+                request=job_request, cluster_name="test-cluster", org_name="test-org"
+            ),
         )
         assert not job.has_nvidia_gpu
         assert not job.has_amd_gpu
@@ -646,7 +658,9 @@ class TestJob:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
-                request=job_request_with_gpu, cluster_name="test-cluster"
+                request=job_request_with_gpu,
+                cluster_name="test-cluster",
+                org_name="test-org",
             ),
         )
         assert job.has_nvidia_gpu
@@ -669,6 +683,7 @@ class TestJob:
                 record=JobRecord.create(
                     request=job_request,
                     cluster_name="test-cluster",
+                    org_name="test-org",
                     status_history=job_status_history,
                     current_datetime_factory=current_datetime_factory,
                     scheduler_enabled=scheduler_enabled,
@@ -815,23 +830,32 @@ class TestJob:
     ) -> None:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                org_name="test-org",
+                project_name="test-proj",
+            ),
         )
         assert job.http_url == "http://testjob.jobs"
 
     def test_http_urls_named(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
+        org_name = "test-org"
+        project_name = "test-proj"
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request,
                 cluster_name="test-cluster",
+                org_name=org_name,
+                project_name=project_name,
                 name="test-job-name",
                 owner="owner",
             ),
         )
-        suffix = self._create_http_host_named_suffix(None, "owner")
+        suffix = self._create_http_host_named_suffix(org_name, project_name)
 
         assert job.http_url == "http://testjob.jobs"
         assert job.http_url_named == f"http://test-job-name--{suffix}.jobs"
@@ -844,7 +868,12 @@ class TestJob:
         )
         job = Job(
             orchestrator_config=config,
-            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
+            record=JobRecord.create(
+                request=job_request,
+                cluster_name="test-cluster",
+                org_name="test-org",
+                project_name="test-proj",
+            ),
         )
         assert job.http_url == "https://testjob.jobs"
 
@@ -854,16 +883,20 @@ class TestJob:
         config = dataclasses.replace(
             mock_orchestrator.config, is_http_ingress_secure=True
         )
+        org_name = "test-org"
+        project_name = "test-proj"
         job = Job(
             orchestrator_config=config,
             record=JobRecord.create(
                 request=job_request,
                 cluster_name="test-cluster",
+                org_name=org_name,
+                project_name=project_name,
                 name="test-job-name",
                 owner="owner",
             ),
         )
-        suffix = self._create_http_host_named_suffix(None, "owner")
+        suffix = self._create_http_host_named_suffix(org_name, project_name)
 
         assert job.http_url == "https://testjob.jobs"
         assert job.http_url_named == f"https://test-job-name--{suffix}.jobs"
@@ -873,16 +906,20 @@ class TestJob:
         mock_orchestrator: MockOrchestrator,
         job_request_with_http: JobRequest,
     ) -> None:
+        org_name = "test-org"
+        project_name = "test-proj"
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
                 request=job_request_with_http,
                 cluster_name="test-cluster",
+                org_name=org_name,
+                project_name=project_name,
                 name="test-job-name",
                 owner="owner",
             ),
         )
-        suffix = self._create_http_host_named_suffix(None, "owner")
+        suffix = self._create_http_host_named_suffix(org_name, project_name)
 
         assert job.http_url == "http://testjob.jobs"
         assert job.http_url_named == f"http://test-job-name--{suffix}.jobs"
@@ -913,6 +950,9 @@ class TestJob:
             record=JobRecord.create(
                 request=job_request,
                 cluster_name="test-cluster",
+                org_name="test-org",
+                project_name="test-proj",
+                namespace="default",
                 owner="testuser",
                 name="test-job-name",
                 scheduler_enabled=False,
@@ -929,8 +969,10 @@ class TestJob:
             "name": "test-job-name",
             "owner": "testuser",
             "cluster_name": "test-cluster",
-            "project_name": "testuser",
-            "org_project_hash": "96d4e8e962",
+            "project_name": "test-proj",
+            "org_name": "test-org",
+            "org_project_hash": "9b3a00517b",
+            "namespace": "platform--test-org--test-proj--cf56e857cd2ca1215e818565",
             "request": job_request.to_primitive(),
             "status": "failed",
             "materialized": False,
@@ -967,6 +1009,8 @@ class TestJob:
             record=JobRecord.create(
                 request=job_request,
                 cluster_name="test-cluster",
+                org_name="test-org",
+                project_name="test-proj",
                 max_run_time_minutes=500,
             ),
         )
@@ -974,8 +1018,10 @@ class TestJob:
             "id": "testjob",
             "owner": "compute",
             "cluster_name": "test-cluster",
-            "project_name": "compute",
-            "org_project_hash": "c16d8d755d",
+            "project_name": "test-proj",
+            "org_name": "test-org",
+            "org_project_hash": "9b3a00517b",
+            "namespace": "platform--test-org--test-proj--cf56e857cd2ca1215e818565",
             "request": job_request.to_primitive(),
             "status": "pending",
             "statuses": [
@@ -1004,7 +1050,11 @@ class TestJob:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
             record=JobRecord.create(
-                request=job_request, cluster_name="test-cluster", tags=["t1", "t2"]
+                request=job_request,
+                cluster_name="test-cluster",
+                org_name="test-org",
+                project_name="test-proj",
+                tags=["t1", "t2"],
             ),
         )
         primitive = job.to_primitive()
@@ -1018,6 +1068,8 @@ class TestJob:
             record=JobRecord.create(
                 request=job_request,
                 cluster_name="test-cluster",
+                org_name="test-org",
+                project_name="test-proj",
                 preset_name="cpu-small",
             ),
         )
@@ -1046,6 +1098,8 @@ class TestJob:
             record=JobRecord.create(
                 request=job_request,
                 cluster_name="test-cluster",
+                org_name="test-org",
+                project_name="test-proj",
                 priority=JobPriority.HIGH,
             ),
         )
@@ -1057,11 +1111,14 @@ class TestJob:
     ) -> None:
         payload = {
             "id": "testjob",
+            "org_name": "test-org",
+            "project_name": "test-proj",
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
             "finished_at": datetime.now(UTC).isoformat(),
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
@@ -1074,10 +1131,10 @@ class TestJob:
         assert job.owner == "testuser"
         assert not job.scheduler_enabled
         assert not job.preemptible_node
-        assert not job.org_name
         assert job.max_run_time_minutes is None
         assert job.restart_policy == JobRestartPolicy.NEVER
         assert job.org_project_hash
+        assert job.namespace == "default"
 
     def test_from_primitive_check_name(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
@@ -1085,11 +1142,14 @@ class TestJob:
         payload = {
             "id": "testjob",
             "name": "test-job-name",
+            "org_name": "test-org",
+            "project_name": "test-proj",
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
             "finished_at": datetime.now(UTC).isoformat(),
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
@@ -1100,12 +1160,15 @@ class TestJob:
     ) -> None:
         payload = {
             "id": "testjob",
+            "org_name": "test-org",
+            "project_name": "test-proj",
             "preset_name": "cpu-small",
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
             "finished_at": datetime.now(UTC).isoformat(),
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.preset_name == "cpu-small"
@@ -1116,12 +1179,15 @@ class TestJob:
         tags = ["tag1", "tag2"]
         payload = {
             "id": "testjob",
+            "org_name": "test-org",
+            "project_name": "test-proj",
             "owner": "testuser",
             "tags": tags,
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
             "finished_at": datetime.now(UTC).isoformat(),
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
@@ -1133,6 +1199,8 @@ class TestJob:
         finished_at_str = datetime.now(UTC).isoformat()
         payload = {
             "id": "testjob",
+            "org_name": "test-org",
+            "project_name": "test-proj",
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
@@ -1140,6 +1208,7 @@ class TestJob:
             "statuses": [{"status": "failed", "transition_time": finished_at_str}],
             "scheduler_enabled": True,
             "preemptible_node": True,
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
@@ -1158,10 +1227,13 @@ class TestJob:
             "id": "testjob",
             "owner": "testuser",
             "cluster_name": "testcluster",
+            "org_name": "test-org",
+            "project_name": "test-proj",
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
             "finished_at": datetime.now(UTC).isoformat(),
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.id == "testjob"
@@ -1182,12 +1254,15 @@ class TestJob:
         job_request_payload["container"].pop("command", None)
         payload = {
             "id": "testjob",
+            "org_name": "test-org",
+            "project_name": "test-proj",
             "name": "test-job-name",
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
             "finished_at": datetime.now(UTC).isoformat(),
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command is None
@@ -1200,12 +1275,15 @@ class TestJob:
         job_request_payload["container"]["command"] = "arg1 arg2 arg3"
         payload = {
             "id": "testjob",
+            "org_name": "test-org",
+            "project_name": "test-proj",
             "name": "test-job-name",
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
             "finished_at": datetime.now(UTC).isoformat(),
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command == "arg1 arg2 arg3"
@@ -1218,12 +1296,15 @@ class TestJob:
         job_request_payload["container"].pop("command", None)
         payload = {
             "id": "testjob",
+            "org_name": "test-org",
+            "project_name": "test-proj",
             "name": "test-job-name",
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
             "finished_at": datetime.now(UTC).isoformat(),
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command is None
@@ -1236,12 +1317,15 @@ class TestJob:
         job_request_payload["container"]["command"] = "arg1 arg2 arg3"
         payload = {
             "id": "testjob",
+            "org_name": "test-org",
+            "project_name": "test-proj",
             "name": "test-job-name",
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
             "finished_at": datetime.now(UTC).isoformat(),
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.request.container.command == "arg1 arg2 arg3"
@@ -1252,6 +1336,8 @@ class TestJob:
     ) -> None:
         payload = {
             "id": "testjob",
+            "org_name": "test-org",
+            "project_name": "test-proj",
             "name": "test-job-name",
             "owner": "testuser",
             "request": job_request_payload,
@@ -1259,6 +1345,7 @@ class TestJob:
             "materialized": True,
             "finished_at": datetime.now(UTC).isoformat(),
             "max_run_time_minutes": 100,
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.max_run_time_minutes == 100
@@ -1268,6 +1355,8 @@ class TestJob:
     ) -> None:
         payload = {
             "id": "testjob",
+            "org_name": "test-org",
+            "project_name": "test-proj",
             "name": "test-job-name",
             "owner": "testuser",
             "request": job_request_payload,
@@ -1275,6 +1364,7 @@ class TestJob:
             "materialized": True,
             "finished_at": datetime.now(UTC).isoformat(),
             "max_run_time_minutes": None,
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.max_run_time_minutes is None
@@ -1292,6 +1382,8 @@ class TestJob:
             "finished_at": datetime.now(UTC).isoformat(),
             "max_run_time_minutes": None,
             "org_name": "some-random-213-tenant-id",
+            "project_name": "test-proj",
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.org_name == "some-random-213-tenant-id"
@@ -1301,12 +1393,15 @@ class TestJob:
     ) -> None:
         payload = {
             "id": "testjob",
+            "org_name": "test-org",
+            "project_name": "test-proj",
             "owner": "testuser",
             "request": job_request_payload,
             "status": "succeeded",
             "materialized": True,
             "finished_at": datetime.now(UTC).isoformat(),
             "priority": 1,
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.priority == JobPriority.HIGH
@@ -1323,7 +1418,10 @@ class TestJob:
             "materialized": True,
             "finished_at": datetime.now(UTC).isoformat(),
             "max_run_time_minutes": None,
+            "org_name": "test-org",
+            "project_name": "test-proj",
             "org_project_hash": "0123456789",
+            "namespace": "default",
         }
         job = Job.from_primitive(mock_orchestrator.config, payload)
         assert job.org_project_hash == bytes.fromhex("0123456789")
@@ -1334,19 +1432,24 @@ class TestJob:
         job = Job(
             mock_orchestrator.config,
             record=JobRecord.create(
-                request=job_request, cluster_name="test-cluster", owner="testuser"
+                request=job_request,
+                cluster_name="test-cluster",
+                org_name="test-org",
+                owner="testuser",
             ),
         )
-        assert job.to_uri() == URL(f"job://test-cluster/testuser/{job.id}")
+        assert job.to_uri() == URL(f"job://test-cluster/test-org/testuser/{job.id}")
 
     def test_to_uri_orphaned(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
             mock_orchestrator.config,
-            record=JobRecord.create(request=job_request, cluster_name="test-cluster"),
+            record=JobRecord.create(
+                request=job_request, cluster_name="test-cluster", org_name="test-org"
+            ),
         )
-        assert job.to_uri() == URL(f"job://test-cluster/compute/{job.id}")
+        assert job.to_uri() == URL(f"job://test-cluster/test-org/compute/{job.id}")
 
     def test_to_uri_no_cluster(
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
@@ -1354,7 +1457,10 @@ class TestJob:
         job = Job(
             mock_orchestrator.config,
             record=JobRecord.create(
-                request=job_request, cluster_name="", owner="testuser"
+                request=job_request,
+                cluster_name="",
+                org_name="test-org",
+                owner="testuser",
             ),
         )
         with pytest.raises(AssertionError):
@@ -1366,10 +1472,13 @@ class TestJob:
         job = Job(
             mock_orchestrator.config,
             record=JobRecord.create(
-                request=job_request, cluster_name="test-cluster", orphaned_job_owner=""
+                request=job_request,
+                cluster_name="test-cluster",
+                org_name="test-org",
+                orphaned_job_owner="",
             ),
         )
-        assert job.to_uri() == URL(f"job://test-cluster/{job.id}")
+        assert job.to_uri() == URL(f"job://test-cluster/test-org/{job.id}")
 
     def test_to_and_from_primitive(
         self, mock_orchestrator: MockOrchestrator, job_request_payload: dict[str, Any]
@@ -1386,6 +1495,7 @@ class TestJob:
             "request": job_request_payload,
             "owner": "user",
             "cluster_name": "testcluster",
+            "org_name": "test-org",
             "project_name": "project",
             "org_project_hash": "b75bbeeaca",
             "status": current_status_item["status"],
@@ -1399,6 +1509,7 @@ class TestJob:
             "privileged": False,
             "priority": 0,
             "energy_schedule_name": "green",
+            "namespace": "default",
         }
         actual = Job.to_primitive(
             Job.from_primitive(mock_orchestrator.config, expected)

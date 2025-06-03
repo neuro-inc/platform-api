@@ -169,13 +169,17 @@ class TestJobsService:
         self,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         assert original_job.status == JobStatus.PENDING
         assert not original_job.is_finished
@@ -183,7 +187,7 @@ class TestJobsService:
         job = await jobs_service.get_job(job_id=original_job.id)
         assert job.id == original_job.id
         assert job.status == JobStatus.PENDING
-        assert job.owner == test_user.name
+        assert job.owner == test_user_with_org.name
 
     async def test_create_job_with_org(
         self,
@@ -192,12 +196,14 @@ class TestJobsService:
         test_user_with_org: AuthUser,
         test_cluster: str,
         test_org: str,
+        test_project: str,
     ) -> None:
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
             user=test_user_with_org,
             cluster_name=test_cluster,
             org_name=test_org,
+            project_name=test_project,
         )
         assert original_job.status == JobStatus.PENDING
         assert not original_job.is_finished
@@ -214,8 +220,10 @@ class TestJobsService:
         cluster_config_registry: ClusterConfigRegistry,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         cluster_config = replace(
             cluster_config,
@@ -232,8 +240,10 @@ class TestJobsService:
         ):
             original_job, _ = await jobs_service.create_job(
                 job_request=mock_job_request,
-                user=test_user,
+                user=test_user_with_org,
                 cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
                 privileged=True,
             )
 
@@ -243,8 +253,10 @@ class TestJobsService:
         cluster_config_registry: ClusterConfigRegistry,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         cluster_config = replace(
             cluster_config,
@@ -257,8 +269,10 @@ class TestJobsService:
 
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             privileged=True,
         )
         assert original_job.privileged
@@ -269,8 +283,10 @@ class TestJobsService:
         cluster_config_registry: ClusterConfigRegistry,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         cluster_config = replace(
             cluster_config,
@@ -285,8 +301,10 @@ class TestJobsService:
         ):
             await jobs_service.create_job(
                 job_request=mock_job_request,
-                user=test_user,
+                user=test_user_with_org,
                 cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
                 priority=JobPriority.HIGH,
             )
 
@@ -296,8 +314,10 @@ class TestJobsService:
         cluster_config_registry: ClusterConfigRegistry,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         cluster_config = replace(
             cluster_config,
@@ -308,8 +328,10 @@ class TestJobsService:
 
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             priority=JobPriority.HIGH,
         )
         assert original_job.priority == JobPriority.HIGH
@@ -320,13 +342,17 @@ class TestJobsService:
         mock_job_request: JobRequest,
         mock_api_base: URL,
         mock_auth_client: MockAuthClient,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             pass_config=True,
         )
         assert original_job.status == JobStatus.PENDING
@@ -334,13 +360,13 @@ class TestJobsService:
         passed_data_str = original_job.request.container.env[NEURO_PASSED_CONFIG]
         passed_data = json.loads(base64.b64decode(passed_data_str).decode())
         assert URL(passed_data["url"]) == mock_api_base
-        assert passed_data["token"] == f"token-{test_user.name}"
+        assert passed_data["token"] == f"token-{test_user_with_org.name}"
         assert passed_data["cluster"] == original_job.cluster_name
         assert passed_data["org_name"] == original_job.org_name
         assert passed_data["project_name"] == original_job.project_name
         token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
         assert mock_auth_client.grants[0] == (
-            test_user.name,
+            test_user_with_org.name,
             [Permission(uri=token_uri, action="read")],
         )
 
@@ -353,12 +379,14 @@ class TestJobsService:
         test_user_with_org: AuthUser,
         test_cluster: str,
         test_org: str,
+        test_project: str,
     ) -> None:
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
             user=test_user_with_org,
             cluster_name=test_cluster,
             org_name=test_org,
+            project_name=test_project,
             pass_config=True,
         )
         assert original_job.status == JobStatus.PENDING
@@ -382,20 +410,24 @@ class TestJobsService:
         mock_job_request: JobRequest,
         mock_auth_client: MockAuthClient,
         mock_orchestrator: MockOrchestrator,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             pass_config=True,
         )
 
         mock_orchestrator.update_status_to_return(JobStatus.SUCCEEDED)
         await jobs_poller_service.update_jobs_statuses()
         token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
-        assert mock_auth_client._revokes[0] == (test_user.name, [token_uri])
+        assert mock_auth_client._revokes[0] == (test_user_with_org.name, [token_uri])
 
     async def test_pass_config_revoke_after_failure(
         self,
@@ -404,20 +436,24 @@ class TestJobsService:
         mock_job_request: JobRequest,
         mock_auth_client: MockAuthClient,
         mock_orchestrator: MockOrchestrator,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             pass_config=True,
         )
 
         mock_orchestrator.update_status_to_return(JobStatus.FAILED)
         await jobs_poller_service.update_jobs_statuses()
         token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
-        assert mock_auth_client._revokes[0] == (test_user.name, [token_uri])
+        assert mock_auth_client._revokes[0] == (test_user_with_org.name, [token_uri])
 
     async def test_pass_config_revoke_fail_to_start(
         self,
@@ -426,13 +462,17 @@ class TestJobsService:
         mock_job_request: JobRequest,
         mock_auth_client: MockAuthClient,
         mock_orchestrator: MockOrchestrator,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             pass_config=True,
         )
 
@@ -444,7 +484,7 @@ class TestJobsService:
         await jobs_poller_service.update_jobs_statuses()
 
         token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
-        assert mock_auth_client._revokes[0] == (test_user.name, [token_uri])
+        assert mock_auth_client._revokes[0] == (test_user_with_org.name, [token_uri])
 
     async def test_pass_config_revoke_fail_on_update(
         self,
@@ -453,13 +493,17 @@ class TestJobsService:
         mock_job_request: JobRequest,
         mock_auth_client: MockAuthClient,
         mock_orchestrator: MockOrchestrator,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             pass_config=True,
         )
 
@@ -468,7 +512,7 @@ class TestJobsService:
         await jobs_poller_service.update_jobs_statuses()
 
         token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
-        assert mock_auth_client._revokes[0] == (test_user.name, [token_uri])
+        assert mock_auth_client._revokes[0] == (test_user_with_org.name, [token_uri])
 
     async def test_pass_config_revoke_cluster_unavail(
         self,
@@ -479,13 +523,17 @@ class TestJobsService:
         mock_orchestrator: MockOrchestrator,
         cluster_holder: ClusterHolder,
         cluster_config: ClusterConfig,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         original_job, _ = await jobs_service.create_job(
             job_request=mock_job_request,
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             pass_config=True,
         )
 
@@ -496,15 +544,17 @@ class TestJobsService:
         await jobs_poller_service.update_jobs_statuses()
 
         token_uri = f"token://{original_job.cluster_name}/job/{original_job.id}"
-        assert mock_auth_client._revokes[0] == (test_user.name, [token_uri])
+        assert mock_auth_client._revokes[0] == (test_user_with_org.name, [token_uri])
 
     async def test_create_job_pass_config_env_present(
         self,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
         mock_api_base: URL,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         mock_job_request.container.env[NEURO_PASSED_CONFIG] = "anything"
         with pytest.raises(
@@ -513,8 +563,10 @@ class TestJobsService:
         ):
             await jobs_service.create_job(
                 job_request=mock_job_request,
-                user=test_user,
+                user=test_user_with_org,
                 cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
                 pass_config=True,
             )
 
@@ -525,8 +577,10 @@ class TestJobsService:
         mock_job_request: JobRequest,
         mock_orchestrator: MockOrchestrator,
         caplog: LogCaptureFixture,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         def _f(job: Job) -> Exception:
             raise JobError(f"Bad job {job.id}")
@@ -535,7 +589,11 @@ class TestJobsService:
         mock_orchestrator.get_job_status_exc_factory = _f
 
         job, _ = await jobs_service.create_job(
-            job_request=mock_job_request, user=test_user, cluster_name=test_cluster
+            job_request=mock_job_request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         assert job.status == JobStatus.PENDING
         assert not job.is_finished
@@ -552,24 +610,36 @@ class TestJobsService:
         self,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job_name = "test-Job_name"
         request = job_request_factory()
         job_1, _ = await jobs_service.create_job(
-            request, user=test_user, cluster_name=test_cluster, job_name=job_name
+            request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
+            job_name=job_name,
         )
         assert job_1.status == JobStatus.PENDING
         assert not job_1.is_finished
 
         with pytest.raises(
             JobsServiceException,
-            match=f"job with name '{job_name}' and project '{test_user.name}'"
+            match=f"job with name '{job_name}' and project '{test_project}'"
             f" already exists: '{job_1.id}'",
         ):
             job_2, _ = await jobs_service.create_job(
-                request, user=test_user, cluster_name=test_cluster, job_name=job_name
+                request,
+                user=test_user_with_org,
+                cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
+                job_name=job_name,
             )
 
     async def test_create_job__name_conflict_with_running(
@@ -578,13 +648,20 @@ class TestJobsService:
         jobs_service: JobsService,
         jobs_poller_service: JobsPollerService,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job_name = "test-Job_name"
         request = job_request_factory()
         job_1, _ = await jobs_service.create_job(
-            request, user=test_user, cluster_name=test_cluster, job_name=job_name
+            request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
+            job_name=job_name,
         )
         assert job_1.status == JobStatus.PENDING
         assert job_1.status_history.current.reason == JobStatusReason.CREATING
@@ -606,11 +683,16 @@ class TestJobsService:
 
         with pytest.raises(
             JobsServiceException,
-            match=f"job with name '{job_name}' and project '{test_user.name}'"
+            match=f"job with name '{job_name}' and project '{test_project}'"
             f" already exists: '{job_1.id}'",
         ):
             job_2, _ = await jobs_service.create_job(
-                request, user=test_user, cluster_name=test_cluster, job_name=job_name
+                request,
+                user=test_user_with_org,
+                cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
+                job_name=job_name,
             )
 
     @pytest.mark.parametrize(
@@ -623,14 +705,21 @@ class TestJobsService:
         jobs_poller_service: JobsPollerService,
         job_request_factory: Callable[[], JobRequest],
         first_job_status: JobStatus,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job_name = "test-Job_name"
         request = job_request_factory()
 
         first_job, _ = await jobs_service.create_job(
-            request, user=test_user, cluster_name=test_cluster, job_name=job_name
+            request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
+            job_name=job_name,
         )
         assert first_job.status == JobStatus.PENDING
         assert first_job.status_history.current.reason == JobStatusReason.CREATING
@@ -651,7 +740,12 @@ class TestJobsService:
         assert job.status == first_job_status
 
         second_job, _ = await jobs_service.create_job(
-            request, user=test_user, cluster_name=test_cluster, job_name=job_name
+            request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
+            job_name=job_name,
         )
         assert second_job.status == JobStatus.PENDING
         assert not second_job.is_finished
@@ -666,8 +760,10 @@ class TestJobsService:
         mock_orchestrator: MockOrchestrator,
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         mock_jobs_storage.fail_set_job_transaction = True
 
@@ -679,18 +775,29 @@ class TestJobsService:
             JobsServiceException, match="Failed to create job: transaction failed"
         ):
             await jobs_service.create_job(
-                request, user=test_user, cluster_name=test_cluster, job_name=job_name
+                request,
+                user=test_user_with_org,
+                cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
+                job_name=job_name,
             )
 
     async def test_get_status_by_job_id(
         self,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job, _ = await jobs_service.create_job(
-            job_request=mock_job_request, user=test_user, cluster_name=test_cluster
+            job_request=mock_job_request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         job_status = await jobs_service.get_job_status(job_id=job.id)
         assert job_status == JobStatus.PENDING
@@ -699,16 +806,22 @@ class TestJobsService:
         self,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job, _ = await jobs_service.create_job(
-            job_request=mock_job_request, user=test_user, cluster_name=test_cluster
+            job_request=mock_job_request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         job_id = job.id
         job_status = await jobs_service.get_job_status(job_id)
         assert job_status == JobStatus.PENDING
-        job_status = await jobs_service.get_job_status(job_id)
+        await jobs_service.get_job_status(job_id)
         status_item = job.status_history.last
         assert status_item.reason == JobStatusReason.CREATING
 
@@ -734,11 +847,17 @@ class TestJobsService:
         self,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job, _ = await jobs_service.create_job(
-            job_request=mock_job_request, user=test_user, cluster_name=test_cluster
+            job_request=mock_job_request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
 
         await jobs_service.set_job_materialized(job.id, True)
@@ -753,11 +872,17 @@ class TestJobsService:
         self,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job, _ = await jobs_service.create_job(
-            job_request=mock_job_request, user=test_user, cluster_name=test_cluster
+            job_request=mock_job_request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
 
         await jobs_service.update_max_run_time(job.id, max_run_time_minutes=10)
@@ -774,15 +899,21 @@ class TestJobsService:
         self,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job_ids = []
         num_jobs = 1000
         for _ in range(num_jobs):
             job_request = job_request_factory()
             job, _ = await jobs_service.create_job(
-                job_request=job_request, user=test_user, cluster_name=test_cluster
+                job_request=job_request,
+                user=test_user_with_org,
+                cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
             )
             job_ids.append(job.id)
 
@@ -794,13 +925,19 @@ class TestJobsService:
         jobs_service: JobsService,
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         async def create_job() -> Job:
             job_request = job_request_factory()
             job, _ = await jobs_service.create_job(
-                job_request=job_request, user=test_user, cluster_name=test_cluster
+                job_request=job_request,
+                user=test_user_with_org,
+                cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
             )
             return job
 
@@ -848,42 +985,51 @@ class TestJobsService:
         mock_orchestrator: MockOrchestrator,
         mock_jobs_storage: MockJobsStorage,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
         user_factory: UserFactory,
+        test_org: str,
+        test_project: str,
     ) -> None:
         otheruser = await user_factory(
-            "other-user", [(test_cluster, Balance(), Quota())]
+            "other-user", [(test_cluster, test_org, Balance(), Quota())]
         )
+        other_project = "other-project"
 
-        async def create_job(job_name: str, user: AuthUser) -> Job:
+        async def create_job(
+            job_name: str,
+            user: AuthUser,
+            project_name: str,
+        ) -> Job:
             job_request = job_request_factory()
             job, _ = await jobs_service.create_job(
                 job_request=job_request,
                 job_name=job_name,
                 user=user,
                 cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=project_name,
             )
             return job
 
-        job1 = await create_job("job1", test_user)
+        job1 = await create_job("job1", test_user_with_org, test_project)
         async with mock_jobs_storage.try_update_job(job1.id) as record:
             record.status = JobStatus.SUCCEEDED
 
-        await create_job("job2", test_user)
-        await create_job("job1", otheruser)
+        await create_job("job2", test_user_with_org, test_project)
+        await create_job("job1", otheruser, other_project)
 
-        job = await jobs_service.get_job_by_name("job1", test_user)
+        job = await jobs_service.get_job_by_name("job1", test_user_with_org)
         assert job.id == job1.id
 
-        job2 = await create_job("job1", test_user)
+        job2 = await create_job("job1", test_user_with_org, test_project)
 
-        job = await jobs_service.get_job_by_name("job1", test_user)
+        job = await jobs_service.get_job_by_name("job1", test_user_with_org)
         assert job.id != job1.id
         assert job.id == job2.id
 
         with pytest.raises(JobError):
-            await jobs_service.get_job_by_name("job3", test_user)
+            await jobs_service.get_job_by_name("job3", test_user_with_org)
 
         with pytest.raises(JobError):
             await jobs_service.get_job_by_name("job2", otheruser)
@@ -892,13 +1038,19 @@ class TestJobsService:
         self,
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         async def create_job() -> Job:
             job_request = job_request_factory()
             job, _ = await jobs_service.create_job(
-                job_request=job_request, user=test_user, cluster_name=test_cluster
+                job_request=job_request,
+                user=test_user_with_org,
+                cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
             )
             return job
 
@@ -944,13 +1096,19 @@ class TestJobsService:
         jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=60)
 
         original_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request=job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         assert original_job.status == JobStatus.PENDING
 
@@ -977,13 +1135,19 @@ class TestJobsService:
         jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=0)
 
         original_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request=job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
 
         await jobs_poller_service.update_jobs_statuses()
@@ -1009,14 +1173,20 @@ class TestJobsService:
         jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         mock_orchestrator.raise_on_get_job_status = True
         jobs_service = jobs_service_factory(deletion_delay_s=0)
 
         original_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request=job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
 
         await jobs_poller_service.update_jobs_statuses()
@@ -1064,13 +1234,19 @@ class TestJobsService:
         job_request_factory: Callable[[], JobRequest],
         reason: str,
         description: str,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=60)
 
         original_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request=job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         assert original_job.status == JobStatus.PENDING
 
@@ -1111,14 +1287,20 @@ class TestJobsService:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         reason: str,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs_service = jobs_service_factory(image_pull_error_delay_s=60)
         jobs_poller_service = poller_service_factory(image_pull_error_delay_s=60)
 
         original_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request=job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         assert original_job.status == JobStatus.PENDING
 
@@ -1147,14 +1329,20 @@ class TestJobsService:
         poller_service_factory: Callable[..., JobsPollerService],
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs_service = jobs_service_factory(image_pull_error_delay_s=0.3)
         jobs_poller_service = poller_service_factory(image_pull_error_delay_s=0.3)
 
         original_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request=job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         assert original_job.status == JobStatus.PENDING
 
@@ -1200,13 +1388,19 @@ class TestJobsService:
         jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=60)
 
         original_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request=job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         assert original_job.status == JobStatus.PENDING
 
@@ -1236,13 +1430,19 @@ class TestJobsService:
         jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=0)
 
         original_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request=job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
 
         await jobs_poller_service.update_jobs_statuses()
@@ -1271,20 +1471,25 @@ class TestJobsService:
         job_request_factory: Callable[[], JobRequest],
         test_cluster: str,
         user_factory: UserFactory,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=60)
 
         user = await user_factory(
-            "testuser", [(test_cluster, Balance(), Quota(total_running_jobs=5))]
+            "testuser",
+            [(test_cluster, test_org, Balance(), Quota(total_running_jobs=5))],
         )
         jobs = []
 
-        # Start bunch of jobs
+        # Start a bunch of jobs
         for _ in range(10):
             job, _ = await jobs_service.create_job(
                 job_request=job_request_factory(),
                 user=user,
                 cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
                 wait_for_jobs_quota=True,
             )
             assert job.status == JobStatus.PENDING
@@ -1342,6 +1547,7 @@ class TestJobsService:
         test_cluster: str,
         org_factory: OrgFactory,
         user_factory: UserFactory,
+        test_project: str,
     ) -> None:
         jobs_service = jobs_service_factory(deletion_delay_s=60)
 
@@ -1363,11 +1569,12 @@ class TestJobsService:
                 cluster_name=test_cluster,
                 wait_for_jobs_quota=True,
                 org_name=org,
+                project_name=test_project,
             )
             assert job.status == JobStatus.PENDING
             jobs.append(job)
 
-        # Start bunch of jobs for different org - should not have no effect
+        # Start a bunch of jobs for different org - should have an effect
         for index in range(10):
             user = await user_factory(
                 f"testorguser{index}", [(test_cluster, org2, Balance(), Quota())]
@@ -1378,6 +1585,7 @@ class TestJobsService:
                 cluster_name=test_cluster,
                 wait_for_jobs_quota=True,
                 org_name=org2,
+                project_name=test_project,
             )
 
         await jobs_poller_service.update_jobs_statuses()
@@ -1427,13 +1635,17 @@ class TestJobsService:
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
         jobs_poller_service: JobsPollerService,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         original_job, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         assert original_job.status == JobStatus.PENDING
 
@@ -1452,13 +1664,19 @@ class TestJobsService:
         jobs_service_factory: Callable[[float], JobsService],
         jobs_poller_service: JobsPollerService,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs_service = jobs_service_factory(3600 * 7)  # Set huge deletion timeout
 
         original_job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request=job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         assert original_job.status == JobStatus.PENDING
 
@@ -1488,11 +1706,21 @@ class TestJobsService:
         balance: Balance,
         user_factory: UserFactory,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
-        user = await user_factory("testuser", [(test_cluster, balance, Quota())])
+        user = await user_factory(
+            "testuser", [(test_cluster, test_org, balance, Quota())]
+        )
         request = job_request_factory()
 
-        job, _ = await jobs_service.create_job(request, user, cluster_name=test_cluster)
+        job, _ = await jobs_service.create_job(
+            request,
+            user,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
+        )
         assert job.status == JobStatus.PENDING
 
     @pytest.mark.parametrize(
@@ -1510,6 +1738,7 @@ class TestJobsService:
         user_factory: UserFactory,
         test_cluster: str,
         test_org: str,
+        test_project: str,
     ) -> None:
         user = await user_factory(
             "testuser", [(test_cluster, test_org, balance, Quota())]
@@ -1520,7 +1749,11 @@ class TestJobsService:
             NoCreditsError, match=f"No credits left for user '{user.name}'"
         ):
             await jobs_service.create_job(
-                request, user, cluster_name=test_cluster, org_name=test_org
+                request,
+                user,
+                cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
             )
 
     @pytest.mark.parametrize(
@@ -1538,6 +1771,8 @@ class TestJobsService:
         org_factory: OrgFactory,
         user_factory: UserFactory,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         org_name = await org_factory("testorg", [(test_cluster, balance, Quota())])
         user = await user_factory(
@@ -1549,7 +1784,11 @@ class TestJobsService:
             NoCreditsError, match=f"No credits left for org '{org_name}'"
         ):
             await jobs_service.create_job(
-                request, user, cluster_name=test_cluster, org_name=org_name
+                request,
+                user,
+                cluster_name=test_cluster,
+                org_name=org_name,
+                project_name=test_project,
             )
 
     async def test_raise_for_jobs_limit(
@@ -1558,18 +1797,33 @@ class TestJobsService:
         job_request_factory: Callable[..., JobRequest],
         user_factory: UserFactory,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         user = await user_factory(
-            "testuser", [(test_cluster, Balance(), Quota(total_running_jobs=5))]
+            "testuser",
+            [(test_cluster, test_org, Balance(), Quota(total_running_jobs=5))],
         )
         for _ in range(5):
             request = job_request_factory()
-            await jobs_service.create_job(request, user=user, cluster_name=test_cluster)
+            await jobs_service.create_job(
+                request,
+                user=user,
+                cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
+            )
 
         request = job_request_factory()
 
         with pytest.raises(RunningJobsQuotaExceededError):
-            await jobs_service.create_job(request, user=user, cluster_name=test_cluster)
+            await jobs_service.create_job(
+                request,
+                user=user,
+                cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
+            )
 
     async def test_raise_for_jobs_limit_in_org(
         self,
@@ -1578,6 +1832,8 @@ class TestJobsService:
         org_factory: OrgFactory,
         user_factory: UserFactory,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         org_name = await org_factory(
             "testorg", [(test_cluster, Balance(), Quota(total_running_jobs=5))]
@@ -1591,7 +1847,11 @@ class TestJobsService:
         for _ in range(5):
             request = job_request_factory()
             await jobs_service.create_job(
-                request, user=user2, cluster_name=test_cluster, org_name=org_name
+                request,
+                user=user2,
+                cluster_name=test_cluster,
+                org_name=org_name,
+                project_name=test_project,
             )
 
         request = job_request_factory()
@@ -1601,7 +1861,11 @@ class TestJobsService:
             match=f"Jobs limit quota exceeded for org '{org_name}'",
         ):
             await jobs_service.create_job(
-                request, user=user, cluster_name=test_cluster, org_name=org_name
+                request,
+                user=user,
+                cluster_name=test_cluster,
+                org_name=org_name,
+                project_name=test_project,
             )
 
     async def test_no_raise_for_jobs_limit_if_wait_flag(
@@ -1610,19 +1874,33 @@ class TestJobsService:
         job_request_factory: Callable[..., JobRequest],
         user_factory: UserFactory,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         user = await user_factory(
-            "testuser", [(test_cluster, Balance(), Quota(total_running_jobs=5))]
+            "testuser",
+            [(test_cluster, test_org, Balance(), Quota(total_running_jobs=5))],
         )
         for _ in range(5):
             request = job_request_factory()
-            await jobs_service.create_job(request, user=user, cluster_name=test_cluster)
+            await jobs_service.create_job(
+                request,
+                user=user,
+                cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
+            )
 
         request = job_request_factory()
 
         # Should not raise anything:
         await jobs_service.create_job(
-            request, user=user, cluster_name=test_cluster, wait_for_jobs_quota=True
+            request,
+            user=user,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
+            wait_for_jobs_quota=True,
         )
 
 
@@ -1666,26 +1944,40 @@ class TestJobsServiceCluster:
         mock_job_request: JobRequest,
         user_factory: UserFactory,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
-        user = await user_factory("testuser", [("missing", Balance(), Quota())])
+        user = await user_factory(
+            "testuser", [("missing", test_org, Balance(), Quota())]
+        )
 
         with pytest.raises(JobsServiceException, match="Cluster 'missing' not found"):
             await jobs_service.create_job(
-                mock_job_request, user=user, cluster_name="missing"
+                mock_job_request,
+                user=user,
+                cluster_name="missing",
+                org_name=test_org,
+                project_name=test_project,
             )
 
     async def test_create_job_user_cluster_name_fallback(
         self,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         with pytest.raises(
             JobsServiceException, match="Cluster 'test-cluster' not found"
         ):
             await jobs_service.create_job(
-                mock_job_request, user=test_user, cluster_name=test_cluster
+                mock_job_request,
+                user=test_user_with_org,
+                cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
             )
 
     async def test_update_pending_job_missing_cluster(
@@ -1700,8 +1992,10 @@ class TestJobsServiceCluster:
         mock_auth_client: AuthClient,
         mock_admin_client: AdminClient,
         mock_api_base: URL,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs_service = JobsService(
             cluster_config_registry=cluster_config_registry,
@@ -1736,7 +2030,11 @@ class TestJobsServiceCluster:
             cluster.orchestrator.get_job_status_exc_factory = _f
 
         job, _ = await jobs_service.create_job(
-            mock_job_request, user=test_user, cluster_name=test_cluster
+            mock_job_request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
 
         status = await jobs_service.get_job_status(job.id)
@@ -1759,8 +2057,10 @@ class TestJobsServiceCluster:
         mock_auth_client: AuthClient,
         mock_admin_client: AdminClient,
         mock_api_base: URL,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs_service = JobsService(
             cluster_config_registry=cluster_config_registry,
@@ -1786,7 +2086,11 @@ class TestJobsServiceCluster:
         await cluster_config_registry.replace(cluster_config)
 
         job, _ = await jobs_service.create_job(
-            mock_job_request, user=test_user, cluster_name=test_cluster
+            mock_job_request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
 
         status = await jobs_service.get_job_status(job.id)
@@ -1817,8 +2121,10 @@ class TestJobsServiceCluster:
         mock_auth_client: AuthClient,
         mock_admin_client: AdminClient,
         mock_api_base: URL,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs_service = JobsService(
             cluster_config_registry=cluster_config_registry,
@@ -1844,7 +2150,11 @@ class TestJobsServiceCluster:
         await cluster_config_registry.replace(cluster_config)
 
         job, _ = await jobs_service.create_job(
-            mock_job_request, user=test_user, cluster_name=test_cluster
+            mock_job_request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
 
         async with mock_jobs_storage.try_update_job(job.id) as record:
@@ -1875,6 +2185,8 @@ class TestJobsServiceCluster:
         mock_api_base: URL,
         user_factory: UserFactory,
         test_cluster: str,
+        org_factory: OrgFactory,
+        test_project: str,
     ) -> None:
         jobs_service = JobsService(
             cluster_config_registry=cluster_config_registry,
@@ -1889,9 +2201,14 @@ class TestJobsServiceCluster:
         await cluster_config_registry.replace(replace(cluster_config, name="default"))
         await cluster_config_registry.replace(replace(cluster_config, name="missing"))
 
-        user = await user_factory("testuser", [("missing", Balance(), Quota())])
+        org = await org_factory("testuser", [("missing", Balance(), Quota())])
+        user = await user_factory("testuser", [("missing", org, Balance(), Quota())])
         job, _ = await jobs_service.create_job(
-            mock_job_request, user=user, cluster_name="missing"
+            mock_job_request,
+            user=user,
+            cluster_name="missing",
+            org_name=org,
+            project_name=test_project,
         )
         assert job.cluster_name == "missing"
 
@@ -1902,7 +2219,7 @@ class TestJobsServiceCluster:
 
         job = await jobs_service.get_job(job.id)
         assert job.cluster_name == "missing"
-        assert job.http_host == f"{job.id}.missing-cluster"
+        assert job.http_host == f"{job.id}.{job.namespace}.missing-cluster"
         assert job.http_host_named is None
 
     async def test_delete_missing_cluster(
@@ -1917,8 +2234,10 @@ class TestJobsServiceCluster:
         mock_auth_client: AuthClient,
         mock_admin_client: AdminClient,
         mock_api_base: URL,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs_service = JobsService(
             cluster_config_registry=cluster_config_registry,
@@ -1944,7 +2263,11 @@ class TestJobsServiceCluster:
         await cluster_config_registry.replace(cluster_config)
 
         job, _ = await jobs_service.create_job(
-            mock_job_request, user=test_user, cluster_name=test_cluster
+            mock_job_request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
 
         await cluster_holder.clean()
@@ -1969,8 +2292,10 @@ class TestJobsServiceCluster:
         mock_auth_client: AuthClient,
         mock_admin_client: AdminClient,
         mock_api_base: URL,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs_service = JobsService(
             cluster_config_registry=cluster_config_registry,
@@ -2005,7 +2330,11 @@ class TestJobsServiceCluster:
             cluster.orchestrator.delete_job_exc_factory = _f
 
         job, _ = await jobs_service.create_job(
-            mock_job_request, user=test_user, cluster_name=test_cluster
+            mock_job_request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
 
         await jobs_service.cancel_job(job.id)
@@ -2055,6 +2384,7 @@ class TestJobServiceNotification:
         user_factory: UserFactory,
         test_cluster: str,
         test_org: str,
+        test_project: str,
     ) -> None:
         user = await user_factory(
             "testuser",
@@ -2067,6 +2397,7 @@ class TestJobServiceNotification:
                 user=user,
                 cluster_name=test_cluster,
                 org_name=test_org,
+                project_name=test_project,
             )
 
         assert mock_notifications_client.sent_notifications == [
@@ -2082,11 +2413,17 @@ class TestJobServiceNotification:
         jobs_poller_service: JobsPollerService,
         mock_job_request: JobRequest,
         mock_notifications_client: MockNotificationsClient,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job, _ = await jobs_service.create_job(
-            job_request=mock_job_request, user=test_user, cluster_name=test_cluster
+            job_request=mock_job_request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         notifications = [
             JobTransition(
@@ -2125,11 +2462,17 @@ class TestJobServiceNotification:
         mock_orchestrator: MockOrchestrator,
         mock_job_request: JobRequest,
         mock_notifications_client: MockNotificationsClient,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job, _ = await jobs_service.create_job(
-            job_request=mock_job_request, user=test_user, cluster_name=test_cluster
+            job_request=mock_job_request,
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
 
         notifications = [
@@ -2173,11 +2516,17 @@ class TestJobServiceNotification:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         mock_notifications_client: MockNotificationsClient,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request=job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         notifications = [
             JobTransition(
@@ -2249,11 +2598,17 @@ class TestJobServiceNotification:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         mock_notifications_client: MockNotificationsClient,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job, _ = await jobs_service.create_job(
-            job_request=job_request_factory(), user=test_user, cluster_name=test_cluster
+            job_request=job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
         )
         notifications = [
             JobTransition(
@@ -2332,14 +2687,18 @@ class TestJobServiceNotification:
         self,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         with pytest.raises(JobsServiceException) as cm:
             await jobs_service.create_job(
                 job_request=mock_job_request,
-                user=test_user,
+                user=test_user_with_org,
                 cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
                 job_name="job-name",
             )
         assert (
@@ -2417,8 +2776,10 @@ class TestScheduledJobsService:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         test_scheduler: MockJobsScheduler,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         jobs = []
 
@@ -2426,8 +2787,10 @@ class TestScheduledJobsService:
         for _ in range(9):
             job, _ = await jobs_service.create_job(
                 job_request=job_request_factory(),
-                user=test_user,
+                user=test_user_with_org,
                 cluster_name=test_cluster,
+                org_name=test_org,
+                project_name=test_project,
                 scheduler_enabled=True,
             )
             assert job.status == JobStatus.PENDING
@@ -2608,25 +2971,33 @@ class TestScheduledJobsService:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         test_scheduler: MockJobsScheduler,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job1, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
         )
         job2, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
         )
         job3, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
         )
 
@@ -2697,19 +3068,25 @@ class TestScheduledJobsService:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         test_scheduler: MockJobsScheduler,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job1, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
         )
         job2, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
         )
 
@@ -2766,13 +3143,17 @@ class TestScheduledJobsService:
         jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
         )
 
@@ -2797,13 +3178,17 @@ class TestScheduledJobsService:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         test_scheduler: MockJobsScheduler,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job1, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
             priority=JobPriority.LOW,
         )
@@ -2812,8 +3197,10 @@ class TestScheduledJobsService:
 
         job2, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
             priority=JobPriority.NORMAL,
         )
@@ -2822,8 +3209,10 @@ class TestScheduledJobsService:
 
         job3, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
             priority=JobPriority.HIGH,
         )
@@ -2871,27 +3260,35 @@ class TestScheduledJobsService:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         test_scheduler: MockJobsScheduler,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job1, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
             priority=JobPriority.HIGH,
         )
         job2, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
             priority=JobPriority.HIGH,
         )
         job3, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
             priority=JobPriority.NORMAL,
         )
@@ -2955,19 +3352,25 @@ class TestScheduledJobsService:
         jobs_poller_service: JobsPollerService,
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[..., JobRequest],
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         job1, _ = await jobs_service.create_job(
             job_request=job_request_factory(memory=10**10),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
         )
         job2, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
         )
 
@@ -2992,16 +3395,20 @@ class TestScheduledJobsService:
         mock_orchestrator: MockOrchestrator,
         job_request_factory: Callable[[], JobRequest],
         test_scheduler: MockJobsScheduler,
-        test_user: AuthUser,
+        test_user_with_org: AuthUser,
         test_cluster: str,
+        test_org: str,
+        test_project: str,
     ) -> None:
         # Sunday
         test_scheduler.set_current_datetime(datetime(2023, 1, 1, 0, 0, tzinfo=UTC))
 
         job1, _ = await jobs_service.create_job(
             job_request=job_request_factory(),
-            user=test_user,
+            user=test_user_with_org,
             cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
             scheduler_enabled=True,
             energy_schedule_name="green",
         )

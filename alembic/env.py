@@ -1,10 +1,15 @@
 import sys
+from collections.abc import Iterable
 
 from neuro_logging import init_logging
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
+from alembic.operations import MigrationScript
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from platform_api.config_factory import EnvironConfigFactory, to_sync_postgres_dsn
+from platform_api.orchestrator.jobs_storage.postgres import JobTables
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -15,11 +20,8 @@ config = context.config
 if sys.argv[0].endswith("alembic"):
     init_logging()
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
+JobTables.create()  # populate metadata
+target_metadata = JobTables.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -54,10 +56,27 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
 
-    In this scenario we need to create an Engine
+    In this scenario, we need to create an Engine
     and associate a connection with the context.
 
     """
+
+    def process_revision_directives(
+        context: MigrationContext,
+        revision: str | Iterable[str | None] | Iterable[str],
+        directives: list[MigrationScript],
+    ) -> None:
+        migration_script = directives[0]
+        head_revision = ScriptDirectory.from_config(context.config).get_current_head()  # type: ignore[arg-type]
+        if head_revision is None:
+            new_rev_id = 1
+        else:
+            last_rev_id = int(head_revision.lstrip("0"))
+            new_rev_id = last_rev_id + 1
+
+        # fill zeros
+        migration_script.rev_id = "{0:04}".format(new_rev_id)  # noqa UP032,UP030
+
     if not config.get_main_option("sqlalchemy.url"):
         db_config = EnvironConfigFactory().create_postgres()
         postgres_dsn = to_sync_postgres_dsn(db_config.postgres_dsn)
@@ -70,7 +89,11 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            process_revision_directives=process_revision_directives,
+        )
 
         with context.begin_transaction():
             context.run_migrations()

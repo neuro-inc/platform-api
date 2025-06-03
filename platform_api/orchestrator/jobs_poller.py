@@ -124,7 +124,7 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
             http_server=http_server,
         )
 
-    project_name = payload.get("project_name") or payload["owner"]
+    project_name = payload["project_name"]
     return JobRecord(
         request=JobRequest(
             job_id=payload["id"],
@@ -139,6 +139,7 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
         org_name=payload.get("org_name"),
         project_name=project_name,
         org_project_hash=bytes.fromhex(payload["org_project_hash"]),
+        namespace=payload["namespace"],
         name=payload.get("name"),
         preset_name=payload.get("preset_name"),
         tags=payload.get("tags", []),
@@ -148,8 +149,6 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
         privileged=payload["privileged"],
         materialized=payload["materialized"],  # Missing
         max_run_time_minutes=payload.get("max_run_time_minutes"),
-        internal_hostname=payload.get("internal_hostname"),
-        internal_hostname_named=payload.get("internal_hostname_named"),
         schedule_timeout=payload.get("schedule_timeout"),
         restart_policy=JobRestartPolicy(payload["restart_policy"]),
         priority=JobPriority.from_name(payload["priority"]),

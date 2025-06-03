@@ -1,7 +1,7 @@
 """remove billing_log table
 
 Revision ID: fc114b57a56c
-Revises: 13c284f200c9
+Revises: 0017
 Create Date: 2024-10-03 10:35:09.025409
 
 """
@@ -12,8 +12,8 @@ import sqlalchemy.dialects.postgresql as sapg
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "fc114b57a56c"
-down_revision = "13c284f200c9"
+revision = "fc114b57a56c"  # todo: rename to 0018 after next migration will be applied
+down_revision = "0017"
 branch_labels = None
 depends_on = None
 

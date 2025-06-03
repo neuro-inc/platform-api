@@ -172,11 +172,13 @@ class MockOrchestrator(Orchestrator):
         self._mock_exit_codes[job_id] = new_exit_code
 
     async def get_missing_secrets(
-        self, user_name: str, secret_names: list[str]
+        self, namespace: str, user_name: str, secret_names: list[str]
     ) -> list[str]:
         return []
 
-    async def get_missing_disks(self, disks: list[Disk]) -> list[Disk]:
+    async def get_missing_disks(
+        self, namespace: str, org_name: str, project_name: str, disks: list[Disk]
+    ) -> list[Disk]:
         return []
 
     def update_preemptible_jobs(self, *jobs: Job | list[Job]) -> None:
@@ -465,7 +467,6 @@ def registry_config() -> RegistryConfig:
 def cluster_config() -> ClusterConfig:
     orchestrator_config = OrchestratorConfig(
         jobs_domain_name_template="{job_id}.jobs",
-        jobs_internal_domain_name_template="{job_id}.default",
         resource_pool_types=[ResourcePoolType()],
         presets=[
             Preset(
@@ -723,3 +724,8 @@ async def test_user_with_org(
     return await user_factory(
         "test_user", [(test_cluster, test_org, Balance(), Quota())]
     )
+
+
+@pytest.fixture
+def test_project() -> str:
+    return "proj"
