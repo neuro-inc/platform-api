@@ -99,7 +99,6 @@ class MyJob(Job):
         )
 
     async def start(self) -> JobStatus:
-        self.init_job_internal_hostnames()
         status = await self._orchestrator.start_job(self)
         assert status == JobStatus.PENDING
         return status
