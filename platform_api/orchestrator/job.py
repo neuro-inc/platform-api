@@ -301,8 +301,6 @@ class JobRecord:
     materialized: bool = False
     privileged: bool = False
     max_run_time_minutes: int | None = None
-    internal_hostname: str | None = None
-    internal_hostname_named: str | None = None
     schedule_timeout: float | None = None
     restart_policy: JobRestartPolicy = JobRestartPolicy.NEVER
     priority: JobPriority = JobPriority.NORMAL
@@ -567,8 +565,6 @@ class JobRecord:
             pass_config=payload.get("pass_config", False),
             privileged=payload.get("privileged", False),
             max_run_time_minutes=payload.get("max_run_time_minutes", None),
-            internal_hostname=payload.get("internal_hostname", None),
-            internal_hostname_named=payload.get("internal_hostname_named", None),
             schedule_timeout=payload.get("schedule_timeout", None),
             restart_policy=JobRestartPolicy(
                 payload.get("restart_policy", str(cls.restart_policy))
@@ -881,26 +877,11 @@ class Job:
 
     @property
     def internal_hostname(self) -> str | None:
-        return self._record.internal_hostname
+        return f"{self.id}.{self.namespace}"
 
     @property
     def internal_hostname_named(self) -> str | None:
-        return self._record.internal_hostname_named
-
-    def init_job_internal_hostnames(self) -> None:
-        self._record.internal_hostname = (
-            self._orchestrator_config.jobs_internal_domain_name_template.format(
-                job_id=self.id,
-                namespace=self.namespace,
-            )
-        )
-        if self.is_named:
-            self._record.internal_hostname_named = (
-                self._orchestrator_config.jobs_internal_domain_name_template.format(
-                    job_id=self.host_segment_named,
-                    namespace=self.namespace,
-                )
-            )
+        return f"{self.host_segment_named}.{self.namespace}"
 
     @property
     def scheduler_enabled(self) -> bool:

@@ -341,7 +341,6 @@ class JobsService:
 
             async with self._create_job_in_storage(record) as record:
                 job = self._make_job(record, cluster_config)
-                job.init_job_internal_hostnames()
             return job, Status.create(job.status)
         except JobsStorageException as transaction_err:
             logger.error("Failed to create job %s: %s", job_id, transaction_err)

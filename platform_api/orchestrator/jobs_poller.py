@@ -149,8 +149,6 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
         privileged=payload["privileged"],
         materialized=payload["materialized"],  # Missing
         max_run_time_minutes=payload.get("max_run_time_minutes"),
-        internal_hostname=payload.get("internal_hostname"),
-        internal_hostname_named=payload.get("internal_hostname_named"),
         schedule_timeout=payload.get("schedule_timeout"),
         restart_policy=JobRestartPolicy(payload["restart_policy"]),
         priority=JobPriority.from_name(payload["priority"]),
