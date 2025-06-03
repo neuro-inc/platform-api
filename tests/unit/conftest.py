@@ -467,7 +467,6 @@ def registry_config() -> RegistryConfig:
 def cluster_config() -> ClusterConfig:
     orchestrator_config = OrchestratorConfig(
         jobs_domain_name_template="{job_id}.jobs",
-        jobs_internal_domain_name_template="{job_id}.default",
         resource_pool_types=[ResourcePoolType()],
         presets=[
             Preset(

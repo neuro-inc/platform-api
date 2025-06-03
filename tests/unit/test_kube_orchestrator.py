@@ -1846,7 +1846,6 @@ class TestKubeOrchestrator:
             registry_config=RegistryConfig(username="username", password="password"),
             orchestrator_config=OrchestratorConfig(
                 jobs_domain_name_template="{job_id}.default.org.neu.ro",
-                jobs_internal_domain_name_template="{job_id}.platform-jobs",
                 resource_pool_types=[],
                 presets=[],
             ),

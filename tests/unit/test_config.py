@@ -75,7 +75,6 @@ class TestStorageVolume:
         )
         orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
             presets=[],
         )
@@ -111,7 +110,6 @@ class TestStorageVolume:
         )
         orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
             presets=[],
         )
@@ -142,7 +140,6 @@ class TestStorageVolume:
         )
         orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
             presets=[],
         )
@@ -179,7 +176,6 @@ class TestStorageVolume:
         )
         orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
             presets=[],
         )
@@ -218,7 +214,6 @@ class TestStorageVolume:
         )
         orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
             presets=[],
         )
@@ -261,7 +256,6 @@ class TestStorageVolume:
         )
         orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
             presets=[],
         )
@@ -299,7 +293,6 @@ class TestSecretVolume:
         )
         orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.testdomain",
-            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
             resource_pool_types=[ResourcePoolType()],
             presets=[],
         )

@@ -157,7 +157,6 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
     def _f(**kwargs: Any) -> OrchestratorConfig:
         defaults = {
             "jobs_domain_name_template": "{job_id}.jobs.neu.ro",
-            "jobs_internal_domain_name_template": "{job_id}.platformapi-tests",
             "resource_pool_types": [
                 ResourcePoolType(
                     name="cpu",

@@ -256,10 +256,6 @@ class TestClusterConfigFactory:
             orchestrator.jobs_domain_name_template
             == orchestrator_payload["job_hostname_template"]
         )
-        assert (
-            orchestrator.jobs_internal_domain_name_template
-            == orchestrator_payload["job_internal_hostname_template"]
-        )
         assert orchestrator.job_schedule_timeout == 60
         assert orchestrator.job_schedule_scaleup_timeout == 120
         assert orchestrator.allow_job_priority

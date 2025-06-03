@@ -302,7 +302,6 @@ class JobsPollerService:
 
         self._dummy_cluster_orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.{namespace}.missing-cluster",
-            jobs_internal_domain_name_template="{job_id}.{namespace}.missing-cluster",
             resource_pool_types=(),
             presets=(),
         )

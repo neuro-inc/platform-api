@@ -86,7 +86,6 @@ class EnergyConfig:
 @dataclass(frozen=True)
 class OrchestratorConfig:
     jobs_domain_name_template: str
-    jobs_internal_domain_name_template: str
 
     resource_pool_types: Sequence[ResourcePoolType]
     presets: Sequence[Preset]
