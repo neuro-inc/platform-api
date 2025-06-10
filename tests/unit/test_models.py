@@ -1852,6 +1852,8 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "total_price_credits": "0",
         "price_credits_per_hour": "10",
         "priority": "normal",
+        "internal_hostname": mock.ANY,
+        "internal_hostname_named": mock.ANY,
     }
 
 
@@ -1969,6 +1971,8 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "price_credits_per_hour": "10",
         "total_price_credits": "0",
         "priority": "normal",
+        "internal_hostname": mock.ANY,
+        "internal_hostname_named": mock.ANY,
     }
 
 
@@ -2045,6 +2049,8 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "price_credits_per_hour": "10",
         "total_price_credits": "0",
         "priority": "normal",
+        "internal_hostname": mock.ANY,
+        "internal_hostname_named": mock.ANY,
     }
 
 

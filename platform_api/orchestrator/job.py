@@ -507,10 +507,6 @@ class JobRecord:
             result["schedule_timeout"] = self.schedule_timeout
         if self.max_run_time_minutes is not None:
             result["max_run_time_minutes"] = self.max_run_time_minutes
-        if self.internal_hostname:
-            result["internal_hostname"] = self.internal_hostname
-        if self.internal_hostname_named:
-            result["internal_hostname_named"] = self.internal_hostname_named
         if self.name:
             result["name"] = self.name
         if self.preset_name:
@@ -881,6 +877,8 @@ class Job:
 
     @property
     def internal_hostname_named(self) -> str | None:
+        if not self.is_named:
+            return None
         return f"{self.host_segment_named}.{self.namespace}"
 
     @property

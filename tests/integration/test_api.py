@@ -3547,7 +3547,8 @@ class TestJobs:
             assert payload["container"]["command"] == "false"
             assert payload["http_url"] == f"http://{job_id}.jobs.neu.ro"
             assert payload["http_url_named"].startswith(f"http://{job_name}--")
-            expected_internal_hostname = f"{job_id}.platformapi-tests"
+            namespace = payload["namespace"]
+            expected_internal_hostname = f"{job_id}.{namespace}"
             assert payload["internal_hostname"] == expected_internal_hostname
             assert not payload["scheduler_enabled"]
             assert not payload["preemptible_node"]
@@ -5471,14 +5472,15 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, response_text
             response_payload = await response.json()
             job_id = response_payload["id"]
+            actual_namespace = response_payload["namespace"]
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
                 "project_name": regular_user.name,
                 "org_project_hash": mock.ANY,
-                "namespace": mock.ANY,
-                "internal_hostname": f"{job_id}.platformapi-tests",
+                "namespace": actual_namespace,
+                "internal_hostname": f"{job_id}.{actual_namespace}",
                 "status": "pending",
                 "statuses": [
                     {
@@ -5531,14 +5533,15 @@ class TestJobs:
             job_id=job_id, status="succeeded"
         )
 
+        actual_namespace = response_payload["namespace"]
         assert response_payload == {
             "id": job_id,
             "owner": regular_user.name,
             "cluster_name": "test-cluster",
             "project_name": regular_user.name,
             "org_project_hash": mock.ANY,
-            "namespace": mock.ANY,
-            "internal_hostname": f"{job_id}.platformapi-tests",
+            "namespace": actual_namespace,
+            "internal_hostname": f"{job_id}.{actual_namespace}",
             "status": "succeeded",
             "statuses": mock.ANY,
             "history": {
@@ -5629,16 +5632,17 @@ class TestJobs:
             job_id=job_id, status="failed"
         )
 
+        actual_namespace = response_payload["namespace"]
         assert response_payload == {
             "id": job_id,
             "owner": regular_user.name,
             "cluster_name": "test-cluster",
             "project_name": regular_user.name,
             "org_project_hash": mock.ANY,
-            "namespace": mock.ANY,
+            "namespace": actual_namespace,
             "status": "failed",
             "statuses": mock.ANY,
-            "internal_hostname": f"{job_id}.platformapi-tests",
+            "internal_hostname": f"{job_id}.{actual_namespace}",
             "history": {
                 "status": "failed",
                 "reason": "Error",
@@ -5722,14 +5726,15 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, response_text
             response_payload = await response.json()
             job_id = response_payload["id"]
+            actual_namespace = response_payload["namespace"]
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
                 "project_name": regular_user.name,
                 "org_project_hash": mock.ANY,
-                "namespace": mock.ANY,
-                "internal_hostname": f"{job_id}.platformapi-tests",
+                "namespace": actual_namespace,
+                "internal_hostname": f"{job_id}.{actual_namespace}",
                 "status": "pending",
                 "statuses": [
                     {
@@ -5832,14 +5837,15 @@ class TestJobs:
             assert response.status == HTTPAccepted.status_code, response_text
             response_payload = await response.json()
             job_id = response_payload["id"]
+            actual_namespace = response_payload["namespace"]
             assert response_payload == {
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
                 "project_name": regular_user.name,
                 "org_project_hash": mock.ANY,
-                "namespace": mock.ANY,
-                "internal_hostname": f"{job_id}.platformapi-tests",
+                "namespace": actual_namespace,
+                "internal_hostname": f"{job_id}.{actual_namespace}",
                 "status": "pending",
                 "statuses": [
                     {
@@ -5910,7 +5916,7 @@ class TestRuntimeLimitEnforcer:
             status="running",
         )
         # Due to conflict between quota enforcer and jobs poller (see issue #986),
-        # we cannot guarrantee that the quota will be enforced up to one
+        # we cannot guarantee that the quota will be enforced up to one
         # enforce-poller's interval, so we check up to 7 intervals:
         max_enforcing_time = 60 + config.job_policy_enforcer.interval_sec * 7
         await user_jobs_client.long_polling_by_job_id(

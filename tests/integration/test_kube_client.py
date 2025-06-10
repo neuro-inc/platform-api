@@ -524,7 +524,7 @@ class TestKubeClient:
             ingress_name = f"ingress-{uuid.uuid4().hex[:6]}"
             labels = {"platform.neuromation.io/job": job_id}
             ingress = await kube_client.create_ingress(
-                kube_client.namespace, ingress_name, labels=labels
+                ingress_name, kube_client.namespace, labels=labels
             )
             await delete_ingress_later(ingress)
             return ingress

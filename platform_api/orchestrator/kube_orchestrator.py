@@ -9,7 +9,7 @@ from pathlib import PurePath
 from typing import Any
 
 import aiohttp
-from apolo_kube_client.apolo import create_namespace
+from apolo_kube_client.apolo import create_namespace, normalize_name
 from apolo_kube_client.errors import (
     KubeClientException,
     ResourceExists,
@@ -30,6 +30,7 @@ from .job_request import (
     JobNotFoundException,
     JobStatus,
     JobUnschedulableException,
+    Secret,
 )
 from .kube_client import (
     DockerRegistrySecret,
@@ -277,7 +278,8 @@ class KubeOrchestrator(Orchestrator):
         return SecretVolume(name=volume_name, k8s_secret_name=name)
 
     def _get_k8s_secret_name(self, project_name: str) -> str:
-        return f"{self._project_prefix}{project_name.replace('/', '--')}--secrets"
+        path = Secret.path_with_org(project_name)
+        return f"{self._project_prefix}{path.replace('/', '--')}--secrets"
 
     def _get_user_resource_name(self, job: Job) -> str:
         return (self._docker_secret_name_prefix + job.owner.replace("/", "--")).lower()
@@ -543,10 +545,15 @@ class KubeOrchestrator(Orchestrator):
                 pvc_project: str = pvc["metadata"]["labels"].get(
                     "platform.neuromation.io/project"
                 )
-                pvc_org: str | None = pvc["metadata"]["labels"].get(
-                    "platform.neuromation.io/disk-api-org-name"
+                pvc_org: str = (
+                    pvc["metadata"]["labels"].get(
+                        "platform.neuromation.io/disk-api-org-name", NO_ORG
+                    )
+                    or NO_ORG
                 )
-                if pvc_project != project_name and pvc_org != org_name:
+                if pvc_project != project_name and normalize_name(
+                    pvc_org
+                ) != normalize_name(org_name):
                     missing.append(disk)
             except (KubeClientException, KeyError):
                 missing.append(disk)
@@ -593,8 +600,9 @@ class KubeOrchestrator(Orchestrator):
             logger.info("Starting Service for %s.", job.id)
             service = await self._create_service(job.namespace, descriptor)
             if job.is_named:
-                # If old job finished recently, it pod can be still there
-                # with corresponding service, so we should delete it here
+                # If an old job finished recently, its pod can be still there
+                #  with the corresponding service,
+                #  so we should delete it here
                 service_name = self._get_service_name_for_named(job)
                 await self._delete_service(
                     job.namespace, service_name, ignore_missing=True
@@ -726,7 +734,7 @@ class KubeOrchestrator(Orchestrator):
 
         # handling PENDING/RUNNING jobs
 
-        # In case this is an external job and node/pod was lost
+        # In case this is an external job, and node/pod was lost
         # we need to reschedule external job runner to continue manage
         # external job state, we treat it as restartable.
         if job.is_restartable or job.is_external:

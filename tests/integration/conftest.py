@@ -383,7 +383,7 @@ async def kube_ingress_ip(kube_config_cluster_payload: dict[str, Any]) -> str:
 
 
 class MyKubeClient(KubeClient):
-    _created_pvcs: list[str]
+    _created_pvcs: list[tuple[str, str]]
 
     async def init(self) -> None:
         await super().init()
@@ -391,8 +391,8 @@ class MyKubeClient(KubeClient):
             self._created_pvcs = []
 
     async def close(self) -> None:
-        for pvc_name in self._created_pvcs:
-            await self.delete_pvc(pvc_name)
+        for namespace, pvc_name in self._created_pvcs:
+            await self.delete_pvc(namespace, pvc_name)
         await super().close()
 
     async def create_pvc(
@@ -418,13 +418,14 @@ class MyKubeClient(KubeClient):
         }
         payload = await self.post(url=url, json=primitive)
         self._raise_for_status(payload)
-        self._created_pvcs.append(pvc_name)
+        self._created_pvcs.append((namespace, pvc_name))
 
     async def delete_pvc(
         self,
+        namespace: str,
         pvc_name: str,
     ) -> None:
-        url = self._generate_pvc_url(pvc_name)
+        url = self._generate_pvc_url(pvc_name, namespace)
         payload = await self.delete(url=url)
         self._raise_for_status(payload)
 
@@ -521,8 +522,12 @@ class MyKubeClient(KubeClient):
         except TimeoutError:
             pytest.fail("Pod still exists")
 
-    async def create_triggered_scaleup_event(self, pod_id: str) -> None:
-        url = f"{self.namespace_url}/events"
+    async def create_triggered_scaleup_event(
+        self,
+        pod_id: str,
+        namespace: str,
+    ) -> None:
+        url = f"{self.generate_namespace_url(namespace)}/events"
         now = datetime.now(timezone.utc)  # noqa: UP017
         now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         data = {
@@ -534,7 +539,7 @@ class MyKubeClient(KubeClient):
                 "apiVersion": "v1",
                 "kind": "Pod",
                 "name": pod_id,
-                "namespace": self._namespace,
+                "namespace": namespace,
                 "resourceVersion": "48102193",
                 "uid": "eddfe678-86e9-11e9-9d65-42010a800018",
             },
@@ -544,10 +549,9 @@ class MyKubeClient(KubeClient):
             "metadata": {
                 "creationTimestamp": now_str,
                 "name": f"{pod_id}.{uuid.uuid4()}",
-                "namespace": self._namespace,
+                "namespace": namespace,
                 "selfLink": (
-                    f"/api/v1/namespaces/{self._namespace}"
-                    "/events/{pod_id}.15a870d7e2bb228b"
+                    f"/api/v1/namespaces/{namespace}/events/{{pod_id}}.15a870d7e2bb228b"
                 ),
                 "uid": "cb886f64-8f96-11e9-9251-42010a800038",
             },
@@ -560,8 +564,12 @@ class MyKubeClient(KubeClient):
 
         await self.post(url=url, json=data)
 
-    async def create_failed_attach_volume_event(self, pod_id: str) -> None:
-        url = f"{self.namespace_url}/events"
+    async def create_failed_attach_volume_event(
+        self,
+        pod_id: str,
+        namespace: str,
+    ) -> None:
+        url = f"{self.generate_namespace_url(namespace)}/events"
         now = datetime.now(timezone.utc)  # noqa: UP017
         now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         data = {
@@ -573,7 +581,7 @@ class MyKubeClient(KubeClient):
                 "apiVersion": "v1",
                 "kind": "Pod",
                 "name": pod_id,
-                "namespace": self._namespace,
+                "namespace": namespace,
                 "resourceVersion": "48102193",
                 "uid": "eddfe678-86e9-11e9-9d65-42010a800018",
             },
@@ -583,10 +591,9 @@ class MyKubeClient(KubeClient):
             "metadata": {
                 "creationTimestamp": now_str,
                 "name": f"{pod_id}.{uuid.uuid4()}",
-                "namespace": self._namespace,
+                "namespace": namespace,
                 "selfLink": (
-                    f"/api/v1/namespaces/{self._namespace}"
-                    f"/events/{pod_id}.15a870d7e2bb228b"
+                    f"/api/v1/namespaces/{namespace}/events/{pod_id}.15a870d7e2bb228b"
                 ),
                 "uid": "cb886f64-8f96-11e9-9251-42010a800038",
             },
