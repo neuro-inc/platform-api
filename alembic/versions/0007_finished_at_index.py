@@ -1,7 +1,7 @@
 """finished_at_index
 
-Revision ID: 331ab0d09462
-Revises: 68197d86eb6f
+Revision ID: 0007
+Revises: 0006
 Create Date: 2020-12-24 16:15:44.297184
 
 """
@@ -9,8 +9,8 @@ Create Date: 2020-12-24 16:15:44.297184
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "331ab0d09462"
-down_revision = "68197d86eb6f"
+revision = "0007"
+down_revision = "0006"
 branch_labels = None
 depends_on = None
 

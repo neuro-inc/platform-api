@@ -239,6 +239,23 @@ typing-extensions = ">=4.12"
 tz = ["tzdata"]
 
 [[package]]
+name = "apolo-kube-client"
+version = "25.5.0"
+description = "Apolo internal client for kubernetes API"
+optional = false
+python-versions = "<4.0,>=3.9"
+groups = ["main"]
+files = [
+    {file = "apolo_kube_client-25.5.0-py3-none-any.whl", hash = "sha256:f347b528a0091db1e0daca409905116fc22486435681668a8584f02af44f0070"},
+    {file = "apolo_kube_client-25.5.0.tar.gz", hash = "sha256:5eeb5946e2602e5d149ae8c4c597104e288d471859cd8e1d6e848b4e4dc6c66c"},
+]
+
+[package.dependencies]
+aiohttp = ">=3.8.1"
+multidict = ">=6"
+yarl = ">=1.10"
+
+[[package]]
 name = "asyncpg"
 version = "0.30.0"
 description = "An asyncio PostgreSQL driver"
@@ -2452,5 +2469,5 @@ propcache = ">=0.2.0"
 
 [metadata]
 lock-version = "2.1"
-python-versions = ">=3.13,<4.0"
-content-hash = "cfc5b513d298b7cef4b13795a67dd531a5e11f5232b7654e677d9e338b9c6b15"
+python-versions = ">=3.11,<4.0"
+content-hash = "95b459591173027ed01d334e3c21f6ea2b914ebdc2ee775483feb04eac539b8e"

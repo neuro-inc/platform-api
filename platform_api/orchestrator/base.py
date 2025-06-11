@@ -33,10 +33,12 @@ class Orchestrator(ABC):
 
     @abstractmethod
     async def get_missing_secrets(
-        self, secret_path: str, secret_names: list[str]
+        self, namespace: str, secret_path: str, secret_names: list[str]
     ) -> list[str]:
         pass
 
     @abstractmethod
-    async def get_missing_disks(self, disks: list[Disk]) -> list[Disk]:
+    async def get_missing_disks(
+        self, namespace: str, org_name: str, project_name: str, disks: list[Disk]
+    ) -> list[Disk]:
         pass

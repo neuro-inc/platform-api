@@ -37,7 +37,7 @@ pip install -e .[dev]
 ```shell
 pytest -vv tests/unit
 ```
-9. Run the integration test suite:
+9. Run the integration test suite (for macOS users you must run a `minikube tunnel` in a separate terminal):
 ```shell
 pytest -vv tests/integration
 ```

@@ -1,7 +1,7 @@
 """add materialized field
 
-Revision ID: e62854f697b3
-Revises: 81675d81a9c7
+Revision ID: 0002
+Revises: 0001
 Create Date: 2020-10-26 11:40:49.112880
 
 """
@@ -11,8 +11,8 @@ from alembic import op
 # revision identifiers, used by Alembic.
 
 
-revision = "e62854f697b3"
-down_revision = "eaa33ba10d63"
+revision = "0002"
+down_revision = "0001"
 branch_labels = None
 depends_on = None
 

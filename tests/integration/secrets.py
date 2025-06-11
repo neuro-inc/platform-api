@@ -14,7 +14,7 @@ from aiodocker.types import JSONObject
 from aiohttp import ClientError
 from yarl import URL
 
-from platform_api.config import AuthConfig
+from platform_api.config import NO_ORG_NORMALIZED, AuthConfig
 from platform_api.orchestrator.kube_config import KubeConfig
 from tests.integration.auth import _User
 
@@ -173,26 +173,24 @@ class SecretsClient:
         self,
         key: str,
         value: str,
+        project_name: str,
         org_name: str | None = None,
-        project_name: str | None = None,
     ) -> None:
         url = self._base_url / "secrets"
         payload = {
             "key": key,
             "value": self._base64_encode(value),
+            "project_name": project_name,
             "org_name": org_name,
         }
-        if project_name:
-            payload["project_name"] = project_name
-        expected_project_name = project_name or self._user_name
         async with self._client.post(url, json=payload) as resp:
             assert resp.status == 201, await resp.text()
             data = await resp.json()
             assert data == {
                 "key": key,
-                "org_name": org_name,
-                "owner": self._user_name,
-                "project_name": expected_project_name,
+                "org_name": org_name or NO_ORG_NORMALIZED,
+                "owner": project_name,
+                "project_name": project_name,
             }
 
 

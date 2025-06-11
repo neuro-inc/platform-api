@@ -11,6 +11,7 @@ from typing import Any
 import aiohttp
 import aiohttp.web
 import pytest
+from apolo_kube_client.errors import KubeClientException, ResourceExists
 
 from platform_api.config import KubeConfig
 from platform_api.orchestrator.job_request import (
@@ -20,7 +21,6 @@ from platform_api.orchestrator.job_request import (
     JobRequest,
 )
 from platform_api.orchestrator.kube_client import (
-    AlreadyExistsException,
     DockerRegistrySecret,
     EventHandler,
     Ingress,
@@ -29,7 +29,6 @@ from platform_api.orchestrator.kube_client import (
     PodDescriptor,
     PodWatcher,
     Service,
-    StatusException,
     WatchEvent,
 )
 from platform_api.orchestrator.kube_config import KubeClientAuthType
@@ -53,7 +52,7 @@ async def delete_ingress_later(
 
     for ingress in ingresses:
         try:
-            await kube_client.delete_ingress(ingress.name)
+            await kube_client.delete_ingress(kube_client.namespace, ingress.name)
         except Exception:
             pass
 
@@ -71,7 +70,7 @@ async def delete_service_later(
 
     for service in services:
         try:
-            await kube_client.delete_service(service.name)
+            await kube_client.delete_service(kube_client.namespace, service.name)
         except Exception:
             pass
 
@@ -138,7 +137,9 @@ class TestKubeClientTokenUpdater:
 class TestKubeClient:
     async def test_wait_pod_is_running_not_found(self, kube_client: KubeClient) -> None:
         with pytest.raises(JobNotFoundException):
-            await kube_client.wait_pod_is_running(pod_name="unknown")
+            await kube_client.wait_pod_is_running(
+                kube_client.namespace, pod_name="unknown"
+            )
 
     async def test_wait_pod_is_running_timed_out(
         self,
@@ -153,9 +154,11 @@ class TestKubeClient:
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)
         await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
+        await kube_client.create_pod(kube_client.namespace, pod)
         with pytest.raises(asyncio.TimeoutError):
-            await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=0.1)
+            await kube_client.wait_pod_is_running(
+                kube_client.namespace, pod_name=pod.name, timeout_s=0.1
+            )
 
     async def test_wait_pod_is_running(
         self,
@@ -170,9 +173,11 @@ class TestKubeClient:
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)
         await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_running(pod_name=pod.name, timeout_s=60.0)
-        pod_status = await kube_client.get_pod_status(pod.name)
+        await kube_client.create_pod(kube_client.namespace, pod)
+        await kube_client.wait_pod_is_running(
+            kube_client.namespace, pod_name=pod.name, timeout_s=60.0
+        )
+        pod_status = await kube_client.get_pod_status(kube_client.namespace, pod.name)
         assert pod_status.phase in ("Running", "Succeeded")
 
     @pytest.mark.parametrize(
@@ -195,10 +200,12 @@ class TestKubeClient:
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)
         await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_terminated(pod_name=pod.name, timeout_s=60.0)
+        await kube_client.create_pod(kube_client.namespace, pod)
+        await kube_client.wait_pod_is_terminated(
+            kube_client.namespace, pod_name=pod.name, timeout_s=60.0
+        )
 
-        pod_finished = await kube_client.get_pod(pod.name)
+        pod_finished = await kube_client.get_pod(kube_client.namespace, pod.name)
 
         # check that "/bin/echo" was not lost anywhere (and "false" was not executed):
         assert pod_finished.status
@@ -227,7 +234,7 @@ class TestKubeClient:
             registry_server="registry.example.com",
         )
 
-        with pytest.raises(StatusException, match="NotFound"):
+        with pytest.raises(KubeClientException, match="NotFound"):
             await kube_client.create_docker_secret(docker_secret)
 
     async def test_create_docker_secret_already_exists(
@@ -246,7 +253,7 @@ class TestKubeClient:
         try:
             await kube_client.create_docker_secret(docker_secret)
 
-            with pytest.raises(StatusException, match="AlreadyExists"):
+            with pytest.raises(KubeClientException, match="AlreadyExists"):
                 await kube_client.create_docker_secret(docker_secret)
         finally:
             await kube_client.delete_secret(name, kube_config.namespace)
@@ -283,7 +290,7 @@ class TestKubeClient:
             registry_server="registry.example.com",
         )
 
-        with pytest.raises(StatusException, match="NotFound"):
+        with pytest.raises(KubeClientException, match="NotFound"):
             await kube_client.update_docker_secret(docker_secret)
 
     async def test_update_docker_secret_create_non_existent(
@@ -314,7 +321,7 @@ class TestKubeClient:
             email="testuser@example.com",
             registry_server="registry.example.com",
         )
-        with pytest.raises(StatusException, match="NotFound"):
+        with pytest.raises(KubeClientException, match="NotFound"):
             await kube_client.get_raw_secret(name, kube_config.namespace)
 
         await kube_client.update_docker_secret(docker_secret, create_non_existent=True)
@@ -336,7 +343,7 @@ class TestKubeClient:
 
         for name in names:
             try:
-                await kube_client.delete_network_policy(name)
+                await kube_client.delete_network_policy(kube_client.namespace, name)
             except Exception:
                 pass
 
@@ -349,10 +356,10 @@ class TestKubeClient:
         name = str(uuid.uuid4())
         await delete_network_policy_later(name)
         payload = await kube_client.create_default_network_policy(
+            kube_client.namespace,
             name,
             pod_labels={"testlabel": name},
             org_project_labels={"testlabel": name},
-            namespace_name=kube_config.namespace,
         )
 
         assert payload["metadata"]["name"] == name
@@ -372,35 +379,34 @@ class TestKubeClient:
         name = str(uuid.uuid4())
         await delete_network_policy_later(name)
         payload = await kube_client.create_default_network_policy(
+            kube_client.namespace,
             name,
             pod_labels={"testlabel": name},
             org_project_labels={"testlabel": name},
-            namespace_name=kube_config.namespace,
         )
         assert payload["metadata"]["name"] == name
-        with pytest.raises(AlreadyExistsException):
+        with pytest.raises(ResourceExists):
             await kube_client.create_default_network_policy(
+                kube_client.namespace,
                 name,
                 {"testlabel": name},
                 {"testlabel": name},
-                namespace_name=kube_config.namespace,
             )
 
     async def test_get_network_policy_not_found(self, kube_client: KubeClient) -> None:
         name = str(uuid.uuid4())
-        with pytest.raises(StatusException, match="NotFound"):
-            await kube_client.get_network_policy(name)
+        with pytest.raises(KubeClientException, match="NotFound"):
+            await kube_client.get_network_policy(kube_client.namespace, name)
 
     async def test_delete_network_policy_not_found(
         self, kube_client: KubeClient
     ) -> None:
         name = str(uuid.uuid4())
-        with pytest.raises(StatusException, match="NotFound"):
-            await kube_client.delete_network_policy(name)
+        with pytest.raises(KubeClientException, match="NotFound"):
+            await kube_client.delete_network_policy(kube_client.namespace, name)
 
     async def test_get_pod_events(
         self,
-        kube_config: KubeConfig,
         kube_client: MyKubeClient,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
@@ -412,16 +418,16 @@ class TestKubeClient:
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)
         await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_terminated(pod.name)
+        await kube_client.create_pod(kube_client.namespace, pod)
+        await kube_client.wait_pod_is_terminated(kube_client.namespace, pod.name)
 
-        events = await kube_client.get_pod_events(pod.name, kube_config.namespace)
+        events = await kube_client.get_pod_events(pod.name, kube_client.namespace)
 
         assert events
         for event in events:
             involved_object = event.involved_object
             assert involved_object["kind"] == "Pod"
-            assert involved_object["namespace"] == kube_config.namespace
+            assert involved_object["namespace"] == kube_client.namespace
             assert involved_object["name"] == pod.name
 
     async def test_get_pod_events_empty(
@@ -445,9 +451,11 @@ class TestKubeClient:
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)
         await delete_pod_later(pod)
-        await kube_client.create_pod(pod)
-        await kube_client.wait_pod_is_terminated(pod_name=pod.name, timeout_s=60.0)
-        pod_status = await kube_client.get_pod_status(pod.name)
+        await kube_client.create_pod(kube_client.namespace, pod)
+        await kube_client.wait_pod_is_terminated(
+            kube_client.namespace, pod_name=pod.name, timeout_s=60.0
+        )
+        pod_status = await kube_client.get_pod_status(kube_client.namespace, pod.name)
 
         assert pod_status.container_status.exit_code != 0
 
@@ -515,7 +523,9 @@ class TestKubeClient:
         async def _f(job_id: str) -> Ingress:
             ingress_name = f"ingress-{uuid.uuid4().hex[:6]}"
             labels = {"platform.neuromation.io/job": job_id}
-            ingress = await kube_client.create_ingress(ingress_name, labels=labels)
+            ingress = await kube_client.create_ingress(
+                ingress_name, kube_client.namespace, labels=labels
+            )
             await delete_ingress_later(ingress)
             return ingress
 
@@ -530,8 +540,13 @@ class TestKubeClient:
         async def _f(job_id: str) -> Service:
             service_name = f"service-{uuid.uuid4().hex[:6]}"
             labels = {"platform.neuromation.io/job": job_id}
-            service = Service(name=service_name, target_port=8080, labels=labels)
-            service = await kube_client.create_service(service)
+            service = Service(
+                namespace=kube_client.namespace,
+                name=service_name,
+                target_port=8080,
+                labels=labels,
+            )
+            service = await kube_client.create_service(kube_client.namespace, service)
             await delete_service_later(service)
             return service
 
@@ -549,7 +564,11 @@ class TestKubeClient:
 
             await delete_network_policy_later(np_name)
             return await kube_client.create_egress_network_policy(
-                np_name, pod_labels=labels, labels=labels, rules=[{}]
+                kube_client.namespace,
+                np_name,
+                pod_labels=labels,
+                labels=labels,
+                rules=[{}],
             )
 
         return _f

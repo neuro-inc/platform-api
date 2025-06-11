@@ -1,7 +1,7 @@
 """Add billing log tables
 
-Revision ID: 5a3bdd81e17d
-Revises: 627ac0b10843
+Revision ID: 0009
+Revises: 0008
 Create Date: 2021-04-21 15:43:12.420458
 
 """
@@ -12,8 +12,8 @@ import sqlalchemy.dialects.postgresql as sapg
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "5a3bdd81e17d"
-down_revision = "627ac0b10843"
+revision = "0009"
+down_revision = "0008"
 branch_labels = None
 depends_on = None
 
