@@ -323,7 +323,7 @@ class KubeOrchestrator(Orchestrator):
             value.append(
                 {
                     "storage_uri": str(volume.uri),
-                    "mount_path": volume.dst_path,
+                    "mount_path": str(volume.dst_path),
                     "mount_mode": "r" if volume.read_only else "rw",
                 }
             )
