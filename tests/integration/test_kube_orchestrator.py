@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import json
 import os
 import shlex
 import time
@@ -27,7 +28,6 @@ from platform_api.config import (
     NO_ORG_NORMALIZED,
     STORAGE_URI_SCHEME,
     RegistryConfig,
-    StorageConfig,
 )
 from platform_api.orchestrator.job import (
     DEFAULT_ORPHANED_JOB_OWNER,
@@ -74,6 +74,7 @@ from platform_api.orchestrator.kube_client import (
     Toleration,
 )
 from platform_api.orchestrator.kube_orchestrator import (
+    INJECT_STORAGE_ANNOTATION_KEY,
     JobStatusItemFactory,
     KubeConfig,
     KubeOrchestrator,
@@ -565,85 +566,56 @@ class TestKubeOrchestrator:
 
     async def test_volumes(
         self,
-        storage_config_host: StorageConfig,
         kube_orchestrator: KubeOrchestrator,
+        kube_client: MyKubeClient,
         cluster_name: str,
     ) -> None:
-        await self._test_volumes(storage_config_host, kube_orchestrator, cluster_name)
-
-    async def test_volumes_nfs(
-        self,
-        storage_config_nfs: StorageConfig,
-        kube_orchestrator_nfs: KubeOrchestrator,
-        cluster_name: str,
-    ) -> None:
-        await self._test_volumes(
-            storage_config_nfs, kube_orchestrator_nfs, cluster_name
-        )
-
-    @pytest.mark.skip
-    async def test_volumes_pvc(
-        self,
-        storage_config_pvc: StorageConfig,
-        kube_orchestrator_pvc: KubeOrchestrator,
-        cluster_name: str,
-    ) -> None:
-        await self._test_volumes(
-            storage_config_pvc, kube_orchestrator_pvc, cluster_name
-        )
-
-    async def _test_volumes(
-        self,
-        storage_config: StorageConfig,
-        kube_orchestrator: KubeOrchestrator,
-        cluster_name: str,
-    ) -> None:
-        assert storage_config.host_mount_path
         volumes = [
             ContainerVolume(
-                uri=URL(f"{STORAGE_URI_SCHEME}://{cluster_name}"),
-                dst_path=PurePath("/storage"),
-            )
+                uri=URL(f"{STORAGE_URI_SCHEME}://{cluster_name}/org/project1"),
+                dst_path=PurePath("/storage1"),
+            ),
+            ContainerVolume(
+                uri=URL(f"{STORAGE_URI_SCHEME}://{cluster_name}/org/project2"),
+                dst_path=PurePath("/storage2"),
+                read_only=True,
+            ),
         ]
-        file_path = "/storage/" + str(uuid.uuid4())
-
-        write_container = Container(
+        container = Container(
             image="ubuntu:20.10",
-            command=f"""bash -c 'echo "test" > {file_path}'""",
+            command="bash -c 'echo test'",
             volumes=volumes,
             resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
         )
-        write_job = MyJob(
+        job = MyJob(
             orchestrator=kube_orchestrator,
             record=JobRecord.create(
-                request=JobRequest.create(write_container), cluster_name="test-cluster"
-            ),
-        )
-
-        read_container = Container(
-            image="ubuntu:20.10",
-            command=f"""bash -c '[ "$(cat {file_path})" == "test" ]'""",
-            volumes=volumes,
-            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
-        )
-        read_job = MyJob(
-            orchestrator=kube_orchestrator,
-            record=JobRecord.create(
-                request=JobRequest.create(read_container), cluster_name="test-cluster"
+                request=JobRequest.create(container), cluster_name="test-cluster"
             ),
         )
 
         try:
-            await write_job.start()
-            await self.wait_for_success(write_job)
-        finally:
-            await write_job.delete()
+            await job.start()
+            raw_pod = await kube_client.get_raw_pod(job.namespace, job.id)
 
-        try:
-            await read_job.start()
-            await self.wait_for_success(read_job)
+            assert raw_pod["metadata"]["annotations"][
+                INJECT_STORAGE_ANNOTATION_KEY
+            ] == json.dumps(
+                [
+                    {
+                        "storage_uri": f"storage://{cluster_name}/org/project1",
+                        "mount_path": "/storage1",
+                        "mount_mode": "rw",
+                    },
+                    {
+                        "storage_uri": f"storage://{cluster_name}/org/project2",
+                        "mount_path": "/storage2",
+                        "mount_mode": "r",
+                    },
+                ]
+            )
         finally:
-            await read_job.delete()
+            await job.delete()
 
     @pytest.mark.parametrize(
         "expected_result,expected_status",
@@ -2515,7 +2487,6 @@ class TestAffinityFixtures:
     @pytest.fixture
     def kube_orchestrator_factory(
         self,
-        storage_config_host: StorageConfig,
         registry_config: RegistryConfig,
         orchestrator_config: OrchestratorConfig,
         kube_config: KubeConfig,
@@ -2543,7 +2514,6 @@ class TestAffinityFixtures:
             await kube_job_nodes_factory(orchestrator, kube_config)
             return KubeOrchestrator(
                 cluster_name="default",
-                storage_configs=[storage_config_host],
                 registry_config=registry_config,
                 orchestrator_config=orchestrator,
                 kube_config=kube_config,

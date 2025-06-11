@@ -1,11 +1,11 @@
 import asyncio
+import json
 import logging
 import operator
 import secrets
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
-from pathlib import PurePath
 from typing import Any
 
 import aiohttp
@@ -17,13 +17,12 @@ from apolo_kube_client.errors import (
 )
 
 from platform_api.cluster_config import OrchestratorConfig
-from platform_api.config import NO_ORG, RegistryConfig, StorageConfig
+from platform_api.config import NO_ORG, RegistryConfig
 from platform_api.resource import ResourcePoolType
 
 from .base import Orchestrator
 from .job import Job, JobRestartPolicy, JobStatusItem, JobStatusReason
 from .job_request import (
-    ContainerVolume,
     Disk,
     JobAlreadyExistsException,
     JobError,
@@ -34,16 +33,13 @@ from .job_request import (
 )
 from .kube_client import (
     DockerRegistrySecret,
-    HostVolume,
     IngressRule,
     KubeClient,
     LabelSelectorMatchExpression,
     LabelSelectorTerm,
-    NfsVolume,
     NodeAffinity,
     NodePreferredSchedulingTerm,
     NodeWatcher,
-    PathVolume,
     PodAffinity,
     PodAffinityTerm,
     PodDescriptor,
@@ -51,12 +47,10 @@ from .kube_client import (
     PodRestartPolicy,
     PodStatus,
     PodWatcher,
-    PVCVolume,
     Resources,
     SecretVolume,
     Service,
     Toleration,
-    VolumeMount,
 )
 from .kube_config import KubeConfig
 from .kube_orchestrator_scheduler import (
@@ -72,6 +66,8 @@ logger = logging.getLogger(__name__)
 JOB_LABEL_KEY = "platform.neuromation.io/job"
 PROJECT_LABEL_KEY = "platform.apolo.us/project"
 ORG_LABEL_KEY = "platform.apolo.us/org"
+
+INJECT_STORAGE_ANNOTATION_KEY = "platform.apolo.us/inject-storage"
 
 
 class JobStatusItemFactory:
@@ -137,7 +133,6 @@ class KubeOrchestrator(Orchestrator):
         self,
         *,
         cluster_name: str,
-        storage_configs: Sequence[StorageConfig],
         registry_config: RegistryConfig,
         orchestrator_config: OrchestratorConfig,
         kube_config: KubeConfig,
@@ -145,7 +140,6 @@ class KubeOrchestrator(Orchestrator):
     ) -> None:
         self._loop = asyncio.get_event_loop()
         self._cluster_name = cluster_name
-        self._storage_configs = storage_configs
         self._registry_config = registry_config
         self._orchestrator_config = orchestrator_config
         self._kube_config = kube_config
@@ -178,96 +172,11 @@ class KubeOrchestrator(Orchestrator):
     def kube_config(self) -> KubeConfig:
         return self._kube_config
 
-    @property
-    def _main_storage_config(self) -> StorageConfig:
-        for sc in self._storage_configs:
-            if sc.path is None:
-                return sc
-        raise JobError("Main storage is not configured")
-
-    @property
-    def _extra_storage_configs(self) -> list[StorageConfig]:
-        result = []
-        for sc in self._storage_configs:
-            if sc.path is not None:
-                result.append(sc)
-        return result
-
     def subscribe_to_kube_events(
         self, node_watcher: NodeWatcher, pod_watcher: PodWatcher
     ) -> None:
         node_watcher.subscribe(self._nodes_handler)
         pod_watcher.subscribe(self._node_resources_handler)
-
-    def create_storage_volumes(
-        self, container_volume: ContainerVolume
-    ) -> Sequence[PathVolume]:
-        storage_configs = self._get_storage_configs_from_container(container_volume)
-        volumes = []
-        for sc in storage_configs:
-            volumes.append(self._get_volume_from_storage_config(sc))
-        return volumes
-
-    def _get_storage_configs_from_container(
-        self, container_volume: ContainerVolume
-    ) -> Sequence[StorageConfig]:
-        if container_volume.src_path == PurePath("/"):
-            return [self._main_storage_config] + self._extra_storage_configs
-
-        for sc in self._extra_storage_configs:
-            try:
-                container_volume.src_path.relative_to(str(sc.path))
-                return [sc]
-            except ValueError:
-                pass
-        else:
-            return [self._main_storage_config]
-
-    def _get_volume_from_storage_config(
-        self, storage_config: StorageConfig
-    ) -> PathVolume:
-        name = self._create_storage_volume_name(storage_config.path)
-
-        if storage_config.is_nfs:
-            return NfsVolume(
-                name=name,
-                path=storage_config.path,
-                server=storage_config.nfs_server,  # type: ignore
-                export_path=storage_config.nfs_export_path,  # type: ignore
-            )
-        if storage_config.is_pvc:
-            assert storage_config.pvc_name
-            return PVCVolume(
-                name=name,
-                path=storage_config.path,
-                claim_name=storage_config.pvc_name,
-            )
-        return HostVolume(
-            name=name,
-            path=storage_config.path,
-            host_path=storage_config.host_mount_path,
-        )
-
-    def create_storage_volume_mounts(
-        self, container_volume: ContainerVolume, volumes: Sequence[PathVolume]
-    ) -> Sequence[VolumeMount]:
-        if len(volumes) == 1:
-            return [volumes[0].create_mount(container_volume)]
-
-        result = []
-        for v in volumes:
-            if v.path is None or v.path == PurePath("/"):
-                dst_path = PurePath(self._cluster_name)
-            else:
-                dst_path = PurePath(v.path.name)
-            result.append(v.create_mount(container_volume, dst_path))
-        return result
-
-    def _create_storage_volume_name(self, path: PurePath | None = None) -> str:
-        if path is None or path == PurePath("/"):
-            return self._kube_config.storage_volume_name
-        name_suffix = str(path).replace("/", "-").replace("_", "-")
-        return self._kube_config.storage_volume_name + name_suffix
 
     def create_secret_volume(self, project_name: str) -> SecretVolume:
         name = self._get_k8s_secret_name(project_name)
@@ -383,8 +292,6 @@ class KubeOrchestrator(Orchestrator):
 
         pod = PodDescriptor.from_job_request(
             job.request,
-            storage_volume_factory=self.create_storage_volumes,
-            storage_volume_mount_factory=self.create_storage_volume_mounts,
             secret_volume_factory=self.create_secret_volume,
             image_pull_secret_names=pull_secrets,
             tolerations=tolerations,
@@ -396,9 +303,31 @@ class KubeOrchestrator(Orchestrator):
             meta_env=meta_env,
             privileged=job.privileged,
         )
+        pod = self._update_pod_annotations(job, pod)
         pod = self._update_pod_container_resources(pod, pool_types)
         pod = self._update_pod_image(job, pod)
         return self._update_pod_command(job, pod)
+
+    def _update_pod_annotations(self, job: Job, pod: PodDescriptor) -> PodDescriptor:
+        return replace(
+            pod,
+            annotations={
+                **pod.annotations,
+                **self._get_pod_storage_annotations(job),
+            },
+        )
+
+    def _get_pod_storage_annotations(self, job: Job) -> dict[str, str]:
+        value = []
+        for volume in job.volumes:
+            value.append(
+                {
+                    "storage_uri": str(volume.uri),
+                    "mount_path": volume.dst_path,
+                    "mount_mode": "r" if volume.read_only else "rw",
+                }
+            )
+        return {INJECT_STORAGE_ANNOTATION_KEY: json.dumps(value)}
 
     def _get_job_resource_pool_types(self, job: Job) -> Sequence[ResourcePoolType]:
         job_preset = job.preset

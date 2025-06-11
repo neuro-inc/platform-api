@@ -1,8 +1,6 @@
 import os
 import pathlib
-from collections.abc import Sequence
 from decimal import Decimal
-from pathlib import PurePath
 
 from yarl import URL
 
@@ -22,8 +20,6 @@ from .config import (
     PostgresConfig,
     RegistryConfig,
     ServerConfig,
-    StorageConfig,
-    StorageType,
 )
 from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
 
@@ -82,7 +78,6 @@ class EnvironConfigFactory:
             admin_url=admin_url,
             cluster_name=cluster_name,
             registry_config=self.create_registry(),
-            storage_configs=self.create_storages(),
             kube_config=self.create_kube(),
         )
 
@@ -293,55 +288,6 @@ class EnvironConfigFactory:
             password=self._environ["NP_AUTH_TOKEN"],
             email=self._environ.get("NP_REGISTRY_EMAIL", RegistryConfig.email),
         )
-
-    def create_storages(self) -> Sequence[StorageConfig]:
-        result: list[StorageConfig] = []
-        i = 0
-
-        while True:
-            if f"NP_STORAGE_TYPE_{i}" not in self._environ:
-                break
-
-            path = None
-            if f"NP_STORAGE_PATH_{i}" in self._environ:
-                path = PurePath(self._environ[f"NP_STORAGE_PATH_{i}"])
-
-            storage_type = StorageType(self._environ[f"NP_STORAGE_TYPE_{i}"])
-            if storage_type == StorageType.HOST:
-                result.append(
-                    StorageConfig.create_host(
-                        path=path,
-                        host_mount_path=PurePath(
-                            self._environ[f"NP_STORAGE_HOST_MOUNT_PATH_{i}"]
-                        ),
-                    )
-                )
-            elif storage_type == StorageType.NFS:
-                result.append(
-                    StorageConfig.create_nfs(
-                        path=path,
-                        nfs_server=self._environ[f"NP_STORAGE_NFS_SERVER_{i}"],
-                        nfs_export_path=PurePath(
-                            self._environ[f"NP_STORAGE_NFS_EXPORT_PATH_{i}"]
-                        ),
-                    )
-                )
-            elif storage_type == StorageType.PVC:
-                result.append(
-                    StorageConfig.create_pvc(
-                        path=path, pvc_name=self._environ[f"NP_STORAGE_PVC_NAME_{i}"]
-                    )
-                )
-            else:
-                raise ValueError(
-                    f"Storage type {storage_type!r} is not supported"
-                )  # pragma: no cover
-            i += 1
-
-        if all(s.path is not None for s in result):
-            raise ValueError("Main storage config is required")
-
-        return result
 
 
 syncpg_schema = "postgresql"

@@ -137,26 +137,6 @@ spec:
         - name: NP_REGISTRY_EMAIL
           value: {{ .Values.platform.registryEmail | quote }}
         {{- end }}
-        {{- range $index, $storage := .Values.storages }}
-        - name: NP_STORAGE_TYPE_{{ $index }}
-          value: {{ $storage.type | quote }}
-        {{- if $storage.path }}
-        - name: NP_STORAGE_PATH_{{ $index }}
-          value: {{ $storage.path | quote }}
-        {{- end }}
-        {{- if eq $storage.type "pvc" }}
-        - name: NP_STORAGE_PVC_NAME_{{ $index }}
-          value: {{ $storage.claimName | quote }}
-        {{- else if eq $storage.type "nfs" }}
-        - name: NP_STORAGE_NFS_SERVER_{{ $index }}
-          value: {{ $storage.server | quote }}
-        - name: NP_STORAGE_NFS_EXPORT_PATH_{{ $index }}
-          value: {{ $storage.exportPath | quote }}
-        {{- else if eq $storage.type "host" }}
-        - name: NP_STORAGE_HOST_MOUNT_PATH_{{ $index }}
-          value: {{ $storage.hostPath | quote }}
-        {{- end }}
-        {{- end }}
         volumeMounts:
         - mountPath: {{ include "platformApiPoller.kubeAuthMountRoot" . }}
           name: kube-api-data

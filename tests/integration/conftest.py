@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -41,7 +41,6 @@ from platform_api.config import (
     PostgresConfig,
     RegistryConfig,
     ServerConfig,
-    StorageConfig,
 )
 from platform_api.config_client import ConfigClient
 from platform_api.orchestrator.job_request import JobNotFoundException
@@ -135,16 +134,6 @@ async def kube_config_user_payload(kube_config_payload: dict[str, Any]) -> Any:
             key_file.flush()
             user["client-key"] = key_file.name
     return user
-
-
-@pytest.fixture(scope="session")
-def storage_config_host() -> StorageConfig:
-    return StorageConfig.create_host(host_mount_path=PurePath("/tmp"))
-
-
-@pytest.fixture(scope="session")
-def storage_config_pvc() -> StorageConfig:
-    return StorageConfig.create_pvc(pvc_name="platformstorage")
 
 
 @pytest.fixture(scope="session")
@@ -662,23 +651,8 @@ async def kube_client(
         yield kube_client
 
 
-@pytest.fixture(scope="session")
-async def nfs_volume_server(kube_client: MyKubeClient) -> Any:
-    payload = await kube_client.get_endpoint("platformstoragenfs", namespace="default")
-    return payload["subsets"][0]["addresses"][0]["ip"]
-
-
-@pytest.fixture(scope="session")
-def storage_config_nfs(nfs_volume_server: str | None) -> StorageConfig:
-    assert nfs_volume_server
-    return StorageConfig.create_nfs(
-        nfs_server=nfs_volume_server, nfs_export_path=PurePath("/var/storage")
-    )
-
-
 @pytest.fixture
 async def kube_orchestrator_factory(
-    storage_config_host: StorageConfig,
     registry_config: RegistryConfig,
     orchestrator_config: OrchestratorConfig,
     kube_config: KubeConfig,
@@ -687,7 +661,6 @@ async def kube_orchestrator_factory(
     def _f(**kwargs: Any) -> KubeOrchestrator:
         defaults = {
             "cluster_name": "default",
-            "storage_configs": [storage_config_host],
             "registry_config": registry_config,
             "orchestrator_config": orchestrator_config,
             "kube_config": kube_config,
@@ -704,22 +677,6 @@ async def kube_orchestrator(
     kube_orchestrator_factory: Callable[..., KubeOrchestrator],
 ) -> KubeOrchestrator:
     return kube_orchestrator_factory()
-
-
-@pytest.fixture
-async def kube_orchestrator_nfs(
-    kube_orchestrator_factory: Callable[..., KubeOrchestrator],
-    storage_config_nfs: StorageConfig,
-) -> KubeOrchestrator:
-    return kube_orchestrator_factory(storage_configs=[storage_config_nfs])
-
-
-@pytest.fixture
-async def kube_orchestrator_pvc(
-    kube_orchestrator_factory: Callable[..., KubeOrchestrator],
-    storage_config_pvc: StorageConfig,
-) -> KubeOrchestrator:
-    return kube_orchestrator_factory(storage_configs=[storage_config_pvc])
 
 
 @pytest.fixture
