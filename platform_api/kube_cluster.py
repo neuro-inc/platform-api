@@ -1,10 +1,9 @@
 import logging
-from collections.abc import Sequence
 from contextlib import AsyncExitStack
 
 from .cluster import Cluster
 from .cluster_config import ClusterConfig
-from .config import RegistryConfig, StorageConfig
+from .config import RegistryConfig
 from .orchestrator.kube_client import KubeClient, NodeWatcher, PodWatcher
 from .orchestrator.kube_config import KubeConfig
 from .orchestrator.kube_orchestrator import KubeOrchestrator, Orchestrator
@@ -18,13 +17,11 @@ class KubeCluster(Cluster):
         kube_client: KubeClient,
         kube_config: KubeConfig,
         registry_config: RegistryConfig,
-        storage_configs: Sequence[StorageConfig],
         cluster_config: ClusterConfig,
     ) -> None:
         self._kube_client = kube_client
         self._kube_config = kube_config
         self._registry_config = registry_config
-        self._storage_configs = storage_configs
         self._cluster_config = cluster_config
 
         self._exit_stack = AsyncExitStack()
@@ -48,7 +45,6 @@ class KubeCluster(Cluster):
         kube_pod_watcher = PodWatcher(self._kube_client)
         orchestrator = KubeOrchestrator(
             cluster_name=self.name,
-            storage_configs=self._storage_configs,
             registry_config=self._registry_config,
             orchestrator_config=self._cluster_config.orchestrator,
             kube_config=self._kube_config,

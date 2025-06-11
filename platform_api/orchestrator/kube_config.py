@@ -35,8 +35,6 @@ class KubeConfig:
     jobs_pod_preemptible_toleration_key: str | None = None
     jobs_pod_priority_class_name: str | None = None
 
-    storage_volume_name: str = "storage"
-
     node_label_preemptible: str | None = None
     node_label_job: str | None = None
     node_label_node_pool: str | None = None

@@ -2,8 +2,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
-from enum import Enum
-from pathlib import PurePath
 
 from yarl import URL
 
@@ -15,92 +13,6 @@ STORAGE_URI_SCHEME = "storage"
 
 NO_ORG = "NO_ORG"
 NO_ORG_NORMALIZED = "no-org"
-
-
-class StorageType(str, Enum):
-    HOST = "host"
-    NFS = "nfs"
-    PVC = "pvc"
-
-
-@dataclass(frozen=True)
-class StorageConfig:
-    host_mount_path: PurePath
-
-    type: StorageType = StorageType.HOST
-
-    nfs_server: str | None = None
-    nfs_export_path: PurePath | None = None
-
-    pvc_name: str | None = None
-
-    path: PurePath | None = None
-
-    def __post_init__(self) -> None:
-        self._check_nfs_attrs()
-
-    def _check_nfs_attrs(self) -> None:
-        nfs_attrs = (self.nfs_server, self.nfs_export_path)
-        if self.is_nfs:
-            if not all(nfs_attrs):
-                raise ValueError("Missing NFS settings")
-            if self.host_mount_path != self.nfs_export_path:
-                # NOTE (ayushkovskiy 14-May-2019) this is a TEMPORARY PATCH: even for
-                # StorageType.NFS, `host_mount_path` must be non-null as it is used
-                # in `ContainerVolumeFactory.__init__`, who assumes that it's not None
-                raise ValueError("Invalid host mount path")
-        else:
-            if any(nfs_attrs):
-                raise ValueError("Redundant NFS settings")
-
-    @property
-    def is_nfs(self) -> bool:
-        return self.type == StorageType.NFS
-
-    @property
-    def is_pvc(self) -> bool:
-        return self.type == StorageType.PVC
-
-    @classmethod
-    def create_nfs(
-        cls,
-        *,
-        path: PurePath | None = None,
-        nfs_server: str,
-        nfs_export_path: PurePath,
-    ) -> "StorageConfig":
-        return cls(
-            path=path,
-            host_mount_path=nfs_export_path,
-            type=StorageType.NFS,
-            nfs_server=nfs_server,
-            nfs_export_path=nfs_export_path,
-        )
-
-    @classmethod
-    def create_pvc(
-        cls,
-        *,
-        path: PurePath | None = None,
-        pvc_name: str,
-    ) -> "StorageConfig":
-        return cls(
-            path=path,
-            type=StorageType.PVC,
-            pvc_name=pvc_name,
-            # NOTE: `host_mount_path`'s value here does not mean anything
-            # really. It is simply used to infer relative paths later.
-            host_mount_path=PurePath("/mnt/storage"),
-        )
-
-    @classmethod
-    def create_host(
-        cls,
-        *,
-        path: PurePath | None = None,
-        host_mount_path: PurePath,
-    ) -> "StorageConfig":
-        return cls(path=path, host_mount_path=host_mount_path, type=StorageType.HOST)
 
 
 @dataclass(frozen=True)
@@ -267,7 +179,6 @@ class PollerConfig:
     config_url: URL
 
     registry_config: RegistryConfig
-    storage_configs: Sequence[StorageConfig]
     kube_config: KubeConfig
 
     jobs: JobsConfig = JobsConfig()

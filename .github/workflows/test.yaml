@@ -98,12 +98,6 @@ jobs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ github.token }}
-    - name: Install NFS
-      run: |
-        sudo apt-get -q update
-        sudo apt-get -q install -y nfs-common
-        sudo modprobe nfs
-        sudo modprobe nfsd
     - name: Install Conntrack
       run: sudo apt-get -q install -y conntrack
     - name: Start minikube

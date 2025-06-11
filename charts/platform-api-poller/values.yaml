@@ -41,8 +41,6 @@ nodeLabels:
   preemptible: platform.neuromation.io/preemptible
   nodePool: platform.neuromation.io/nodepool
 
-storages: []
-
 resources:
   requests:
     cpu: "1"

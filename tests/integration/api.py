@@ -19,7 +19,6 @@ from platform_api.config import (
     Config,
     PollerConfig,
     RegistryConfig,
-    StorageConfig,
 )
 from platform_api.orchestrator.job import JobStatus
 from platform_api.orchestrator.kube_config import KubeConfig
@@ -72,7 +71,6 @@ class AuthApiConfig(NamedTuple):
 async def api(
     config: Config,
     registry_config: RegistryConfig,
-    storage_config_host: StorageConfig,
     kube_config: KubeConfig,
     cluster_config_factory: Callable[..., ClusterConfig],
 ) -> AsyncIterator[ApiConfig]:
@@ -97,7 +95,6 @@ async def api(
             config_url=config.config_url,
             admin_url=config.admin_url,
             registry_config=registry_config,
-            storage_configs=[storage_config_host],
             kube_config=kube_config,
         )
         poller_app = await poller_main.create_app(poller_config, cluster)
@@ -114,7 +111,6 @@ async def api(
 async def api_with_oauth(
     config_with_oauth: Config,
     registry_config: RegistryConfig,
-    storage_config_host: StorageConfig,
     kube_config: KubeConfig,
     cluster_config: ClusterConfig,
 ) -> AsyncIterator[ApiConfig]:
@@ -135,7 +131,6 @@ async def api_with_oauth(
             config_url=config_with_oauth.config_url,
             admin_url=config_with_oauth.admin_url,
             registry_config=registry_config,
-            storage_configs=[storage_config_host],
             kube_config=kube_config,
         )
         poller_app = await poller_main.create_app(poller_config, cluster)

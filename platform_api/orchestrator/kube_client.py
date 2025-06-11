@@ -137,17 +137,6 @@ class PathVolume(Volume):
 
 
 @dataclass(frozen=True)
-class HostVolume(PathVolume):
-    host_path: PurePath
-
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "hostPath": {"path": str(self.host_path), "type": "Directory"},
-        }
-
-
-@dataclass(frozen=True)
 class SharedMemoryVolume(Volume):
     def to_primitive(self) -> dict[str, Any]:
         return {"name": self.name, "emptyDir": {"medium": "Memory"}}
@@ -164,29 +153,6 @@ class SharedMemoryVolume(Volume):
             sub_path=PurePath(),
             read_only=container_volume.read_only,
         )
-
-
-@dataclass(frozen=True)
-class NfsVolume(PathVolume):
-    server: str
-    export_path: PurePath
-
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "nfs": {"server": self.server, "path": str(self.export_path)},
-        }
-
-
-@dataclass(frozen=True)
-class PVCVolume(PathVolume):
-    claim_name: str
-
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "persistentVolumeClaim": {"claimName": self.claim_name},
-        }
 
 
 @dataclass(frozen=True)
@@ -956,36 +922,6 @@ class PodDescriptor:
     privileged: bool = False
 
     @classmethod
-    def _process_storage_volumes(
-        cls,
-        container: Container,
-        storage_volume_factory: (
-            Callable[[ContainerVolume], Sequence[PathVolume]] | None
-        ) = None,
-        storage_volume_mount_factory: (
-            Callable[[ContainerVolume, Sequence[PathVolume]], Sequence[VolumeMount]]
-            | None
-        ) = None,
-    ) -> tuple[list[PathVolume], list[VolumeMount]]:
-        if not storage_volume_factory or not storage_volume_mount_factory:
-            return [], []
-
-        result_volumes = []
-        result_volume_mounts = []
-
-        for container_volume in container.volumes:
-            volumes = storage_volume_factory(container_volume)
-            for v in storage_volume_factory(container_volume):
-                if v not in result_volumes:
-                    result_volumes.append(v)
-            volume_mounts = storage_volume_mount_factory(container_volume, volumes)
-            for vm in volume_mounts:
-                if vm not in result_volume_mounts:
-                    result_volume_mounts.append(vm)
-
-        return result_volumes, result_volume_mounts
-
-    @classmethod
     def _process_secret_volumes(
         cls,
         container: Container,
@@ -1030,13 +966,6 @@ class PodDescriptor:
     def from_job_request(
         cls,
         job_request: JobRequest,
-        storage_volume_factory: (
-            Callable[[ContainerVolume], Sequence[PathVolume]] | None
-        ) = None,
-        storage_volume_mount_factory: (
-            Callable[[ContainerVolume, Sequence[PathVolume]], Sequence[VolumeMount]]
-            | None
-        ) = None,
         secret_volume_factory: Callable[[str], SecretVolume] | None = None,
         image_pull_secret_names: list[str] | None = None,
         node_selector: dict[str, str] | None = None,
@@ -1051,9 +980,6 @@ class PodDescriptor:
     ) -> "PodDescriptor":
         container = job_request.container
 
-        storage_volumes, storage_volume_mounts = cls._process_storage_volumes(
-            container, storage_volume_factory, storage_volume_mount_factory
-        )
         secret_volumes, secret_volume_mounts = cls._process_secret_volumes(
             container, secret_volume_factory
         )
@@ -1061,9 +987,8 @@ class PodDescriptor:
             container.disk_volumes
         )
 
-        volumes = [*storage_volumes, *secret_volumes, *disk_volumes]
+        volumes = [*secret_volumes, *disk_volumes]
         volume_mounts = [
-            *storage_volume_mounts,
             *secret_volume_mounts,
             *disk_volume_mounts,
         ]

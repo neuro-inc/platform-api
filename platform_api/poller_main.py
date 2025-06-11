@@ -44,7 +44,6 @@ def create_cluster_factory(
             kube_client=kube_client,
             kube_config=config.kube_config,
             registry_config=config.registry_config,
-            storage_configs=config.storage_configs,
             cluster_config=cluster_config,
         )
 
