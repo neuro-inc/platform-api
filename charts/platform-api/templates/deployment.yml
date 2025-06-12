@@ -37,13 +37,13 @@ spec:
                    {{- end }}
         livenessProbe:
           httpGet:
-            path: /api/v1/ping
+            path: /ping
             port: tcp-web
           initialDelaySeconds: 10
           periodSeconds: 5
         readinessProbe:
           httpGet:
-            path: /api/v1/ping
+            path: /ping
             port: tcp-web
           initialDelaySeconds: 10
           periodSeconds: 10
