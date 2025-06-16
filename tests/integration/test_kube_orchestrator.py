@@ -74,7 +74,7 @@ from platform_api.orchestrator.kube_client import (
     Toleration,
 )
 from platform_api.orchestrator.kube_orchestrator import (
-    INJECT_STORAGE_ANNOTATION_KEY,
+    INJECT_STORAGE_KEY,
     JobStatusItemFactory,
     KubeConfig,
     KubeOrchestrator,
@@ -599,7 +599,7 @@ class TestKubeOrchestrator:
             raw_pod = await kube_client.get_raw_pod(job.namespace, job.id)
             metadata = raw_pod["metadata"]
 
-            assert metadata["annotations"][INJECT_STORAGE_ANNOTATION_KEY] == json.dumps(
+            assert metadata["annotations"][INJECT_STORAGE_KEY] == json.dumps(
                 [
                     {
                         "storage_uri": f"storage://{cluster_name}/org/project1",
@@ -613,7 +613,7 @@ class TestKubeOrchestrator:
                     },
                 ]
             )
-            assert metadata["labels"][INJECT_STORAGE_ANNOTATION_KEY] == "true"
+            assert metadata["labels"][INJECT_STORAGE_KEY] == "true"
         finally:
             await job.delete()
 
