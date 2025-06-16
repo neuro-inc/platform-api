@@ -67,7 +67,8 @@ JOB_LABEL_KEY = "platform.neuromation.io/job"
 PROJECT_LABEL_KEY = "platform.apolo.us/project"
 ORG_LABEL_KEY = "platform.apolo.us/org"
 
-INJECT_STORAGE_ANNOTATION_KEY = "platform.apolo.us/inject-storage"
+# used in both annotations and as a label selector by a storage-injector
+INJECT_STORAGE_KEY = "platform.apolo.us/inject-storage"
 
 
 class JobStatusItemFactory:
@@ -327,7 +328,7 @@ class KubeOrchestrator(Orchestrator):
                     "mount_mode": "r" if volume.read_only else "rw",
                 }
             )
-        return {INJECT_STORAGE_ANNOTATION_KEY: json.dumps(value)}
+        return {INJECT_STORAGE_KEY: json.dumps(value)}
 
     def _get_job_resource_pool_types(self, job: Job) -> Sequence[ResourcePoolType]:
         job_preset = job.preset
@@ -449,12 +450,18 @@ class KubeOrchestrator(Orchestrator):
             labels["platform.neuromation.io/external"] = "true"
         return labels
 
+    def _get_storage_labels(self, job: Job) -> dict[str, str]:
+        if not job.volumes:
+            return {}
+        return {INJECT_STORAGE_KEY: "true"}
+
     def _get_pod_labels(self, job: Job) -> dict[str, str]:
         labels = self._get_job_labels(job)
         labels.update(self._get_user_pod_labels(job))
         labels.update(self._get_org_pod_labels(job))
         labels.update(self._get_project_pod_labels(job))
         labels.update(self._get_preset_labels(job))
+        labels.update(self._get_storage_labels(job))
         return labels
 
     def _get_pod_restart_policy(self, job: Job) -> PodRestartPolicy:
