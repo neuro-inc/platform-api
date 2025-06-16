@@ -518,10 +518,7 @@ async def create_app(
 
     app.add_subapp("/api/v1", api_v1_app)
 
-    async def handle_ping(request: aiohttp.web.Request) -> aiohttp.web.Response:
-        return aiohttp.web.Response(text="Pong")
-
-    app.router.add_get("/ping", handle_ping)
+    app.router.add_get("/ping", api_v1_handler.handle_ping)
 
     app.on_response_prepare.append(add_version_to_header)
 
