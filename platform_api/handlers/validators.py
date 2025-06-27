@@ -246,7 +246,7 @@ def create_resources_validator(
 
 def create_tpu_validator(
     *, allow_any: bool = False, allowed: Sequence[TPUResource] = ()
-) -> Optional[t.Trafaret]:  # noqa: UP007
+) -> Optional[t.Trafaret]:  # noqa: UP045
     if allow_any:
         return t.Dict({"type": t.String, "software_version": t.String})
 
