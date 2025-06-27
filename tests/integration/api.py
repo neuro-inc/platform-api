@@ -45,7 +45,7 @@ class ApiConfig(NamedTuple):
 
     @property
     def ping_url(self) -> str:
-        return self.endpoint + "/ping"
+        return f"http://{self.host}:{self.port}/ping"
 
     @property
     def config_url(self) -> str:
