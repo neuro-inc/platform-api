@@ -1,7 +1,7 @@
 import shlex
 from collections.abc import Sequence
 from pathlib import PurePath
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import unquote, urlsplit
 
 import trafaret as t
@@ -216,10 +216,6 @@ def create_resources_validator(
         }
     )
 
-    tpu_validator = create_tpu_validator(
-        allow_any=allow_any_tpu, allowed=allowed_tpu_resources
-    )
-
     validators = [
         common_resources_validator,
         common_resources_validator
@@ -238,21 +234,23 @@ def create_resources_validator(
         ),
     ]
 
-    if tpu_validator:
+    tpu_validator = None
+    if allow_any_tpu:
+        tpu_validator = create_any_tpu_validator()
+    elif allowed_tpu_resources:
+        tpu_validator = create_tpu_validator(allowed=allowed_tpu_resources)
+
+    if tpu_validator is not None:
         validators.append(common_resources_validator + t.Dict({"tpu": tpu_validator}))
 
     return t.Or(*validators) & check_memory_keys
 
 
-def create_tpu_validator(
-    *, allow_any: bool = False, allowed: Sequence[TPUResource] = ()
-) -> Optional[t.Trafaret]:  # noqa: UP007
-    if allow_any:
-        return t.Dict({"type": t.String, "software_version": t.String})
+def create_any_tpu_validator() -> t.Trafaret:
+    return t.Dict({"type": t.String, "software_version": t.String})
 
-    if not allowed:
-        return None
 
+def create_tpu_validator(*, allowed: Sequence[TPUResource] = ()) -> t.Trafaret:
     validators = []
     for resource in allowed:
         validators.append(

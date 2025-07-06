@@ -3,7 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppress
-from typing import Any, Optional
+from typing import Any
 
 import asyncpg
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -125,7 +125,7 @@ class ResubscribingNotifier(Notifier):
     class _Subscription(Subscription):
         _inner_manager: AbstractAsyncContextManager[Subscription] | None = None
         _subscription: Subscription | None = None
-        _task: Optional["asyncio.Task[None]"] = None
+        _task: asyncio.Task[None] | None = None
 
         def __init__(
             self, notifier: Notifier, callback: Callback, check_interval: float
