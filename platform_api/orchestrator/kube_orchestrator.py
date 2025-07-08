@@ -63,9 +63,13 @@ from .kube_orchestrator_scheduler import (
 logger = logging.getLogger(__name__)
 
 
-JOB_LABEL_KEY = "platform.neuromation.io/job"
-PROJECT_LABEL_KEY = "platform.apolo.us/project"
-ORG_LABEL_KEY = "platform.apolo.us/org"
+NEURO_JOB_LABEL_KEY = "platform.neuromation.io/job"
+APOLO_JOB_LABEL_KEY = "platform.apolo.us/job"
+APOLO_JOB_NAME_LABEL_KEY = "platform.apolo.us/job-name"
+APOLO_PROJECT_LABEL_KEY = "platform.apolo.us/project"
+APOLO_ORG_LABEL_KEY = "platform.apolo.us/org"
+APOLO_USER_LABEL_KEY = "platform.apolo.us/user"
+APOLO_PRESET_LABEL_KEY = "platform.apolo.us/preset"
 
 # used in both annotations and as a label selector by a storage-injector
 INJECT_STORAGE_KEY = "platform.apolo.us/inject-storage"
@@ -421,33 +425,39 @@ class KubeOrchestrator(Orchestrator):
         return pod
 
     def _get_user_pod_labels(self, job: Job) -> dict[str, str]:
-        return {"platform.neuromation.io/user": job.owner.replace("/", "--")}
-
-    def _get_org_project_labels(self, job: Job) -> dict[str, str]:
-        labels = {
-            PROJECT_LABEL_KEY: job.project_name,
+        user = job.owner.replace("/", "--")
+        return {
+            "platform.neuromation.io/user": user,
+            APOLO_USER_LABEL_KEY: user,
         }
-        if job.org_name:
-            labels[ORG_LABEL_KEY] = job.org_name
-        return labels
 
     def _get_org_pod_labels(self, job: Job) -> dict[str, str]:
         # Org label must always be set. Prometheus doesn't return empty labels
         # in response which are required for Grafana tables plugin.
-        return {"platform.neuromation.io/org": job.org_name or "no_org"}
+        return {
+            "platform.neuromation.io/org": job.org_name or "no_org",
+            APOLO_ORG_LABEL_KEY: job.org_name or "no_org",
+        }
 
     def _get_project_pod_labels(self, job: Job) -> dict[str, str]:
-        return {"platform.neuromation.io/project": job.project_name}
+        return {
+            "platform.neuromation.io/project": job.project_name,
+            APOLO_PROJECT_LABEL_KEY: job.project_name,
+        }
 
     def _get_job_labels(self, job: Job) -> dict[str, str]:
-        return {JOB_LABEL_KEY: job.id}
+        return {NEURO_JOB_LABEL_KEY: job.id, APOLO_JOB_LABEL_KEY: job.id}
 
     def _get_preset_labels(self, job: Job) -> dict[str, str]:
         if not job.preset_name:
             return {}
-        labels = {"platform.neuromation.io/preset": job.preset_name}
+        labels = {
+            "platform.neuromation.io/preset": job.preset_name,
+            APOLO_PRESET_LABEL_KEY: job.preset_name,
+        }
         if job.is_external:
             labels["platform.neuromation.io/external"] = "true"
+            labels["platform.apolo.us/external"] = "true"
         return labels
 
     def _get_storage_labels(self, job: Job) -> dict[str, str]:
@@ -650,7 +660,7 @@ class KubeOrchestrator(Orchestrator):
                         LabelSelectorTerm(
                             [
                                 LabelSelectorMatchExpression.create_exists(
-                                    JOB_LABEL_KEY
+                                    NEURO_JOB_LABEL_KEY
                                 ),
                             ]
                         )
@@ -913,6 +923,7 @@ class KubeOrchestrator(Orchestrator):
         labels = self._get_user_pod_labels(job)
         if job.name:
             labels["platform.neuromation.io/job-name"] = job.name
+            labels[APOLO_JOB_NAME_LABEL_KEY] = job.name
         return labels
 
     def _get_ingress_labels(self, job: Job, service: Service) -> dict[str, str]:
@@ -952,7 +963,7 @@ class KubeOrchestrator(Orchestrator):
             logger.warning("Failed to remove ingress %s: %s", name, e)
 
     async def delete_all_job_resources(self, namespace: str, job_id: str) -> None:
-        labels = {JOB_LABEL_KEY: job_id}
+        labels = {NEURO_JOB_LABEL_KEY: job_id}
         await self._client.delete_all_pods(namespace, labels=labels)
         # todo: check this
         await self._client.delete_all_ingresses(namespace, labels=labels)
