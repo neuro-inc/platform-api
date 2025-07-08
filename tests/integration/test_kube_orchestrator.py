@@ -1549,6 +1549,10 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": "no_org",
             "platform.neuromation.io/project": job.owner,
+            "platform.apolo.us/job": job.id,
+            "platform.apolo.us/user": job.owner,
+            "platform.apolo.us/org": "no_org",
+            "platform.apolo.us/project": job.owner,
         }
 
     async def test_named_job_resource_labels(
