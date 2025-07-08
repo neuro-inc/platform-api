@@ -20,9 +20,14 @@ spec:
         app: {{ include "platformApi.name" . }}
         release: {{ .Release.Name }}
         service: platform-api
-      {{- if .Values.secrets }}
+      {{- if or .Values.annotations .Values.secrets }}
       annotations:
-        checksum/secret: {{ include (print $.Template.BasePath "/secrets.yml") . | sha256sum }}
+        {{- with .Values.annotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+        {{- end }}
       {{- end }}
     spec:
       containers:
