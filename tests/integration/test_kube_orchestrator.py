@@ -1455,6 +1455,11 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": "no_org",
             "platform.neuromation.io/project": job.owner,
+            "platform.apolo.us/job": job.id,
+            "platform.apolo.us/preset": job.preset_name,
+            "platform.apolo.us/user": job.owner,
+            "platform.apolo.us/org": "no_org",
+            "platform.apolo.us/project": job.owner,
         }
 
     async def test_job_org_pod_labels(
@@ -1491,6 +1496,10 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": job.org_name,
             "platform.neuromation.io/project": job.owner,
+            "platform.apolo.us/job": job.id,
+            "platform.apolo.us/user": job.owner,
+            "platform.apolo.us/org": job.org_name,
+            "platform.apolo.us/project": job.owner,
         }
 
     async def test_job_resource_labels(
@@ -1527,6 +1536,10 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": "no_org",
             "platform.neuromation.io/project": job.owner,
+            "platform.apolo.us/job": job.id,
+            "platform.apolo.us/user": job.owner,
+            "platform.apolo.us/org": "no_org",
+            "platform.apolo.us/project": job.owner,
         }
 
         ingress_name = job.id
@@ -1536,6 +1549,10 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": "no_org",
             "platform.neuromation.io/project": job.owner,
+            "platform.apolo.us/job": job.id,
+            "platform.apolo.us/user": job.owner,
+            "platform.apolo.us/org": "no_org",
+            "platform.apolo.us/project": job.owner,
         }
 
     async def test_named_job_resource_labels(
@@ -1574,16 +1591,25 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": "no_org",
             "platform.neuromation.io/project": job.owner,
+            "platform.apolo.us/job": job.id,
+            "platform.apolo.us/user": job.owner,
+            "platform.apolo.us/org": "no_org",
+            "platform.apolo.us/project": job.owner,
         }
 
         ingress_name = job.id
         ingress = await kube_client.get_ingress(job.namespace, ingress_name)
         assert ingress.labels == {
             "platform.neuromation.io/job": job.id,
+            "platform.neuromation.io/job-name": job.name,
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": "no_org",
-            "platform.neuromation.io/job-name": job.name,
             "platform.neuromation.io/project": job.owner,
+            "platform.apolo.us/job": job.id,
+            "platform.apolo.us/job-name": job.name,
+            "platform.apolo.us/user": job.owner,
+            "platform.apolo.us/org": "no_org",
+            "platform.apolo.us/project": job.owner,
         }
 
     async def test_job_check_ingress_annotations_jobs_ingress_class_nginx(
