@@ -1,7 +1,7 @@
 """rename preemptible fields
 
-Revision ID: 68197d86eb6f
-Revises: 2390260103ce
+Revision ID: 0006
+Revises: 0005
 Create Date: 2020-12-21 14:56:02.437730
 
 """
@@ -9,8 +9,8 @@ Create Date: 2020-12-21 14:56:02.437730
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "68197d86eb6f"
-down_revision = "2390260103ce"
+revision = "0006"
+down_revision = "0005"
 branch_labels = None
 depends_on = None
 

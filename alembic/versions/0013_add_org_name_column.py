@@ -1,7 +1,7 @@
 """add org_name column
 
-Revision ID: ca2963935742
-Revises: de3a85c9c87a
+Revision ID: 0013
+Revises: 0012
 Create Date: 2021-11-17 16:10:58.573317
 
 """
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "ca2963935742"
-down_revision = "de3a85c9c87a"
+revision = "0013"
+down_revision = "0012"
 branch_labels = None
 depends_on = None
 

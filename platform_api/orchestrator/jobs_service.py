@@ -120,8 +120,8 @@ class JobsService:
         self._max_deletion_attempts = 10
 
         self._dummy_cluster_orchestrator_config = OrchestratorConfig(
-            jobs_domain_name_template="{job_id}.missing-cluster",
-            jobs_internal_domain_name_template="{job_id}.missing-cluster",
+            jobs_domain_name_template="{job_id}.{namespace}.missing-cluster",
+            jobs_internal_domain_name_template="{job_id}.{namespace}.missing-cluster",
             resource_pool_types=(),
             presets=(),
         )
@@ -220,8 +220,8 @@ class JobsService:
         user: AuthUser,
         cluster_name: str,
         *,
+        project_name: str,
         org_name: str | None = None,
-        project_name: str | None = None,
         job_name: str | None = None,
         preset_name: str | None = None,
         tags: Sequence[str] = (),
@@ -236,7 +236,6 @@ class JobsService:
         priority: JobPriority = JobPriority.NORMAL,
         energy_schedule_name: str | None = None,
     ) -> tuple[Job, Status]:
-        project_name = project_name or user.name
         base_name = get_base_owner(
             user.name
         )  # SA has access to same clusters as a user
@@ -245,6 +244,15 @@ class JobsService:
             raise JobsServiceException(
                 "Failed to create job: job name cannot start with 'job-' prefix."
             )
+
+        try:
+            cluster_config = self._cluster_registry.get(cluster_name)
+        except ClusterNotFound as cluster_err:
+            # NOTE: this will result in 400 HTTP response which may not be
+            # what we want to convey really
+            raise JobsServiceException(
+                f"Cluster '{cluster_name}' not found"
+            ) from cluster_err
 
         # check quotas for both a user and a cluster
         cluster_user = await self._admin_client.get_cluster_user(
@@ -261,6 +269,7 @@ class JobsService:
             )
             if not wait_for_jobs_quota:
                 await self._raise_for_orgs_running_jobs_quota(org_cluster)
+
             org_user = await self._admin_client.get_org_user(
                 org_name=org_name,
                 user_name=base_name,
@@ -314,8 +323,6 @@ class JobsService:
         job_id = job_request.job_id
 
         try:
-            cluster_config = self._cluster_registry.get(cluster_name)
-
             if (
                 record.privileged
                 and not cluster_config.orchestrator.allow_privileged_mode
@@ -334,15 +341,7 @@ class JobsService:
 
             async with self._create_job_in_storage(record) as record:
                 job = self._make_job(record, cluster_config)
-                job.init_job_internal_hostnames()
             return job, Status.create(job.status)
-
-        except ClusterNotFound as cluster_err:
-            # NOTE: this will result in 400 HTTP response which may not be
-            # what we want to convey really
-            raise JobsServiceException(
-                f"Cluster '{record.cluster_name}' not found"
-            ) from cluster_err
         except JobsStorageException as transaction_err:
             logger.error("Failed to create job %s: %s", job_id, transaction_err)
             raise JobsServiceException(f"Failed to create job: {transaction_err}")

@@ -1,7 +1,7 @@
 """drop jobs runtime cache table
 
-Revision ID: de3a85c9c87a
-Revises: 1497c0e2f5a2
+Revision ID: 0012
+Revises: 0011
 Create Date: 2021-07-07 17:12:57.615587
 
 """
@@ -12,8 +12,8 @@ import sqlalchemy.dialects.postgresql as sapg
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "de3a85c9c87a"
-down_revision = "0ee42d5f1908"
+revision = "0012"
+down_revision = "0011"
 branch_labels = None
 depends_on = None
 

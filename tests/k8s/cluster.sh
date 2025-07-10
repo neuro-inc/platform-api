@@ -10,17 +10,27 @@ function k8s::install_minikube {
 }
 
 function k8s::start {
+    # ----- Kernel prerequisites for the none driver ----------------------------
+    echo "• Enabling br_netfilter and required sysctl flags …"
+    sudo modprobe br_netfilter
+    sudo sysctl -w \
+        net.bridge.bridge-nf-call-iptables=1 \
+        net.bridge.bridge-nf-call-ip6tables=1 \
+        net.ipv4.ip_forward=1
+
+    # ----- Disable swap (kubeadm requirement) -----------------------------------
+    echo "• Disabling swap …"
+    sudo swapoff -a
+
     export KUBECONFIG=$HOME/.kube/config
     mkdir -p $(dirname $KUBECONFIG)
     touch $KUBECONFIG
 
     export MINIKUBE_WANTUPDATENOTIFICATION=false
-    export MINIKUBE_WANTREPORTERRORPROMPT=false
     export MINIKUBE_HOME=$HOME
     export CHANGE_MINIKUBE_NONE_USER=true
 
     sudo -E mkdir -p ~/.minikube/files/files
-    sudo -E minikube config set WantReportErrorPrompt false
     sudo -E minikube config set WantUpdateNotification false
     sudo -E minikube config set WantNoneDriverWarning false
 
@@ -37,7 +47,6 @@ function k8s::start {
 
     k8s::wait k8s::setup_namespace
     k8s::wait k8s::setup_storageclass
-    k8s::wait k8s::start_nfs
     k8s::wait "kubectl get po --all-namespaces"
 }
 
@@ -85,14 +94,6 @@ function k8s::test {
     exit 1
 }
 
-function k8s::start_nfs {
-    kubectl apply -f tests/k8s/nfs.yml
-}
-
-function k8s::stop_nfs {
-    kubectl delete -f tests/k8s/nfs.yml
-}
-
 
 case "${1:-}" in
     install)
@@ -109,12 +110,6 @@ case "${1:-}" in
         ;;
     test)
         k8s::test
-        ;;
-    start-nfs)
-        k8s::start_nfs
-        ;;
-    stop-nfs)
-        k8s::stop_nfs
         ;;
     *)
         exit 1

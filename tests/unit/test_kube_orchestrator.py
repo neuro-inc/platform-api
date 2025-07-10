@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from pathlib import PurePath
 from typing import Any
 from unittest import mock
 
 import pytest
+from apolo_kube_client.errors import ResourceExists
 from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig
-from platform_api.config import RegistryConfig, StorageConfig, StorageType
+from platform_api.config import RegistryConfig
 from platform_api.orchestrator.job import JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_request import (
     Container,
@@ -22,11 +22,9 @@ from platform_api.orchestrator.job_request import (
     SecretContainerVolume,
 )
 from platform_api.orchestrator.kube_client import (
-    AlreadyExistsException,
     ContainerStatus,
     Ingress,
     KubeClient,
-    PathVolume,
     Resources,
     SecretEnvVar,
     SecretRef,
@@ -38,83 +36,23 @@ from platform_api.orchestrator.kube_client import (
 )
 from platform_api.orchestrator.kube_config import KubeConfig
 from platform_api.orchestrator.kube_orchestrator import (
-    HostVolume,
     IngressRule,
     JobStatusItemFactory,
     KubeOrchestrator,
     LabelSelectorMatchExpression,
     LabelSelectorTerm,
-    NfsVolume,
     NodeAffinity,
     PodAffinity,
     PodAffinityTerm,
     PodDescriptor,
     PodPreferredSchedulingTerm,
     PodStatus,
-    PVCVolume,
     Service,
     Toleration,
 )
 
 
 class TestVolume:
-    @pytest.mark.parametrize(
-        "volume",
-        (
-            HostVolume("testvolume", path=None, host_path=PurePath("/host")),
-            NfsVolume(
-                "testvolume", path=None, server="1.2.3.4", export_path=PurePath("/host")
-            ),
-            PVCVolume("testvolume", path=None, claim_name="testclaim"),
-        ),
-    )
-    def test_create_mount(self, volume: Volume) -> None:
-        container_volume = ContainerVolume(
-            uri=URL("storage://host/path/to/dir"),
-            dst_path=PurePath("/container/path/to/dir"),
-        )
-        mount = volume.create_mount(container_volume)
-        assert mount.volume == volume
-        assert mount.mount_path == PurePath("/container/path/to/dir")
-        assert mount.sub_path == PurePath("path/to/dir")
-        assert not mount.read_only
-
-    def test_create_org_mount(self) -> None:
-        volume = PVCVolume("testvolume", path=PurePath("/org"), claim_name="testclaim")
-        container_volume = ContainerVolume(
-            uri=URL("storage://cluster/org/path/to/dir"),
-            dst_path=PurePath("/container/path/to/dir"),
-        )
-        mount = volume.create_mount(container_volume)
-        assert mount.volume == volume
-        assert mount.mount_path == PurePath("/container/path/to/dir")
-        assert mount.sub_path == PurePath("path/to/dir")
-        assert not mount.read_only
-
-    def test_create_org_root_mount(self) -> None:
-        volume = PVCVolume("testvolume", path=PurePath("/org"), claim_name="testclaim")
-        container_volume = ContainerVolume(
-            uri=URL("storage://cluster"),
-            dst_path=PurePath("/container/path/to/dir"),
-        )
-        mount = volume.create_mount(container_volume)
-        assert mount.volume == volume
-        assert mount.mount_path == PurePath("/container/path/to/dir")
-        assert mount.sub_path == PurePath()
-        assert not mount.read_only
-
-    def test_create_mount_with_mount_sub_path(self) -> None:
-        volume = PVCVolume("testvolume", path=None, claim_name="testclaim")
-        container_volume = ContainerVolume(
-            uri=URL("storage://cluster/path/to/dir"),
-            dst_path=PurePath("/container/path/to/dir"),
-        )
-        mount = volume.create_mount(container_volume, PurePath("sub/dir"))
-        assert mount.volume == volume
-        assert mount.mount_path == PurePath("/container/path/to/dir/sub/dir")
-        assert mount.sub_path == PurePath("path/to/dir")
-        assert not mount.read_only
-
     def test_create_mount_shared_with_mount_sub_path(self) -> None:
         volume = SharedMemoryVolume("testvolume")
         container_volume = ContainerVolume(
@@ -136,35 +74,6 @@ class TestAbstractVolume:
                 dst_path=PurePath("/container/path/to/dir"),
             )
             Volume("testvolume").create_mount(container_volume)
-
-
-class TestHostVolume:
-    def test_to_primitive(self) -> None:
-        volume = HostVolume("testvolume", path=None, host_path=PurePath("/tmp"))
-        assert volume.to_primitive() == {
-            "name": "testvolume",
-            "hostPath": {"path": "/tmp", "type": "Directory"},
-        }
-
-
-class TestNfsVolume:
-    def test_to_primitive(self) -> None:
-        volume = NfsVolume(
-            "testvolume", path=None, server="1.2.3.4", export_path=PurePath("/tmp")
-        )
-        assert volume.to_primitive() == {
-            "name": "testvolume",
-            "nfs": {"server": "1.2.3.4", "path": "/tmp"},
-        }
-
-
-class TestPVCVolume:
-    def test_to_primitive(self) -> None:
-        volume = PVCVolume("testvolume", claim_name="testclaim", path=PurePath("/tmp"))
-        assert volume.to_primitive() == {
-            "name": "testvolume",
-            "persistentVolumeClaim": {"claimName": "testclaim"},
-        }
 
 
 class TestSecretVolume:
@@ -212,14 +121,17 @@ class TestSecretEnvVar:
         assert sec_env_var.to_primitive() == {
             "name": "sec-name",
             "valueFrom": {
-                "secretKeyRef": {"name": "project--test-user--secrets", "key": "sec1"}
+                "secretKeyRef": {
+                    "name": "project--no-org--test-user--secrets",
+                    "key": "sec1",
+                }
             },
         }
 
 
 class TestVolumeMount:
     def test_to_primitive(self) -> None:
-        volume = HostVolume(name="testvolume", path=None, host_path=PurePath("/tmp"))
+        volume = SharedMemoryVolume(name="testvolume")
         mount = VolumeMount(
             volume=volume,
             mount_path=PurePath("/dst"),
@@ -670,76 +582,6 @@ class TestPodDescriptor:
         assert pod.annotations == {"tf-version.cloud-tpus.google.com": "1.14"}
         assert pod.priority_class_name is None
 
-    def test_from_job_request_multiple_volumes(self) -> None:
-        volume_cluster = PVCVolume(
-            name="storage", path=PurePath("/"), claim_name="storage"
-        )
-        volume_org = PVCVolume(
-            name="storage-org", path=PurePath("/org"), claim_name="storage-org"
-        )
-
-        def create_storage_volume(volume: ContainerVolume) -> Sequence[PathVolume]:
-            return (
-                [volume_org] if volume.uri.path.startswith("/org") else [volume_cluster]
-            )
-
-        def create_storage_volume_mount(
-            volume: ContainerVolume, volumes: Sequence[PathVolume]
-        ) -> Sequence[VolumeMount]:
-            return (
-                [volume_org.create_mount(volume)]
-                if volume.uri.path.startswith("/org")
-                else [volume_cluster.create_mount(volume)]
-            )
-
-        container = Container(
-            image="testimage",
-            command="testcommand 123",
-            resources=ContainerResources(cpu=1, memory=128 * 10**6),
-            volumes=[
-                ContainerVolume(
-                    uri=URL("storage://cluster/user1"),
-                    dst_path=PurePath("/var/storage-user1"),
-                ),
-                ContainerVolume(
-                    uri=URL("storage://cluster/user1"),
-                    dst_path=PurePath("/var/storage-user1"),
-                ),  # duplicate volume, should be ignored
-                ContainerVolume(
-                    uri=URL("storage://cluster/user2"),
-                    dst_path=PurePath("/var/storage-user2"),
-                ),
-                ContainerVolume(
-                    uri=URL("storage://cluster/org/user3"),
-                    dst_path=PurePath("/var/storage-user3"),
-                ),
-            ],
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(
-            job_request,
-            storage_volume_factory=create_storage_volume,
-            storage_volume_mount_factory=create_storage_volume_mount,
-        )
-        assert pod.volumes == [volume_cluster, volume_org]
-        assert pod.volume_mounts == [
-            VolumeMount(
-                volume=volume_cluster,
-                mount_path=PurePath("/var/storage-user1"),
-                sub_path=PurePath("user1"),
-            ),
-            VolumeMount(
-                volume=volume_cluster,
-                mount_path=PurePath("/var/storage-user2"),
-                sub_path=PurePath("user2"),
-            ),
-            VolumeMount(
-                volume=volume_org,
-                mount_path=PurePath("/var/storage-user3"),
-                sub_path=PurePath("user3"),
-            ),
-        ]
-
     def test_from_primitive_defaults(self) -> None:
         payload = {
             "kind": "Pod",
@@ -820,7 +662,7 @@ class TestPodDescriptor:
 
     def test_from_primitive_failure(self) -> None:
         payload = {"kind": "Status", "code": 409}
-        with pytest.raises(AlreadyExistsException, match="already exist"):
+        with pytest.raises(ResourceExists, match="already exist"):
             PodDescriptor.from_primitive(payload)
 
     def test_from_primitive_unknown_kind(self) -> None:
@@ -1188,7 +1030,7 @@ class TestIngressV1Beta1Rule:
         }
 
     def test_from_service(self) -> None:
-        service = Service(name="testname", target_port=1234)
+        service = Service(namespace="default", name="testname", target_port=1234)
         rule = IngressRule.from_service(host="testname.testdomain", service=service)
         assert rule == IngressRule(
             host="testname.testdomain", service_name="testname", service_port=80
@@ -1623,7 +1465,7 @@ class TestService:
     @pytest.fixture
     def service_payload(self) -> dict[str, Any]:
         return {
-            "metadata": {"name": "testservice"},
+            "metadata": {"namespace": "default", "name": "testservice"},
             "spec": {
                 "type": "ClusterIP",
                 "ports": [{"port": 80, "targetPort": 8080, "name": "http"}],
@@ -1645,6 +1487,7 @@ class TestService:
 
     def test_to_primitive(self, service_payload: dict[str, dict[str, Any]]) -> None:
         service = Service(
+            namespace="default",
             name="testservice",
             selector=service_payload["spec"]["selector"],
             target_port=8080,
@@ -1658,6 +1501,7 @@ class TestService:
         expected_payload = service_payload.copy()
         expected_payload["metadata"]["labels"] = labels
         service = Service(
+            namespace="default",
             name="testservice",
             selector=expected_payload["spec"]["selector"],
             target_port=8080,
@@ -1669,6 +1513,7 @@ class TestService:
         self, service_payload: dict[str, dict[str, Any]]
     ) -> None:
         service = Service(
+            namespace="default",
             name="testservice",
             selector=service_payload["spec"]["selector"],
             target_port=8080,
@@ -1681,6 +1526,7 @@ class TestService:
         self, service_payload: dict[str, dict[str, Any]]
     ) -> None:
         service = Service(
+            namespace="default",
             name="testservice",
             selector=service_payload["spec"]["selector"],
             target_port=8080,
@@ -1694,6 +1540,7 @@ class TestService:
     ) -> None:
         service = Service.from_primitive(service_payload_with_uid)
         assert service == Service(
+            namespace="default",
             name="testservice",
             uid="test-uid",
             selector=service_payload_with_uid["spec"]["selector"],
@@ -1708,6 +1555,7 @@ class TestService:
         input_payload["metadata"]["labels"] = labels
         service = Service.from_primitive(input_payload)
         assert service == Service(
+            namespace="default",
             name="testservice",
             uid="test-uid",
             selector=service_payload_with_uid["spec"]["selector"],
@@ -1721,6 +1569,7 @@ class TestService:
         service_payload_with_uid["spec"]["type"] = "NodePort"
         service = Service.from_primitive(service_payload_with_uid)
         assert service == Service(
+            namespace="default",
             name="testservice",
             uid="test-uid",
             selector=service_payload_with_uid["spec"]["selector"],
@@ -1734,6 +1583,7 @@ class TestService:
         service_payload_with_uid["spec"]["clusterIP"] = "None"
         service = Service.from_primitive(service_payload_with_uid)
         assert service == Service(
+            namespace="default",
             name="testservice",
             uid="test-uid",
             selector=service_payload_with_uid["spec"]["selector"],
@@ -1743,13 +1593,15 @@ class TestService:
 
     def test_create_for_pod(self) -> None:
         pod = PodDescriptor(name="testpod", image="testimage", port=1234)
-        service = Service.create_for_pod(pod)
-        assert service == Service(name="testpod", target_port=1234)
+        service = Service.create_for_pod(namespace="default", pod=pod)
+        assert service == Service(namespace="default", name="testpod", target_port=1234)
 
     def test_create_headless_for_pod(self) -> None:
         pod = PodDescriptor(name="testpod", image="testimage", port=1234)
-        service = Service.create_headless_for_pod(pod)
-        assert service == Service(name="testpod", cluster_ip="None", target_port=1234)
+        service = Service.create_headless_for_pod(namespace="default", pod=pod)
+        assert service == Service(
+            namespace="default", name="testpod", cluster_ip="None", target_port=1234
+        )
 
 
 class TestContainerStatus:
@@ -1817,19 +1669,6 @@ class TestKubeOrchestrator:
         kube_client = mock.AsyncMock(spec=KubeClient)
         return KubeOrchestrator(
             cluster_name="default",
-            storage_configs=[
-                StorageConfig(
-                    host_mount_path=PurePath("/tmp"),
-                    type=StorageType.PVC,
-                    pvc_name="main",
-                ),
-                StorageConfig(
-                    path=PurePath("/org"),
-                    host_mount_path=PurePath("/tmp"),
-                    type=StorageType.PVC,
-                    pvc_name="org",
-                ),
-            ],
             registry_config=RegistryConfig(username="username", password="password"),
             orchestrator_config=OrchestratorConfig(
                 jobs_domain_name_template="{job_id}.default.org.neu.ro",
@@ -1840,91 +1679,3 @@ class TestKubeOrchestrator:
             kube_config=KubeConfig(endpoint_url="https://kuberrnetes.svc"),
             kube_client=kube_client,
         )
-
-    def test_create_main_storage_volumes(self, orchestrator: KubeOrchestrator) -> None:
-        container_volume = ContainerVolume(
-            uri=URL("storage://cluster/user"),
-            dst_path=PurePath("/var/storage"),
-        )
-        volumes = orchestrator.create_storage_volumes(container_volume)
-
-        assert volumes == [PVCVolume(path=None, name="storage", claim_name="main")]
-
-    def test_create_org_storage_volumes(self, orchestrator: KubeOrchestrator) -> None:
-        container_volume = ContainerVolume(
-            uri=URL("storage://cluster/org"),
-            dst_path=PurePath("/var/storage"),
-        )
-        volumes = orchestrator.create_storage_volumes(container_volume)
-
-        assert volumes == [
-            PVCVolume(path=PurePath("/org"), name="storage-org", claim_name="org")
-        ]
-
-    def test_create_storage_volumes_all_storages(
-        self, orchestrator: KubeOrchestrator
-    ) -> None:
-        container_volume = ContainerVolume(
-            uri=URL("storage://cluster"),
-            dst_path=PurePath("/var/storage"),
-        )
-        volumes = orchestrator.create_storage_volumes(container_volume)
-
-        assert volumes == [
-            PVCVolume(path=None, name="storage", claim_name="main"),
-            PVCVolume(path=PurePath("/org"), name="storage-org", claim_name="org"),
-        ]
-
-    def test_create_org_storage_volume_mounts(
-        self, orchestrator: KubeOrchestrator
-    ) -> None:
-        container_volume = ContainerVolume(
-            uri=URL("storage://cluster/org"),
-            dst_path=PurePath("/var/storage"),
-        )
-        volume = PVCVolume(path=PurePath("/org"), name="storage-org", claim_name="org")
-        mounts = orchestrator.create_storage_volume_mounts(container_volume, [volume])
-
-        assert mounts == [
-            VolumeMount(volume=volume, mount_path=PurePath("/var/storage"))
-        ]
-
-    def test_create_all_storage_volume_mounts(
-        self, orchestrator: KubeOrchestrator
-    ) -> None:
-        container_volume = ContainerVolume(
-            uri=URL("storage://cluster"),
-            dst_path=PurePath("/var/storage"),
-        )
-        main_volume = PVCVolume(path=None, name="storage", claim_name="main")
-        org_volume = PVCVolume(
-            path=PurePath("/org"), name="storage-org", claim_name="org"
-        )
-        mounts = orchestrator.create_storage_volume_mounts(
-            container_volume, [main_volume, org_volume]
-        )
-
-        assert mounts == [
-            VolumeMount(
-                volume=main_volume,
-                mount_path=PurePath("/var/storage/default"),
-            ),
-            VolumeMount(
-                volume=org_volume,
-                mount_path=PurePath("/var/storage/org"),
-            ),
-        ]
-
-    def test_create_all_storage_volume_mounts_for_single_volume(
-        self, orchestrator: KubeOrchestrator
-    ) -> None:
-        container_volume = ContainerVolume(
-            uri=URL("storage://cluster"),
-            dst_path=PurePath("/var/storage"),
-        )
-        volume = PVCVolume(path=None, name="storage", claim_name="main")
-        mounts = orchestrator.create_storage_volume_mounts(container_volume, [volume])
-
-        assert mounts == [
-            VolumeMount(volume=volume, mount_path=PurePath("/var/storage"))
-        ]

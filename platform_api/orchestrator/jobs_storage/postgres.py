@@ -30,13 +30,17 @@ from .base import (
 @dataclass(frozen=True)
 class JobTables:
     jobs: sa.Table
+    metadata = sa.MetaData()
 
     @classmethod
     def create(cls) -> "JobTables":
-        metadata = sa.MetaData()
+        table_name = "jobs"
+        if table_name in cls.metadata:
+            return cls(jobs=cls.metadata.tables[table_name])
+
         jobs_table = sa.Table(
-            "jobs",
-            metadata,
+            table_name,
+            cls.metadata,
             sa.Column("id", sa.String(), primary_key=True),
             sa.Column("owner", sa.String(), nullable=False),
             sa.Column("name", sa.String(), nullable=True),
@@ -55,7 +59,47 @@ class JobTables:
             ),
             # All other fields
             sa.Column("payload", sapg.JSONB(), nullable=False),
+            sa.Column("namespace", sa.String(), nullable=True),
         )
+        (sa.Index("jobs_owner_index", jobs_table.c.owner),)
+        (sa.Index("jobs_name_index", jobs_table.c.name),)
+        (sa.Index("jobs_status_index", jobs_table.c.status),)
+        (sa.Index("jobs_created_at_index", jobs_table.c.created_at),)
+        (sa.Index("jobs_finished_at_index", jobs_table.c.finished_at),)
+        (
+            sa.Index(
+                "jobs_materialized_index",
+                sa.cast(jobs_table.c.payload["materialized"].astext, Boolean),
+            ),
+        )
+        sa.Index(
+            "jobs_tags_index",
+            jobs_table.c.tags,
+            postgresql_using="gin",
+            postgresql_ops={"tags": "jsonb_path_ops"},
+        )
+        sa.Index("jobs_orgs_index", jobs_table.c.org_name)
+        sa.Index("jobs_org_project_hash_index", jobs_table.c.org_project_hash)
+        sa.Index(
+            "jobs_name_project_name_uq",
+            jobs_table.c.name,
+            jobs_table.c.project_name,
+            unique=True,
+            postgresql_where="""
+                (
+                    (
+                        (status)::text <> 'succeeded'::text
+                    ) AND
+                    (
+                        (status)::text <> 'failed'::text
+                    ) AND
+                    (
+                        (status)::text <> 'cancelled'::text
+                    )
+                )
+            """,
+        )
+
         return cls(
             jobs=jobs_table,
         )
@@ -84,6 +128,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             "created_at": job.status_history.created_at,
             "finished_at": job.status_history.finished_at,
             "payload": payload,
+            "namespace": job.namespace,
         }
 
     def _record_to_job(self, record: Row) -> JobRecord:
@@ -97,6 +142,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
         payload["org_project_hash"] = record["org_project_hash"]
         if record["tags"] is not None:
             payload["tags"] = record["tags"]
+        payload["namespace"] = record["namespace"]
         return JobRecord.from_primitive(payload)
 
     # Simple operations
@@ -129,7 +175,7 @@ class PostgresJobsStorage(BasePostgresStorage, JobsStorage):
             if isinstance(exc.orig.__cause__, UniqueViolationError):
                 e = exc.orig.__cause__
                 if e.constraint_name == "jobs_name_project_name_uq":
-                    # We need to retrieve conflicting job from database to
+                    # We need to retrieve a conflicting job from database to
                     # build JobStorageJobFoundError
                     project_name = values["project_name"]
                     query = (

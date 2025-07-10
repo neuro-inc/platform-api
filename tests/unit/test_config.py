@@ -1,27 +1,18 @@
 from datetime import timedelta
 from decimal import Decimal
-from pathlib import PurePath
 from unittest import mock
 
 import pytest
 from yarl import URL
 
 from platform_api.cluster_config import OrchestratorConfig
-from platform_api.config import (
-    RegistryConfig,
-    StorageConfig,
-    StorageType,
-)
+from platform_api.config import RegistryConfig
 from platform_api.config_factory import EnvironConfigFactory
-from platform_api.orchestrator.job_request import ContainerVolume
 from platform_api.orchestrator.kube_client import KubeClient, SecretVolume
 from platform_api.orchestrator.kube_config import KubeClientAuthType
 from platform_api.orchestrator.kube_orchestrator import (
-    HostVolume,
     KubeConfig,
     KubeOrchestrator,
-    NfsVolume,
-    PVCVolume,
 )
 from platform_api.resource import ResourcePoolType
 
@@ -31,272 +22,10 @@ def kube_client() -> KubeClient:
     return mock.AsyncMock(spec=KubeClient)
 
 
-class TestStorageConfig:
-    def test_missing_nfs_settings(self) -> None:
-        with pytest.raises(ValueError, match="Missing NFS settings"):
-            StorageConfig(host_mount_path=PurePath("/tmp"), type=StorageType.NFS)
-
-    def test_nfs_invalid_host_mount_path(self) -> None:
-        with pytest.raises(ValueError, match="Invalid host mount path"):
-            StorageConfig(
-                host_mount_path=PurePath("/path1"),
-                nfs_export_path=PurePath("/path2"),
-                nfs_server="http://1.2.3.4",
-                type=StorageType.NFS,
-            )
-
-    def test_redundant_nfs_settings(self) -> None:
-        with pytest.raises(ValueError, match="Redundant NFS settings"):
-            StorageConfig(
-                host_mount_path=PurePath("/tmp"),
-                type=StorageType.HOST,
-                nfs_server="1.2.3.4",
-            )
-
-    def test_is_nfs(self) -> None:
-        config = StorageConfig(
-            host_mount_path=PurePath("/tmp"),
-            type=StorageType.NFS,
-            nfs_server="1.2.3.4",
-            nfs_export_path=PurePath("/tmp"),
-        )
-        assert config.is_nfs
-
-
-class TestStorageVolume:
-    def test_create_storage_volume_nfs(
-        self, kube_client: KubeClient, registry_config: RegistryConfig
-    ) -> None:
-        storage_config = StorageConfig(
-            host_mount_path=PurePath("/tmp"),
-            type=StorageType.NFS,
-            nfs_server="4.3.2.1",
-            nfs_export_path=PurePath("/tmp"),
-        )
-        orchestrator_config = OrchestratorConfig(
-            jobs_domain_name_template="{job_id}.testdomain",
-            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
-            resource_pool_types=[ResourcePoolType()],
-            presets=[],
-        )
-        kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
-        kube_orchestrator = KubeOrchestrator(
-            cluster_name="default",
-            storage_configs=[storage_config],
-            registry_config=registry_config,
-            orchestrator_config=orchestrator_config,
-            kube_config=kube_config,
-            kube_client=kube_client,
-        )
-        container_volume = ContainerVolume.create(
-            "storage://neuromation/public",
-            dst_path=PurePath("/vat/storage"),
-            read_only=True,
-        )
-        volumes = kube_orchestrator.create_storage_volumes(container_volume)
-        assert volumes == [
-            NfsVolume(
-                name="storage",
-                path=None,
-                server="4.3.2.1",
-                export_path=PurePath("/tmp"),
-            )
-        ]
-
-    def test_create_storage_volume_host(
-        self, kube_client: KubeClient, registry_config: RegistryConfig
-    ) -> None:
-        storage_config = StorageConfig(
-            host_mount_path=PurePath("/tmp"), type=StorageType.HOST
-        )
-        orchestrator_config = OrchestratorConfig(
-            jobs_domain_name_template="{job_id}.testdomain",
-            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
-            resource_pool_types=[ResourcePoolType()],
-            presets=[],
-        )
-        kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
-        kube_orchestrator = KubeOrchestrator(
-            cluster_name="default",
-            storage_configs=[storage_config],
-            registry_config=registry_config,
-            orchestrator_config=orchestrator_config,
-            kube_config=kube_config,
-            kube_client=kube_client,
-        )
-        container_volume = ContainerVolume.create(
-            "storage://neuromation/public",
-            dst_path=PurePath("/vat/storage"),
-            read_only=True,
-        )
-        volumes = kube_orchestrator.create_storage_volumes(container_volume)
-        assert volumes == [
-            HostVolume(name="storage", path=None, host_path=PurePath("/tmp"))
-        ]
-
-    def test_create_storage_volume_pvc(
-        self, kube_client: KubeClient, registry_config: RegistryConfig
-    ) -> None:
-        storage_config = StorageConfig(
-            host_mount_path=PurePath("/tmp"), type=StorageType.PVC, pvc_name="testclaim"
-        )
-        orchestrator_config = OrchestratorConfig(
-            jobs_domain_name_template="{job_id}.testdomain",
-            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
-            resource_pool_types=[ResourcePoolType()],
-            presets=[],
-        )
-        kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
-        kube_orchestrator = KubeOrchestrator(
-            cluster_name="default",
-            storage_configs=[storage_config],
-            registry_config=registry_config,
-            orchestrator_config=orchestrator_config,
-            kube_config=kube_config,
-            kube_client=kube_client,
-        )
-        container_volume = ContainerVolume.create(
-            "storage://neuromation/public",
-            dst_path=PurePath("/vat/storage"),
-            read_only=True,
-        )
-        volumes = kube_orchestrator.create_storage_volumes(container_volume)
-        assert volumes == [PVCVolume(name="storage", path=None, claim_name="testclaim")]
-
-    def test_create_main_storage_volume(
-        self, kube_client: KubeClient, registry_config: RegistryConfig
-    ) -> None:
-        main_storage_config = StorageConfig(
-            host_mount_path=PurePath("/tmp"),
-            type=StorageType.PVC,
-            pvc_name="main-claim",
-        )
-        isolated_storage_config = StorageConfig(
-            path=PurePath("/user_other"),
-            host_mount_path=PurePath("/tmp"),
-            type=StorageType.PVC,
-            pvc_name="user-other-claim",
-        )
-        orchestrator_config = OrchestratorConfig(
-            jobs_domain_name_template="{job_id}.testdomain",
-            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
-            resource_pool_types=[ResourcePoolType()],
-            presets=[],
-        )
-        kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
-        kube_orchestrator = KubeOrchestrator(
-            cluster_name="default",
-            storage_configs=[main_storage_config, isolated_storage_config],
-            registry_config=registry_config,
-            orchestrator_config=orchestrator_config,
-            kube_config=kube_config,
-            kube_client=kube_client,
-        )
-        container_volume = ContainerVolume.create(
-            "storage://cluster/user",
-            dst_path=PurePath("/vat/storage"),
-            read_only=True,
-        )
-        volumes = kube_orchestrator.create_storage_volumes(container_volume)
-        assert volumes == [
-            PVCVolume(name="storage", path=None, claim_name="main-claim")
-        ]
-
-    def test_create_extra_storage_volume(
-        self, kube_client: KubeClient, registry_config: RegistryConfig
-    ) -> None:
-        main_storage_config = StorageConfig(
-            host_mount_path=PurePath("/tmp"),
-            type=StorageType.PVC,
-            pvc_name="main-claim",
-        )
-        isolated_storage_config = StorageConfig(
-            path=PurePath("/isolated"),
-            host_mount_path=PurePath("/tmp"),
-            type=StorageType.PVC,
-            pvc_name="isolated-claim",
-        )
-        orchestrator_config = OrchestratorConfig(
-            jobs_domain_name_template="{job_id}.testdomain",
-            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
-            resource_pool_types=[ResourcePoolType()],
-            presets=[],
-        )
-        kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
-        kube_orchestrator = KubeOrchestrator(
-            cluster_name="default",
-            storage_configs=[main_storage_config, isolated_storage_config],
-            registry_config=registry_config,
-            orchestrator_config=orchestrator_config,
-            kube_config=kube_config,
-            kube_client=kube_client,
-        )
-        container_volume = ContainerVolume.create(
-            "storage://cluster/isolated/dir",
-            dst_path=PurePath("/vat/storage"),
-            read_only=True,
-        )
-        volumes = kube_orchestrator.create_storage_volumes(container_volume)
-        assert volumes == [
-            PVCVolume(
-                name="storage-isolated",
-                path=PurePath("/isolated"),
-                claim_name="isolated-claim",
-            )
-        ]
-
-    def test_create_all_storage_volumes(
-        self, kube_client: KubeClient, registry_config: RegistryConfig
-    ) -> None:
-        main_storage_config = StorageConfig(
-            host_mount_path=PurePath("/tmp"),
-            type=StorageType.PVC,
-            pvc_name="main-claim",
-        )
-        isolated_storage_config = StorageConfig(
-            path=PurePath("/isolated"),
-            host_mount_path=PurePath("/tmp"),
-            type=StorageType.PVC,
-            pvc_name="isolated-claim",
-        )
-        orchestrator_config = OrchestratorConfig(
-            jobs_domain_name_template="{job_id}.testdomain",
-            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
-            resource_pool_types=[ResourcePoolType()],
-            presets=[],
-        )
-        kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
-        kube_orchestrator = KubeOrchestrator(
-            cluster_name="default",
-            storage_configs=[main_storage_config, isolated_storage_config],
-            registry_config=registry_config,
-            orchestrator_config=orchestrator_config,
-            kube_config=kube_config,
-            kube_client=kube_client,
-        )
-        container_volume = ContainerVolume.create(
-            "storage://cluster",
-            dst_path=PurePath("/vat/storage"),
-            read_only=True,
-        )
-        volumes = kube_orchestrator.create_storage_volumes(container_volume)
-        assert volumes == [
-            PVCVolume(name="storage", path=None, claim_name="main-claim"),
-            PVCVolume(
-                name="storage-isolated",
-                path=PurePath("/isolated"),
-                claim_name="isolated-claim",
-            ),
-        ]
-
-
 class TestSecretVolume:
     def test_create_secret_volume(
         self, kube_client: KubeClient, registry_config: RegistryConfig
     ) -> None:
-        storage_config = StorageConfig(
-            host_mount_path=PurePath("/tmp"), type=StorageType.PVC, pvc_name="testclaim"
-        )
         orchestrator_config = OrchestratorConfig(
             jobs_domain_name_template="{job_id}.testdomain",
             jobs_internal_domain_name_template="{job_id}.testinternaldomain",
@@ -306,7 +35,6 @@ class TestSecretVolume:
         kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
         kube_orchestrator = KubeOrchestrator(
             cluster_name="default",
-            storage_configs=[storage_config],
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
             kube_config=kube_config,
@@ -315,8 +43,8 @@ class TestSecretVolume:
         user_name = "test-user"
         volume = kube_orchestrator.create_secret_volume(user_name)
         assert volume == SecretVolume(
-            name="project--test-user--secrets",
-            k8s_secret_name="project--test-user--secrets",
+            name="project--no-org--test-user--secrets",
+            k8s_secret_name="project--no-org--test-user--secrets",
         )
 
 
@@ -485,71 +213,6 @@ class TestEnvironConfigFactory:
             password="token",
             email="user@neu.ro",
         )
-
-    def test_storage_host(self) -> None:
-        configs = EnvironConfigFactory(
-            environ={
-                "NP_STORAGE_TYPE_0": "host",
-                "NP_STORAGE_HOST_MOUNT_PATH_0": "/storage",
-            }
-        ).create_storages()
-
-        assert len(configs) == 1
-        assert configs[0] == StorageConfig(
-            type=StorageType.HOST, host_mount_path=PurePath("/storage")
-        )
-
-    def test_storage_nfs(self) -> None:
-        configs = EnvironConfigFactory(
-            environ={
-                "NP_STORAGE_TYPE_0": "nfs",
-                "NP_STORAGE_NFS_SERVER_0": "nfs-server",
-                "NP_STORAGE_NFS_EXPORT_PATH_0": "/nfs",
-            }
-        ).create_storages()
-
-        assert len(configs) == 1
-        assert configs[0] == StorageConfig(
-            type=StorageType.NFS,
-            nfs_server="nfs-server",
-            nfs_export_path=PurePath("/nfs"),
-            host_mount_path=PurePath("/nfs"),
-        )
-
-    def test_storage_pvc(self) -> None:
-        configs = EnvironConfigFactory(
-            environ={"NP_STORAGE_TYPE_0": "pvc", "NP_STORAGE_PVC_NAME_0": "storage"}
-        ).create_storages()
-
-        assert len(configs) == 1
-        assert configs[0] == StorageConfig(
-            type=StorageType.PVC,
-            pvc_name="storage",
-            host_mount_path=PurePath("/mnt/storage"),
-        )
-
-    def test_multiple_storage(self) -> None:
-        configs = EnvironConfigFactory(
-            environ={
-                "NP_STORAGE_TYPE_0": "pvc",
-                "NP_STORAGE_PVC_NAME_0": "storage0",
-                "NP_STORAGE_TYPE_1": "pvc",
-                "NP_STORAGE_PVC_NAME_1": "storage1",
-            }
-        ).create_storages()
-
-        assert configs == [
-            StorageConfig(
-                type=StorageType.PVC,
-                pvc_name="storage0",
-                host_mount_path=PurePath("/mnt/storage"),
-            ),
-            StorageConfig(
-                type=StorageType.PVC,
-                pvc_name="storage1",
-                host_mount_path=PurePath("/mnt/storage"),
-            ),
-        ]
 
     def test_kube_config_default(self) -> None:
         config = EnvironConfigFactory(

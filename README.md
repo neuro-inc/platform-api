@@ -21,7 +21,6 @@ kubectl config use-context minikube
 ```shell
 minikube addons enable ingress
 kubectl apply -f tests/k8s/namespace.yml
-kubectl apply -f tests/k8s/nfs.yml
 kubectl apply -f tests/k8s/storageclass.yml
 ```
 6. Create a new virtual environment with Python 3.6:
@@ -37,7 +36,7 @@ pip install -e .[dev]
 ```shell
 pytest -vv tests/unit
 ```
-9. Run the integration test suite:
+9. Run the integration test suite (for macOS users you must run a `minikube tunnel` in a separate terminal):
 ```shell
 pytest -vv tests/integration
 ```

@@ -19,7 +19,7 @@ from platform_api.cluster import (
     ClusterNotFound,
 )
 from platform_api.cluster_config import ClusterConfig, OrchestratorConfig
-from platform_api.config import JobsConfig, JobsSchedulerConfig
+from platform_api.config import NO_ORG_NORMALIZED, JobsConfig, JobsSchedulerConfig
 
 from ..utils.asyncio import run_and_log_exceptions
 from ..utils.retry import retries
@@ -301,8 +301,8 @@ class JobsPollerService:
         self._max_deletion_attempts = 10
 
         self._dummy_cluster_orchestrator_config = OrchestratorConfig(
-            jobs_domain_name_template="{job_id}.missing-cluster",
-            jobs_internal_domain_name_template="{job_id}.missing-cluster",
+            jobs_domain_name_template="{job_id}.{namespace}.missing-cluster",
+            jobs_internal_domain_name_template="{job_id}.{namespace}.missing-cluster",
             resource_pool_types=(),
             presets=(),
         )
@@ -317,7 +317,9 @@ class JobsPollerService:
         for secret_path, path_secrets in grouped_secrets.items():
             missing.extend(
                 await orchestrator.get_missing_secrets(
-                    secret_path, [secret.secret_key for secret in path_secrets]
+                    job.namespace,
+                    secret_path,
+                    [secret.secret_key for secret in path_secrets],
                 )
             )
         if missing:
@@ -329,7 +331,14 @@ class JobsPollerService:
             disk_volume.disk for disk_volume in job.request.container.disk_volumes
         ]
         if job_disks:
-            missing = await orchestrator.get_missing_disks(job_disks)
+            org_name = job.org_name or NO_ORG_NORMALIZED
+
+            missing = await orchestrator.get_missing_disks(
+                namespace=job.namespace,
+                org_name=org_name,
+                project_name=job.project_name,
+                disks=job_disks,
+            )
             if missing:
                 details = ", ".join(f"'{disk.disk_id}'" for disk in missing)
                 raise JobError(f"Missing disks: {details}")
