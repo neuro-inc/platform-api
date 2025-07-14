@@ -56,7 +56,7 @@ def _raise_status_job_exception(pod: dict[str, Any], job_id: str | None) -> NoRe
         raise JobNotFoundException(f"job {job_id} was not found")
     if pod["code"] == 422:
         raise JobError(f"cant create job with id {job_id}")
-    raise JobError("unexpected")
+    raise JobError(f"unexpected payload: {pod}")
 
 
 class GroupVersion(str, Enum):
