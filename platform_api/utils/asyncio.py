@@ -3,7 +3,7 @@ import functools
 import logging
 from collections.abc import Callable, Coroutine, Iterable
 from contextlib import AbstractAsyncContextManager, aclosing
-from typing import Any, TypeVar
+from typing import Any
 
 
 async def run_and_log_exceptions(
@@ -22,11 +22,7 @@ async def run_and_log_exceptions(
             logging.exception(exc, exc_info=exc)
 
 
-T_co = TypeVar("T_co", covariant=True)
-T_contra = TypeVar("T_contra", contravariant=True)
-
-
-def asyncgeneratorcontextmanager(
+def asyncgeneratorcontextmanager[T_co](
     func: Callable[..., T_co],
 ) -> Callable[..., AbstractAsyncContextManager[T_co]]:
     @functools.wraps(func)
