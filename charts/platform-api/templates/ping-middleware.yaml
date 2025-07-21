@@ -1,0 +1,13 @@
+{{- if .Values.ingress.enabled }}
+{{- if .Capabilities.APIVersions.Has "traefik.io/v1alpha1" }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "platformApi.fullname" . }}-ping
+  labels: {{ include "platformApi.labels.standard" . | nindent 4 }}
+spec:
+  replacePathRegex:
+    regex: ^/api/v1/ping/.+
+    replacement: /ping
+{{- end }}
+{{- end }}

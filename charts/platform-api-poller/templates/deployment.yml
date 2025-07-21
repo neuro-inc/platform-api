@@ -31,6 +31,13 @@ spec:
       - name: platform-api-poller
         image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
         command: ["platform-api-poller"]
+        securityContext:
+          {{- if .Values.securityContext.enabled }}
+          runAsUser: {{ .Values.securityContext.runAsUser }}
+          runAsGroup: {{ .Values.securityContext.runAsGroup }}
+          runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+          allowPrivilegeEscalation: {{ .Values.securityContext.allowPrivilegeEscalation }}
+          {{- end }}
         livenessProbe:
           httpGet:
             path: /ping

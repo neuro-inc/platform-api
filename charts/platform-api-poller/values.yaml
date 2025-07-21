@@ -46,10 +46,18 @@ resources:
     cpu: "1"
     memory: "1Gi"
 
+service:
+  labels: {}
+  annotations: {}
+
 ingress:
   enabled: false
+
   ingressClassName: ""
+
   hosts: []
+
+  labels: {}
   annotations: {}
 
 secrets: []
