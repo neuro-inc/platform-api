@@ -1,21 +1,20 @@
 {{- if .Values.ingress.enabled }}
-{{- $ingressApiIsStable := eq (include "k8s.ingress.isStable" .) "true" -}}
-apiVersion: {{ include "k8s.ingress.apiVersion" . }}
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "platformApiPoller.fullname" . }}
-  labels: {{ include "platformApiPoller.labels.standard" . | nindent 4 }}
-    service: platform-api-poller
-  annotations:
-    {{- if and (not $ingressApiIsStable) .Values.ingress.ingressClassName }}
-    kubernetes.io/ingress.class: {{ .Values.ingress.ingressClassName }}
+  labels:
+    {{- include "platformApiPoller.labels.standard" . | nindent 4 }}
+    {{- with .Values.ingress.labels }}
+    {{- toYaml . | nindent 4 }}
     {{- end }}
-{{- with .Values.ingress.annotations }}
-{{ toYaml . | indent 4}}
-{{- end }}
+  annotations:
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4}}
+    {{- end }}
 spec:
-  {{- if and $ingressApiIsStable .Values.ingress.ingressClassName }}
-  ingressClassName: {{ .Values.ingress.ingressClassName }}
+  {{- with .Values.ingress.ingressClassName }}
+  ingressClassName: {{ . }}
   {{- end }}
   rules:
   {{- range .Values.ingress.hosts }}
@@ -23,18 +22,11 @@ spec:
     http:
       paths:
       - path: /api/v1/poller
-        {{- if $ingressApiIsStable }}
         pathType: Prefix
-        {{- end }}
         backend:
-          {{- if $ingressApiIsStable }}
           service:
             name: {{ include "platformApiPoller.fullname" $ }}
             port:
               name: http
-          {{- else }}
-          serviceName: {{ include "platformApiPoller.fullname" $ }}
-          servicePort: http
-          {{- end }}
   {{- end }}
 {{- end }}

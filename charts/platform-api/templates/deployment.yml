@@ -34,27 +34,27 @@ spec:
       - name: platform-api
         image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
         securityContext:
-                   {{- if .Values.securityContext.enabled }}
+          {{- if .Values.securityContext.enabled }}
           runAsUser: {{ .Values.securityContext.runAsUser }}
           runAsGroup: {{ .Values.securityContext.runAsGroup }}
           runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
           allowPrivilegeEscalation: {{ .Values.securityContext.allowPrivilegeEscalation }}
-                   {{- end }}
+          {{- end }}
         livenessProbe:
           httpGet:
             path: /ping
-            port: tcp-web
+            port: http
           initialDelaySeconds: 10
           periodSeconds: 5
         readinessProbe:
           httpGet:
             path: /ping
-            port: tcp-web
+            port: http
           initialDelaySeconds: 10
           periodSeconds: 10
         ports:
           - containerPort: 8080
-            name: tcp-web
+            name: http
             protocol: TCP
 {{- if .Values.resources }}
         resources: {{ toYaml .Values.resources | nindent 10 }}
