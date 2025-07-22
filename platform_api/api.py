@@ -526,7 +526,7 @@ async def create_app(
 
 
 def main() -> None:
-    init_logging()
+    init_logging(health_check_url_path="/ping")
     config = EnvironConfigFactory().create()
     logging.info("Loaded config: %r", config)
     loop = asyncio.get_event_loop()

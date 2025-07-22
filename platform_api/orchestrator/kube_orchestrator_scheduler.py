@@ -68,10 +68,14 @@ class NodesHandler(EventHandler):
         self._nodes: dict[str, Node] = {}
 
     async def init(self, raw_nodes: list[dict[str, Any]]) -> None:
+        self._clear()
         for raw_node in raw_nodes:
             node = Node.from_primitive(raw_node)
             if node.status.is_ready:
                 self._add_node(node)
+
+    def _clear(self) -> None:
+        self._nodes.clear()
 
     async def handle(self, event: WatchEvent) -> None:
         node = Node.from_primitive(event.resource)
@@ -97,6 +101,8 @@ class NodeResourcesHandler(EventHandler):
         self._pod_node_names: dict[str, str] = {}
 
     async def init(self, raw_pods: list[dict[str, Any]]) -> None:
+        self._clear()
+
         for raw_pod in raw_pods:
             pod = _Pod(raw_pod)
             if (
@@ -106,6 +112,11 @@ class NodeResourcesHandler(EventHandler):
                 and not pod.status.is_phase_failed
             ):
                 self._add_pod(pod)
+
+    def _clear(self) -> None:
+        self._resource_requests.clear()
+        self._pod_counts = Counter()
+        self._pod_node_names.clear()
 
     async def handle(self, event: WatchEvent) -> None:
         pod = _Pod(event.resource)
