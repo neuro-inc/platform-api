@@ -68,7 +68,9 @@ class TestVolume:
 
 class TestAbstractVolume:
     def test_create_mount_for_abstract_volume_should_fail(self) -> None:
-        with pytest.raises(NotImplementedError, match=""):
+        with pytest.raises(
+            NotImplementedError, match="Cannot create mount for abstract Volume type."
+        ):
             container_volume = ContainerVolume(
                 uri=URL("storage://host/path/to/dir"),
                 dst_path=PurePath("/container/path/to/dir"),
