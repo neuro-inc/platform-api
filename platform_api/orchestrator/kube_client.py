@@ -18,7 +18,6 @@ import iso8601
 from apolo_kube_client.client import KubeClient as ApoloKubeClient
 from apolo_kube_client.errors import (
     KubeClientException,
-    KubeClientExpired,
     KubeClientUnauthorized,
     ResourceExists,
     ResourceGone,
@@ -2353,6 +2352,8 @@ class EventHandler:
 
 
 class Watcher(abc.ABC):
+    resource_version: str
+
     def __init__(self, kube_client: KubeClient) -> None:
         self._kube_client = kube_client
         self._handlers: list[EventHandler] = []
@@ -2371,10 +2372,8 @@ class Watcher(abc.ABC):
         await self.stop()
 
     async def start(self) -> None:
-        result = await self.list()
-        for handler in self._handlers:
-            await handler.init(result.items)
-        self._watcher_task = asyncio.create_task(self._run(result.resource_version))
+        await self._init()
+        self._watcher_task = asyncio.create_task(self._watch())
 
     async def stop(self) -> None:
         if self._watcher_task is None:
@@ -2385,27 +2384,35 @@ class Watcher(abc.ABC):
         self._watcher_task = None
         self._handlers.clear()
 
-    async def _run(self, resource_version: str) -> None:
+    async def _init(self) -> None:
+        result = await self.list()
+        for handler in self._handlers:
+            await handler.init(result.items)
+
+        self.resource_version = result.resource_version
+
+    async def _watch(self) -> None:
         while True:
             try:
-                async for event in self.watch(resource_version):
+                async for event in self.watch(self.resource_version):
                     if isinstance(event, WatchBookmarkEvent):
-                        resource_version = event.resource_version
+                        self.resource_version = event.resource_version
                         continue
                     for handler in self._handlers:
                         await handler.handle(event)
-            except KubeClientUnauthorized as exc:
-                logger.info("Kube client unauthorized", exc_info=exc)
-            except KubeClientExpired as exc:
-                logger.info("Kube token expired", exc_info=exc)
-            except ResourceGone as exc:
-                logger.warning("Resource gone", exc_info=exc)
+            except ResourceGone:
+                logger.info("%s: resource gone", self.__class__.__name__)
+                await self._init()
+            except KubeClientUnauthorized:
+                logger.info("%s: kube client unauthorized", self.__class__.__name__)
             except aiohttp.ClientError as exc:
-                logger.warning("Watch client error", exc_info=exc)
-            except asyncio.CancelledError:
-                raise
+                logger.warning(
+                    "%s: watch client error", self.__class__.__name__, exc_info=exc
+                )
             except Exception as exc:
-                logger.warning("Unhandled error", exc_info=exc)
+                logger.warning(
+                    "%s: unhandled error", self.__class__.__name__, exc_info=exc
+                )
 
     @abc.abstractmethod
     async def list(self) -> ListResult:
