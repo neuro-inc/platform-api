@@ -241,14 +241,14 @@ tz = ["tzdata"]
 
 [[package]]
 name = "apolo-kube-client"
-version = "25.7.2"
+version = "25.7.4"
 description = "Apolo internal client for kubernetes API"
 optional = false
 python-versions = "<4.0,>=3.9"
 groups = ["main"]
 files = [
-    {file = "apolo_kube_client-25.7.2-py3-none-any.whl", hash = "sha256:17565a71249897b5fa15afc47d27a521b2d09c2c746f8a5fbc26a738f88f5ffa"},
-    {file = "apolo_kube_client-25.7.2.tar.gz", hash = "sha256:655789f7babcb029b73430e1b50a70c908f30a9d65c521941c9cb253b68391c1"},
+    {file = "apolo_kube_client-25.7.4-py3-none-any.whl", hash = "sha256:13bc6d20d59f8b5b46a161a30ab18c8357269db753b7091e86a198e08f3d2c0e"},
+    {file = "apolo_kube_client-25.7.4.tar.gz", hash = "sha256:4903ec7d137ed34ac3326f91508e98a48d8c3049439f66640094e6c766956ec0"},
 ]
 
 [package.dependencies]
@@ -2495,4 +2495,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "52d2170c47abede01014d8c5734a19f64f2623ede133c6de77c823335fe85a2c"
+content-hash = "b9b15cffde9fd66c69d89da81764f7fcddd161c6641b8e6d575812e4226eaaed"
