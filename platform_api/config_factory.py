@@ -295,7 +295,7 @@ class EnvironConfigFactory:
     def create_events(self) -> EventsClientConfig | None:
         if "NP_EVENTS_URL" in self._environ:
             url = URL(self._environ["NP_EVENTS_URL"])
-            token = self._environ["NP_EVENTS_TOKEN"]
+            token = self._environ["NP_AUTH_TOKEN"]
             return EventsClientConfig(url=url, token=token, name="platform-api")
         return None
 
