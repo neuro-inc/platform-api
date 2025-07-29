@@ -2,6 +2,7 @@ import os
 import pathlib
 from decimal import Decimal
 
+from apolo_events_client import EventsClientConfig
 from yarl import URL
 
 from alembic.config import Config as AlembicConfig
@@ -60,6 +61,7 @@ class EnvironConfigFactory:
             admin_url=admin_url,
             admin_public_url=admin_public_url,
             api_base_url=api_base_url,
+            events=self.create_events(),
         )
 
     def create_poller(self) -> PollerConfig:
@@ -79,6 +81,7 @@ class EnvironConfigFactory:
             cluster_name=cluster_name,
             registry_config=self.create_registry(),
             kube_config=self.create_kube(),
+            events=self.create_events(),
         )
 
     def create_jobs(self, *, orphaned_job_owner: str) -> JobsConfig:
@@ -288,6 +291,13 @@ class EnvironConfigFactory:
             password=self._environ["NP_AUTH_TOKEN"],
             email=self._environ.get("NP_REGISTRY_EMAIL", RegistryConfig.email),
         )
+
+    def create_events(self) -> EventsClientConfig | None:
+        if "NP_EVENTS_URL" in self._environ:
+            url = URL(self._environ["NP_EVENTS_URL"])
+            token = self._environ["NP_EVENTS_TOKEN"]
+            return EventsClientConfig(url=url, token=token, name="platform-api")
+        return None
 
 
 syncpg_schema = "postgresql"
