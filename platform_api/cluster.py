@@ -85,7 +85,21 @@ class ClusterUpdater:
 
     async def __aenter__(self) -> Self:
         logger.info("Subscribe for %r", self._CONFIG_STREAM)
-        await self._events_client.subscribe_group(self._CONFIG_STREAM, self._on_event)
+        await self._events_client.subscribe_group(
+            self._CONFIG_STREAM,
+            self._on_event,
+            filters=[
+                FilterItem(
+                    event_types=frozenset(
+                        [
+                            self._CLUSTER_ADD_EVENT,
+                            self._CLUSTER_UPDATE_EVENT,
+                            self._CLUSTER_REMOVE_EVENT,
+                        ]
+                    )
+                )
+            ],
+        )
         logger.info("Subscribed")
         return self
 
@@ -93,16 +107,18 @@ class ClusterUpdater:
         pass
 
     async def _on_event(self, ev: RecvEvent) -> None:
+        assert ev.cluster, "event cluster is required"
+
         if (
             ev.event_type == self._CLUSTER_UPDATE_EVENT
             or ev.event_type == self._CLUSTER_ADD_EVENT
         ):
-            assert ev.cluster, "event cluster is required"
             cluster_config = await self._config_client.get_cluster(ev.cluster)
             if cluster_config:
                 await self._cluster_registry.replace(cluster_config)
+            else:
+                logger.warning("Cluster %r not found", ev.cluster)
         if ev.event_type == self._CLUSTER_REMOVE_EVENT:
-            assert ev.cluster, "event cluster is required"
             self._cluster_registry.remove(ev.cluster)
 
 
@@ -129,7 +145,12 @@ class SingleClusterUpdater:
         await self._events_client.subscribe_group(
             self._CONFIG_STREAM,
             self._on_event,
-            filters=[FilterItem(clusters=frozenset([self._cluster_name]))],
+            filters=[
+                FilterItem(
+                    event_types=frozenset([self._CLUSTER_UPDATE_EVENT]),
+                    clusters=frozenset([self._cluster_name]),
+                )
+            ],
         )
         logger.info("Subscribed")
         return self
