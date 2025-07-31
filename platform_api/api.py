@@ -7,9 +7,9 @@ from typing import Any
 import aiohttp.web
 from aiohttp.web import HTTPUnauthorized
 from aiohttp.web_urldispatcher import AbstractRoute
-from aiohttp_security import check_permission
+from apolo_events_client import from_config as create_events_client_from_config
 from neuro_admin_client import AdminClient, OrgUser, ProjectUser
-from neuro_auth_client import AuthClient, Permission
+from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
 from neuro_logging import init_logging, setup_sentry
 from neuro_notifications_client import Client as NotificationsClient
@@ -44,12 +44,7 @@ from .orchestrator.jobs_storage import JobsStorage, PostgresJobsStorage
 from .orchestrator.jobs_storage.base import JobStorageTransactionError
 from .postgres import make_async_engine
 from .resource import Preset, ResourcePoolType
-from .user import authorized_user, untrusted_user
-from .utils.update_notifier import (
-    Notifier,
-    PostgresChannelNotifier,
-    ResubscribingNotifier,
-)
+from .user import authorized_user
 
 logger = logging.getLogger(__name__)
 
@@ -68,32 +63,11 @@ class ConfigApiHandler:
         self._config = config
 
     def register(self, app: aiohttp.web.Application) -> None:
-        app.add_routes(
-            (
-                aiohttp.web.get("", self.handle_config),
-                aiohttp.web.post("/clusters/sync", self.handle_clusters_sync),
-            )
-        )
+        app.add_routes((aiohttp.web.get("", self.handle_config),))
 
     @property
     def _jobs_service(self) -> JobsService:
         return self._app["jobs_service"]
-
-    @property
-    def _cluster_update_notifier(self) -> Notifier:
-        return self._app["cluster_update_notifier"]
-
-    async def handle_clusters_sync(
-        self, request: aiohttp.web.Request
-    ) -> aiohttp.web.Response:
-        user = await untrusted_user(request)
-        permission = Permission(uri="cluster://", action="manage")
-        logger.info("Checking whether %r has %r", user, permission)
-        await check_permission(request, permission.action, [permission])
-
-        await self._cluster_update_notifier.notify()
-
-        return aiohttp.web.Response(text="OK")
 
     async def handle_config(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         """Return platform configuration.
@@ -449,11 +423,10 @@ async def create_app(
             logger.info("Initializing JobsStorage")
             jobs_storage: JobsStorage = PostgresJobsStorage(engine)
 
-            cluster_update_notifier = ResubscribingNotifier(
-                PostgresChannelNotifier(engine, "cluster_update_required"),
-                check_interval=15,
+            logger.info("Initializing EventsClient")
+            events_client = await exit_stack.enter_async_context(
+                create_events_client_from_config(config.events)
             )
-            app["config_app"]["cluster_update_notifier"] = cluster_update_notifier
 
             logger.info("Initializing JobsService")
             jobs_service = JobsService(
@@ -468,8 +441,7 @@ async def create_app(
 
             logger.info("Initializing ClusterUpdater")
             cluster_updater = ClusterUpdater(
-                notifier=cluster_update_notifier,
-                config=config,
+                events_client=events_client,
                 config_client=config_client,
                 cluster_registry=cluster_config_registry,
             )

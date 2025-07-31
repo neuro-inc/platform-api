@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
 
+from apolo_events_client import EventsClientConfig
 from yarl import URL
 
 from alembic.config import Config as AlembicConfig
@@ -166,6 +167,8 @@ class Config:
 
     scheduler: JobsSchedulerConfig = JobsSchedulerConfig()
 
+    events: EventsClientConfig | None = None
+
 
 @dataclass(frozen=True)
 class PollerConfig:
@@ -184,6 +187,8 @@ class PollerConfig:
     jobs: JobsConfig = JobsConfig()
 
     scheduler: JobsSchedulerConfig = JobsSchedulerConfig()
+
+    events: EventsClientConfig | None = None
 
 
 @dataclass(frozen=True)

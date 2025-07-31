@@ -112,6 +112,8 @@ class TestEnvironConfigFactory:
             "https://dev.neu.ro/oauth/show-code"
         )
 
+        assert config.events is None
+
     def test_create_value_error_invalid_port(self) -> None:
         environ = {
             "NP_API_PORT": "port",
@@ -145,6 +147,7 @@ class TestEnvironConfigFactory:
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
+            "NP_EVENTS_URL": "http://platform-events:8080",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
@@ -176,6 +179,11 @@ class TestEnvironConfigFactory:
         assert config.auth.public_endpoint_url == URL("https://neu.ro/api/v1/users")
         assert config.auth.service_token == "token"
         assert config.auth.service_name == "servicename"
+
+        assert config.events
+        assert config.events.url == URL("http://platform-events:8080")
+        assert config.events.token == "token"
+        assert config.events.name == "platform-api"
 
     def test_alembic_with_escaped_symbol(self) -> None:
         async_dsn = "postgresql+asyncpg://postgres%40@localhost:5432/postgres"

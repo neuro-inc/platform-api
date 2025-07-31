@@ -29,7 +29,6 @@ from neuro_admin_client import (
 from neuro_auth_client import Permission
 from yarl import URL
 
-from platform_api.cluster import ClusterConfigRegistry
 from platform_api.config import Config
 from platform_api.orchestrator.job import get_base_owner
 from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
@@ -39,7 +38,6 @@ from tests.integration.auth import AuthClient, ServiceAccountFactory, UserFactor
 from tests.integration.conftest import MyKubeClient
 from tests.integration.diskapi import DiskAPIClient
 from tests.integration.secrets import SecretsClient
-from tests.integration.test_config_client import create_config_api
 
 
 @pytest.fixture
@@ -101,42 +99,6 @@ class TestApi:
             assert resp.status == HTTPOk.status_code, await resp.text()
             result = await resp.json()
             assert result == {"authorized": False}
-
-    async def test_clusters_sync(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        cluster_configs_payload: list[dict[str, Any]],
-        cluster_user: _User,
-    ) -> None:
-        cluster_registry: ClusterConfigRegistry = api.runner._app["config_app"][
-            "jobs_service"
-        ]._cluster_registry
-
-        async def assert_cluster_names(names: list[str]) -> None:
-            async def _loop() -> None:
-                while names != cluster_registry.cluster_names:
-                    await asyncio.sleep(0.1)
-
-            try:
-                await asyncio.wait_for(_loop(), timeout=5)
-            except TimeoutError:
-                assert names == cluster_registry.cluster_names
-
-        async with create_config_api(cluster_configs_payload):
-            url = api.clusters_sync_url
-            async with client.post(url, headers=cluster_user.headers):
-                pass
-
-            await assert_cluster_names(["cluster_name"])
-
-        # pass empty cluster config - all clusters should be deleted
-        async with create_config_api([]):
-            url = api.clusters_sync_url
-            async with client.post(url, headers=cluster_user.headers):
-                pass
-
-            await assert_cluster_names([])
 
     async def test_config_no_clusters(
         self,

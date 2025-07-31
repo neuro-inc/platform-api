@@ -27,6 +27,7 @@ platform:
   apiUrl:
   registryUrl:
   registryEmail:
+  eventsUrl:
   token: {}
 
 jobs:

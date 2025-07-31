@@ -63,15 +63,17 @@ spec:
         - name: NP_AUTH_PUBLIC_URL
           value: {{ .Values.platform.authUrl | quote }}
         - name: NP_AUTH_TOKEN
-{{- if .Values.platform.token }}
-{{ toYaml .Values.platform.token | indent 10 }}
-{{- end }}
+          {{- if .Values.platform.token }}
+          {{- toYaml .Values.platform.token | indent 10 }}
+          {{- end }}
         - name: NP_PLATFORM_API_URL
           value: {{ .Values.platform.apiUrl | quote }}
         - name: NP_PLATFORM_CONFIG_URI
           value: {{ .Values.platform.configUrl | quote }}
         - name: NP_PLATFORM_ADMIN_URI
           value: {{ .Values.platform.adminUrl | quote }}
+        - name: NP_EVENTS_URL
+          value: {{ .Values.platform.eventsUrl | quote }}
         {{- if .Values.sentry }}
         - name: SENTRY_DSN
           value: {{ .Values.sentry.dsn }}

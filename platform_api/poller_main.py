@@ -5,6 +5,7 @@ from contextlib import AsyncExitStack
 
 import aiohttp.web
 from aiohttp.web_urldispatcher import AbstractRoute
+from apolo_events_client import from_config as create_events_client_from_config
 from neuro_admin_client import AdminClient
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
@@ -108,6 +109,11 @@ async def create_app(
                 )
             )
 
+            logger.info("Initializing EventsClient")
+            events_client = await exit_stack.enter_async_context(
+                create_events_client_from_config(config.events)
+            )
+
             logger.info("Initializing JobsPollerApi")
             poller_api = await exit_stack.enter_async_context(
                 HttpJobsPollerApi(
@@ -132,6 +138,7 @@ async def create_app(
 
             logger.info("Initializing ClusterUpdater")
             cluster_updater = SingleClusterUpdater(
+                events_client=events_client,
                 config_client=config_client,
                 cluster_holder=cluster_holder,
                 cluster_name=config.cluster_name,
