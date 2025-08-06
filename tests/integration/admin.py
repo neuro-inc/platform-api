@@ -186,6 +186,7 @@ async def admin_server(
             "NP_ADMIN_NOTIFICATIONS_URL=http://host.docker.internal:8083",
             "NP_ADMIN_NOTIFICATIONS_TOKEN=token",
             "NP_LOG_LEVEL=DEBUG",
+            "NP_JWT_SECRET=secret",
         ],
     }
 

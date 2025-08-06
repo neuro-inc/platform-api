@@ -181,7 +181,7 @@ class TestEnvironConfigFactory:
         assert config.auth.service_name == "servicename"
 
         assert config.events
-        assert config.events.url == URL("http://platform-events:8080")
+        assert config.events.url == URL("http://platform-events:8080/apis/events")
         assert config.events.token == "token"
         assert config.events.name == "platform-api"
 
