@@ -23,11 +23,11 @@ from neuro_admin_client import (
     Quota,
 )
 from neuro_auth_client import AuthClient, Permission, User as AuthUser
+from neuro_config_client import ConfigClient
 from yarl import URL
 
 from platform_api.config import AuthConfig, OAuthConfig
 from tests.conftest import random_str
-from tests.integration.conftest import _TestConfigClient
 
 
 @pytest.fixture(scope="session")
@@ -188,7 +188,7 @@ class UserFactory(Protocol):
 @pytest.fixture
 async def regular_user_factory(
     auth_client: AuthClient,
-    config_client: _TestConfigClient,
+    config_client: ConfigClient,
     admin_client: AdminClient,
     token_factory: Callable[[str], str],
     admin_token: str,
@@ -227,7 +227,9 @@ async def regular_user_factory(
             try:
                 # in case docker containers are reused, we want to recreate clusters
                 # that were previously stored in memory
-                await config_client.create_cluster(name=cluster)
+                await config_client.create_blank_cluster(
+                    name=cluster, service_token="cluster-token"
+                )
             except ClientResponseError:
                 pass
 

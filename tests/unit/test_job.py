@@ -687,6 +687,7 @@ class TestJob:
                     status_history=job_status_history,
                     current_datetime_factory=current_datetime_factory,
                     scheduler_enabled=scheduler_enabled,
+                    preset_name="cpu-small",
                 ),
                 current_datetime_factory=current_datetime_factory,
             )
@@ -829,7 +830,9 @@ class TestJob:
         self, mock_orchestrator: MockOrchestrator, job_request: JobRequest
     ) -> None:
         job = Job(
-            orchestrator_config=mock_orchestrator.config,
+            orchestrator_config=dataclasses.replace(
+                mock_orchestrator.config, is_http_ingress_secure=False
+            ),
             record=JobRecord.create(
                 request=job_request,
                 cluster_name="test-cluster",
@@ -845,7 +848,9 @@ class TestJob:
         org_name = "test-org"
         project_name = "test-proj"
         job = Job(
-            orchestrator_config=mock_orchestrator.config,
+            orchestrator_config=dataclasses.replace(
+                mock_orchestrator.config, is_http_ingress_secure=False
+            ),
             record=JobRecord.create(
                 request=job_request,
                 cluster_name="test-cluster",
@@ -900,29 +905,6 @@ class TestJob:
 
         assert job.http_url == "https://testjob.jobs"
         assert job.http_url_named == f"https://test-job-name--{suffix}.jobs"
-
-    def test_http_url_named(
-        self,
-        mock_orchestrator: MockOrchestrator,
-        job_request_with_http: JobRequest,
-    ) -> None:
-        org_name = "test-org"
-        project_name = "test-proj"
-        job = Job(
-            orchestrator_config=mock_orchestrator.config,
-            record=JobRecord.create(
-                request=job_request_with_http,
-                cluster_name="test-cluster",
-                org_name=org_name,
-                project_name=project_name,
-                name="test-job-name",
-                owner="owner",
-            ),
-        )
-        suffix = self._create_http_host_named_suffix(org_name, project_name)
-
-        assert job.http_url == "http://testjob.jobs"
-        assert job.http_url_named == f"http://test-job-name--{suffix}.jobs"
 
     def test_job__get_total_price_credits(
         self, mock_orchestrator: MockOrchestrator, job_factory: Callable[..., Job]

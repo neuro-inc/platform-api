@@ -1,12 +1,13 @@
 import asyncio
 from collections import defaultdict
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
-from datetime import datetime, time, timedelta, timezone
+from datetime import UTC, datetime, time, timedelta, timezone
 from decimal import Decimal
 from functools import partial
 from pathlib import Path
 from typing import Any
 
+import neuro_config_client
 import pytest
 from aiohttp import ClientResponseError
 from neuro_admin_client import (
@@ -26,25 +27,33 @@ from neuro_admin_client import (
     UserInfo,
 )
 from neuro_auth_client import AuthClient, Permission, User as AuthUser
+from neuro_config_client import (
+    ACMEEnvironment,
+    AppsConfig,
+    BucketsConfig,
+    ClusterStatus,
+    DisksConfig,
+    DNSConfig,
+    EnergyConfig,
+    EnergySchedule,
+    EnergySchedulePeriod,
+    IngressConfig,
+    MetricsConfig,
+    MonitoringConfig,
+    OrchestratorConfig,
+    ResourcePoolType,
+    ResourcePreset,
+    SecretsConfig,
+    StorageConfig,
+)
 from neuro_notifications_client import Client as NotificationsClient
 from neuro_notifications_client.notifications import Notification
 from yarl import URL
 
 from platform_api.cluster import (
     Cluster,
-    ClusterConfig,
     ClusterConfigRegistry,
     ClusterHolder,
-)
-from platform_api.cluster_config import (
-    UTC,
-    AppsConfig,
-    EnergyConfig,
-    EnergySchedule,
-    EnergySchedulePeriod,
-    IngressConfig,
-    OrchestratorConfig,
-    StorageConfig,
 )
 from platform_api.config import JobsConfig, JobsSchedulerConfig, RegistryConfig
 from platform_api.orchestrator.base import Orchestrator
@@ -69,13 +78,12 @@ from platform_api.orchestrator.poller_service import (
     JobsPollerService,
     JobsScheduler,
 )
-from platform_api.resource import Preset, ResourcePoolType
 
 CA_DATA_PEM = "this-is-certificate-authority-public-key"
 
 
 class MockOrchestrator(Orchestrator):
-    def __init__(self, config: ClusterConfig) -> None:
+    def __init__(self, config: neuro_config_client.Cluster) -> None:
         self._config = config
         self._mock_status_to_return = JobStatus.PENDING
         self._mock_reason_to_return: str | None = JobStatusReason.CONTAINER_CREATING
@@ -439,7 +447,9 @@ def mock_job_request(job_request_factory: Callable[[], JobRequest]) -> JobReques
 
 
 class MockCluster(Cluster):
-    def __init__(self, config: ClusterConfig, orchestrator: Orchestrator) -> None:
+    def __init__(
+        self, config: neuro_config_client.Cluster, orchestrator: Orchestrator
+    ) -> None:
         self._config = config
         self._orchestrator = orchestrator
 
@@ -450,7 +460,7 @@ class MockCluster(Cluster):
         pass
 
     @property
-    def config(self) -> ClusterConfig:
+    def config(self) -> neuro_config_client.Cluster:
         return self._config
 
     @property
@@ -464,13 +474,15 @@ def registry_config() -> RegistryConfig:
 
 
 @pytest.fixture
-def cluster_config() -> ClusterConfig:
+def cluster_config() -> neuro_config_client.Cluster:
     orchestrator_config = OrchestratorConfig(
-        jobs_domain_name_template="{job_id}.jobs",
-        jobs_internal_domain_name_template="{job_id}.default",
-        resource_pool_types=[ResourcePoolType()],
-        presets=[
-            Preset(
+        job_hostname_template="{job_id}.jobs",
+        job_fallback_hostname="defaults.jobs.apolo.us",
+        job_schedule_timeout_s=300,
+        job_schedule_scale_up_timeout_s=900,
+        resource_pool_types=[ResourcePoolType(name="cpu")],
+        resource_presets=[
+            ResourcePreset(
                 name="cpu-small",
                 credits_per_hour=Decimal("10"),
                 cpu=2,
@@ -478,18 +490,11 @@ def cluster_config() -> ClusterConfig:
             ),
         ],
     )
-    return ClusterConfig(
+    return neuro_config_client.Cluster(
         name="test-cluster",
+        created_at=datetime.now(UTC),
+        status=ClusterStatus.DEPLOYED,
         orchestrator=orchestrator_config,
-        ingress=IngressConfig(
-            registry_url=URL(),
-            storage_url=URL(),
-            monitoring_url=URL(),
-            secrets_url=URL(),
-            metrics_url=URL(),
-            disks_url=URL(),
-            buckets_url=URL(),
-        ),
         energy=EnergyConfig(
             schedules=[
                 EnergySchedule(
@@ -504,21 +509,37 @@ def cluster_config() -> ClusterConfig:
                 )
             ]
         ),
-        storage=StorageConfig(volumes=()),
-        apps=AppsConfig(apps_hostname_templates=[]),
+        storage=StorageConfig(url=URL("https://neu.ro/api/v1/storage"), volumes=()),
+        registry=neuro_config_client.RegistryConfig(
+            url=URL("https://registry.dev.neuromation.io")
+        ),
+        monitoring=MonitoringConfig(url=URL("https://neu.ro/api/v1/monitoring")),
+        secrets=SecretsConfig(url=URL("https://neu.ro/api/v1/secrets")),
+        metrics=MetricsConfig(url=URL("https://neu.ro/api/v1/metrics")),
+        disks=DisksConfig(
+            url=URL("https://neu.ro/api/v1/disk"),
+            storage_limit_per_user=100 * 2**30,
+        ),
+        buckets=BucketsConfig(url=URL("https://neu.ro/api/v1/buckets")),
+        apps=AppsConfig(
+            apps_hostname_templates=["{app_name}.apps.dev.neu.ro"],
+            app_proxy_url=URL("https://proxy.apps.dev.neu.ro"),
+        ),
+        dns=DNSConfig(name="neu.ro"),
+        ingress=IngressConfig(acme_environment=ACMEEnvironment.PRODUCTION),
     )
 
 
 @pytest.fixture
-def mock_orchestrator(cluster_config: ClusterConfig) -> MockOrchestrator:
+def mock_orchestrator(cluster_config: neuro_config_client.Cluster) -> MockOrchestrator:
     return MockOrchestrator(config=cluster_config)
 
 
 @pytest.fixture
 async def cluster_holder(
-    cluster_config: ClusterConfig, mock_orchestrator: MockOrchestrator
+    cluster_config: neuro_config_client.Cluster, mock_orchestrator: MockOrchestrator
 ) -> AsyncIterator[ClusterHolder]:
-    def _cluster_factory(config: ClusterConfig) -> Cluster:
+    def _cluster_factory(config: neuro_config_client.Cluster) -> Cluster:
         return MockCluster(config, mock_orchestrator)
 
     async with ClusterHolder(factory=_cluster_factory) as holder:
@@ -528,7 +549,7 @@ async def cluster_holder(
 
 @pytest.fixture
 async def cluster_config_registry(
-    cluster_config: ClusterConfig,
+    cluster_config: neuro_config_client.Cluster,
 ) -> ClusterConfigRegistry:
     registry = ClusterConfigRegistry()
     await registry.replace(cluster_config)

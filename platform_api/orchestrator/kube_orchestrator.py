@@ -15,10 +15,9 @@ from apolo_kube_client.errors import (
     ResourceExists,
     ResourceNotFound,
 )
+from neuro_config_client import OrchestratorConfig, ResourcePoolType
 
-from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import NO_ORG, RegistryConfig
-from platform_api.resource import ResourcePoolType
 
 from .base import Orchestrator
 from .job import Job, JobRestartPolicy, JobStatusItem, JobStatusReason
@@ -335,16 +334,18 @@ class KubeOrchestrator(Orchestrator):
         return {INJECT_STORAGE_KEY: json.dumps(value)}
 
     def _get_job_resource_pool_types(self, job: Job) -> Sequence[ResourcePoolType]:
+        if not job.preset_name:
+            logger.info("Job %s does not have a preset", job.id)
+            return []
         job_preset = job.preset
-        if job.preset_name and job_preset is None:
+        if job_preset is None:
             logger.info("Preset %s not found for job %s", job.preset_name, job.id)
             return []
-        if job_preset:
-            return [
-                p
-                for p in self._orchestrator_config.resource_pool_types
-                if p.name in job_preset.available_resource_pool_names
-            ]
+        return [
+            p
+            for p in self._orchestrator_config.resource_pool_types
+            if p.name in job_preset.available_resource_pool_names
+        ]
 
         job_resources = job.request.container.resources
         has_cpu_pools = any(
@@ -382,9 +383,13 @@ class KubeOrchestrator(Orchestrator):
             return pod
         max_node_cpu = max(p.available_cpu or 0 for p in pool_types)
         max_node_memory = max(p.available_memory or 0 for p in pool_types)
-        max_node_nvidia_gpu = max(p.nvidia_gpu or 0 for p in pool_types)
-        max_node_amd_gpu = max(p.amd_gpu or 0 for p in pool_types)
-        max_node_intel_gpu = max(p.intel_gpu or 0 for p in pool_types)
+        max_node_nvidia_gpu = max(
+            p.nvidia_gpu.count if p.nvidia_gpu else 0 for p in pool_types
+        )
+        max_node_amd_gpu = max(p.amd_gpu.count if p.amd_gpu else 0 for p in pool_types)
+        max_node_intel_gpu = max(
+            p.intel_gpu.count if p.intel_gpu else 0 for p in pool_types
+        )
         pod_nvidia_gpu = pod.resources.nvidia_gpu or 0
         pod_amd_gpu = pod.resources.amd_gpu or 0
         pod_intel_gpu = pod.resources.intel_gpu or 0
@@ -776,14 +781,15 @@ class KubeOrchestrator(Orchestrator):
             return job_status
 
         schedule_timeout = (
-            job.schedule_timeout or self._orchestrator_config.job_schedule_timeout
+            job.schedule_timeout or self._orchestrator_config.job_schedule_timeout_s
         )
 
         scaleup_events = [e for e in pod_events if e.reason == "TriggeredScaleUp"]
         scaleup_events.sort(key=operator.attrgetter("last_timestamp"))
         if scaleup_events and (
             (now - scaleup_events[-1].timestamp).total_seconds()
-            < self._orchestrator_config.job_schedule_scaleup_timeout + schedule_timeout
+            < self._orchestrator_config.job_schedule_scale_up_timeout_s
+            + schedule_timeout
         ):
             # waiting for cluster scaleup
             return JobStatusItem.create(

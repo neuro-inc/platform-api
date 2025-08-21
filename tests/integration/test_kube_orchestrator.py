@@ -21,9 +21,15 @@ import pytest
 from aiohttp import web
 from apolo_kube_client.apolo import NO_ORG, create_namespace
 from apolo_kube_client.errors import KubeClientException, ResourceNotFound
+from neuro_config_client import (
+    NvidiaGPU,
+    OrchestratorConfig,
+    ResourcePoolType,
+    ResourcePreset,
+    TPUResource,
+)
 from yarl import URL
 
-from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import (
     NO_ORG_NORMALIZED,
     STORAGE_URI_SCHEME,
@@ -79,7 +85,6 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeConfig,
     KubeOrchestrator,
 )
-from platform_api.resource import Preset, ResourcePoolType, TPUResource
 from tests.conftest import random_str
 from tests.integration.conftest import (
     ApiAddress,
@@ -370,7 +375,9 @@ class TestKubeOrchestrator:
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         orchestrator_config = orchestrator_config_factory(
-            resource_pool_types=[ResourcePoolType(cpu=0.1, memory=1025 * 10**6)]
+            resource_pool_types=[
+                ResourcePoolType(name="cpu", cpu=0.1, memory=1025 * 10**6)
+            ]
         )
         kube_orchestrator = kube_orchestrator_factory(
             orchestrator_config=orchestrator_config
@@ -2530,13 +2537,13 @@ class TestAffinityFixtures:
 
         async def _create(
             resource_pool_types: Sequence[ResourcePoolType],
-            presets: Sequence[Preset] | None = None,
+            presets: Sequence[ResourcePreset] | None = None,
         ) -> KubeOrchestrator:
             orchestrator = replace(
                 orchestrator_config, resource_pool_types=resource_pool_types
             )
             if presets is not None:
-                orchestrator = replace(orchestrator, presets=presets)
+                orchestrator = replace(orchestrator, resource_presets=presets)
             await kube_job_nodes_factory(orchestrator, kube_config)
             return KubeOrchestrator(
                 cluster_name="default",
@@ -2576,25 +2583,25 @@ class TestAffinityFixtures:
                     name="nvidia-gpu",
                     cpu=7,
                     memory=61440 * 10**6,
-                    nvidia_gpu=8,
+                    nvidia_gpu=NvidiaGPU(count=8, model="nvidia-gpu"),
                 ),
                 ResourcePoolType(
                     name="nvidia-gpu-p",
                     cpu=7,
                     memory=61440 * 10**6,
-                    nvidia_gpu=8,
+                    nvidia_gpu=NvidiaGPU(count=8, model="nvidia-gpu"),
                     is_preemptible=True,
                 ),
             ],
             [
-                Preset(
+                ResourcePreset(
                     name="cpu",
                     credits_per_hour=Decimal("0"),
                     cpu=0.1,
                     memory=100 * 10**6,
                     available_resource_pool_names=["cpu-small"],
                 ),
-                Preset(
+                ResourcePreset(
                     name="unschedulable",
                     credits_per_hour=Decimal("0"),
                     cpu=0.1,
@@ -2617,7 +2624,7 @@ class TestAffinityFixtures:
                     name="nvidia-gpu",
                     cpu=7,
                     memory=61440 * 10**6,
-                    nvidia_gpu=8,
+                    nvidia_gpu=NvidiaGPU(count=8, model="nvidia-gpu"),
                 ),
             ],
         )
@@ -3793,8 +3800,8 @@ class TestExternalJobs:
         self, orchestrator_config_factory: Callable[..., OrchestratorConfig]
     ) -> OrchestratorConfig:
         return orchestrator_config_factory(
-            presets=[
-                Preset(
+            resource_presets=[
+                ResourcePreset(
                     name="vast-ai",
                     credits_per_hour=Decimal("0"),
                     cpu=0.1,
@@ -4061,7 +4068,7 @@ class TestExternalJobsPreemption:
             ),
         ]
         presets = [
-            Preset(
+            ResourcePreset(
                 name="vast-ai",
                 credits_per_hour=Decimal("0"),
                 cpu=0.1,
@@ -4069,7 +4076,7 @@ class TestExternalJobsPreemption:
                 is_external_job=True,
                 available_resource_pool_names=["cpu-small"],
             ),
-            Preset(
+            ResourcePreset(
                 name="vast-ai-p",
                 credits_per_hour=Decimal("0"),
                 cpu=0.1,

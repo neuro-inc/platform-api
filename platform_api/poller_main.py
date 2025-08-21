@@ -4,17 +4,18 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack
 
 import aiohttp.web
+import neuro_config_client
 from aiohttp.web_urldispatcher import AbstractRoute
 from apolo_events_client import from_config as create_events_client_from_config
 from neuro_admin_client import AdminClient
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
+from neuro_config_client import ConfigClient
 from neuro_logging import init_logging, setup_sentry
 
 from .api import add_version_to_header, handle_exceptions
-from .cluster import Cluster, ClusterConfig, ClusterHolder, SingleClusterUpdater
+from .cluster import Cluster, ClusterHolder, SingleClusterUpdater
 from .config import PollerConfig
-from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobError
@@ -39,8 +40,8 @@ class Handler:
 
 def create_cluster_factory(
     config: PollerConfig, kube_client: KubeClient
-) -> Callable[[ClusterConfig], Cluster]:
-    def _create_cluster(cluster_config: ClusterConfig) -> Cluster:
+) -> Callable[[neuro_config_client.Cluster], Cluster]:
+    def _create_cluster(cluster_config: neuro_config_client.Cluster) -> Cluster:
         return KubeCluster(
             kube_client=kube_client,
             kube_config=config.kube_config,
@@ -52,7 +53,7 @@ def create_cluster_factory(
 
 
 async def create_app(
-    config: PollerConfig, cluster: ClusterConfig | None = None
+    config: PollerConfig, cluster: neuro_config_client.Cluster | None = None
 ) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
@@ -103,10 +104,7 @@ async def create_app(
 
             logger.info("Initializing ConfigClient")
             config_client = await exit_stack.enter_async_context(
-                ConfigClient(
-                    base_url=config.config_url,
-                    service_token=config.auth.service_token,
-                )
+                ConfigClient(url=config.config_url, token=config.auth.service_token)
             )
 
             logger.info("Initializing EventsClient")
