@@ -1429,14 +1429,14 @@ python-jose = ">=3.0.1"
 
 [[package]]
 name = "neuro-config-client"
-version = "25.8.5"
+version = "25.8.6"
 description = "Internal client for Neu.ro config service"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "neuro_config_client-25.8.5-py3-none-any.whl", hash = "sha256:07c99678ea0146e36ca8bfe7e8aacbc75f4919627610dbe191e58ee0b68b589b"},
-    {file = "neuro_config_client-25.8.5.tar.gz", hash = "sha256:33e6a5f21293a930a9aa5d9a50883a297c16bb5f94b2c8dc4c70e484f6950f30"},
+    {file = "neuro_config_client-25.8.6-py3-none-any.whl", hash = "sha256:2e25f8ef5ab6108257ce441ac38a3165d3270256f26d1311e4ac8e7d2c6b4b8b"},
+    {file = "neuro_config_client-25.8.6.tar.gz", hash = "sha256:30145cb4591d4c8c7a075a48ccc42941355c1202f0fbf7497089aaa491adc13c"},
 ]
 
 [package.dependencies]
@@ -2172,6 +2172,24 @@ pytest = ">=6.2.5"
 testing = ["fields", "hunter", "process-tests", "pytest-xdist", "virtualenv"]
 
 [[package]]
+name = "pytest-retry"
+version = "1.7.0"
+description = "Adds the ability to retry flaky tests in CI environments"
+optional = false
+python-versions = ">=3.9"
+groups = ["dev"]
+files = [
+    {file = "pytest_retry-1.7.0-py3-none-any.whl", hash = "sha256:a2dac85b79a4e2375943f1429479c65beb6c69553e7dae6b8332be47a60954f4"},
+    {file = "pytest_retry-1.7.0.tar.gz", hash = "sha256:f8d52339f01e949df47c11ba9ee8d5b362f5824dff580d3870ec9ae0057df80f"},
+]
+
+[package.dependencies]
+pytest = ">=7.0.0"
+
+[package.extras]
+dev = ["black", "flake8", "isort", "mypy"]
+
+[[package]]
 name = "pytest-timeout"
 version = "2.4.0"
 description = "pytest plugin to abort hanging tests"
@@ -2691,4 +2709,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "3b93a6aa67cae17259c075a240045e983b3f894a6f1191b120be0ae8b2c17277"
+content-hash = "36304c97afdd229e5faec22e4f2559b4d2a3aa110a3a1aa68a8f75da0947b2e6"
