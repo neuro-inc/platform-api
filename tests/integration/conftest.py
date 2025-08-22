@@ -273,7 +273,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     available_resource_pool_names=["tpu"],
                 ),
             ],
-            "job_schedule_scaleup_timeout": 5,
+            "job_schedule_scaleup_timeout_s": 5,
             "allow_privileged_mode": True,
             "allow_job_priority": True,
         }
