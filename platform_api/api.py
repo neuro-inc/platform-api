@@ -194,20 +194,23 @@ class ConfigApiHandler:
             payload["nvidia_gpu"] = {
                 "count": resource_pool_type.nvidia_gpu.count,
                 "model": resource_pool_type.nvidia_gpu.model,
-                "memory": resource_pool_type.nvidia_gpu.memory,
             }
+            if resource_pool_type.nvidia_gpu.memory:
+                payload["nvidia_gpu"]["memory"] = resource_pool_type.nvidia_gpu.memory
         if resource_pool_type.amd_gpu is not None:
             payload["amd_gpu"] = {
                 "count": resource_pool_type.amd_gpu.count,
                 "model": resource_pool_type.amd_gpu.model,
-                "memory": resource_pool_type.amd_gpu.memory,
             }
+            if resource_pool_type.amd_gpu.memory:
+                payload["amd_gpu"]["memory"] = resource_pool_type.amd_gpu.memory
         if resource_pool_type.intel_gpu is not None:
             payload["intel_gpu"] = {
                 "count": resource_pool_type.intel_gpu.count,
                 "model": resource_pool_type.intel_gpu.model,
-                "memory": resource_pool_type.intel_gpu.memory,
             }
+            if resource_pool_type.intel_gpu.memory:
+                payload["intel_gpu"]["memory"] = resource_pool_type.intel_gpu.memory
         if resource_pool_type.tpu:
             payload["tpu"] = {
                 "types": resource_pool_type.tpu.types,
@@ -237,21 +240,27 @@ class ConfigApiHandler:
         if preset.nvidia_gpu is not None:
             payload["nvidia_gpu"] = {
                 "count": preset.nvidia_gpu.count,
-                "model": preset.nvidia_gpu.model,
-                "memory": preset.nvidia_gpu.memory,
             }
+            if preset.nvidia_gpu.model:
+                payload["nvidia_gpu"]["model"] = preset.nvidia_gpu.model
+            if preset.nvidia_gpu.memory:
+                payload["nvidia_gpu"]["memory"] = preset.nvidia_gpu.memory
         if preset.amd_gpu is not None:
             payload["amd_gpu"] = {
                 "count": preset.amd_gpu.count,
-                "model": preset.amd_gpu.model,
-                "memory": preset.amd_gpu.memory,
             }
+            if preset.amd_gpu.model:
+                payload["amd_gpu"]["model"] = preset.amd_gpu.model
+            if preset.amd_gpu.memory:
+                payload["amd_gpu"]["memory"] = preset.amd_gpu.memory
         if preset.intel_gpu is not None:
             payload["intel_gpu"] = {
                 "count": preset.intel_gpu.count,
-                "model": preset.intel_gpu.model,
-                "memory": preset.intel_gpu.memory,
             }
+            if preset.intel_gpu.model:
+                payload["intel_gpu"]["model"] = preset.intel_gpu.model
+            if preset.intel_gpu.memory:
+                payload["intel_gpu"]["memory"] = preset.intel_gpu.memory
         if preset.tpu:
             payload["tpu"] = {
                 "type": preset.tpu.type,

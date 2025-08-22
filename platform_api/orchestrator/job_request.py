@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
 from typing import Any
 
+from neuro_config_client import ResourcePoolType, ResourcePreset
 from yarl import URL
 
 from platform_api.config import NO_ORG_NORMALIZED
@@ -276,6 +277,118 @@ class ContainerResources:
         if self.tpu:
             payload["tpu"] = self.tpu.to_primitive()
         return payload
+
+    @property
+    def require_gpu(self) -> bool:
+        return bool(self.nvidia_gpu or self.amd_gpu or self.intel_gpu)
+
+    def check_fit_into_pool_type(self, pool_type: ResourcePoolType) -> bool:
+        available_cpu = pool_type.available_cpu or pool_type.cpu
+        available_memory = pool_type.available_memory or pool_type.memory
+        if not available_cpu or not available_memory:
+            return False
+        return (
+            self.cpu <= available_cpu
+            and self.memory <= available_memory
+            and self._check_gpu(pool_type)
+            and self._check_tpu(pool_type)
+        )
+
+    def check_fit_into_preset(self, preset: ResourcePreset) -> bool:
+        return (
+            self.cpu <= preset.cpu
+            and self.memory <= preset.memory
+            and self._check_gpu(preset)
+            and self._check_tpu_preset(preset)
+        )
+
+    def _check_gpu(self, entry: ResourcePoolType | ResourcePreset) -> bool:
+        if not self.require_gpu:
+            # container does not need GPU.
+            # we are good regardless of the presence of GPU in the pool type.
+            return True
+
+        # container needs GPU
+        if self.nvidia_gpu and not self._gpu_match(
+            resources_gpu=self.nvidia_gpu,
+            resources_gpu_model=self.nvidia_gpu_model,
+            entry_gpu=entry.nvidia_gpu.count if entry.nvidia_gpu else 0,
+            entry_gpu_model=entry.nvidia_gpu.model if entry.nvidia_gpu else None,
+        ):
+            return False
+
+        if self.amd_gpu and not self._gpu_match(
+            resources_gpu=self.amd_gpu,
+            resources_gpu_model=self.amd_gpu_model,
+            entry_gpu=entry.amd_gpu.count if entry.amd_gpu else 0,
+            entry_gpu_model=entry.amd_gpu.model if entry.amd_gpu else None,
+        ):
+            return False
+
+        if self.intel_gpu and not self._gpu_match(
+            resources_gpu=self.intel_gpu,
+            resources_gpu_model=self.intel_gpu_model,
+            entry_gpu=entry.intel_gpu.count if entry.intel_gpu else 0,
+            entry_gpu_model=entry.intel_gpu.model if entry.intel_gpu else None,
+        ):
+            return False
+
+        return True
+
+    def _check_tpu(self, pool_type: ResourcePoolType) -> bool:
+        if not self.tpu:
+            # container does not need TPU.
+            # we are good regardless of the presence of TPU in the pool type.
+            return True
+
+        # container needs TPU
+
+        if not pool_type.tpu:
+            return False
+
+        return (
+            self.tpu.type in pool_type.tpu.types
+            and self.tpu.software_version in pool_type.tpu.software_versions
+        )
+
+    @staticmethod
+    def _gpu_match(
+        resources_gpu: int,
+        resources_gpu_model: str | None,
+        entry_gpu: int | None,
+        entry_gpu_model: str | None,
+    ) -> bool:
+        """
+        Ensures that the resource GPU requirement matches
+        with the entry (preset or resource pool) GPUs
+        """
+        if not entry_gpu:
+            # entry doesn't have the same GPU make
+            return False
+        if entry_gpu < resources_gpu:
+            # entry has less GPU than resources requires
+            return False
+        if not resources_gpu_model:
+            # ready to exit. resources doesn't required a specific GPU model
+            return True
+        # resource requires a specific model. therefore, we compare them
+        return entry_gpu_model == resources_gpu_model
+
+    def _check_tpu_preset(self, preset: ResourcePreset) -> bool:
+        if not self.tpu:
+            # container does not need TPU. we are good regardless of presence
+            # of TPU in the pool type.
+            return True
+
+        # container needs TPU
+
+        if not preset.tpu:
+            return False
+
+        return (
+            self.tpu.type == preset.tpu.type
+            and self.tpu.software_version == preset.tpu.software_version
+        )
 
 
 @dataclass(frozen=True)

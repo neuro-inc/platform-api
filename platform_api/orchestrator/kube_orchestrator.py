@@ -335,17 +335,17 @@ class KubeOrchestrator(Orchestrator):
 
     def _get_job_resource_pool_types(self, job: Job) -> Sequence[ResourcePoolType]:
         if not job.preset_name:
-            logger.info("Job %s does not have a preset", job.id)
-            return []
+            logger.warning("Job %s does not have a preset", job.id)
         job_preset = job.preset
-        if job_preset is None:
+        if job.preset_name and job_preset is None:
             logger.info("Preset %s not found for job %s", job.preset_name, job.id)
             return []
-        return [
-            p
-            for p in self._orchestrator_config.resource_pool_types
-            if p.name in job_preset.available_resource_pool_names
-        ]
+        if job_preset:
+            return [
+                p
+                for p in self._orchestrator_config.resource_pool_types
+                if p.name in job_preset.available_resource_pool_names
+            ]
 
         job_resources = job.request.container.resources
         has_cpu_pools = any(
