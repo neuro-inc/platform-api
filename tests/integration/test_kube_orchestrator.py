@@ -4087,7 +4087,7 @@ class TestExternalJobsPreemption:
             ),
         ]
         orchestrator_config = orchestrator_config_factory(
-            resource_pool_types=resources, presets=presets
+            resource_pool_types=resources, resource_presets=presets
         )
         return kube_orchestrator_factory(
             kube_config=kube_config,

@@ -203,7 +203,9 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     cpu=1.0,
                     memory=2048 * 10**6,
                     disk_size=150 * 10**9,
-                    nvidia_gpu=NvidiaGPU(count=1, model="nvidia-gpu"),
+                    nvidia_gpu=NvidiaGPU(
+                        count=1, model="nvidia-gpu", memory=40 * 2**30
+                    ),
                     amd_gpu=AMDGPU(count=2, model="amd-gpu"),
                     intel_gpu=IntelGPU(count=3, model="intel-gpu"),
                 ),
@@ -214,7 +216,9 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     credits_per_hour=Decimal("10"),
                     cpu=7,
                     memory=30720 * 10**6,
-                    nvidia_gpu=NvidiaGPUPreset(count=1, model="nvidia-tesla-k80"),
+                    nvidia_gpu=NvidiaGPUPreset(
+                        count=1, model="nvidia-tesla-k80", memory=40 * 2**30
+                    ),
                     available_resource_pool_names=["gpu"],
                 ),
                 ResourcePreset(
@@ -349,7 +353,9 @@ def kube_job_nodes_factory(
                 "pods": "110",
                 "cpu": int(pool_type.cpu or 0),
                 "memory": f"{pool_type.memory}",
-                "nvidia.com/gpu": pool_type.nvidia_gpu or 0,
+                "nvidia.com/gpu": (
+                    pool_type.nvidia_gpu.count if pool_type.nvidia_gpu else 0
+                ),
             }
             taints = [
                 NodeTaint(key=kube_config.jobs_pod_job_toleration_key, value="true")
