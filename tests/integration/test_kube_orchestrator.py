@@ -1329,7 +1329,7 @@ class TestKubeOrchestrator:
     ) -> Iterator[Callable[[str], MyJob]]:
         def impl(server_hostname: str) -> MyJob:
             cmd = (
-                "--fail --connect-timeout 5 --retry 20 --retry-connrefused "
+                "curl --fail --connect-timeout 5 --retry 20 --retry-connrefused "
                 f"http://{server_hostname}/"
             )
             client_cont = Container(
