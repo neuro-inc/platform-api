@@ -347,6 +347,11 @@ class KubeOrchestrator(Orchestrator):
                 if p.name in job_preset.available_resource_pool_names
             ]
 
+        # In the past we supported running jobs without presets by specifying
+        # resource requirements directly in the job request. Currently it's not
+        # used anywhere except tests. Some day we will need to update tests
+        # to use presets and remove this code.
+
         job_resources = job.request.container.resources
         has_cpu_pools = any(
             not p.has_gpu for p in self._orchestrator_config.resource_pool_types
