@@ -293,6 +293,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                 ),
             ],
             "job_fallback_hostname": "default.jobs.apolo.us",
+            "is_http_ingress_secure": False,
             "job_schedule_timeout_s": 30,
             "job_schedule_scale_up_timeout_s": 5,
             "allow_privileged_mode": True,
