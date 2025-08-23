@@ -1,5 +1,4 @@
 PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
-PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
 PLATFORMSECRETS_IMAGE = $(shell cat PLATFORMSECRETS_IMAGE)
 PLATFORMDISKAPI_IMAGE = $(shell cat PLATFORMDISKAPI_IMAGE)
 PLATFORMADMIN_IMAGE = $(shell cat PLATFORMADMIN_IMAGE)
@@ -77,12 +76,6 @@ run_api_k8s_container:
 
 docker_pull_test_images:
 	docker pull $(PLATFORMAUTHAPI_IMAGE)
-	docker pull $(PLATFORMCONFIG_IMAGE)
 	docker pull $(PLATFORMSECRETS_IMAGE)
 	docker pull $(PLATFORMDISKAPI_IMAGE)
 	docker pull $(PLATFORMADMIN_IMAGE)
-	docker tag $(PLATFORMAUTHAPI_IMAGE) platformauthapi:latest
-	docker tag $(PLATFORMCONFIG_IMAGE) platformconfig:latest
-	docker tag $(PLATFORMSECRETS_IMAGE) platformsecrets:latest
-	docker tag $(PLATFORMDISKAPI_IMAGE) platformdiskapi:latest
-	docker tag $(PLATFORMADMIN_IMAGE) platformadmin:latest

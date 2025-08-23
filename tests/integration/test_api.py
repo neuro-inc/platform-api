@@ -581,7 +581,7 @@ class TestApi:
                         "cpu": 7,
                         "memory": 30720 * 10**6,
                         "memory_mb": 29296,
-                        "amd_gpu": 1,
+                        "amd_gpu": {"count": 1},
                         "scheduler_enabled": False,
                         "preemptible_node": False,
                         "is_preemptible": False,
