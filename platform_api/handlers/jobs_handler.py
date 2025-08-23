@@ -215,8 +215,9 @@ def create_job_preset_validator(presets: Sequence[ResourcePreset]) -> t.Trafaret
         }
         if preset.nvidia_gpu:
             container_resources["nvidia_gpu"] = preset.nvidia_gpu.count
-            container_resources["gpu_model"] = preset.nvidia_gpu.model
-            container_resources["nvidia_gpu_model"] = preset.nvidia_gpu.model
+            if preset.nvidia_gpu.model:
+                container_resources["nvidia_gpu_model"] = preset.nvidia_gpu.model
+                container_resources["gpu_model"] = preset.nvidia_gpu.model
         if preset.amd_gpu:
             container_resources["amd_gpu"] = preset.amd_gpu.count
             if preset.amd_gpu.model:

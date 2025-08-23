@@ -166,17 +166,11 @@ class JobsScheduler:
         cluster_config: neuro_config_client.Cluster | None,
         current_time: datetime,
     ) -> bool:
-        if not cluster_config:
-            return True
-
-        allow_scheduler_enabled_job = any(
-            preset.scheduler_enabled
-            for preset in cluster_config.orchestrator.resource_presets
-        )
-
-        if not allow_scheduler_enabled_job or not job.scheduler_enabled:
-            return True
-        if not cluster_config.energy:
+        if (
+            not cluster_config
+            or not cluster_config.orchestrator.allow_scheduler_enabled_job
+            or not job.scheduler_enabled
+        ):
             return True
         schedule = cluster_config.energy.get_schedule(job.energy_schedule_name)
         return schedule.check_time(current_time)

@@ -376,7 +376,13 @@ class TestKubeOrchestrator:
     ) -> None:
         orchestrator_config = orchestrator_config_factory(
             resource_pool_types=[
-                ResourcePoolType(name="cpu", cpu=0.1, memory=1025 * 10**6)
+                ResourcePoolType(
+                    name="cpu",
+                    cpu=0.1,
+                    available_cpu=0.1,
+                    memory=1025 * 10**6,
+                    available_memory=1025 * 10**6,
+                )
             ]
         )
         kube_orchestrator = kube_orchestrator_factory(
@@ -2562,17 +2568,27 @@ class TestAffinityFixtures:
     ) -> KubeOrchestrator:
         return await kube_orchestrator_factory(
             [
-                ResourcePoolType(name="cpu-small", cpu=2, memory=2048 * 10**6),
+                ResourcePoolType(
+                    name="cpu-small",
+                    cpu=2,
+                    available_cpu=2,
+                    memory=2048 * 10**6,
+                    available_memory=2048 * 10**6,
+                ),
                 ResourcePoolType(
                     name="cpu-small-p",
                     cpu=2,
+                    available_cpu=2,
                     memory=2048 * 10**6,
+                    available_memory=2048 * 10**6,
                     is_preemptible=True,
                 ),
                 ResourcePoolType(
                     name="cpu-large-tpu",
                     cpu=3,
+                    available_cpu=3,
                     memory=14336 * 10**6,
+                    available_memory=14336 * 10**6,
                     tpu=TPUResource(
                         ipv4_cidr_block="1.1.1.1/32",
                         types=("v2-8",),
@@ -2582,13 +2598,17 @@ class TestAffinityFixtures:
                 ResourcePoolType(
                     name="nvidia-gpu",
                     cpu=7,
+                    available_cpu=7,
                     memory=61440 * 10**6,
+                    available_memory=61440 * 10**6,
                     nvidia_gpu=NvidiaGPU(count=8, model="nvidia-gpu"),
                 ),
                 ResourcePoolType(
                     name="nvidia-gpu-p",
                     cpu=7,
+                    available_cpu=7,
                     memory=61440 * 10**6,
+                    available_memory=61440 * 10**6,
                     nvidia_gpu=NvidiaGPU(count=8, model="nvidia-gpu"),
                     is_preemptible=True,
                 ),
@@ -2623,7 +2643,9 @@ class TestAffinityFixtures:
                 ResourcePoolType(
                     name="nvidia-gpu",
                     cpu=7,
+                    available_cpu=7,
                     memory=61440 * 10**6,
+                    available_memory=61440 * 10**6,
                     nvidia_gpu=NvidiaGPU(count=8, model="nvidia-gpu"),
                 ),
             ],
@@ -3093,13 +3115,17 @@ class TestPreemption:
             ResourcePoolType(
                 name="cpu-small",
                 cpu=2,
+                available_cpu=2,
                 memory=2048 * 10**6,
+                available_memory=2048 * 10**6,
                 is_preemptible=False,
             ),
             ResourcePoolType(
                 name="cpu-small-p",
                 cpu=2,
+                available_cpu=2,
                 memory=2048 * 10**6,
+                available_memory=2048 * 10**6,
                 is_preemptible=True,
             ),
         ]
@@ -4057,13 +4083,17 @@ class TestExternalJobsPreemption:
             ResourcePoolType(
                 name="cpu-small",
                 cpu=2,
+                available_cpu=2,
                 memory=2048 * 10**6,
+                available_memory=2048 * 10**6,
                 is_preemptible=False,
             ),
             ResourcePoolType(
                 name="cpu-small-p",
                 cpu=2,
+                available_cpu=2,
                 memory=2048 * 10**6,
+                available_memory=2048 * 10**6,
                 is_preemptible=True,
             ),
         ]
