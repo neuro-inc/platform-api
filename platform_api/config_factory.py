@@ -47,7 +47,7 @@ class EnvironConfigFactory:
         api_base_url = URL(self._environ["NP_API_URL"])
         admin_url = self._get_url("NP_ADMIN_URL")
         admin_public_url = self._get_url("NP_ADMIN_PUBLIC_URL")
-        config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
+        config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"]).with_path("")
         return Config(
             server=self.create_server(),
             database=self.create_database(),

@@ -6,30 +6,46 @@ from asyncio import timeout
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 import aiohttp
-import aiohttp.pytest_plugin
 import aiohttp.web
+import neuro_config_client
 import pytest
 from apolo_kube_client.errors import ResourceExists
-from yarl import URL
-
-from platform_api.cluster_config import (
-    UTC,
+from neuro_config_client import (
+    AMDGPU,
+    ACMEEnvironment,
+    AMDGPUPreset,
     AppsConfig,
-    ClusterConfig,
+    BucketsConfig,
+    Cluster,
+    ClusterStatus,
+    DisksConfig,
+    DNSConfig,
     EnergyConfig,
     EnergySchedule,
     IngressConfig,
+    IntelGPU,
+    MetricsConfig,
+    MonitoringConfig,
+    NvidiaGPU,
+    NvidiaGPUPreset,
     OrchestratorConfig,
+    ResourcePoolType,
+    ResourcePreset,
+    SecretsConfig,
     StorageConfig as ClusterStorageConfig,
+    TPUPreset,
+    TPUResource,
     VolumeConfig,
 )
+from yarl import URL
+
 from platform_api.config import (
     AuthConfig,
     Config,
@@ -42,7 +58,6 @@ from platform_api.config import (
     RegistryConfig,
     ServerConfig,
 )
-from platform_api.config_client import ConfigClient
 from platform_api.orchestrator.job_request import JobNotFoundException
 from platform_api.orchestrator.kube_client import (
     KubeClient,
@@ -52,13 +67,6 @@ from platform_api.orchestrator.kube_client import (
 )
 from platform_api.orchestrator.kube_config import KubeClientAuthType
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
-from platform_api.resource import (
-    GKEGPUModels,
-    Preset,
-    ResourcePoolType,
-    TPUPreset,
-    TPUResource,
-)
 
 
 @pytest.fixture(scope="session")
@@ -145,8 +153,7 @@ def registry_config(token_factory: Callable[[str], str]) -> RegistryConfig:
 def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]:
     def _f(**kwargs: Any) -> OrchestratorConfig:
         defaults = {
-            "jobs_domain_name_template": "{job_id}.jobs.neu.ro",
-            "jobs_internal_domain_name_template": "{job_id}.platformapi-tests",
+            "job_hostname_template": "{job_id}.jobs.neu.ro",
             "resource_pool_types": [
                 ResourcePoolType(
                     name="cpu",
@@ -154,8 +161,11 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     max_size=2,
                     idle_size=1,
                     cpu=1.0,
+                    available_cpu=1.0,
                     memory=2048 * 10**6,
+                    available_memory=2048 * 10**6,
                     disk_size=150 * 10**9,
+                    available_disk_size=150 * 10**9,
                     cpu_min_watts=1,
                     cpu_max_watts=2,
                 ),
@@ -164,24 +174,34 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     min_size=1,
                     max_size=2,
                     cpu=1.0,
+                    available_cpu=1.0,
                     memory=2048 * 10**6,
+                    available_memory=2048 * 10**6,
                     disk_size=150 * 10**9,
+                    available_disk_size=150 * 10**9,
                     is_preemptible=True,
                 ),
                 ResourcePoolType(
+                    name="cpu-large",
                     min_size=1,
                     max_size=2,
                     cpu=100,
+                    available_cpu=100,
                     memory=500_000 * 10**6,
+                    available_memory=500_000 * 10**6,
                     disk_size=150 * 10**9,
+                    available_disk_size=150 * 10**9,
                 ),
                 ResourcePoolType(
                     name="tpu",
                     min_size=1,
                     max_size=2,
                     cpu=1.0,
+                    available_cpu=1.0,
                     memory=2048 * 10**6,
+                    available_memory=2048 * 10**6,
                     disk_size=150 * 10**9,
+                    available_disk_size=150 * 10**9,
                     tpu=TPUResource(
                         ipv4_cidr_block="1.1.1.1/32",
                         types=("v2-8",),
@@ -193,73 +213,77 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     min_size=1,
                     max_size=2,
                     cpu=1.0,
+                    available_cpu=1.0,
                     memory=2048 * 10**6,
+                    available_memory=2048 * 10**6,
                     disk_size=150 * 10**9,
-                    nvidia_gpu=1,
-                    amd_gpu=2,
-                    intel_gpu=3,
+                    available_disk_size=150 * 10**9,
+                    nvidia_gpu=NvidiaGPU(
+                        count=1, model="nvidia-gpu", memory=40 * 2**30
+                    ),
+                    amd_gpu=AMDGPU(count=2, model="amd-gpu"),
+                    intel_gpu=IntelGPU(count=3, model="intel-gpu"),
                 ),
             ],
-            "presets": [
-                Preset(
+            "resource_presets": [
+                ResourcePreset(
                     name="gpu-small",
                     credits_per_hour=Decimal("10"),
-                    nvidia_gpu=1,
                     cpu=7,
                     memory=30720 * 10**6,
-                    nvidia_gpu_model=GKEGPUModels.K80.value.id,
+                    nvidia_gpu=NvidiaGPUPreset(
+                        count=1, model="nvidia-tesla-k80", memory=40 * 2**30
+                    ),
                     available_resource_pool_names=["gpu"],
                 ),
-                Preset(
+                ResourcePreset(
                     name="amd-gpu-small",
                     credits_per_hour=Decimal("10"),
-                    amd_gpu=1,
                     cpu=7,
                     memory=30720 * 10**6,
+                    amd_gpu=AMDGPUPreset(count=1),
                     available_resource_pool_names=["gpu"],
                 ),
-                Preset(
+                ResourcePreset(
                     name="gpu-large",
                     credits_per_hour=Decimal("10"),
-                    nvidia_gpu=1,
                     cpu=7,
                     memory=61440 * 10**6,
-                    nvidia_gpu_model=GKEGPUModels.V100.value.id,
+                    nvidia_gpu=NvidiaGPUPreset(count=1, model="nvidia-tesla-v100"),
                     available_resource_pool_names=["gpu"],
                 ),
-                Preset(
+                ResourcePreset(
                     name="gpu-large-p",
                     credits_per_hour=Decimal("10"),
-                    nvidia_gpu=1,
                     cpu=7,
                     memory=61440 * 10**6,
-                    nvidia_gpu_model=GKEGPUModels.V100.value.id,
+                    nvidia_gpu=NvidiaGPUPreset(count=1, model="nvidia-tesla-v100"),
                     scheduler_enabled=True,
                     preemptible_node=True,
                     available_resource_pool_names=["gpu"],
                 ),
-                Preset(
+                ResourcePreset(
                     name="cpu-micro",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
                     memory=100 * 10**6,
                     available_resource_pool_names=["cpu"],
                 ),
-                Preset(
+                ResourcePreset(
                     name="cpu-small",
                     credits_per_hour=Decimal("10"),
                     cpu=2,
                     memory=2048 * 10**6,
                     available_resource_pool_names=["cpu"],
                 ),
-                Preset(
+                ResourcePreset(
                     name="cpu-large",
                     credits_per_hour=Decimal("10"),
                     cpu=3,
                     memory=14336 * 10**6,
                     available_resource_pool_names=["cpu"],
                 ),
-                Preset(
+                ResourcePreset(
                     name="tpu",
                     credits_per_hour=Decimal("10"),
                     cpu=3,
@@ -268,7 +292,10 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     available_resource_pool_names=["tpu"],
                 ),
             ],
-            "job_schedule_scaleup_timeout": 5,
+            "job_fallback_hostname": "default.jobs.apolo.us",
+            "is_http_ingress_secure": False,
+            "job_schedule_timeout_s": 30,
+            "job_schedule_scale_up_timeout_s": 5,
             "allow_privileged_mode": True,
             "allow_job_priority": True,
         }
@@ -342,7 +369,9 @@ def kube_job_nodes_factory(
                 "pods": "110",
                 "cpu": int(pool_type.cpu or 0),
                 "memory": f"{pool_type.memory}",
-                "nvidia.com/gpu": pool_type.nvidia_gpu or 0,
+                "nvidia.com/gpu": (
+                    pool_type.nvidia_gpu.count if pool_type.nvidia_gpu else 0
+                ),
             }
             taints = [
                 NodeTaint(key=kube_config.jobs_pod_job_toleration_key, value="true")
@@ -886,23 +915,16 @@ def config_factory(
 @pytest.fixture
 def cluster_config_factory(
     orchestrator_config: OrchestratorConfig,
-) -> Callable[..., ClusterConfig]:
-    def _f(cluster_name: str = "test-cluster") -> ClusterConfig:
-        ingress_config = IngressConfig(
-            registry_url=URL("https://registry.dev.neuromation.io"),
-            storage_url=URL("https://neu.ro/api/v1/storage"),
-            monitoring_url=URL("https://neu.ro/api/v1/monitoring"),
-            secrets_url=URL("https://neu.ro/api/v1/secrets"),
-            metrics_url=URL("https://neu.ro/api/v1/metrics"),
-            disks_url=URL("https://neu.ro/api/v1/disk"),
-            buckets_url=URL("https://neu.ro/api/v1/buckets"),
-        )
-        return ClusterConfig(
+) -> Callable[..., Cluster]:
+    def _f(cluster_name: str = "test-cluster") -> Cluster:
+        return Cluster(
             name=cluster_name,
+            created_at=datetime.now(UTC),
+            status=ClusterStatus.DEPLOYED,
             location="eu-west-4",
             logo_url=URL("https://logo.url"),
             orchestrator=orchestrator_config,
-            ingress=ingress_config,
+            ingress=IngressConfig(acme_environment=ACMEEnvironment.PRODUCTION),
             timezone=UTC,
             energy=EnergyConfig(
                 schedules=[
@@ -911,17 +933,31 @@ def cluster_config_factory(
                 ]
             ),
             storage=ClusterStorageConfig(
+                url=URL("https://neu.ro/api/v1/storage"),
                 volumes=[
                     VolumeConfig(
                         name="default",
                         path=None,
                         credits_per_hour_per_gb=Decimal("100"),
                     )
-                ]
+                ],
             ),
+            registry=neuro_config_client.RegistryConfig(
+                url=URL("https://registry.dev.neuromation.io")
+            ),
+            monitoring=MonitoringConfig(url=URL("https://neu.ro/api/v1/monitoring")),
+            secrets=SecretsConfig(url=URL("https://neu.ro/api/v1/secrets")),
+            metrics=MetricsConfig(url=URL("https://neu.ro/api/v1/metrics")),
+            disks=DisksConfig(
+                url=URL("https://neu.ro/api/v1/disk"),
+                storage_limit_per_user=100 * 2**30,
+            ),
+            buckets=BucketsConfig(url=URL("https://neu.ro/api/v1/buckets")),
             apps=AppsConfig(
                 apps_hostname_templates=["{app_name}.apps.dev.neu.ro"],
+                app_proxy_url=URL("https://proxy.apps.dev.neu.ro"),
             ),
+            dns=DNSConfig(name="neu.ro"),
         )
 
     return _f
@@ -929,8 +965,8 @@ def cluster_config_factory(
 
 @pytest.fixture
 def cluster_config(
-    cluster_config_factory: Callable[..., ClusterConfig],
-) -> ClusterConfig:
+    cluster_config_factory: Callable[..., Cluster],
+) -> Cluster:
     return cluster_config_factory()
 
 
@@ -999,9 +1035,3 @@ class ApiRunner:
     @property
     def closed(self) -> bool:
         return not self._task
-
-
-class _TestConfigClient(ConfigClient):
-    async def create_cluster(self, *, name: str) -> None:
-        async with self._request("POST", "clusters", json={"name": name}):
-            pass

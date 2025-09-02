@@ -15,10 +15,11 @@ from aiodocker.types import JSONObject
 from aiohttp import ClientError, ClientResponseError
 from aiohttp.web_exceptions import HTTPCreated, HTTPNoContent, HTTPNotFound
 from neuro_admin_client import AdminClient
+from neuro_config_client import ConfigClient
 from yarl import URL
 
 from platform_api.config import AuthConfig
-from tests.integration.conftest import ApiRunner, _TestConfigClient
+from tests.integration.conftest import ApiRunner
 from tests.integration.notifications import NotificationsServer
 
 
@@ -86,11 +87,8 @@ async def fake_config_app() -> AsyncIterator[URL]:
 
 
 @pytest.fixture
-async def config_client(fake_config_app: URL) -> AsyncIterator[_TestConfigClient]:
-    client = _TestConfigClient(
-        base_url=fake_config_app,
-        service_token="token",
-    )
+async def config_client(fake_config_app: URL) -> AsyncIterator[ConfigClient]:
+    client = ConfigClient(url=fake_config_app, token="token")
     async with client:
         yield client
 

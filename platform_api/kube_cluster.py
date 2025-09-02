@@ -1,8 +1,9 @@
 import logging
 from contextlib import AsyncExitStack
 
+import neuro_config_client
+
 from .cluster import Cluster
-from .cluster_config import ClusterConfig
 from .config import RegistryConfig
 from .orchestrator.kube_client import KubeClient, NodeWatcher, PodWatcher
 from .orchestrator.kube_config import KubeConfig
@@ -17,7 +18,7 @@ class KubeCluster(Cluster):
         kube_client: KubeClient,
         kube_config: KubeConfig,
         registry_config: RegistryConfig,
-        cluster_config: ClusterConfig,
+        cluster_config: neuro_config_client.Cluster,
     ) -> None:
         self._kube_client = kube_client
         self._kube_config = kube_config
@@ -27,7 +28,7 @@ class KubeCluster(Cluster):
         self._exit_stack = AsyncExitStack()
 
     @property
-    def config(self) -> ClusterConfig:
+    def config(self) -> neuro_config_client.Cluster:
         return self._cluster_config
 
     @property

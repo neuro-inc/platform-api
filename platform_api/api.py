@@ -11,6 +11,16 @@ from apolo_events_client import from_config as create_events_client_from_config
 from neuro_admin_client import AdminClient, OrgUser, ProjectUser
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
+from neuro_config_client import (
+    AppsConfig,
+    Cluster,
+    ConfigClient,
+    EnergySchedule,
+    EnergySchedulePeriod,
+    ResourcePoolType,
+    ResourcePreset,
+    VolumeConfig,
+)
 from neuro_logging import init_logging, setup_sentry
 from neuro_notifications_client import Client as NotificationsClient
 
@@ -23,15 +33,8 @@ from platform_api.orchestrator.job_policy_enforcer import (
     StopOnClusterRemoveEnforcer,
 )
 
-from .cluster import ClusterConfig, ClusterConfigRegistry, ClusterUpdater
-from .cluster_config import (
-    AppsConfig,
-    EnergySchedule,
-    EnergySchedulePeriod,
-    VolumeConfig,
-)
+from .cluster import ClusterConfigRegistry, ClusterUpdater
 from .config import Config
-from .config_client import ConfigClient
 from .config_factory import EnvironConfigFactory
 from .handlers import JobsHandler
 from .orchestrator.job_request import JobError, JobException
@@ -43,7 +46,6 @@ from .orchestrator.jobs_service import (
 from .orchestrator.jobs_storage import JobsStorage, PostgresJobsStorage
 from .orchestrator.jobs_storage.base import JobStorageTransactionError
 from .postgres import make_async_engine
-from .resource import Preset, ResourcePoolType
 from .user import authorized_user
 
 logger = logging.getLogger(__name__)
@@ -135,17 +137,17 @@ class ConfigApiHandler:
         ]
         presets = [
             self._convert_preset_to_payload(preset)
-            for preset in cluster_config.orchestrator.presets
+            for preset in cluster_config.orchestrator.resource_presets
         ]
         result = {
             "name": cluster_config.name,
-            "registry_url": str(cluster_config.ingress.registry_url),
-            "storage_url": str(cluster_config.ingress.storage_url),
-            "monitoring_url": str(cluster_config.ingress.monitoring_url),
-            "secrets_url": str(cluster_config.ingress.secrets_url),
-            "metrics_url": str(cluster_config.ingress.metrics_url),
-            "disks_url": str(cluster_config.ingress.disks_url),
-            "buckets_url": str(cluster_config.ingress.buckets_url),
+            "registry_url": str(cluster_config.registry.url),
+            "storage_url": str(cluster_config.storage.url),
+            "monitoring_url": str(cluster_config.monitoring.url),
+            "secrets_url": str(cluster_config.secrets.url),
+            "metrics_url": str(cluster_config.metrics.url),
+            "disks_url": str(cluster_config.disks.url),
+            "buckets_url": str(cluster_config.buckets.url),
             "resource_pool_types": resource_pool_types,
             "resource_presets": presets,
             "orgs": orgs,
@@ -189,17 +191,26 @@ class ConfigApiHandler:
         if resource_pool_type.idle_size:
             payload["idle_size"] = resource_pool_type.idle_size
         if resource_pool_type.nvidia_gpu is not None:
-            payload["nvidia_gpu"] = resource_pool_type.nvidia_gpu
-        if resource_pool_type.nvidia_gpu_model is not None:
-            payload["nvidia_gpu_model"] = resource_pool_type.nvidia_gpu_model
+            payload["nvidia_gpu"] = {
+                "count": resource_pool_type.nvidia_gpu.count,
+                "model": resource_pool_type.nvidia_gpu.model,
+            }
+            if resource_pool_type.nvidia_gpu.memory:
+                payload["nvidia_gpu"]["memory"] = resource_pool_type.nvidia_gpu.memory
         if resource_pool_type.amd_gpu is not None:
-            payload["amd_gpu"] = resource_pool_type.amd_gpu
-        if resource_pool_type.amd_gpu_model is not None:
-            payload["amd_gpu_model"] = resource_pool_type.amd_gpu_model
+            payload["amd_gpu"] = {
+                "count": resource_pool_type.amd_gpu.count,
+                "model": resource_pool_type.amd_gpu.model,
+            }
+            if resource_pool_type.amd_gpu.memory:
+                payload["amd_gpu"]["memory"] = resource_pool_type.amd_gpu.memory
         if resource_pool_type.intel_gpu is not None:
-            payload["intel_gpu"] = resource_pool_type.intel_gpu
-        if resource_pool_type.intel_gpu_model is not None:
-            payload["intel_gpu_model"] = resource_pool_type.intel_gpu_model
+            payload["intel_gpu"] = {
+                "count": resource_pool_type.intel_gpu.count,
+                "model": resource_pool_type.intel_gpu.model,
+            }
+            if resource_pool_type.intel_gpu.memory:
+                payload["intel_gpu"]["memory"] = resource_pool_type.intel_gpu.memory
         if resource_pool_type.tpu:
             payload["tpu"] = {
                 "types": resource_pool_type.tpu.types,
@@ -214,7 +225,7 @@ class ConfigApiHandler:
             payload["cpu_max_watts"] = resource_pool_type.cpu_max_watts
         return payload
 
-    def _convert_preset_to_payload(self, preset: Preset) -> dict[str, Any]:
+    def _convert_preset_to_payload(self, preset: ResourcePreset) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "name": preset.name,
             "credits_per_hour": str(preset.credits_per_hour),
@@ -227,20 +238,29 @@ class ConfigApiHandler:
             "is_preemptible_node_required": preset.preemptible_node,
         }
         if preset.nvidia_gpu is not None:
-            payload["nvidia_gpu"] = preset.nvidia_gpu
-            payload["gpu"] = preset.nvidia_gpu
+            payload["nvidia_gpu"] = {
+                "count": preset.nvidia_gpu.count,
+            }
+            if preset.nvidia_gpu.model:
+                payload["nvidia_gpu"]["model"] = preset.nvidia_gpu.model
+            if preset.nvidia_gpu.memory:
+                payload["nvidia_gpu"]["memory"] = preset.nvidia_gpu.memory
         if preset.amd_gpu is not None:
-            payload["amd_gpu"] = preset.amd_gpu
+            payload["amd_gpu"] = {
+                "count": preset.amd_gpu.count,
+            }
+            if preset.amd_gpu.model:
+                payload["amd_gpu"]["model"] = preset.amd_gpu.model
+            if preset.amd_gpu.memory:
+                payload["amd_gpu"]["memory"] = preset.amd_gpu.memory
         if preset.intel_gpu is not None:
-            payload["intel_gpu"] = preset.intel_gpu
-        nvidia_gpu_model = preset.nvidia_gpu_model or preset.gpu_model
-        if nvidia_gpu_model is not None:
-            payload["gpu_model"] = nvidia_gpu_model
-            payload["nvidia_gpu_model"] = nvidia_gpu_model
-        if preset.amd_gpu_model is not None:
-            payload["amd_gpu_model"] = preset.amd_gpu_model
-        if preset.intel_gpu_model is not None:
-            payload["intel_gpu_model"] = preset.intel_gpu_model
+            payload["intel_gpu"] = {
+                "count": preset.intel_gpu.count,
+            }
+            if preset.intel_gpu.model:
+                payload["intel_gpu"]["model"] = preset.intel_gpu.model
+            if preset.intel_gpu.memory:
+                payload["intel_gpu"]["memory"] = preset.intel_gpu.memory
         if preset.tpu:
             payload["tpu"] = {
                 "type": preset.tpu.type,
@@ -361,7 +381,7 @@ async def add_version_to_header(
 
 
 async def create_app(
-    config: Config, clusters: Sequence[ClusterConfig] = ()
+    config: Config, clusters: Sequence[Cluster] = ()
 ) -> aiohttp.web.Application:
     app = aiohttp.web.Application(middlewares=[handle_exceptions])
     app["config"] = config
@@ -402,15 +422,15 @@ async def create_app(
             logger.info("Initializing Config client")
             config_client = await exit_stack.enter_async_context(
                 ConfigClient(
-                    base_url=config.config_url,
-                    service_token=config.auth.service_token,
+                    url=config.config_url,
+                    token=config.auth.service_token,
                 )
             )
 
             if clusters:
                 client_clusters = clusters
             else:
-                client_clusters = await config_client.get_clusters()
+                client_clusters = await config_client.list_clusters()
 
             logger.info("Loading clusters")
             for cluster in client_clusters:

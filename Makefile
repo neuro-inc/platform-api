@@ -1,5 +1,4 @@
 PLATFORMAUTHAPI_IMAGE = $(shell cat PLATFORMAUTHAPI_IMAGE)
-PLATFORMCONFIG_IMAGE = $(shell cat PLATFORMCONFIG_IMAGE)
 PLATFORMSECRETS_IMAGE = $(shell cat PLATFORMSECRETS_IMAGE)
 PLATFORMDISKAPI_IMAGE = $(shell cat PLATFORMDISKAPI_IMAGE)
 PLATFORMADMIN_IMAGE = $(shell cat PLATFORMADMIN_IMAGE)
@@ -35,11 +34,11 @@ endif
 
 .PHONY: test_unit
 test_unit:
-	poetry run pytest -vvvs --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-unit.xml tests/unit
+	poetry run pytest -vv --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-unit.xml tests/unit
 
 .PHONY: test_integration
 test_integration:
-	poetry run pytest -vvvs --maxfail=3 --durations=20 --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-integration.xml tests/integration
+	poetry run pytest -vv --retries=3 --retry-delay=3 --maxfail=3 --durations=20 --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-integration.xml tests/integration
 
 .PHONY: docker_build
 docker_build: .python-version dist
@@ -77,12 +76,6 @@ run_api_k8s_container:
 
 docker_pull_test_images:
 	docker pull $(PLATFORMAUTHAPI_IMAGE)
-	docker pull $(PLATFORMCONFIG_IMAGE)
 	docker pull $(PLATFORMSECRETS_IMAGE)
 	docker pull $(PLATFORMDISKAPI_IMAGE)
 	docker pull $(PLATFORMADMIN_IMAGE)
-	docker tag $(PLATFORMAUTHAPI_IMAGE) platformauthapi:latest
-	docker tag $(PLATFORMCONFIG_IMAGE) platformconfig:latest
-	docker tag $(PLATFORMSECRETS_IMAGE) platformsecrets:latest
-	docker tag $(PLATFORMDISKAPI_IMAGE) platformdiskapi:latest
-	docker tag $(PLATFORMADMIN_IMAGE) platformadmin:latest

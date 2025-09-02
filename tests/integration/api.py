@@ -5,15 +5,14 @@ from collections.abc import AsyncIterator, Callable
 from typing import Any, NamedTuple
 
 import aiohttp
-import aiohttp.web
 import pytest
 from aiohttp.client import ClientSession
 from aiohttp.web import HTTPAccepted, HTTPNoContent, HTTPOk
+from neuro_config_client import Cluster
 from yarl import URL
 
 from platform_api import poller_main
 from platform_api.api import create_app
-from platform_api.cluster_config import ClusterConfig
 from platform_api.config import (
     AuthConfig,
     Config,
@@ -68,7 +67,7 @@ async def api(
     config: Config,
     registry_config: RegistryConfig,
     kube_config: KubeConfig,
-    cluster_config_factory: Callable[..., ClusterConfig],
+    cluster_config_factory: Callable[..., Cluster],
 ) -> AsyncIterator[ApiConfig]:
     clusters = [
         cluster_config_factory("test-cluster"),
@@ -108,7 +107,7 @@ async def api_with_oauth(
     config_with_oauth: Config,
     registry_config: RegistryConfig,
     kube_config: KubeConfig,
-    cluster_config: ClusterConfig,
+    cluster_config: Cluster,
 ) -> AsyncIterator[ApiConfig]:
     app = await create_app(config_with_oauth, [cluster_config])
     runner = ApiRunner(app, port=8081)

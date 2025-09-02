@@ -6,9 +6,9 @@ from unittest import mock
 
 import pytest
 from apolo_kube_client.errors import ResourceExists
+from neuro_config_client import OrchestratorConfig
 from yarl import URL
 
-from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import RegistryConfig
 from platform_api.orchestrator.job import JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_request import (
@@ -1673,10 +1673,12 @@ class TestKubeOrchestrator:
             cluster_name="default",
             registry_config=RegistryConfig(username="username", password="password"),
             orchestrator_config=OrchestratorConfig(
-                jobs_domain_name_template="{job_id}.default.org.neu.ro",
-                jobs_internal_domain_name_template="{job_id}.platform-jobs",
+                job_hostname_template="{job_id}.default.org.neu.ro",
+                job_fallback_hostname="default.org.neu.ro",
+                job_schedule_timeout_s=300,
+                job_schedule_scale_up_timeout_s=900,
                 resource_pool_types=[],
-                presets=[],
+                resource_presets=[],
             ),
             kube_config=KubeConfig(endpoint_url="https://kuberrnetes.svc"),
             kube_client=kube_client,

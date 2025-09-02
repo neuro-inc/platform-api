@@ -9,6 +9,14 @@ import pytest
 from multidict import MultiDict
 from neuro_auth_client import Permission
 from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
+from neuro_config_client import (
+    AMDGPUPreset,
+    IntelGPUPreset,
+    NvidiaGPUPreset,
+    ResourcePreset,
+    TPUPreset,
+    TPUResource,
+)
 from trafaret import DataError
 from yarl import URL
 
@@ -52,7 +60,6 @@ from platform_api.orchestrator.job_request import (
 )
 from platform_api.orchestrator.jobs_poller import job_response_to_job_record
 from platform_api.orchestrator.jobs_storage import JobFilter
-from platform_api.resource import Preset, TPUPreset, TPUResource
 
 from .conftest import MockOrchestrator
 
@@ -221,7 +228,16 @@ class TestContainerRequestValidator:
 
     @pytest.mark.parametrize(
         "allowed_tpu_resources",
-        ([], [TPUResource(types=["v2-8"], software_versions=["1.14"])]),
+        (
+            [],
+            [
+                TPUResource(
+                    ipv4_cidr_block="1.2.3.4/24",
+                    types=["v2-8"],
+                    software_versions=["1.14"],
+                )
+            ],
+        ),
     )
     def test_tpu_unavailable(
         self, allowed_tpu_resources: Sequence[TPUResource]
@@ -253,7 +269,11 @@ class TestContainerRequestValidator:
         }
         validator = create_container_request_validator(
             allowed_tpu_resources=[
-                TPUResource(types=["v2-8"], software_versions=["1.14"])
+                TPUResource(
+                    ipv4_cidr_block="1.2.3.4/24",
+                    types=["v2-8"],
+                    software_versions=["1.14"],
+                )
             ],
             cluster_name=cluster,
         )
@@ -484,7 +504,7 @@ class TestJobPresetValidator:
         request = {"preset_name": "preset", "container": {}}
         validator = create_job_preset_validator(
             [
-                Preset(
+                ResourcePreset(
                     name="preset",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
@@ -516,7 +536,7 @@ class TestJobPresetValidator:
         request: dict[str, Any] = {"container": {}}
         validator = create_job_preset_validator(
             [
-                Preset(
+                ResourcePreset(
                     name="preset",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
@@ -539,7 +559,7 @@ class TestJobPresetValidator:
         request = {"preset_name": "preset"}
         validator = create_job_preset_validator(
             [
-                Preset(
+                ResourcePreset(
                     name="preset",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
@@ -560,7 +580,7 @@ class TestJobPresetValidator:
         request = {"preset_name": "unknown", "container": {}}
         validator = create_job_preset_validator(
             [
-                Preset(
+                ResourcePreset(
                     name="preset",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
@@ -578,7 +598,7 @@ class TestJobPresetValidator:
         }
         validator = create_job_preset_validator(
             [
-                Preset(
+                ResourcePreset(
                     name="preset",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
@@ -598,7 +618,7 @@ class TestJobPresetValidator:
         }
         validator = create_job_preset_validator(
             [
-                Preset(
+                ResourcePreset(
                     name="preset",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
@@ -618,15 +638,14 @@ class TestJobPresetValidator:
         }
         validator = create_job_preset_validator(
             [
-                Preset(
+                ResourcePreset(
                     name="preset",
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
                     memory=100 * 10**6,
-                    nvidia_gpu=1,
-                    amd_gpu=1,
-                    intel_gpu=1,
-                    gpu_model="nvidia-tesla-k80",
+                    nvidia_gpu=NvidiaGPUPreset(count=1, model="nvidia-tesla-k80"),
+                    amd_gpu=AMDGPUPreset(count=1),
+                    intel_gpu=IntelGPUPreset(count=1),
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),
                     scheduler_enabled=True,
                     preemptible_node=True,
@@ -1802,6 +1821,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
             org_name="test-tenant-id",
             name="test-job-name",
             project_name="test-project",
+            preset_name="cpu-small",
         ),
     )
     response = convert_job_to_job_response(job)
@@ -1854,6 +1874,7 @@ async def test_job_to_job_response(mock_orchestrator: MockOrchestrator) -> None:
         "priority": "normal",
         "internal_hostname": mock.ANY,
         "internal_hostname_named": mock.ANY,
+        "preset_name": "cpu-small",
     }
 
 
@@ -1919,6 +1940,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
             project_name="test-project",
             owner=owner_name,
             name=job_name,
+            preset_name="cpu-small",
         ),
     )
     response = convert_job_to_job_response(job)
@@ -1931,7 +1953,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "org_project_hash": "48e35fc28a",
         "namespace": "platform--test-org--test-project--a5e4118c50842e7acbd85e28",
         "name": job_name,
-        "http_url": f"http://{job.id}.jobs",
+        "http_url": f"https://{job.id}.jobs",
         "http_url_named": job.http_url_named,
         "status": "pending",
         "statuses": [
@@ -1973,6 +1995,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed(
         "priority": "normal",
         "internal_hostname": mock.ANY,
         "internal_hostname_named": mock.ANY,
+        "preset_name": "cpu-small",
     }
 
 
@@ -1996,6 +2019,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
             project_name="test-project",
             owner=owner_name,
             name=job_name,
+            preset_name="cpu-small",
         ),
     )
     response = convert_job_to_job_response(job)
@@ -2008,7 +2032,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "org_project_hash": "48e35fc28a",
         "namespace": "platform--test-org--test-project--a5e4118c50842e7acbd85e28",
         "name": job_name,
-        "http_url": f"http://{job.id}.jobs",
+        "http_url": f"https://{job.id}.jobs",
         "http_url_named": job.http_url_named,
         # NOTE: field `http_url_named` is cut off when it is invalid
         "status": "pending",
@@ -2051,6 +2075,7 @@ async def test_job_to_job_response_with_job_name_and_http_exposed_too_long_name(
         "priority": "normal",
         "internal_hostname": mock.ANY,
         "internal_hostname_named": mock.ANY,
+        "preset_name": "cpu-small",
     }
 
 

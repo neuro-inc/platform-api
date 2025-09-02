@@ -3,9 +3,9 @@ from decimal import Decimal
 from unittest import mock
 
 import pytest
+from neuro_config_client import OrchestratorConfig, ResourcePoolType
 from yarl import URL
 
-from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import RegistryConfig
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_client import KubeClient, SecretVolume
@@ -14,7 +14,6 @@ from platform_api.orchestrator.kube_orchestrator import (
     KubeConfig,
     KubeOrchestrator,
 )
-from platform_api.resource import ResourcePoolType
 
 
 @pytest.fixture
@@ -27,10 +26,12 @@ class TestSecretVolume:
         self, kube_client: KubeClient, registry_config: RegistryConfig
     ) -> None:
         orchestrator_config = OrchestratorConfig(
-            jobs_domain_name_template="{job_id}.testdomain",
-            jobs_internal_domain_name_template="{job_id}.testinternaldomain",
-            resource_pool_types=[ResourcePoolType()],
-            presets=[],
+            job_hostname_template="{job_id}.testdomain",
+            job_fallback_hostname="default.jobs.testdomain",
+            job_schedule_timeout_s=300,
+            job_schedule_scale_up_timeout_s=900,
+            resource_pool_types=[ResourcePoolType(name="cpu")],
+            resource_presets=[],
         )
         kube_config = KubeConfig(endpoint_url="http://1.2.3.4")
         kube_orchestrator = KubeOrchestrator(
@@ -75,7 +76,7 @@ class TestEnvironConfigFactory:
         }
         config = EnvironConfigFactory(environ=environ).create()
 
-        assert config.config_url == URL("http://platformconfig:8080/api/v1")
+        assert config.config_url == URL("http://platformconfig:8080")
         assert config.admin_url is None
         assert config.admin_public_url is None
 

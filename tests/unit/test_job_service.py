@@ -8,10 +8,12 @@ from decimal import Decimal
 from typing import Any
 from unittest import mock
 
+import neuro_config_client
 import pytest
 from _pytest.logging import LogCaptureFixture
 from neuro_admin_client import AdminClient, Balance, Quota
 from neuro_auth_client import AuthClient, Permission, User as AuthUser
+from neuro_config_client import ResourcePreset
 from neuro_notifications_client import (
     Client as NotificationsClient,
     JobCannotStartNoCredits,
@@ -21,7 +23,6 @@ from yarl import URL
 
 from platform_api.cluster import (
     Cluster,
-    ClusterConfig,
     ClusterConfigRegistry,
     ClusterHolder,
 )
@@ -43,7 +44,6 @@ from platform_api.orchestrator.jobs_service import (
 )
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.orchestrator.poller_service import JobsPollerService, JobsScheduler
-from platform_api.resource import Preset
 
 from .conftest import (
     MockAuthClient,
@@ -216,7 +216,7 @@ class TestJobsService:
 
     async def test_create_job_privileged_not_allowed(
         self,
-        cluster_config: ClusterConfig,
+        cluster_config: neuro_config_client.Cluster,
         cluster_config_registry: ClusterConfigRegistry,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
@@ -249,7 +249,7 @@ class TestJobsService:
 
     async def test_create_job_privileged_allowed(
         self,
-        cluster_config: ClusterConfig,
+        cluster_config: neuro_config_client.Cluster,
         cluster_config_registry: ClusterConfigRegistry,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
@@ -279,7 +279,7 @@ class TestJobsService:
 
     async def test_create_job_priority_not_allowed(
         self,
-        cluster_config: ClusterConfig,
+        cluster_config: neuro_config_client.Cluster,
         cluster_config_registry: ClusterConfigRegistry,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
@@ -310,7 +310,7 @@ class TestJobsService:
 
     async def test_create_job_priority_allowed(
         self,
-        cluster_config: ClusterConfig,
+        cluster_config: neuro_config_client.Cluster,
         cluster_config_registry: ClusterConfigRegistry,
         jobs_service: JobsService,
         mock_job_request: JobRequest,
@@ -522,7 +522,7 @@ class TestJobsService:
         mock_auth_client: MockAuthClient,
         mock_orchestrator: MockOrchestrator,
         cluster_holder: ClusterHolder,
-        cluster_config: ClusterConfig,
+        cluster_config: neuro_config_client.Cluster,
         test_user_with_org: AuthUser,
         test_cluster: str,
         test_org: str,
@@ -1907,7 +1907,7 @@ class TestJobsService:
 class TestJobsServiceCluster:
     @pytest.fixture
     async def cluster_holder(self) -> AsyncIterator[ClusterHolder]:
-        def _cluster_factory(config: ClusterConfig) -> Cluster:
+        def _cluster_factory(config: neuro_config_client.Cluster) -> Cluster:
             orchestrator = MockOrchestrator(config)
             return MockCluster(config, orchestrator)
 
@@ -1984,7 +1984,7 @@ class TestJobsServiceCluster:
         self,
         cluster_holder: ClusterHolder,
         cluster_config_registry: ClusterConfigRegistry,
-        cluster_config: ClusterConfig,
+        cluster_config: neuro_config_client.Cluster,
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
@@ -2049,7 +2049,7 @@ class TestJobsServiceCluster:
         self,
         cluster_holder: ClusterHolder,
         cluster_config_registry: ClusterConfigRegistry,
-        cluster_config: ClusterConfig,
+        cluster_config: neuro_config_client.Cluster,
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
@@ -2113,7 +2113,7 @@ class TestJobsServiceCluster:
         self,
         cluster_holder: ClusterHolder,
         cluster_config_registry: ClusterConfigRegistry,
-        cluster_config: ClusterConfig,
+        cluster_config: neuro_config_client.Cluster,
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
@@ -2175,7 +2175,7 @@ class TestJobsServiceCluster:
     async def test_get_job_fallback(
         self,
         cluster_config_registry: ClusterConfigRegistry,
-        cluster_config: ClusterConfig,
+        cluster_config: neuro_config_client.Cluster,
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
@@ -2226,7 +2226,7 @@ class TestJobsServiceCluster:
         self,
         cluster_holder: ClusterHolder,
         cluster_config_registry: ClusterConfigRegistry,
-        cluster_config: ClusterConfig,
+        cluster_config: neuro_config_client.Cluster,
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
@@ -2284,7 +2284,7 @@ class TestJobsServiceCluster:
         self,
         cluster_holder: ClusterHolder,
         cluster_config_registry: ClusterConfigRegistry,
-        cluster_config: ClusterConfig,
+        cluster_config: neuro_config_client.Cluster,
         mock_jobs_storage: MockJobsStorage,
         mock_job_request: JobRequest,
         jobs_config: JobsConfig,
@@ -2709,14 +2709,16 @@ class TestJobServiceNotification:
 
 class TestScheduledJobsService:
     @pytest.fixture
-    def cluster_config(self, cluster_config: ClusterConfig) -> ClusterConfig:
+    def cluster_config(
+        self, cluster_config: neuro_config_client.Cluster
+    ) -> neuro_config_client.Cluster:
         return replace(
             cluster_config,
             orchestrator=replace(
                 cluster_config.orchestrator,
                 allow_job_priority=True,
-                presets=[
-                    Preset(
+                resource_presets=[
+                    ResourcePreset(
                         name="cpu-small",
                         credits_per_hour=Decimal("10"),
                         cpu=2,
@@ -2741,7 +2743,9 @@ class TestScheduledJobsService:
 
     @pytest.fixture
     async def cluster_holder(
-        self, cluster_config: ClusterConfig, mock_orchestrator: MockOrchestrator
+        self,
+        cluster_config: neuro_config_client.Cluster,
+        mock_orchestrator: MockOrchestrator,
     ) -> AsyncIterator[ClusterHolder]:
         """
         This fixture is a complete copy of the same fixture in conftest.py.
@@ -2750,7 +2754,7 @@ class TestScheduledJobsService:
         `cluster_holder` is redefined here.
         """
 
-        def _cluster_factory(config: ClusterConfig) -> Cluster:
+        def _cluster_factory(config: neuro_config_client.Cluster) -> Cluster:
             return MockCluster(config, mock_orchestrator)
 
         async with ClusterHolder(factory=_cluster_factory) as holder:

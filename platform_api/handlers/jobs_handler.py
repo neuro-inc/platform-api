@@ -18,9 +18,9 @@ from neuro_auth_client import (
     check_permissions,
 )
 from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewRoot
+from neuro_config_client import Cluster, ResourcePreset, TPUResource
 from yarl import URL
 
-from platform_api.cluster_config import ClusterConfig
 from platform_api.config import NO_ORG, STORAGE_URI_SCHEME, Config
 from platform_api.log import log_debug_time
 from platform_api.orchestrator.job import (
@@ -48,7 +48,6 @@ from platform_api.orchestrator.jobs_storage import (
     JobFilter,
     JobStorageTransactionError,
 )
-from platform_api.resource import Preset, TPUResource
 from platform_api.user import authorized_user, untrusted_user
 from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
@@ -174,7 +173,7 @@ def create_job_request_validator(
     )
 
 
-def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
+def create_job_preset_validator(presets: Sequence[ResourcePreset]) -> t.Trafaret:
     def _check_no_resources(payload: dict[str, Any]) -> dict[str, Any]:
         if "container" in payload:
             resources = payload["container"].get("resources")
@@ -215,19 +214,18 @@ def create_job_preset_validator(presets: Sequence[Preset]) -> t.Trafaret:
             "shm": shm,
         }
         if preset.nvidia_gpu:
-            container_resources["nvidia_gpu"] = preset.nvidia_gpu
+            container_resources["nvidia_gpu"] = preset.nvidia_gpu.count
+            if preset.nvidia_gpu.model:
+                container_resources["nvidia_gpu_model"] = preset.nvidia_gpu.model
+                container_resources["gpu_model"] = preset.nvidia_gpu.model
         if preset.amd_gpu:
-            container_resources["amd_gpu"] = preset.amd_gpu
+            container_resources["amd_gpu"] = preset.amd_gpu.count
+            if preset.amd_gpu.model:
+                container_resources["amd_gpu_model"] = preset.amd_gpu.model
         if preset.intel_gpu:
-            container_resources["intel_gpu"] = preset.intel_gpu
-        nvidia_gpu_model = preset.nvidia_gpu_model or preset.gpu_model
-        if nvidia_gpu_model:
-            container_resources["gpu_model"] = nvidia_gpu_model
-            container_resources["nvidia_gpu_model"] = nvidia_gpu_model
-        if preset.amd_gpu_model:
-            container_resources["amd_gpu_model"] = preset.amd_gpu_model
-        if preset.intel_gpu_model:
-            container_resources["intel_gpu_model"] = preset.intel_gpu_model
+            container_resources["intel_gpu"] = preset.intel_gpu.count
+            if preset.intel_gpu.model:
+                container_resources["intel_gpu_model"] = preset.intel_gpu.model
         if preset.tpu:
             container_resources["tpu"] = {
                 "type": preset.tpu.type,
@@ -631,7 +629,7 @@ class JobsHandler:
 
     async def _create_job_request_validator(
         self,
-        cluster_config: ClusterConfig,
+        cluster_config: Cluster,
         allow_flat_structure: bool = False,
         org_name: str | None = None,
     ) -> t.Trafaret:
@@ -649,7 +647,7 @@ class JobsHandler:
         user_cluster_configs: Sequence[UserClusterConfig],
         cluster_name: str,
         org_name: str | None,
-    ) -> ClusterConfig:
+    ) -> Cluster:
         for user_cluster_config in user_cluster_configs:
             if user_cluster_config.config.name == cluster_name:
                 if org_name in user_cluster_config.orgs:
@@ -720,7 +718,7 @@ class JobsHandler:
 
         if "from_preset" in request.query:
             job_preset_validator = create_job_preset_validator(
-                cluster_config.orchestrator.presets
+                cluster_config.orchestrator.resource_presets
             )
             request_payload = job_preset_validator.check(request_payload)
             allow_flat_structure = True
@@ -736,7 +734,7 @@ class JobsHandler:
 
         permissions = infer_permissions_from_container(
             container,
-            cluster_config.ingress.registry_host,
+            cluster_config.registry.host,
             cluster_name,
             org_name,
             project_name=project_name,

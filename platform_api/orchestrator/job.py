@@ -12,13 +12,12 @@ from typing import Any
 
 import iso8601
 from apolo_kube_client.apolo import generate_namespace_name
+from neuro_config_client import OrchestratorConfig, ResourcePreset
+from neuro_config_client.entities import DEFAULT_ENERGY_SCHEDULE_NAME
 from yarl import URL
 
-from platform_api.cluster_config import OrchestratorConfig
 from platform_api.config import NO_ORG
 
-from ..cluster_config import DEFAULT_ENERGY_SCHEDULE_NAME
-from ..resource import Preset
 from .job_request import (
     ContainerResources,
     ContainerVolume,
@@ -635,11 +634,11 @@ class Job:
         return self._record.preset_name
 
     @property
-    def preset(self) -> Preset | None:
+    def preset(self) -> ResourcePreset | None:
         try:
             return next(
                 preset
-                for preset in self._orchestrator_config.presets
+                for preset in self._orchestrator_config.resource_presets
                 if preset.name == self.preset_name
             )
         except StopIteration:
@@ -655,10 +654,13 @@ class Job:
         # then it is a badly configured cluster in general,
         # and it is safe to assume zero cost
         result = max(
-            (preset.credits_per_hour for preset in self._orchestrator_config.presets),
+            (
+                preset.credits_per_hour
+                for preset in self._orchestrator_config.resource_presets
+            ),
             default=Decimal(0),
         )
-        for preset in self._orchestrator_config.presets:
+        for preset in self._orchestrator_config.resource_presets:
             if self.resources.check_fit_into_preset(preset):
                 result = min(result, preset.credits_per_hour)
         return result
@@ -830,7 +832,7 @@ class Job:
 
     @property
     def http_host(self) -> str:
-        return self._orchestrator_config.jobs_domain_name_template.format(
+        return self._orchestrator_config.job_hostname_template.format(
             job_id=self.id,
             namespace=self.namespace,
         )
@@ -844,7 +846,7 @@ class Job:
     def http_host_named(self) -> str | None:
         if not self.is_named:
             return None
-        return self._orchestrator_config.jobs_domain_name_template.format(
+        return self._orchestrator_config.job_hostname_template.format(
             job_id=self.host_segment_named,
             namespace=self.namespace,
         )

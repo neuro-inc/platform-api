@@ -8,9 +8,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from functools import partial
 
+import neuro_config_client
 from aiohttp import ClientResponseError
 from neuro_admin_client import AdminClient
 from neuro_auth_client import AuthClient
+from neuro_config_client import OrchestratorConfig
 
 from platform_api.cluster import (
     Cluster,
@@ -18,7 +20,6 @@ from platform_api.cluster import (
     ClusterNotAvailable,
     ClusterNotFound,
 )
-from platform_api.cluster_config import ClusterConfig, OrchestratorConfig
 from platform_api.config import NO_ORG_NORMALIZED, JobsConfig, JobsSchedulerConfig
 
 from ..utils.asyncio import run_and_log_exceptions
@@ -151,7 +152,7 @@ class JobsScheduler:
 
         return jobs_to_update
 
-    async def _get_cluster_config(self) -> ClusterConfig | None:
+    async def _get_cluster_config(self) -> neuro_config_client.Cluster | None:
         try:
             async with self._cluster_holder.get() as cluster:
                 return cluster.config
@@ -162,7 +163,7 @@ class JobsScheduler:
         self,
         *,
         job: JobRecord,
-        cluster_config: ClusterConfig | None,
+        cluster_config: neuro_config_client.Cluster | None,
         current_time: datetime,
     ) -> bool:
         if (
@@ -301,10 +302,10 @@ class JobsPollerService:
         self._max_deletion_attempts = 10
 
         self._dummy_cluster_orchestrator_config = OrchestratorConfig(
-            jobs_domain_name_template="{job_id}.{namespace}.missing-cluster",
-            jobs_internal_domain_name_template="{job_id}.{namespace}.missing-cluster",
-            resource_pool_types=(),
-            presets=(),
+            job_hostname_template="{job_id}.{namespace}.missing-cluster",
+            job_fallback_hostname="default.jobs.apolo.us",
+            job_schedule_timeout_s=300,
+            job_schedule_scale_up_timeout_s=900,
         )
         self._auth_client = auth_client
 

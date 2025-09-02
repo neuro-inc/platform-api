@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import Self
 
+import neuro_config_client
 from aiorwlock import RWLock
 from apolo_events_client import (
     AbstractEventsClient,
@@ -13,9 +14,8 @@ from apolo_events_client import (
     RecvEvent,
     StreamType,
 )
+from neuro_config_client import ConfigClient
 
-from .cluster_config import ClusterConfig
-from .config_client import ConfigClient
 from .orchestrator.base import Orchestrator
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ class Cluster(ABC):
 
     @property
     @abstractmethod
-    def config(self) -> ClusterConfig:  # pragma: no cover
+    def config(self) -> neuro_config_client.Cluster:  # pragma: no cover
         pass
 
     @property
@@ -61,7 +61,7 @@ class Cluster(ABC):
         pass
 
 
-ClusterFactory = Callable[[ClusterConfig], Cluster]
+ClusterFactory = Callable[[neuro_config_client.Cluster], Cluster]
 
 
 class ClusterUpdater:
@@ -187,10 +187,7 @@ class ClusterHolder:
     async def __aexit__(self, *args: object) -> None:
         await self.clean()
 
-    async def update(
-        self,
-        config: ClusterConfig,
-    ) -> None:
+    async def update(self, config: neuro_config_client.Cluster) -> None:
         async with self._lock.writer:
             if self._cluster:
                 if self._cluster.config == config:
@@ -237,22 +234,22 @@ class ClusterConfigRegistry:
     def __init__(
         self,
     ) -> None:
-        self._records: dict[str, ClusterConfig] = {}
+        self._records: dict[str, neuro_config_client.Cluster] = {}
 
     @property
     def cluster_names(self) -> list[str]:
         return list(self._records)
 
-    def get(self, name: str) -> ClusterConfig:
+    def get(self, name: str) -> neuro_config_client.Cluster:
         try:
             return self._records[name]
         except KeyError:
             raise ClusterNotFound.create(name)
 
-    async def replace(self, config: ClusterConfig) -> None:
+    async def replace(self, config: neuro_config_client.Cluster) -> None:
         self._records[config.name] = config
 
-    def remove(self, name: str) -> ClusterConfig:
+    def remove(self, name: str) -> neuro_config_client.Cluster:
         record = self._records.pop(name, None)
         if not record:
             raise ClusterNotFound.create(name)

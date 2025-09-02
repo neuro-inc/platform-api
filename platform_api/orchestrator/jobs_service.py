@@ -19,6 +19,7 @@ from neuro_admin_client import (
     User as AdminUser,
 )
 from neuro_auth_client import AuthClient, Permission, User as AuthUser
+from neuro_config_client import Cluster, OrchestratorConfig, VolumeConfig
 from neuro_notifications_client import (
     Client as NotificationsClient,
     JobCannotStartNoCredits,
@@ -26,8 +27,7 @@ from neuro_notifications_client import (
 )
 from yarl import URL
 
-from platform_api.cluster import ClusterConfig, ClusterConfigRegistry, ClusterNotFound
-from platform_api.cluster_config import OrchestratorConfig, VolumeConfig
+from platform_api.cluster import ClusterConfigRegistry, ClusterNotFound
 from platform_api.config import JobsConfig
 from platform_api.utils.asyncio import asyncgeneratorcontextmanager
 
@@ -89,7 +89,7 @@ class NoCreditsError(JobsServiceException):
 
 @dataclass(frozen=True)
 class UserClusterConfig:
-    config: ClusterConfig
+    config: Cluster
     # None value means the direct access to cluster without any or:
     orgs: list[str | None]
 
@@ -120,17 +120,17 @@ class JobsService:
         self._max_deletion_attempts = 10
 
         self._dummy_cluster_orchestrator_config = OrchestratorConfig(
-            jobs_domain_name_template="{job_id}.{namespace}.missing-cluster",
-            jobs_internal_domain_name_template="{job_id}.{namespace}.missing-cluster",
-            resource_pool_types=(),
-            presets=(),
+            job_hostname_template="{job_id}.{namespace}.missing-cluster",
+            job_fallback_hostname="default.jobs.apolo.us",
+            job_schedule_timeout_s=300,
+            job_schedule_scale_up_timeout_s=900,
         )
         self._auth_client = auth_client
         self._admin_client = admin_client
         self._api_base_url = api_base_url
 
     def _make_job(
-        self, record: JobRecord, cluster_config: ClusterConfig | None = None
+        self, record: JobRecord, cluster_config: Cluster | None = None
     ) -> Job:
         if cluster_config is not None:
             orchestrator_config = cluster_config.orchestrator
@@ -506,21 +506,22 @@ class JobsService:
 
     async def _get_user_cluster_configs_by_name(
         self, response: GetUserResponse
-    ) -> dict[str, ClusterConfig]:
+    ) -> dict[str, Cluster]:
         cluster_configs = self._get_cluster_configs_by_name(response)
         volumes_by_cluster = await self._get_user_storage_volumes_by_cluster_name(
             response.user.name, list(cluster_configs.values())
         )
         for cluster_name, volumes in volumes_by_cluster.items():
-            cluster_configs[cluster_name] = cluster_configs[
-                cluster_name
-            ].with_storage_volumes(volumes)
+            cluster_config = cluster_configs[cluster_name]
+            cluster_configs[cluster_name] = replace(
+                cluster_config, storage=replace(cluster_config.storage, volumes=volumes)
+            )
         return cluster_configs
 
     def _get_cluster_configs_by_name(
         self, response: GetUserResponse
-    ) -> dict[str, ClusterConfig]:
-        cluster_configs: dict[str, ClusterConfig] = {}
+    ) -> dict[str, Cluster]:
+        cluster_configs: dict[str, Cluster] = {}
         for cluster in response.clusters:
             try:
                 cluster_configs[cluster.cluster_name] = self._cluster_registry.get(
@@ -531,7 +532,7 @@ class JobsService:
         return cluster_configs
 
     async def _get_user_storage_volumes_by_cluster_name(
-        self, user_name: str, cluster_configs: Sequence[ClusterConfig]
+        self, user_name: str, cluster_configs: Sequence[Cluster]
     ) -> dict[str, list[VolumeConfig]]:
         missing_storage_uris = await self._get_user_storage_volume_missing_storage_uris(
             user_name, cluster_configs
@@ -548,7 +549,7 @@ class JobsService:
         return volumes_by_cluster
 
     async def _get_user_storage_volume_missing_storage_uris(
-        self, user_name: str, cluster_configs: Sequence[ClusterConfig]
+        self, user_name: str, cluster_configs: Sequence[Cluster]
     ) -> set[str]:
         permissions = []
         for cluster_config in cluster_configs:
