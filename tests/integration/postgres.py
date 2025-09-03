@@ -58,7 +58,7 @@ async def admin_postgres_dsn(
         await container.delete(force=True)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def postgres_dsn(
     docker: aiodocker.Docker, reuse_docker: bool
 ) -> AsyncIterator[str]:

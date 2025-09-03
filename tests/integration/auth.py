@@ -36,7 +36,7 @@ def auth_server_image_name() -> str:
         return f.read().strip()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def auth_server(
     docker: aiodocker.Docker, reuse_docker: bool, auth_server_image_name: str
 ) -> AsyncIterator[AuthConfig]:
