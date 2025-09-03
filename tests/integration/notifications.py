@@ -27,7 +27,7 @@ class NotificationsServer(NamedTuple):
         self.app["requests"].clear()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def mock_notifications_server() -> AsyncIterator[NotificationsServer]:
     async def _notify(request: aiohttp.web.Request) -> aiohttp.web.Response:
         type = request.match_info["type"]

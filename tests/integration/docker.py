@@ -15,7 +15,7 @@ def pytest_addoption(parser: Any) -> None:
     )
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def reuse_docker(request: Any) -> Any:
     return request.config.getoption(PYTEST_REUSE_DOCKER_OPT)
 

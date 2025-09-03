@@ -23,7 +23,7 @@ from tests.integration.conftest import ApiRunner
 from tests.integration.notifications import NotificationsServer
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def fake_config_app() -> AsyncIterator[URL]:
     app = aiohttp.web.Application()
     clusters: list[Any] = []
@@ -93,13 +93,13 @@ async def config_client(fake_config_app: URL) -> AsyncIterator[ConfigClient]:
         yield client
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def admin_server_image_name() -> str:
     with Path("PLATFORMADMIN_IMAGE").open() as f:
         return f.read().strip()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def _admin_server_setup_db(
     docker: aiodocker.Docker,
     reuse_docker: bool,
@@ -151,7 +151,7 @@ async def _admin_server_setup_db(
         )
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def admin_server(
     docker: aiodocker.Docker,
     reuse_docker: bool,

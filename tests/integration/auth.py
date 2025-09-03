@@ -30,7 +30,7 @@ from platform_api.config import AuthConfig, OAuthConfig
 from tests.conftest import random_str
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def auth_server_image_name() -> str:
     with Path("PLATFORMAUTHAPI_IMAGE").open() as f:
         return f.read().strip()
@@ -85,12 +85,12 @@ def create_token(name: str) -> str:
     return jwt.encode(payload, "secret", algorithm="HS256")
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def token_factory() -> Callable[[str], str]:
     return create_token
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def admin_token(token_factory: Callable[[str], str]) -> str:
     return token_factory("admin")
 
