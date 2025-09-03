@@ -10,7 +10,7 @@ from apolo_events_client.pytest import EventsQueues
 from tests.integration.auth import _User
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio
 async def test_project_deleter(
     events_queues: EventsQueues,
     client: aiohttp.ClientSession,
