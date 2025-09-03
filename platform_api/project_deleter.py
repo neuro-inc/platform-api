@@ -2,7 +2,7 @@ import logging
 from typing import Self
 
 from apolo_events_client import (
-    EventsClient,
+    AbstractEventsClient,
     EventType,
     RecvEvent,
     StreamType,
@@ -20,7 +20,7 @@ class ProjectDeleter:
 
     def __init__(
         self,
-        events_client: EventsClient,
+        events_client: AbstractEventsClient,
         jobs_service: JobsService,
     ) -> None:
         self._events_client = events_client
