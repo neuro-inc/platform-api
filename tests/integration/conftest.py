@@ -69,7 +69,7 @@ from platform_api.orchestrator.kube_config import KubeClientAuthType
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def kube_config_payload() -> dict[str, Any]:
     process = await asyncio.create_subprocess_exec(
         "kubectl",
@@ -85,7 +85,7 @@ async def kube_config_payload() -> dict[str, Any]:
     return json.loads(payload_str)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def kube_config_cluster_payload(kube_config_payload: dict[str, Any]) -> Any:
     cluster_name = "minikube"
     clusters = {
@@ -95,7 +95,7 @@ async def kube_config_cluster_payload(kube_config_payload: dict[str, Any]) -> An
     return clusters[cluster_name]
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def cert_authority_data_pem(
     kube_config_cluster_payload: dict[str, Any],
 ) -> str | None:
@@ -110,7 +110,7 @@ def cert_authority_data_pem(
     return None
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def kube_config_user_payload(kube_config_payload: dict[str, Any]) -> Any:
     import tempfile
 
@@ -298,7 +298,7 @@ async def orchestrator_config(
     return orchestrator_config_factory()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def kube_config_factory(
     kube_config_cluster_payload: dict[str, Any],
     kube_config_user_payload: dict[str, Any],
@@ -325,7 +325,7 @@ def kube_config_factory(
     yield _f
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def kube_config(kube_config_factory: Callable[..., KubeConfig]) -> KubeConfig:
     return kube_config_factory()
 
