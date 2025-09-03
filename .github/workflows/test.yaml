@@ -35,6 +35,7 @@ jobs:
   unit:
     name: Unit tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
     - name: Checkout commit
       uses: actions/checkout@v5
