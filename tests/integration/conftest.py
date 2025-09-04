@@ -70,20 +70,37 @@ from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestr
 
 
 @pytest.fixture(scope="session")
-def kube_config_payload() -> dict[str, Any]:
-    import subprocess
+def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
+    asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    loop.set_debug(True)
 
-    result = subprocess.run(
-        ["kubectl", "config", "view", "--raw", "-o", "json"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return json.loads(result.stdout.rstrip())
+    watcher = asyncio.SafeChildWatcher()
+    watcher.attach_loop(loop)
+    asyncio.get_event_loop_policy().set_child_watcher(watcher)
+
+    yield loop
+    loop.close()
 
 
 @pytest.fixture(scope="session")
-def kube_config_cluster_payload(kube_config_payload: dict[str, Any]) -> Any:
+async def kube_config_payload() -> dict[str, Any]:
+    process = await asyncio.create_subprocess_exec(
+        "kubectl",
+        "config",
+        "view",
+        "--raw",
+        "-o",
+        "json",
+        stdout=asyncio.subprocess.PIPE,
+    )
+    output, _ = await process.communicate()
+    payload_str = output.decode().rstrip()
+    return json.loads(payload_str)
+
+
+@pytest.fixture(scope="session")
+async def kube_config_cluster_payload(kube_config_payload: dict[str, Any]) -> Any:
     cluster_name = "minikube"
     clusters = {
         cluster["name"]: cluster["cluster"]
@@ -108,7 +125,7 @@ def cert_authority_data_pem(
 
 
 @pytest.fixture(scope="session")
-def kube_config_user_payload(kube_config_payload: dict[str, Any]) -> Any:
+async def kube_config_user_payload(kube_config_payload: dict[str, Any]) -> Any:
     import tempfile
 
     user_name = "minikube"
@@ -289,7 +306,7 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
 
 
 @pytest.fixture(scope="session")
-def orchestrator_config(
+async def orchestrator_config(
     orchestrator_config_factory: Callable[..., OrchestratorConfig],
 ) -> OrchestratorConfig:
     return orchestrator_config_factory()
@@ -323,7 +340,7 @@ def kube_config_factory(
 
 
 @pytest.fixture(scope="session")
-def kube_config(kube_config_factory: Callable[..., KubeConfig]) -> KubeConfig:
+async def kube_config(kube_config_factory: Callable[..., KubeConfig]) -> KubeConfig:
     return kube_config_factory()
 
 
@@ -378,7 +395,7 @@ def kube_job_nodes_factory(
 
 
 @pytest.fixture(scope="session")
-def kube_ingress_ip(kube_config_cluster_payload: dict[str, Any]) -> str:
+async def kube_ingress_ip(kube_config_cluster_payload: dict[str, Any]) -> str:
     cluster = kube_config_cluster_payload
     return urlsplit(cluster["server"]).hostname
 
@@ -636,7 +653,7 @@ class MyKubeClient(KubeClient):
 
 
 @pytest.fixture(scope="session")
-def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeClient]:
+async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeClient]:
     def _f(custom_kube_config: KubeConfig | None = None) -> MyKubeClient:
         config = custom_kube_config or kube_config
         return MyKubeClient(
