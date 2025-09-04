@@ -15,12 +15,12 @@ def pytest_addoption(parser: Any) -> None:
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def reuse_docker(request: Any) -> Any:
     return request.config.getoption(PYTEST_REUSE_DOCKER_OPT)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def docker() -> AsyncIterator[aiodocker.Docker]:
     client = aiodocker.Docker(api_version="v1.34")
     yield client

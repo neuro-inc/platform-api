@@ -13,7 +13,7 @@ from platform_api.config_factory import EnvironConfigFactory
 from platform_api.postgres import MigrationRunner, make_async_engine
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def admin_postgres_dsn(
     docker: aiodocker.Docker, reuse_docker: bool
 ) -> AsyncIterator[str]:
@@ -58,7 +58,7 @@ async def admin_postgres_dsn(
         await container.delete(force=True)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def postgres_dsn(
     docker: aiodocker.Docker, reuse_docker: bool
 ) -> AsyncIterator[str]:

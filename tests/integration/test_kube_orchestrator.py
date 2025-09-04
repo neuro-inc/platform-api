@@ -3786,11 +3786,11 @@ class TestJobsPreemption:
 class TestExternalJobs:
     ApiFactory = Callable[..., AbstractAsyncContextManager[ApiAddress]]
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     def external_job_runner_port(self, unused_tcp_port_factory: Any) -> int:
         return unused_tcp_port_factory()
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     async def external_job_runner_factory(
         self, external_job_runner_port: int
     ) -> ApiFactory:
@@ -3821,7 +3821,7 @@ class TestExternalJobs:
 
         return _create
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     async def orchestrator_config(
         self, orchestrator_config_factory: Callable[..., OrchestratorConfig]
     ) -> OrchestratorConfig:
@@ -3838,7 +3838,7 @@ class TestExternalJobs:
             ]
         )
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     async def kube_config(self, kube_config: KubeConfig) -> KubeConfig:
         return replace(
             kube_config,

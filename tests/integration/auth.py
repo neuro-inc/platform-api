@@ -30,13 +30,13 @@ from platform_api.config import AuthConfig, OAuthConfig
 from tests.conftest import random_str
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def auth_server_image_name() -> str:
     with Path("PLATFORMAUTHAPI_IMAGE").open() as f:
         return f.read().strip()
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def auth_server(
     docker: aiodocker.Docker, reuse_docker: bool, auth_server_image_name: str
 ) -> AsyncIterator[AuthConfig]:
@@ -85,12 +85,12 @@ def create_token(name: str) -> str:
     return jwt.encode(payload, "secret", algorithm="HS256")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def token_factory() -> Callable[[str], str]:
     return create_token
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def admin_token(token_factory: Callable[[str], str]) -> str:
     return token_factory("admin")
 

@@ -19,13 +19,13 @@ from platform_api.orchestrator.kube_config import KubeConfig
 from tests.integration.auth import _User
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def disk_api_server_image_name() -> str:
     with Path("PLATFORMDISKAPI_IMAGE").open() as f:
         return f.read().strip()
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def docker_host(docker: aiodocker.Docker) -> str:
     if sys.platform.startswith("linux"):
         bridge = await docker.networks.get("bridge")
@@ -34,7 +34,7 @@ async def docker_host(docker: aiodocker.Docker) -> str:
     return "host.docker.internal"
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def kube_proxy_url(docker_host: str) -> AsyncIterator[str]:
     cmd = ["kubectl", "proxy", "-p", "8086", "--address=0.0.0.0", "--accept-hosts=.*"]
     proc = await asyncio.create_subprocess_exec(

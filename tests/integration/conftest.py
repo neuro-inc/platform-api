@@ -69,24 +69,21 @@ from platform_api.orchestrator.kube_config import KubeClientAuthType
 from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
 
 
-@pytest.fixture
-async def kube_config_payload() -> dict[str, Any]:
-    process = await asyncio.create_subprocess_exec(
-        "kubectl",
-        "config",
-        "view",
-        "--raw",
-        "-o",
-        "json",
-        stdout=asyncio.subprocess.PIPE,
+@pytest.fixture(scope="session")
+def kube_config_payload() -> dict[str, Any]:
+    import subprocess
+
+    result = subprocess.run(
+        ["kubectl", "config", "view", "--raw", "-o", "json"],
+        capture_output=True,
+        text=True,
+        check=True,
     )
-    output, _ = await process.communicate()
-    payload_str = output.decode().rstrip()
-    return json.loads(payload_str)
+    return json.loads(result.stdout.rstrip())
 
 
-@pytest.fixture
-async def kube_config_cluster_payload(kube_config_payload: dict[str, Any]) -> Any:
+@pytest.fixture(scope="session")
+def kube_config_cluster_payload(kube_config_payload: dict[str, Any]) -> Any:
     cluster_name = "minikube"
     clusters = {
         cluster["name"]: cluster["cluster"]
@@ -95,7 +92,7 @@ async def kube_config_cluster_payload(kube_config_payload: dict[str, Any]) -> An
     return clusters[cluster_name]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def cert_authority_data_pem(
     kube_config_cluster_payload: dict[str, Any],
 ) -> str | None:
@@ -110,8 +107,8 @@ def cert_authority_data_pem(
     return None
 
 
-@pytest.fixture
-async def kube_config_user_payload(kube_config_payload: dict[str, Any]) -> Any:
+@pytest.fixture(scope="session")
+def kube_config_user_payload(kube_config_payload: dict[str, Any]) -> Any:
     import tempfile
 
     user_name = "minikube"
@@ -130,12 +127,12 @@ async def kube_config_user_payload(kube_config_payload: dict[str, Any]) -> Any:
     return user
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def registry_config(token_factory: Callable[[str], str]) -> RegistryConfig:
     return RegistryConfig(username="compute", password=token_factory("compute"))
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]:
     def _f(**kwargs: Any) -> OrchestratorConfig:
         defaults = {
@@ -291,14 +288,14 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
     yield _f
 
 
-@pytest.fixture
-async def orchestrator_config(
+@pytest.fixture(scope="session")
+def orchestrator_config(
     orchestrator_config_factory: Callable[..., OrchestratorConfig],
 ) -> OrchestratorConfig:
     return orchestrator_config_factory()
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def kube_config_factory(
     kube_config_cluster_payload: dict[str, Any],
     kube_config_user_payload: dict[str, Any],
@@ -325,8 +322,8 @@ def kube_config_factory(
     yield _f
 
 
-@pytest.fixture
-async def kube_config(kube_config_factory: Callable[..., KubeConfig]) -> KubeConfig:
+@pytest.fixture(scope="session")
+def kube_config(kube_config_factory: Callable[..., KubeConfig]) -> KubeConfig:
     return kube_config_factory()
 
 
@@ -380,7 +377,7 @@ def kube_job_nodes_factory(
     return _create
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def kube_ingress_ip(kube_config_cluster_payload: dict[str, Any]) -> str:
     cluster = kube_config_cluster_payload
     return urlsplit(cluster["server"]).hostname
@@ -638,7 +635,7 @@ class MyKubeClient(KubeClient):
         )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeClient]:
     def _f(custom_kube_config: KubeConfig | None = None) -> MyKubeClient:
         config = custom_kube_config or kube_config
@@ -658,7 +655,7 @@ def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeClient]:
     return _f
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def kube_client(
     kube_client_factory: Callable[..., MyKubeClient],
 ) -> AsyncIterator[KubeClient]:
