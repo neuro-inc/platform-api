@@ -85,23 +85,26 @@ async def test_project_deleter(
     assert jobs_to_keep[0]["id"] == job_to_keep["id"]
 
     # Send project-remove event
-    await events_queues.outcome.put(
-        RecvEvents(
-            subscr_id=uuid4(),
-            events=[
-                RecvEvent(
-                    tag=Tag("delete-project-123"),
-                    timestamp=datetime.now(tz=UTC),
-                    sender="platform-admin",
-                    stream=StreamType("platform-admin"),
-                    event_type=EventType("project-remove"),
-                    org=test_org,
-                    cluster=cluster_name,
-                    project=project_to_delete,
-                    user="admin",
-                ),
-            ],
-        )
+    await asyncio.wait_for(
+        events_queues.outcome.put(
+            RecvEvents(
+                subscr_id=uuid4(),
+                events=[
+                    RecvEvent(
+                        tag=Tag("delete-project-123"),
+                        timestamp=datetime.now(tz=UTC),
+                        sender="platform-admin",
+                        stream=StreamType("platform-admin"),
+                        event_type=EventType("project-remove"),
+                        org=test_org,
+                        cluster=cluster_name,
+                        project=project_to_delete,
+                        user="admin",
+                    ),
+                ],
+            )
+        ),
+        timeout=5.0,
     )
 
     # Wait for event acknowledgment
