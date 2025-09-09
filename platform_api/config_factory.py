@@ -67,7 +67,7 @@ class EnvironConfigFactory:
     def create_poller(self) -> PollerConfig:
         auth = self.create_auth()
         jobs = self.create_jobs(orphaned_job_owner=auth.service_name)
-        config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"])
+        config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"]).with_path("")
         admin_url = self._get_url("NP_PLATFORM_ADMIN_URI")
         cluster_name = self._environ["NP_CLUSTER_NAME"]
         return PollerConfig(

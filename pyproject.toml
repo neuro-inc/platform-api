@@ -20,7 +20,7 @@ aiohttp = {version = "^3.12.15", extras = ["speedups"]}
 iso8601 = ">=2.1.0"
 trafaret = "2.1.1"
 neuro-auth-client = "25.8.2"
-cryptography = "45.0.6"
+cryptography = "45.0.7"
 aiorwlock = "1.5.0"
 neuro-notifications-client = "25.3.0"
 neuro-logging = "25.6.1"
@@ -58,7 +58,7 @@ pytest-cov="6.2.1"
 pytest-timeout="2.4.0"
 pytest-aiohttp="1.1.0"
 requests="2.32.5"
-ruff = "0.12.11"
+ruff = "0.12.12"
 pytest-retry = "^1.7.0"
 apolo-events-client = {extras = ["pytest"], version = "25.8.0"}
 
