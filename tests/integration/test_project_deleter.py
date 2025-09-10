@@ -34,14 +34,19 @@ async def test_project_deleter(
         ],
         cluster_user_role=ClusterUserRoleType.MANAGER,
         org_user_role=OrgUserRoleType.MANAGER,
+        do_create_project=False,
     )
 
     # Create admin client to create projects
     admin_client = await admin_client_factory(regular_user.token)
 
     # Create the projects in the organization
-    await admin_client.create_project(project_to_delete, cluster_name, test_org)
-    await admin_client.create_project(project_to_keep, cluster_name, test_org)
+    await admin_client.create_project(
+        project_to_delete, regular_user.cluster_name, test_org
+    )
+    await admin_client.create_project(
+        project_to_keep, regular_user.cluster_name, test_org
+    )
 
     jobs_url = f"{api_url}/jobs"
     headers = regular_user.headers
