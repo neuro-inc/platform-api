@@ -9,6 +9,7 @@ from apolo_events_client import Ack, EventType, RecvEvent, RecvEvents, StreamTyp
 from apolo_events_client.pytest import EventsQueues
 from neuro_admin_client import ClusterUserRoleType, OrgUserRoleType
 
+from tests.conftest import random_str
 from tests.integration.admin import AdminClient
 from tests.integration.auth import Balance, Quota, UserFactory
 
@@ -21,16 +22,16 @@ async def test_project_deleter(
     regular_user_factory: UserFactory,
     admin_client_factory: Callable[[str], Awaitable[AdminClient]],
     cluster_name: str,
+    test_org_name: str,
 ) -> None:
     # Create test jobs in different projects
-    test_org = "test-org"
-    project_to_delete = "project-to-delete"
-    project_to_keep = "project-to-keep"
+    project_to_delete = random_str()
+    project_to_keep = random_str()
 
     # Create user with organization membership
     regular_user = await regular_user_factory(
         clusters=[
-            (cluster_name, test_org, Balance(), Quota()),
+            (cluster_name, test_org_name, Balance(), Quota()),
         ],
         cluster_user_role=ClusterUserRoleType.MANAGER,
         org_user_role=OrgUserRoleType.MANAGER,
@@ -42,10 +43,10 @@ async def test_project_deleter(
 
     # Create the projects in the organization
     await admin_client.create_project(
-        project_to_delete, regular_user.cluster_name, test_org
+        project_to_delete, regular_user.cluster_name, test_org_name
     )
     await admin_client.create_project(
-        project_to_keep, regular_user.cluster_name, test_org
+        project_to_keep, regular_user.cluster_name, test_org_name
     )
 
     jobs_url = f"{api_url}/jobs"
@@ -59,7 +60,7 @@ async def test_project_deleter(
             "memory": "1G",
             "shm": False,
         },
-        "org_name": test_org,
+        "org_name": test_org_name,
         "project_name": project_to_delete,
     }
 
@@ -77,7 +78,7 @@ async def test_project_deleter(
             "memory": "1G",
             "shm": False,
         },
-        "org_name": test_org,
+        "org_name": test_org_name,
         "project_name": project_to_keep,
     }
 
@@ -89,7 +90,7 @@ async def test_project_deleter(
     async with client.get(
         jobs_url,
         headers={**headers, "Accept": "application/x-ndjson"},
-        params={"project_name": project_to_delete, "org_name": test_org},
+        params={"project_name": project_to_delete, "org_name": test_org_name},
     ) as resp:
         assert resp.status == 200
         content = await resp.text()
@@ -98,7 +99,7 @@ async def test_project_deleter(
     async with client.get(
         jobs_url,
         headers={**headers, "Accept": "application/x-ndjson"},
-        params={"project_name": project_to_keep, "org_name": test_org},
+        params={"project_name": project_to_keep, "org_name": test_org_name},
     ) as resp:
         assert resp.status == 200
         content = await resp.text()
@@ -121,7 +122,7 @@ async def test_project_deleter(
                         sender="platform-admin",
                         stream=StreamType("platform-admin"),
                         event_type=EventType("project-remove"),
-                        org=test_org,
+                        org=test_org_name,
                         cluster=cluster_name,
                         project=project_to_delete,
                         user="admin",
@@ -142,7 +143,7 @@ async def test_project_deleter(
     async with client.get(
         jobs_url,
         headers={**headers, "Accept": "application/x-ndjson"},
-        params={"project_name": project_to_delete, "org_name": test_org},
+        params={"project_name": project_to_delete, "org_name": test_org_name},
     ) as resp:
         assert resp.status == 200
         content = await resp.text()
@@ -157,7 +158,7 @@ async def test_project_deleter(
     async with client.get(
         jobs_url,
         headers={**headers, "Accept": "application/x-ndjson"},
-        params={"project_name": project_to_keep, "org_name": test_org},
+        params={"project_name": project_to_keep, "org_name": test_org_name},
     ) as resp:
         assert resp.status == 200
         content = await resp.text()
