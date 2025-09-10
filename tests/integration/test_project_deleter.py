@@ -54,11 +54,10 @@ async def test_project_deleter(
 
     # Create a job in the project that will be deleted
     job_to_delete_payload = {
-        "image": "ubuntu:20.04",
-        "command": ["sleep", "3600"],
-        "resources": {
-            "memory": "1G",
-            "shm": False,
+        "container": {
+            "image": "ubuntu:20.04",
+            "command": ["sleep", "3600"],
+            "resources": {"cpu": 0.1, "memory_mb": 1024},
         },
         "org_name": test_org_name,
         "project_name": project_to_delete,
@@ -72,11 +71,10 @@ async def test_project_deleter(
 
     # Create a job in the project that should be kept
     job_to_keep_payload = {
-        "image": "ubuntu:20.04",
-        "command": ["sleep", "3600"],
-        "resources": {
-            "memory": "1G",
-            "shm": False,
+        "container": {
+            "image": "ubuntu:20.04",
+            "command": ["sleep", "3600"],
+            "resources": {"cpu": 0.1, "memory_mb": 1024},
         },
         "org_name": test_org_name,
         "project_name": project_to_keep,
