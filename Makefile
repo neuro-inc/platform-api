@@ -38,7 +38,7 @@ test_unit:
 
 .PHONY: test_integration
 test_integration:
-	poetry run pytest -vv --retries=3 --retry-delay=3 --maxfail=3 --durations=20 --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-integration.xml tests/integration/test_project_deleter.py
+	poetry run pytest -vv --retries=3 --retry-delay=3 --maxfail=3 --durations=20 --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-integration.xml tests/integration/
 
 .PHONY: docker_build
 docker_build: .python-version dist
