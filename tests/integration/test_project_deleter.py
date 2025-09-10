@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -6,8 +7,10 @@ import aiohttp
 import pytest
 from apolo_events_client import Ack, EventType, RecvEvent, RecvEvents, StreamType, Tag
 from apolo_events_client.pytest import EventsQueues
+from neuro_admin_client import ClusterUserRoleType, OrgUserRoleType
 
-from tests.integration.auth import _User
+from tests.integration.admin import AdminClient
+from tests.integration.auth import Balance, Quota, UserFactory
 
 
 @pytest.mark.asyncio
@@ -15,13 +18,30 @@ async def test_project_deleter(
     events_queues: EventsQueues,
     client: aiohttp.ClientSession,
     api_url: str,
-    regular_user: _User,
+    regular_user_factory: UserFactory,
+    admin_client_factory: Callable[[str], Awaitable[AdminClient]],
     cluster_name: str,
 ) -> None:
     # Create test jobs in different projects
     test_org = "test-org"
     project_to_delete = "project-to-delete"
     project_to_keep = "project-to-keep"
+
+    # Create user with organization membership
+    regular_user = await regular_user_factory(
+        clusters=[
+            (cluster_name, test_org, Balance(), Quota()),
+        ],
+        cluster_user_role=ClusterUserRoleType.MANAGER,
+        org_user_role=OrgUserRoleType.MANAGER,
+    )
+
+    # Create admin client to create projects
+    admin_client = await admin_client_factory(regular_user.token)
+
+    # Create the projects in the organization
+    await admin_client.create_project(project_to_delete, cluster_name, test_org)
+    await admin_client.create_project(project_to_keep, cluster_name, test_org)
 
     jobs_url = f"{api_url}/jobs"
     headers = regular_user.headers
