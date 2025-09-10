@@ -1,4 +1,5 @@
 import asyncio
+import json
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -92,7 +93,9 @@ async def test_project_deleter(
     ) as resp:
         assert resp.status == 200
         content = await resp.text()
-        jobs_to_delete = [eval(line) for line in content.strip().split("\n") if line]
+        jobs_to_delete = [
+            json.loads(line) for line in content.strip().split("\n") if line
+        ]
 
     async with client.get(
         jobs_url,
@@ -101,7 +104,9 @@ async def test_project_deleter(
     ) as resp:
         assert resp.status == 200
         content = await resp.text()
-        jobs_to_keep = [eval(line) for line in content.strip().split("\n") if line]
+        jobs_to_keep = [
+            json.loads(line) for line in content.strip().split("\n") if line
+        ]
 
     assert len(jobs_to_delete) == 1
     assert jobs_to_delete[0]["id"] == job_to_delete["id"]
@@ -146,7 +151,7 @@ async def test_project_deleter(
         assert resp.status == 200
         content = await resp.text()
         jobs_to_delete_after = [
-            eval(line) for line in content.strip().split("\n") if line
+            json.loads(line) for line in content.strip().split("\n") if line
         ]
 
     assert len(jobs_to_delete_after) == 1
@@ -161,7 +166,7 @@ async def test_project_deleter(
         assert resp.status == 200
         content = await resp.text()
         jobs_to_keep_after = [
-            eval(line) for line in content.strip().split("\n") if line
+            json.loads(line) for line in content.strip().split("\n") if line
         ]
 
     assert len(jobs_to_keep_after) == 1
