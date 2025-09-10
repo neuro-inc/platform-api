@@ -16,6 +16,7 @@ import aiohttp
 import aiohttp.web
 import neuro_config_client
 import pytest
+from apolo_events_client import EventsClientConfig
 from apolo_kube_client.errors import ResourceExists
 from neuro_config_client import (
     AMDGPU,
@@ -883,6 +884,7 @@ def config_factory(
     notifications_config: NotificationsConfig,
     admin_url: URL,
     token_factory: Callable[[str], str],
+    events_config: EventsClientConfig,
 ) -> Callable[..., Config]:
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
@@ -902,6 +904,7 @@ def config_factory(
             jobs=jobs_config,
             job_policy_enforcer=job_policy_enforcer,
             notifications=notifications_config,
+            events=events_config,
             config_url=config_url,
             admin_url=admin_url,
             admin_public_url=admin_url,

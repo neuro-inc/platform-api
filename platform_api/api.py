@@ -46,6 +46,7 @@ from .orchestrator.jobs_service import (
 from .orchestrator.jobs_storage import JobsStorage, PostgresJobsStorage
 from .orchestrator.jobs_storage.base import JobStorageTransactionError
 from .postgres import make_async_engine
+from .project_deleter import ProjectDeleter
 from .user import authorized_user
 
 logger = logging.getLogger(__name__)
@@ -466,6 +467,13 @@ async def create_app(
                 cluster_registry=cluster_config_registry,
             )
             await exit_stack.enter_async_context(cluster_updater)
+
+            logger.info("Initializing ProjectDeleter")  # pragma: no cover
+            project_deleter = ProjectDeleter(  # pragma: no cover
+                events_client=events_client,
+                jobs_service=jobs_service,
+            )
+            await exit_stack.enter_async_context(project_deleter)  # pragma: no cover
 
             app["config_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
