@@ -56,7 +56,7 @@ async def test_project_deleter(
     job_to_delete_payload = {
         "container": {
             "image": "ubuntu:20.04",
-            "command": ["sleep", "3600"],
+            "command": "sleep 3600",
             "resources": {"cpu": 0.1, "memory_mb": 1024},
         },
         "org_name": test_org_name,
@@ -73,7 +73,7 @@ async def test_project_deleter(
     job_to_keep_payload = {
         "container": {
             "image": "ubuntu:20.04",
-            "command": ["sleep", "3600"],
+            "command": "sleep 3600",
             "resources": {"cpu": 0.1, "memory_mb": 1024},
         },
         "org_name": test_org_name,
