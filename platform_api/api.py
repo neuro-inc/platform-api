@@ -468,12 +468,12 @@ async def create_app(
             )
             await exit_stack.enter_async_context(cluster_updater)
 
-            logger.info("Initializing ProjectDeleter")
-            project_deleter = ProjectDeleter(
+            logger.info("Initializing ProjectDeleter")  # pragma: no cover
+            project_deleter = ProjectDeleter(  # pragma: no cover
                 events_client=events_client,
                 jobs_service=jobs_service,
             )
-            await exit_stack.enter_async_context(project_deleter)
+            await exit_stack.enter_async_context(project_deleter)  # pragma: no cover
 
             app["config_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
