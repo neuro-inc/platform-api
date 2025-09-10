@@ -26,13 +26,15 @@ class ProjectDeleter:
         self._events_client = events_client
         self._jobs_service = jobs_service
 
-    async def __aenter__(self) -> Self:
+    async def __aenter__(self) -> Self:  # pragma: no cover
         await self._events_client.subscribe_group(
             self.ADMIN_STREAM, self._on_admin_event, auto_ack=True
         )
         return self
 
-    async def __aexit__(self, exc_typ: object, exc_val: object, exc_tb: object) -> None:
+    async def __aexit__(
+        self, exc_typ: object, exc_val: object, exc_tb: object
+    ) -> None:  # pragma: no cover
         pass
 
     async def _on_admin_event(self, ev: RecvEvent) -> None:
