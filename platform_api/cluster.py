@@ -99,7 +99,6 @@ class ClusterUpdater:
                     )
                 )
             ],
-            auto_ack=True,
         )
         logger.info("Subscribed")
         return self
@@ -152,7 +151,6 @@ class SingleClusterUpdater:
                     clusters=frozenset([self._cluster_name]),
                 )
             ],
-            auto_ack=True,
         )
         logger.info("Subscribed")
         return self
