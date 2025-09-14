@@ -34,7 +34,7 @@ neuro-admin-client = "25.5.0"
 yarl = "1.18.3"
 python-jose = ">=3.4.0"
 apolo-kube-client = "25.7.4"
-apolo-events-client = "^25.7.7"
+apolo-events-client = "^25.8.0"
 neuro-config-client = "25.9.1"
 
 [tool.poetry.scripts]
