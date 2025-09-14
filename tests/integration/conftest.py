@@ -24,7 +24,6 @@ from neuro_config_client import (
     AppsConfig,
     BucketsConfig,
     Cluster,
-    ClusterStatus,
     DisksConfig,
     DNSConfig,
     EnergyConfig,
@@ -920,7 +919,6 @@ def cluster_config_factory(
         return Cluster(
             name=cluster_name,
             created_at=datetime.now(UTC),
-            status=ClusterStatus.DEPLOYED,
             location="eu-west-4",
             logo_url=URL("https://logo.url"),
             orchestrator=orchestrator_config,
