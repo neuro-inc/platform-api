@@ -30,7 +30,6 @@ from neuro_config_client import (
     ACMEEnvironment,
     AppsConfig,
     BucketsConfig,
-    ClusterStatus,
     DisksConfig,
     DNSConfig,
     EnergyConfig,
@@ -492,7 +491,6 @@ def cluster_config() -> neuro_config_client.Cluster:
     return neuro_config_client.Cluster(
         name="test-cluster",
         created_at=datetime.now(UTC),
-        status=ClusterStatus.DEPLOYED,
         orchestrator=orchestrator_config,
         energy=EnergyConfig(
             schedules=[
