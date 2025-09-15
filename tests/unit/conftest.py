@@ -1,6 +1,5 @@
-import asyncio
 from collections import defaultdict
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from datetime import UTC, datetime, time, timedelta, timezone
 from decimal import Decimal
 from functools import partial
@@ -638,13 +637,6 @@ def jobs_poller_service(
         auth_client=mock_auth_client,
         api=mock_poller_api,
     )
-
-
-@pytest.fixture(scope="session")
-def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
-    loop = asyncio.get_event_loop()
-    yield loop
-    loop.close()
 
 
 UserFactory = Callable[

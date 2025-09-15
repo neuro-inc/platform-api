@@ -411,6 +411,16 @@ def job_request_factory() -> Callable[[], dict[str, Any]]:
 
 
 @pytest.fixture
+def api_url(api: ApiConfig) -> str:
+    return api.endpoint
+
+
+@pytest.fixture
+def cluster_name() -> str:
+    return "test-cluster"
+
+
+@pytest.fixture
 async def job_submit(
     job_request_factory: Callable[[], dict[str, Any]],
 ) -> dict[str, Any]:
