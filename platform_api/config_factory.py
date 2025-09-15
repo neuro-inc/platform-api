@@ -2,10 +2,9 @@ import os
 import pathlib
 from decimal import Decimal
 
+from alembic.config import Config as AlembicConfig
 from apolo_events_client import EventsClientConfig
 from yarl import URL
-
-from alembic.config import Config as AlembicConfig
 
 from .config import (
     AuthConfig,
