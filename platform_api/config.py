@@ -3,10 +3,9 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
 
+from alembic.config import Config as AlembicConfig
 from apolo_events_client import EventsClientConfig
 from yarl import URL
-
-from alembic.config import Config as AlembicConfig
 
 from .orchestrator.kube_config import KubeConfig
 
