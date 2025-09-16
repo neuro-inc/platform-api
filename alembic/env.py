@@ -1,13 +1,13 @@
 import sys
 from collections.abc import Iterable
 
+from alembic.operations import MigrationScript
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from neuro_logging import init_logging
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-from alembic.operations import MigrationScript
-from alembic.runtime.migration import MigrationContext
-from alembic.script import ScriptDirectory
 from platform_api.config_factory import EnvironConfigFactory, to_sync_postgres_dsn
 from platform_api.orchestrator.jobs_storage.postgres import JobTables
 
