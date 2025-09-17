@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from unittest import mock
 
 import neuro_config_client
@@ -2568,7 +2568,7 @@ class TestJobServiceNotification:
             JobTransition(
                 job_id=job.id,
                 status=JobStatus.PENDING,
-                transition_time=mock.ANY,
+                transition_time=cast(datetime, mock.ANY),
                 reason=JobStatusReason.ERR_IMAGE_PULL,
                 description=None,
                 exit_code=None,
@@ -2585,7 +2585,7 @@ class TestJobServiceNotification:
                 description="Image 'testimage' can not be pulled",
                 exit_code=None,
                 prev_status=JobStatus.PENDING,
-                prev_transition_time=mock.ANY,
+                prev_transition_time=cast(datetime, mock.ANY),
             )
         )
 

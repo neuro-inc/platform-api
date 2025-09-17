@@ -12,7 +12,7 @@ from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontext
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import PurePath
-from typing import Any
+from typing import Any, cast
 from unittest import mock
 from unittest.mock import PropertyMock, patch
 
@@ -755,7 +755,7 @@ class TestKubeOrchestrator:
         labels = {"label/1": "label-value-1", "label/2": "label-value-2"}
         expected_ingress = Ingress(
             name=name,
-            ingress_class=mock.ANY,
+            ingress_class=cast(str, mock.ANY),
             rules=rules,
             annotations=annotations,
             labels=labels,
@@ -794,7 +794,7 @@ class TestKubeOrchestrator:
         )
         assert result_ingress == Ingress(
             name=ingress.name,
-            ingress_class=mock.ANY,
+            ingress_class=cast(str, mock.ANY),
             rules=[
                 IngressRule(host=""),
                 IngressRule(host="host1"),
@@ -811,7 +811,7 @@ class TestKubeOrchestrator:
         )
         assert result_ingress == Ingress(
             name=ingress.name,
-            ingress_class=mock.ANY,
+            ingress_class=cast(str, mock.ANY),
             rules=[
                 IngressRule(host=""),
                 IngressRule(host="host1"),
