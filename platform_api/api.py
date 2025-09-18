@@ -8,7 +8,12 @@ import aiohttp.web
 from aiohttp.web import HTTPUnauthorized
 from aiohttp.web_urldispatcher import AbstractRoute
 from apolo_events_client import from_config as create_events_client_from_config
-from neuro_admin_client import AdminClient, OrgUser, ProjectUser
+from neuro_admin_client import (
+    AdminClient,
+    AuthClient as AdminAuthClient,
+    OrgUser,
+    ProjectUser,
+)
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
 from neuro_config_client import (
@@ -404,6 +409,12 @@ async def create_app(
                     service_token=config.auth.service_token,
                 )
             )
+            admin_auth_client = await exit_stack.enter_async_context(
+                AdminAuthClient(
+                    url=config.admin_url,
+                    token=config.auth.service_token,
+                )
+            )
 
             await setup_security(
                 app=app, auth_client=auth_client, auth_scheme=AuthScheme.BEARER
@@ -456,6 +467,7 @@ async def create_app(
                 jobs_config=config.jobs,
                 notifications_client=notifications_client,
                 auth_client=auth_client,
+                admin_auth_client=admin_auth_client,
                 admin_client=admin_client,
                 api_base_url=config.api_base_url,
             )

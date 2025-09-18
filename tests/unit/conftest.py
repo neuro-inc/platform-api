@@ -12,6 +12,7 @@ from aiohttp import ClientResponseError
 from neuro_admin_client import (
     AdminClient,
     AdminClientDummy,
+    AuthClient as AdminAuthClient,
     Balance,
     ClusterUser,
     ClusterUserRoleType,
@@ -287,6 +288,20 @@ class MockAuthClient(AuthClient):
         self,
         name: str,
         new_token_uri: str | None = None,
+        token: str | None = None,
+    ) -> str:
+        return f"token-{name}"
+
+
+class MockAdminAuthClient(AdminAuthClient):
+    def __init__(self) -> None:
+        pass
+
+    async def get_user_token(
+        self,
+        name: str,
+        new_token_uri: str | None = None,
+        job_id: str | None = None,
         token: str | None = None,
     ) -> str:
         return f"token-{name}"
@@ -579,6 +594,11 @@ def mock_admin_client() -> MockAdminClient:
 
 
 @pytest.fixture
+def mock_admin_auth_client() -> MockAdminAuthClient:
+    return MockAdminAuthClient()
+
+
+@pytest.fixture
 def jobs_config() -> JobsConfig:
     return JobsConfig(orphaned_job_owner="compute")
 
@@ -596,6 +616,7 @@ def jobs_service(
     mock_notifications_client: NotificationsClient,
     mock_auth_client: AuthClient,
     mock_admin_client: AdminClient,
+    mock_admin_auth_client: AdminAuthClient,
     mock_api_base: URL,
 ) -> JobsService:
     return JobsService(
@@ -604,6 +625,7 @@ def jobs_service(
         jobs_config=jobs_config,
         notifications_client=mock_notifications_client,
         auth_client=mock_auth_client,
+        admin_auth_client=mock_admin_auth_client,
         admin_client=mock_admin_client,
         api_base_url=mock_api_base,
     )
