@@ -10,6 +10,7 @@ from datetime import timedelta
 from aiohttp import ClientResponseError
 from neuro_admin_client import (
     AdminClient,
+    AuthClient as AdminAuthClient,
     ClusterUser,
     GetUserResponse,
     Org,
@@ -110,6 +111,7 @@ class JobsService:
         notifications_client: NotificationsClient,
         auth_client: AuthClient,
         admin_client: AdminClient,
+        admin_auth_client: AdminAuthClient,
         api_base_url: URL,
     ) -> None:
         self._cluster_registry = cluster_config_registry
@@ -126,6 +128,7 @@ class JobsService:
             job_schedule_scale_up_timeout_s=900,
         )
         self._auth_client = auth_client
+        self._admin_auth_client = admin_auth_client
         self._admin_client = admin_client
         self._api_base_url = api_base_url
 
@@ -179,7 +182,9 @@ class JobsService:
         await self._auth_client.grant_user_permissions(
             username, [Permission(uri=token_uri, action="read")]
         )
-        return await self._auth_client.get_user_token(username, new_token_uri=token_uri)
+        return await self._admin_auth_client.get_user_token(
+            username, new_token_uri=token_uri, job_id=job_id
+        )
 
     async def _setup_pass_config(
         self,

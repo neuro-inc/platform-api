@@ -11,7 +11,12 @@ from unittest import mock
 import neuro_config_client
 import pytest
 from _pytest.logging import LogCaptureFixture
-from neuro_admin_client import AdminClient, Balance, Quota
+from neuro_admin_client import (
+    AdminClient,
+    AuthClient as AdminAuthClient,
+    Balance,
+    Quota,
+)
 from neuro_auth_client import AuthClient, Permission, User as AuthUser
 from neuro_config_client import ResourcePreset
 from neuro_notifications_client import (
@@ -107,6 +112,7 @@ def jobs_service_factory(
     mock_notifications_client: NotificationsClient,
     mock_auth_client: AuthClient,
     mock_admin_client: AdminClient,
+    mock_admin_auth_client: AdminAuthClient,
     mock_api_base: URL,
 ) -> Callable[..., JobsService]:
     def _factory(
@@ -121,6 +127,7 @@ def jobs_service_factory(
             ),
             notifications_client=mock_notifications_client,
             auth_client=mock_auth_client,
+            admin_auth_client=mock_admin_auth_client,
             api_base_url=mock_api_base,
             admin_client=mock_admin_client,
         )
@@ -1926,6 +1933,7 @@ class TestJobsServiceCluster:
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
         mock_admin_client: AdminClient,
+        mock_admin_auth_client: AdminAuthClient,
         mock_api_base: URL,
     ) -> JobsService:
         return JobsService(
@@ -1934,6 +1942,7 @@ class TestJobsServiceCluster:
             jobs_config=JobsConfig(),
             notifications_client=mock_notifications_client,
             auth_client=mock_auth_client,
+            admin_auth_client=mock_admin_auth_client,
             admin_client=mock_admin_client,
             api_base_url=mock_api_base,
         )
@@ -1991,6 +2000,7 @@ class TestJobsServiceCluster:
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
         mock_admin_client: AdminClient,
+        mock_admin_auth_client: AdminAuthClient,
         mock_api_base: URL,
         test_user_with_org: AuthUser,
         test_cluster: str,
@@ -2003,6 +2013,7 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
             auth_client=mock_auth_client,
+            admin_auth_client=mock_admin_auth_client,
             admin_client=mock_admin_client,
             api_base_url=mock_api_base,
         )
@@ -2056,6 +2067,7 @@ class TestJobsServiceCluster:
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
         mock_admin_client: AdminClient,
+        mock_admin_auth_client: AdminAuthClient,
         mock_api_base: URL,
         test_user_with_org: AuthUser,
         test_cluster: str,
@@ -2069,6 +2081,7 @@ class TestJobsServiceCluster:
             notifications_client=mock_notifications_client,
             auth_client=mock_auth_client,
             admin_client=mock_admin_client,
+            admin_auth_client=mock_admin_auth_client,
             api_base_url=mock_api_base,
         )
         jobs_poller_service = JobsPollerService(
@@ -2120,6 +2133,7 @@ class TestJobsServiceCluster:
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
         mock_admin_client: AdminClient,
+        mock_admin_auth_client: AdminAuthClient,
         mock_api_base: URL,
         test_user_with_org: AuthUser,
         test_cluster: str,
@@ -2133,6 +2147,7 @@ class TestJobsServiceCluster:
             notifications_client=mock_notifications_client,
             auth_client=mock_auth_client,
             admin_client=mock_admin_client,
+            admin_auth_client=mock_admin_auth_client,
             api_base_url=mock_api_base,
         )
         jobs_poller_service = JobsPollerService(
@@ -2182,6 +2197,7 @@ class TestJobsServiceCluster:
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
         mock_admin_client: AdminClient,
+        mock_admin_auth_client: AdminAuthClient,
         mock_api_base: URL,
         user_factory: UserFactory,
         test_cluster: str,
@@ -2195,6 +2211,7 @@ class TestJobsServiceCluster:
             notifications_client=mock_notifications_client,
             auth_client=mock_auth_client,
             admin_client=mock_admin_client,
+            admin_auth_client=mock_admin_auth_client,
             api_base_url=mock_api_base,
         )
         await cluster_config_registry.replace(cluster_config)  # "test-cluster"
@@ -2233,6 +2250,7 @@ class TestJobsServiceCluster:
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
         mock_admin_client: AdminClient,
+        mock_admin_auth_client: AdminAuthClient,
         mock_api_base: URL,
         test_user_with_org: AuthUser,
         test_cluster: str,
@@ -2245,6 +2263,7 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
             auth_client=mock_auth_client,
+            admin_auth_client=mock_admin_auth_client,
             admin_client=mock_admin_client,
             api_base_url=mock_api_base,
         )
@@ -2291,6 +2310,7 @@ class TestJobsServiceCluster:
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
         mock_admin_client: AdminClient,
+        mock_admin_auth_client: AdminAuthClient,
         mock_api_base: URL,
         test_user_with_org: AuthUser,
         test_cluster: str,
@@ -2303,6 +2323,7 @@ class TestJobsServiceCluster:
             jobs_config=jobs_config,
             notifications_client=mock_notifications_client,
             auth_client=mock_auth_client,
+            admin_auth_client=mock_admin_auth_client,
             admin_client=mock_admin_client,
             api_base_url=mock_api_base,
         )
@@ -2354,6 +2375,7 @@ class TestJobServiceNotification:
         mock_notifications_client: NotificationsClient,
         mock_auth_client: AuthClient,
         mock_admin_client: AdminClient,
+        mock_admin_auth_client: AdminAuthClient,
         mock_api_base: URL,
     ) -> Callable[..., JobsService]:
         def _factory(deletion_delay_s: int = 0) -> JobsService:
@@ -2363,6 +2385,7 @@ class TestJobServiceNotification:
                 jobs_config=JobsConfig(deletion_delay_s=deletion_delay_s),
                 notifications_client=mock_notifications_client,
                 auth_client=mock_auth_client,
+                admin_auth_client=mock_admin_auth_client,
                 admin_client=mock_admin_client,
                 api_base_url=mock_api_base,
             )
