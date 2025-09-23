@@ -1534,13 +1534,15 @@ files = [
 
 [[package]]
 name = "neuro-admin-client"
-version = "25.5.1.dev16+g05bf6a47d.d20250818"
+version = "25.9.0"
 description = "Internal client for Neu.ro admin service"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-files = []
-develop = true
+files = [
+    {file = "neuro_admin_client-25.9.0-py3-none-any.whl", hash = "sha256:d0d6666242b47018fe4f38f70fe70f6360fd593f7f2cace7e68ac2767b9d9761"},
+    {file = "neuro_admin_client-25.9.0.tar.gz", hash = "sha256:63322e8dbbc2731dc197fb4c359a72b6249c1b04674b906ba753b3a84fab4887"},
+]
 
 [package.dependencies]
 aiohttp = ">=3.8.1"
@@ -1548,10 +1550,6 @@ aiohttp-security = ">=0.4.0"
 multidict = ">=6"
 python-jose = ">=3.0.1"
 yarl = ">=1.10"
-
-[package.source]
-type = "directory"
-url = "../neuro-admin-client"
 
 [[package]]
 name = "neuro-auth-client"
@@ -2894,4 +2892,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "4b27b0c5dc0357ec9c7ab51228d270a6be33a18c5e13f01b866ee129e80f4913"
+content-hash = "29a05e6f2465b72fe7bd8927853e319858e62acf897c63a14e8a3b56848ce582"
