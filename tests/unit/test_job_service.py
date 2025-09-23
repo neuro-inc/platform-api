@@ -2211,7 +2211,7 @@ class TestJobsServiceCluster:
             notifications_client=mock_notifications_client,
             auth_client=mock_auth_client,
             admin_client=mock_admin_client,
-            admin_auth_client=mock_admin_client,
+            admin_auth_client=mock_admin_auth_client,
             api_base_url=mock_api_base,
         )
         await cluster_config_registry.replace(cluster_config)  # "test-cluster"
