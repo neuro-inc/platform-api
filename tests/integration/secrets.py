@@ -181,7 +181,7 @@ class SecretsClient:
             "key": key,
             "value": self._base64_encode(value),
             "project_name": project_name,
-            "org_name": org_name,
+            "org_name": org_name or NO_ORG_NORMALIZED,
         }
         async with self._client.post(url, json=payload) as resp:
             assert resp.status == 201, await resp.text()
