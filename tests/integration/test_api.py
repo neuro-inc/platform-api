@@ -1425,20 +1425,29 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_submit: dict[str, Any],
         jobs_client: JobsClient,
-        regular_user: _User,
-        regular_secrets_client: SecretsClient,
+        regular_user_factory: UserFactory,
+        secrets_client_factory: Callable[
+            [_User], AbstractAsyncContextManager[SecretsClient]
+        ],
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
-        key, value = "key1", "value1"
-        await regular_secrets_client.create_secret(
-            key, value, project_name=regular_user.name
+        org_user = await regular_user_factory(
+            clusters=[
+                ("test-cluster", "org", Balance(), Quota()),
+            ],
         )
+        key, value = "key1", "value1"
+        async with secrets_client_factory(org_user) as secrets_client:
+            await secrets_client.create_secret(
+                key, value, project_name=org_user.name, org_name="org"
+            )
 
-        user = regular_user
+        user = org_user
         secret_env = {
-            "ENV_SECRET": f"secret://{user.cluster_name}/{user.name}/{key}",
+            "ENV_SECRET": f"secret://{user.cluster_name}/org/{user.name}/{key}",
         }
         job_submit["container"]["secret_env"] = secret_env
+        job_submit["org_name"] = "org"
 
         cmd = f'bash -c \'echo "$ENV_SECRET" && [ "$ENV_SECRET" == "{value}" ]\''
         job_submit["container"]["command"] = cmd
@@ -1450,29 +1459,39 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: dict[str, Any],
-        jobs_client: JobsClient,
-        regular_user: _User,
-        regular_secrets_client: SecretsClient,
+        jobs_client_factory: Callable[[_User], JobsClient],
+        regular_user_factory: UserFactory,
+        secrets_client_factory: Callable[
+            [_User], AbstractAsyncContextManager[SecretsClient]
+        ],
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
+        org_user = await regular_user_factory(
+            clusters=[
+                ("test-cluster", "org", Balance(), Quota()),
+            ],
+        )
         secret_name, secret_value = "key1", "value1"
         secret_path = "/etc/foo/file.txt"
 
-        await regular_secrets_client.create_secret(
-            secret_name, secret_value, project_name=regular_user.name
-        )
+        async with secrets_client_factory(org_user) as secrets_client:
+            await secrets_client.create_secret(
+                secret_name, secret_value, project_name=org_user.name, org_name="org"
+            )
 
-        user = regular_user
-        secret_uri = f"secret://{user.cluster_name}/{user.name}/{secret_name}"
+        user = org_user
+        secret_uri = f"secret://{user.cluster_name}/org/{user.name}/{secret_name}"
         secret_volumes = [
             {"src_secret_uri": secret_uri, "dst_path": secret_path},
         ]
         job_submit["container"]["secret_volumes"] = secret_volumes
+        job_submit["org_name"] = "org"
 
         cmd = f'bash -c \'[ "$(cat {secret_path})" == "{secret_value}" ]\''
         job_submit["container"]["command"] = cmd
 
         job_id = ""
+        jobs_client = jobs_client_factory(org_user)
         try:
             url = api.jobs_base_url
             async with client.post(url, headers=user.headers, json=job_submit) as resp:
@@ -1592,12 +1611,17 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: dict[str, Any],
-        regular_user: _User,
+        regular_user_factory: UserFactory,
         service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         secrets_client_factory: Callable[[_User], SecretsClient],
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
+        regular_user = await regular_user_factory(
+            clusters=[
+                ("test-cluster", "org", Balance(), Quota()),
+            ],
+        )
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
         )
@@ -1609,16 +1633,17 @@ class TestJobs:
 
         async with secrets_client_factory(service_user) as secrets_client:
             await secrets_client.create_secret(
-                secret_name, secret_value, project_name=project_name
+                secret_name, secret_value, project_name=project_name, org_name="org"
             )
 
         secret_uri = (
-            f"secret://{service_user.cluster_name}/{project_name}/{secret_name}"
+            f"secret://{service_user.cluster_name}/org/{project_name}/{secret_name}"
         )
         secret_volumes = [
             {"src_secret_uri": secret_uri, "dst_path": secret_path},
         ]
         job_submit["container"]["secret_volumes"] = secret_volumes
+        job_submit["org_name"] = "org"
 
         cmd = f'bash -c \'[ "$(cat {secret_path})" == "{secret_value}" ]\''
         job_submit["container"]["command"] = cmd
@@ -1649,12 +1674,17 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         job_submit: dict[str, Any],
-        regular_user: _User,
+        regular_user_factory: UserFactory,
         service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         secrets_client_factory: Callable[[_User], SecretsClient],
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
     ) -> None:
+        regular_user = await regular_user_factory(
+            clusters=[
+                ("test-cluster", "org", Balance(), Quota()),
+            ],
+        )
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
         )
@@ -1663,12 +1693,15 @@ class TestJobs:
         key, value = "key1", "value1"
 
         async with secrets_client_factory(service_user) as secrets_client:
-            await secrets_client.create_secret(key, value, project_name=project_name)
+            await secrets_client.create_secret(
+                key, value, project_name=project_name, org_name="org"
+            )
 
         secret_env = {
-            "ENV_SECRET": f"secret://{service_user.cluster_name}/{project_name}/{key}",
+            "ENV_SECRET": f"secret://{service_user.cluster_name}/org/{project_name}/{key}",
         }
         job_submit["container"]["secret_env"] = secret_env
+        job_submit["org_name"] = "org"
 
         cmd = f'bash -c \'echo "$ENV_SECRET" && [ "$ENV_SECRET" == "{value}" ]\''
         job_submit["container"]["command"] = cmd
