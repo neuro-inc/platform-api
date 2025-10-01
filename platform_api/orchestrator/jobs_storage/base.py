@@ -28,7 +28,7 @@ class JobStorageJobFoundError(JobsStorageException):
         )
 
 
-ClusterOrgProjectNameSet = dict[str, dict[str | None, dict[str, AbstractSet[str]]]]
+ClusterOrgProjectNameSet = dict[str, dict[str, dict[str, AbstractSet[str]]]]
 
 
 @dataclass(frozen=True)
@@ -39,9 +39,7 @@ class JobFilter:
     clusters: ClusterOrgProjectNameSet = field(
         default_factory=cast(type[ClusterOrgProjectNameSet], dict)
     )
-    orgs: AbstractSet[str | None] = field(
-        default_factory=cast(type[AbstractSet[str | None]], set)
-    )
+    orgs: AbstractSet[str] = field(default_factory=cast(type[AbstractSet[str]], set))
     owners: AbstractSet[str] = field(default_factory=cast(type[AbstractSet[str]], set))
     projects: AbstractSet[str] = field(
         default_factory=cast(type[AbstractSet[str]], set)
@@ -73,6 +71,7 @@ class JobFilter:
             if orgs is None:
                 return False
             if orgs:
+                assert job.org_name is not None, "org_name is required"
                 projects = orgs.get(job.org_name)
                 if projects is None:
                     return False

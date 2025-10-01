@@ -82,12 +82,6 @@ class ConfigApiHandler:
 
         If the requesting user is authorized, the response will contain the details
         about the user's orgs, clusters, and projects.
-
-        In case the user has direct access to a cluster outside of any org,
-        the list of orgs will not have a None entry, but the cluster will have a None
-        entry in its orgs list.
-
-        Similarly, a project in the response can have a None org.
         """
         data: dict[str, Any] = {}
 

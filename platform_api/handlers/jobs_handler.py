@@ -243,20 +243,15 @@ def create_job_preset_validator(presets: Sequence[ResourcePreset]) -> t.Trafaret
 def create_job_cluster_org_name_validator(
     *,
     default_cluster_name: str,
-    default_org_name: str | None,
+    default_org_name: str,
     default_project_name: str,
 ) -> t.Trafaret:
-    if default_org_name is not None:
-        org_name_key = t.Key("org_name", default=default_org_name)
-    else:
-        org_name_key = t.Key("org_name")
-
     return t.Dict(
         {
             t.Key(
                 "cluster_name", default=default_cluster_name
             ): create_cluster_name_validator(),
-            org_name_key: create_org_name_validator(),
+            t.Key("org_name", default=default_org_name): create_org_name_validator(),
             t.Key(
                 "project_name", default=default_project_name
             ): create_project_name_validator(),
@@ -697,16 +692,12 @@ class JobsHandler:
             ),
             None,
         )
-        # Determine default org_name:
-        # - If user has org-based access, use first org as default
-        # - If user only has direct cluster access (no orgs), org_name will be required
-        default_org_name = None
-        if cluster_config_for_default_org is not None:
-            available_orgs = [
-                org for org in cluster_config_for_default_org.orgs if org is not None
-            ]
-            if available_orgs:
-                default_org_name = available_orgs[0]
+        # Use first org from user's cluster access as default
+        assert cluster_config_for_default_org is not None, (
+            "User must have cluster access"
+        )
+        assert cluster_config_for_default_org.orgs, "User must have at least one org"
+        default_org_name = cluster_config_for_default_org.orgs[0]
 
         job_cluster_org_name_validator = create_job_cluster_org_name_validator(
             default_cluster_name=default_cluster_name,
@@ -1165,11 +1156,11 @@ class BulkJobFilterBuilder:
         self._has_access_to_all: bool = False
         self._has_clusters_shared_all: bool = False
         self._has_orgs_shared_all: bool = False
-        self._clusters_shared_any: dict[str, dict[str | None, dict[str, set[str]]]] = (
+        self._clusters_shared_any: dict[str, dict[str, dict[str, set[str]]]] = (
             defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
         )
         self._projects_shared_any: set[str] = set()
-        self._orgs_shared_any: set[str | None] = set()
+        self._orgs_shared_any: set[str] = set()
         self._shared_ids: set[str] = set()
 
     def build(self) -> BulkJobFilter:
@@ -1224,10 +1215,6 @@ class BulkJobFilterBuilder:
                 self._clusters_shared_any[cluster_name] = {}
             else:
                 self._traverse_orgs(sub_tree, cluster_name)
-                if self._query_filter.orgs and None not in self._query_filter.orgs:
-                    # skipping None org
-                    continue
-                self._traverse_projects(sub_tree, cluster_name, None)
 
     def _traverse_orgs(self, tree: ClientAccessSubTreeView, cluster_name: str) -> None:
         for org_name, sub_tree in tree.children.items():
@@ -1252,7 +1239,7 @@ class BulkJobFilterBuilder:
         self,
         tree: ClientAccessSubTreeView,
         cluster_name: str,
-        org_name: str | None,
+        org_name: str,
     ) -> None:
         for project, sub_tree in tree.children.items():
             if not sub_tree.can_list():
@@ -1279,7 +1266,7 @@ class BulkJobFilterBuilder:
         self,
         tree: ClientAccessSubTreeView,
         cluster_name: str,
-        org_name: str | None,
+        org_name: str,
         project_name: str,
     ) -> None:
         for name, sub_tree in tree.children.items():
@@ -1350,7 +1337,7 @@ class BulkJobFilterBuilder:
 
     def _optimize_clusters_projects(
         self,
-        orgs: AbstractSet[str | None],
+        orgs: AbstractSet[str],
         projects: AbstractSet[str],
         name: str | None,
     ) -> None:

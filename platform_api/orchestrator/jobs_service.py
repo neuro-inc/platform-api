@@ -91,8 +91,7 @@ class NoCreditsError(JobsServiceException):
 @dataclass(frozen=True)
 class UserClusterConfig:
     config: Cluster
-    # None value means the direct access to cluster without any or:
-    orgs: list[str | None]
+    orgs: list[str]
 
 
 @dataclass(frozen=True)
@@ -503,7 +502,8 @@ class JobsService:
         cluster_configs = await self._get_user_cluster_configs_by_name(response)
         cluster_to_orgs = defaultdict(list)
         for user_cluster in response.clusters:
-            cluster_to_orgs[user_cluster.cluster_name].append(user_cluster.org_name)
+            if user_cluster.org_name is not None:
+                cluster_to_orgs[user_cluster.cluster_name].append(user_cluster.org_name)
         for cluster_name, orgs in cluster_to_orgs.items():
             if cluster_config := cluster_configs.get(cluster_name):
                 configs.append(UserClusterConfig(config=cluster_config, orgs=orgs))

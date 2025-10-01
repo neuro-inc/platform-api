@@ -360,16 +360,15 @@ class TestJobClusterNameValidator:
         }
         request = {
             "container": container,
-            "org_name": "test-org",
         }
         validator = create_job_cluster_org_name_validator(
             default_cluster_name="default",
-            default_org_name=None,
+            default_org_name="default-org",
             default_project_name="default-project",
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "default"
-        assert payload["org_name"] == "test-org"
+        assert payload["org_name"] == "default-org"
         assert payload["project_name"] == "default-project"
 
     def test_without_org_name(self) -> None:
@@ -399,17 +398,16 @@ class TestJobClusterNameValidator:
         }
         request = {
             "cluster_name": "testcluster",
-            "org_name": "test-org",
             "container": container,
         }
         validator = create_job_cluster_org_name_validator(
             default_cluster_name="default",
-            default_org_name=None,
+            default_org_name="default-org",
             default_project_name="default-project",
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
-        assert payload["org_name"] == "test-org"
+        assert payload["org_name"] == "default-org"
 
     def test_with_org_name(self) -> None:
         container = {
@@ -424,7 +422,7 @@ class TestJobClusterNameValidator:
         }
         validator = create_job_cluster_org_name_validator(
             default_cluster_name="default",
-            default_org_name=None,
+            default_org_name="test-org",
             default_project_name="default-project",
         )
         payload = validator.check(request)
@@ -434,7 +432,7 @@ class TestJobClusterNameValidator:
     def test_invalid_payload_type(self) -> None:
         validator = create_job_cluster_org_name_validator(
             default_cluster_name="default",
-            default_org_name=None,
+            default_org_name="test-org",
             default_project_name="default-project",
         )
         with pytest.raises(DataError):
@@ -446,7 +444,7 @@ class TestJobClusterNameValidator:
         }
         validator = create_job_cluster_org_name_validator(
             default_cluster_name="default",
-            default_org_name=None,
+            default_org_name="test-org",
             default_project_name="default-project",
         )
         with pytest.raises(DataError, match="value is not a string"):
@@ -458,7 +456,7 @@ class TestJobClusterNameValidator:
         }
         validator = create_job_cluster_org_name_validator(
             default_cluster_name="default",
-            default_org_name=None,
+            default_org_name="test-org",
             default_project_name="default-project",
         )
         with pytest.raises(DataError, match="value is not a string"):
@@ -478,7 +476,7 @@ class TestJobClusterNameValidator:
         }
         validator = create_job_cluster_org_name_validator(
             default_cluster_name="default",
-            default_org_name=None,
+            default_org_name="test-org",
             default_project_name="default-project",
         )
         payload = validator.check(request)
@@ -494,7 +492,7 @@ class TestJobClusterNameValidator:
         }
         validator = create_job_cluster_org_name_validator(
             default_cluster_name="default",
-            default_org_name=None,
+            default_org_name="test-org",
             default_project_name="default-project",
         )
         with pytest.raises(DataError, match="value is not a string"):
@@ -692,7 +690,7 @@ class TestJobRequestValidator:
         validator = create_job_request_validator(
             allowed_tpu_resources=(),
             cluster_name="testcluster",
-            org_name=None,
+            org_name="test-org",
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
@@ -712,7 +710,7 @@ class TestJobRequestValidator:
         validator = create_job_request_validator(
             allowed_tpu_resources=(),
             cluster_name="testcluster",
-            org_name=None,
+            org_name="test-org",
         )
         with pytest.raises(
             DataError, match="schedule_timeout is not allowed for scheduled jobs"
@@ -729,7 +727,7 @@ class TestJobRequestValidator:
             allow_flat_structure=True,
             allowed_tpu_resources=(),
             cluster_name="testcluster",
-            org_name=None,
+            org_name="test-org",
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
@@ -748,7 +746,7 @@ class TestJobRequestValidator:
         validator = create_job_request_validator(
             allowed_tpu_resources=(),
             cluster_name="testcluster",
-            org_name=None,
+            org_name="test-org",
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
@@ -766,7 +764,7 @@ class TestJobRequestValidator:
         validator = create_job_request_validator(
             allowed_tpu_resources=(),
             cluster_name="another",
-            org_name=None,
+            org_name="test-org",
         )
         with pytest.raises(DataError, match="value is not exactly 'another'"):
             validator.check(request)
@@ -785,7 +783,7 @@ class TestJobRequestValidator:
         validator = create_job_request_validator(
             allowed_tpu_resources=(),
             cluster_name="test-cluster",
-            org_name=None,
+            org_name="test-org",
         )
         validator.check(request)
 
@@ -803,7 +801,7 @@ class TestJobRequestValidator:
         validator = create_job_request_validator(
             allowed_tpu_resources=(),
             cluster_name="test-cluster",
-            org_name=None,
+            org_name="test-org",
         )
         with pytest.raises(DataError, match="value is less than"):
             validator.check(request)
@@ -853,7 +851,7 @@ class TestJobRequestValidator:
         validator = create_job_request_validator(
             allowed_tpu_resources=(),
             cluster_name="testcluster",
-            org_name=None,
+            org_name="test-org",
         )
         with pytest.raises(DataError, match="restart_policy.+any variant"):
             validator.check(request)
@@ -873,7 +871,7 @@ class TestJobRequestValidator:
         validator = create_job_request_validator(
             allowed_tpu_resources=(),
             cluster_name="clustername",
-            org_name=None,
+            org_name="test-org",
         )
         validator.check(request)
 
@@ -896,7 +894,7 @@ class TestJobRequestValidator:
         validator = create_job_request_validator(
             allowed_tpu_resources=(),
             cluster_name="clustername",
-            org_name=None,
+            org_name="test-org",
         )
         validator.check(request)
 
@@ -914,7 +912,7 @@ class TestJobRequestValidator:
         validator = create_job_request_validator(
             allowed_tpu_resources=(),
             cluster_name="testcluster",
-            org_name=None,
+            org_name="test-org",
             allowed_energy_schedule_names=["default"],
         )
         validator.check(request)
@@ -933,7 +931,7 @@ class TestJobRequestValidator:
         validator = create_job_request_validator(
             allowed_tpu_resources=(),
             cluster_name="testcluster",
-            org_name=None,
+            org_name="test-org",
             allowed_energy_schedule_names=[],
         )
         with pytest.raises(DataError, match="value doesn't match any"):
@@ -952,7 +950,7 @@ class TestJobRequestValidator:
         validator = create_job_request_validator(
             allowed_tpu_resources=(),
             cluster_name="testcluster",
-            org_name=None,
+            org_name="test-org",
             allowed_energy_schedule_names=["default"],
         )
         with pytest.raises(DataError, match="energy_schedule_name.+scheduler.+enabled"):
@@ -1317,32 +1315,38 @@ class TestBulkJobFilterBuilder:
         )
 
     def test_user_access_same_project(self) -> None:
-        query_filter = JobFilter(orgs={None})
+        query_filter = JobFilter(orgs={"test-org"})
         tree = make_access_tree(
-            {"test-cluster/testuser": "read", "anothercluster/testuser": "read"}
+            {
+                "test-cluster/test-org/testuser": "read",
+                "anothercluster/test-org/testuser": "read",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
                 clusters={"test-cluster": {}, "anothercluster": {}},
                 projects={"testuser"},
-                orgs={None},
+                orgs={"test-org"},
             ),
             shared_ids=set(),
             shared_ids_filter=None,
         )
 
     def test_user_access_same_cluster(self) -> None:
-        query_filter = JobFilter(orgs={None})
+        query_filter = JobFilter(orgs={"test-org"})
         tree = make_access_tree(
-            {"test-cluster/testuser": "read", "test-cluster/anotheruser": "read"}
+            {
+                "test-cluster/test-org/testuser": "read",
+                "test-cluster/test-org/anotheruser": "read",
+            }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
                 clusters={"test-cluster": {}},
                 projects={"testuser", "anotheruser"},
-                orgs={None},
+                orgs={"test-org"},
             ),
             shared_ids=set(),
             shared_ids_filter=None,
@@ -1357,22 +1361,22 @@ class TestBulkJobFilterBuilder:
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
                 clusters={
-                    "test-cluster": {None: {"testuser": set()}, "testuser": {}},
-                    "anothercluster": {None: {"anotheruser": set()}, "anotheruser": {}},
+                    "test-cluster": {"testuser": {}},
+                    "anothercluster": {"anotheruser": {}},
                 },
-                orgs={None, "testuser", "anotheruser"},
+                orgs={"testuser", "anotheruser"},
             ),
             shared_ids=set(),
             shared_ids_filter=None,
         )
 
     def test_user_access_mixed_projects_and_clusters(self) -> None:
-        query_filter = JobFilter(orgs={None})
+        query_filter = JobFilter(orgs={"test-org"})
         tree = make_access_tree(
             {
-                "test-cluster/testuser": "read",
-                "test-cluster/anotheruser": "read",
-                "anothercluster/testuser": "read",
+                "test-cluster/test-org/testuser": "read",
+                "test-cluster/test-org/anotheruser": "read",
+                "anothercluster/test-org/testuser": "read",
             }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
@@ -1380,47 +1384,51 @@ class TestBulkJobFilterBuilder:
             bulk_filter=JobFilter(
                 clusters={
                     "test-cluster": {},
-                    "anothercluster": {None: {"testuser": set()}},
+                    "anothercluster": {"test-org": {"testuser": set()}},
                 },
                 projects={"testuser", "anotheruser"},
-                orgs={None},
+                orgs={"test-org"},
             ),
             shared_ids=set(),
             shared_ids_filter=None,
         )
 
     def test_user_access_mixed_projects_and_clusters2(self) -> None:
-        query_filter = JobFilter(orgs={None})
+        query_filter = JobFilter(orgs={"test-org"})
         tree = make_access_tree(
             {
-                "test-cluster/testuser": "read",
-                "test-cluster/anotheruser": "read",
-                "anothercluster/testuser": "read",
-                "anothercluster/thirduser": "read",
-                "thirdcluster/testuser": "read",
+                "test-cluster/test-org/testuser": "read",
+                "test-cluster/test-org/anotheruser": "read",
+                "anothercluster/test-org/testuser": "read",
+                "anothercluster/test-org/thirduser": "read",
+                "thirdcluster/test-org/testuser": "read",
             }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
                 clusters={
-                    "test-cluster": {None: {"testuser": set(), "anotheruser": set()}},
-                    "anothercluster": {None: {"testuser": set(), "thirduser": set()}},
-                    "thirdcluster": {None: {"testuser": set()}},
+                    "test-cluster": {
+                        "test-org": {"testuser": set(), "anotheruser": set()}
+                    },
+                    "anothercluster": {
+                        "test-org": {"testuser": set(), "thirduser": set()}
+                    },
+                    "thirdcluster": {"test-org": {"testuser": set()}},
                 },
                 projects={"testuser", "anotheruser", "thirduser"},
-                orgs={None},
+                orgs={"test-org"},
             ),
             shared_ids=set(),
             shared_ids_filter=None,
         )
 
     def test_user_access_mixed_jobs_and_clusters(self) -> None:
-        query_filter = JobFilter(orgs={None})
+        query_filter = JobFilter(orgs={"test-org"})
         tree = make_access_tree(
             {
-                "test-cluster/testuser/foo": "read",
-                "test-cluster/anotheruser/foo": "read",
+                "test-cluster/test-org/testuser/foo": "read",
+                "test-cluster/test-org/anotheruser/foo": "read",
                 "anothercluster": "read",
             }
         )
@@ -1429,14 +1437,14 @@ class TestBulkJobFilterBuilder:
             bulk_filter=JobFilter(
                 clusters={
                     "test-cluster": {
-                        None: {
+                        "test-org": {
                             "testuser": {"foo"},
                             "anotheruser": {"foo"},
                         },
                     },
                     "anothercluster": {},
                 },
-                orgs={None},
+                orgs={"test-org"},
             ),
             shared_ids=set(),
             shared_ids_filter=None,
@@ -1458,7 +1466,6 @@ class TestBulkJobFilterBuilder:
                     "test-cluster": {
                         "testuser": {},
                         "anotheruser": {},
-                        None: {"testuser": set(), "anotheruser": set()},
                     },
                     "anothercluster": {},
                 },
@@ -1468,13 +1475,13 @@ class TestBulkJobFilterBuilder:
         )
 
     def test_mixed_access_no_projects(self) -> None:
-        query_filter = JobFilter(orgs={None})
+        query_filter = JobFilter(orgs={"test-org"})
         tree = make_access_tree(
             {
-                "test-cluster/testuser": "read",
-                "test-cluster/anotheruser/job-test-1": "read",
-                "test-cluster/anotheruser/job-test-2": "deny",
-                "test-cluster/someuser": "deny",
+                "test-cluster/test-org/testuser": "read",
+                "test-cluster/test-org/anotheruser/job-test-1": "read",
+                "test-cluster/test-org/anotheruser/job-test-2": "deny",
+                "test-cluster/test-org/someuser": "deny",
             }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
@@ -1482,46 +1489,46 @@ class TestBulkJobFilterBuilder:
             bulk_filter=JobFilter(
                 clusters={"test-cluster": {}},
                 projects={"testuser"},
-                orgs={None},
+                orgs={"test-org"},
             ),
             shared_ids={"job-test-1"},
-            shared_ids_filter=JobFilter(orgs={None}),
+            shared_ids_filter=JobFilter(orgs={"test-org"}),
         )
 
     def test_mixed_access_projects_shared_all(self) -> None:
-        query_filter = JobFilter(projects={"testuser"}, orgs={None})
+        query_filter = JobFilter(projects={"testuser"}, orgs={"test-org"})
         tree = make_access_tree(
             {
-                "test-cluster/testuser": "read",
-                "test-cluster/anotheruser/job-test-1": "read",
-                "test-cluster/anotheruser/job-test-2": "deny",
-                "test-cluster/someuser": "deny",
+                "test-cluster/test-org/testuser": "read",
+                "test-cluster/test-org/anotheruser/job-test-1": "read",
+                "test-cluster/test-org/anotheruser/job-test-2": "deny",
+                "test-cluster/test-org/someuser": "deny",
             }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
-                clusters={"test-cluster": {}}, projects={"testuser"}, orgs={None}
+                clusters={"test-cluster": {}}, projects={"testuser"}, orgs={"test-org"}
             ),
             shared_ids=set(),
             shared_ids_filter=None,
         )
 
     def test_mixed_access_shared_ids_only(self) -> None:
-        query_filter = JobFilter(projects={"anotheruser"}, orgs={None})
+        query_filter = JobFilter(projects={"anotheruser"}, orgs={"test-org"})
         tree = make_access_tree(
             {
-                "test-cluster/testuser": "read",
-                "test-cluster/anotheruser/job-test-1": "read",
-                "test-cluster/anotheruser/job-test-2": "deny",
-                "test-cluster/someuser": "deny",
+                "test-cluster/test-org/testuser": "read",
+                "test-cluster/test-org/anotheruser/job-test-1": "read",
+                "test-cluster/test-org/anotheruser/job-test-2": "deny",
+                "test-cluster/test-org/someuser": "deny",
             }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=None,
             shared_ids={"job-test-1"},
-            shared_ids_filter=JobFilter(projects={"anotheruser"}, orgs={None}),
+            shared_ids_filter=JobFilter(projects={"anotheruser"}, orgs={"test-org"}),
         )
 
     def test_mixed_access_projects_shared_all_and_specific(self) -> None:
@@ -1529,14 +1536,14 @@ class TestBulkJobFilterBuilder:
             projects={"testuser", "anotheruser"},
             statuses={JobStatus.PENDING},
             name="testname",
-            orgs={None},
+            orgs={"test-org"},
         )
         tree = make_access_tree(
             {
-                "test-cluster/testuser": "read",
-                "test-cluster/anotheruser/job-test-1": "read",
-                "test-cluster/anotheruser/job-test-2": "deny",
-                "test-cluster/someuser": "deny",
+                "test-cluster/test-org/testuser": "read",
+                "test-cluster/test-org/anotheruser/job-test-1": "read",
+                "test-cluster/test-org/anotheruser/job-test-2": "deny",
+                "test-cluster/test-org/someuser": "deny",
             }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
@@ -1546,14 +1553,14 @@ class TestBulkJobFilterBuilder:
                 projects={"testuser"},
                 statuses={JobStatus.PENDING},
                 name="testname",
-                orgs={None},
+                orgs={"test-org"},
             ),
             shared_ids={"job-test-1"},
             shared_ids_filter=JobFilter(
                 projects={"testuser", "anotheruser"},
                 statuses={JobStatus.PENDING},
                 name="testname",
-                orgs={None},
+                orgs={"test-org"},
             ),
         )
 
@@ -1573,28 +1580,24 @@ class TestBulkJobFilterBuilder:
                     "test-cluster": {
                         "testuser": {},
                         "anotheruser": {"job-test-1": set(), "testname": set()},
-                        None: {
-                            "testuser": set(),
-                            "anotheruser": {"testname"},
-                        },
                     }
                 },
-                orgs={None, "testuser", "anotheruser"},
+                orgs={"testuser", "anotheruser"},
             ),
-            shared_ids={"job-test-1"},
-            shared_ids_filter=JobFilter(),
+            shared_ids=set(),
+            shared_ids_filter=None,
         )
 
     def test_shared_by_name_with_name(self) -> None:
-        query_filter = JobFilter(name="testname", orgs={None})
+        query_filter = JobFilter(name="testname", orgs={"test-org"})
         tree = make_access_tree(
             {
-                "test-cluster/testuser": "read",
-                "test-cluster/anotheruser/job-test-1": "read",
-                "test-cluster/anotheruser/testname": "read",
-                "test-cluster/anotheruser/testname2": "read",
-                "test-cluster/thirduser/testname": "read",
-                "test-cluster/forthduser/testname2": "read",
+                "test-cluster/test-org/testuser": "read",
+                "test-cluster/test-org/anotheruser/job-test-1": "read",
+                "test-cluster/test-org/anotheruser/testname": "read",
+                "test-cluster/test-org/anotheruser/testname2": "read",
+                "test-cluster/test-org/thirduser/testname": "read",
+                "test-cluster/test-org/forthduser/testname2": "read",
             }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
@@ -1607,32 +1610,34 @@ class TestBulkJobFilterBuilder:
                     "thirduser",
                 },
                 name="testname",
-                orgs={None},
+                orgs={"test-org"},
             ),
             shared_ids={"job-test-1"},
-            shared_ids_filter=JobFilter(name="testname", orgs={None}),
+            shared_ids_filter=JobFilter(name="testname", orgs={"test-org"}),
         )
 
     def test_shared_by_name_with_projects(self) -> None:
-        query_filter = JobFilter(projects={"anotheruser", "someuser"}, orgs={None})
+        query_filter = JobFilter(
+            projects={"anotheruser", "someuser"}, orgs={"test-org"}
+        )
         tree = make_access_tree(
             {
-                "test-cluster/testuser": "read",
-                "test-cluster/anotheruser/job-test-1": "read",
-                "test-cluster/anotheruser/testname": "read",
-                "test-cluster/thirduser/testname": "read",
+                "test-cluster/test-org/testuser": "read",
+                "test-cluster/test-org/anotheruser/job-test-1": "read",
+                "test-cluster/test-org/anotheruser/testname": "read",
+                "test-cluster/test-org/thirduser/testname": "read",
             }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
-                clusters={"test-cluster": {None: {"anotheruser": {"testname"}}}},
+                clusters={"test-cluster": {"test-org": {"anotheruser": {"testname"}}}},
                 projects={"anotheruser"},
-                orgs={None},
+                orgs={"test-org"},
             ),
             shared_ids={"job-test-1"},
             shared_ids_filter=JobFilter(
-                projects={"anotheruser", "someuser"}, orgs={None}
+                projects={"anotheruser", "someuser"}, orgs={"test-org"}
             ),
         )
 
@@ -1651,22 +1656,24 @@ class TestBulkJobFilterBuilder:
         assert bulk_filter == BulkJobFilter(
             bulk_filter=JobFilter(
                 clusters={"test-cluster": {}},
-                orgs={None, "testuser"},
+                orgs={"testuser"},
                 projects={"anotheruser"},
                 name="testname",
             ),
-            shared_ids={"job-test-1"},
-            shared_ids_filter=JobFilter(projects={"anotheruser"}, name="testname"),
+            shared_ids=set(),
+            shared_ids_filter=None,
         )
 
     def test_shared_by_name_with_project_and_name_2(self) -> None:
-        query_filter = JobFilter(projects={"anotheruser"}, name="testname", orgs={None})
+        query_filter = JobFilter(
+            projects={"anotheruser"}, name="testname", orgs={"test-org"}
+        )
         tree = make_access_tree(
             {
-                "test-cluster/testuser": "read",
-                "test-cluster/anotheruser/job-test-1": "read",
-                "test-cluster/anotheruser/testname2": "read",
-                "test-cluster/thirduser/testname": "read",
+                "test-cluster/test-org/testuser": "read",
+                "test-cluster/test-org/anotheruser/job-test-1": "read",
+                "test-cluster/test-org/anotheruser/testname2": "read",
+                "test-cluster/test-org/thirduser/testname": "read",
             }
         )
         bulk_filter = BulkJobFilterBuilder(query_filter, tree).build()
@@ -1674,7 +1681,7 @@ class TestBulkJobFilterBuilder:
             bulk_filter=None,
             shared_ids={"job-test-1"},
             shared_ids_filter=JobFilter(
-                projects={"anotheruser"}, name="testname", orgs={None}
+                projects={"anotheruser"}, name="testname", orgs={"test-org"}
             ),
         )
 
