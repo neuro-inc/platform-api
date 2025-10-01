@@ -127,12 +127,13 @@ class TestApi:
         client: aiohttp.ClientSession,
         regular_user_factory: UserFactory,
         admin_url: URL,
+        test_org_name: str,
     ) -> None:
         url = api.config_url
         regular_user = await regular_user_factory(
             clusters=[
-                ("test-cluster", Balance(), Quota()),
-                ("testcluster2", Balance(), Quota()),
+                ("test-cluster", test_org_name, Balance(), Quota()),
+                ("testcluster2", test_org_name, Balance(), Quota()),
             ],
             do_create_project=False,
         )
@@ -436,7 +437,7 @@ class TestApi:
             assert result == expected_payload
 
             result_orgs = result["clusters"][0]["orgs"]
-            assert None in result_orgs
+            assert test_org_name in result_orgs
 
     async def test_config__with_orgs_and_projects(
         self,
@@ -449,7 +450,6 @@ class TestApi:
         url = api.config_url
         regular_user = await regular_user_factory(
             clusters=[
-                ("test-cluster", Balance(), Quota()),
                 ("test-cluster", "org1", Balance(), Quota()),
                 ("test-cluster", "org2", Balance(), Quota()),
             ],
@@ -461,9 +461,6 @@ class TestApi:
 
         org3 = await admin_client.create_org(random_str())
 
-        project1 = await admin_client.create_project(
-            random_str(), regular_user.cluster_name, None
-        )
         project2 = await admin_client.create_project(
             random_str(), regular_user.cluster_name, "org1"
         )
@@ -679,7 +676,6 @@ class TestApi:
             assert result == expected_payload
 
             result_orgs = result["clusters"][0]["orgs"]
-            assert None in result_orgs
             assert "org1" in result_orgs
             assert "org2" in result_orgs
 
@@ -703,12 +699,6 @@ class TestApi:
             assert sorted(result["projects"], key=lambda o: o["name"]) == sorted(
                 [
                     {
-                        "name": project1.name,
-                        "cluster_name": regular_user.cluster_name,
-                        "org_name": None,
-                        "role": "admin",
-                    },
-                    {
                         "name": project2.name,
                         "cluster_name": regular_user.cluster_name,
                         "org_name": "org1",
@@ -724,8 +714,11 @@ class TestApi:
         client: aiohttp.ClientSession,
         regular_user_factory: UserFactory,
         admin_url: URL,
+        test_cluster_name: str,
+        test_org_name: str,
     ) -> None:
         regular_user = await regular_user_factory(
+            clusters=[(test_cluster_name, test_org_name, Balance(), Quota())],
             do_create_project=False,
         )
         url = api_with_oauth.config_url
