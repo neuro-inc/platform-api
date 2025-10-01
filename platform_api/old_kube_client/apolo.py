@@ -182,7 +182,7 @@ async def create_namespace(
                                     # allow traffic to all pods in this ns
                                     "podSelector": {
                                         "matchLabels": {
-                                            "platform.apolo.us/component": "ingress-gateway"
+                                            "platform.apolo.us/component": "ingress-gateway"  # noqa
                                         }
                                     },
                                 }

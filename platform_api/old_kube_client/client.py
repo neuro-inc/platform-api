@@ -52,7 +52,7 @@ class KubeClient:
         if auth_type == KubeClientAuthType.TOKEN:
             assert token or token_path, "token or token path must be provided"
         elif auth_type == KubeClientAuthType.CERTIFICATE:
-            assert auth_cert_path and auth_cert_key_path, "certs must be provided"
+            assert auth_cert_path and auth_cert_key_path, "certs must be provided"  # noqa
 
         self._auth_type = auth_type
         self._auth_cert_path = auth_cert_path
