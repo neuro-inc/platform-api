@@ -4,7 +4,7 @@ import ssl
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
-from typing import Any, Optional, Union, cast
+from typing import Any, cast
 from urllib.parse import urlsplit
 
 import aiohttp
@@ -29,19 +29,19 @@ class KubeClient:
         *,
         base_url: str,
         namespace: str,
-        cert_authority_path: Optional[str] = None,
-        cert_authority_data_pem: Optional[str] = None,
+        cert_authority_path: str | None = None,
+        cert_authority_data_pem: str | None = None,
         auth_type: KubeClientAuthType = KubeClientAuthType.CERTIFICATE,
-        auth_cert_path: Optional[str] = None,
-        auth_cert_key_path: Optional[str] = None,
-        token: Optional[str] = None,
-        token_path: Optional[str] = None,
+        auth_cert_path: str | None = None,
+        auth_cert_key_path: str | None = None,
+        token: str | None = None,
+        token_path: str | None = None,
         token_update_interval_s: int = 300,
         conn_timeout_s: int = 300,
         read_timeout_s: int = 100,
         watch_timeout_s: int = 1800,
         conn_pool_size: int = 100,
-        trace_configs: Optional[list[aiohttp.TraceConfig]] = None,
+        trace_configs: list[aiohttp.TraceConfig] | None = None,
     ) -> None:
         self._base_url = base_url
         self._namespace = namespace
@@ -67,8 +67,8 @@ class KubeClient:
         self._conn_pool_size = conn_pool_size
         self._trace_configs = trace_configs
 
-        self._client: Optional[aiohttp.ClientSession] = None
-        self._token_updater_task: Optional[asyncio.Task[None]] = None
+        self._client: aiohttp.ClientSession | None = None
+        self._token_updater_task: asyncio.Task[None] | None = None
 
     def __str__(self) -> str:
         return self.__class__.__name__
@@ -79,7 +79,7 @@ class KubeClient:
         await self.init()
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.close()
 
     async def init(self) -> None:
@@ -123,7 +123,7 @@ class KubeClient:
     def namespaces_url(self) -> str:
         return f"{self.api_v1_url}/namespaces"
 
-    def generate_namespace_url(self, namespace_name: Optional[str] = None) -> str:
+    def generate_namespace_url(self, namespace_name: str | None = None) -> str:
         namespace_name = namespace_name or self._namespace
         return f"{self.namespaces_url}/{namespace_name}"
 
@@ -208,7 +208,7 @@ class KubeClient:
     def _is_ssl(self) -> bool:
         return urlsplit(self._base_url).scheme == "https"
 
-    def _create_ssl_context(self) -> Union[ssl.SSLContext, bool]:
+    def _create_ssl_context(self) -> ssl.SSLContext | bool:
         if not self._is_ssl:
             return False
         ssl_context = ssl.create_default_context(
@@ -253,7 +253,7 @@ class KubeClient:
 
 @asynccontextmanager
 async def kube_client_from_config(
-    config: KubeConfig, trace_configs: Optional[list[aiohttp.TraceConfig]] = None
+    config: KubeConfig, trace_configs: list[aiohttp.TraceConfig] | None = None
 ) -> AsyncIterator[KubeClient]:
     client = KubeClient(
         base_url=config.endpoint_url,

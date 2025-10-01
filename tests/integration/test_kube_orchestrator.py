@@ -19,8 +19,6 @@ from unittest.mock import PropertyMock, patch
 import aiohttp
 import pytest
 from aiohttp import web
-from platform_api.old_kube_client.apolo import NO_ORG, create_namespace
-from platform_api.old_kube_client.errors import KubeClientException, ResourceNotFound
 from neuro_config_client import (
     NvidiaGPU,
     OrchestratorConfig,
@@ -35,6 +33,8 @@ from platform_api.config import (
     STORAGE_URI_SCHEME,
     RegistryConfig,
 )
+from platform_api.old_kube_client.apolo import NO_ORG, create_namespace
+from platform_api.old_kube_client.errors import KubeClientException, ResourceNotFound
 from platform_api.orchestrator.job import (
     DEFAULT_ORPHANED_JOB_OWNER,
     Job,

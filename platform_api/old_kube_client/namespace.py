@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Any, Optional
+from typing import Any
 
 from platform_api.old_kube_client.client import KubeClient
 
@@ -50,7 +50,7 @@ class NamespaceApi:
         return Namespace.from_kube(response)
 
     async def create_namespace(
-        self, name: str, *, labels: Optional[dict[str, str]] = None
+        self, name: str, *, labels: dict[str, str] | None = None
     ) -> Namespace:
         payload: dict[str, Any] = {
             "apiVersion": "v1",
