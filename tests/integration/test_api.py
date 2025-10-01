@@ -2094,10 +2094,11 @@ class TestJobs:
         job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
+        test_org_name: str,
     ) -> None:
         url = api.jobs_base_url
         user = regular_user
-        disk_uri = f"disk://{user.cluster_name}/{user.name}/disk-1"
+        disk_uri = f"disk://{user.cluster_name}/{test_org_name}/{user.name}/disk-1"
         disk_volumes = [
             {"src_disk_uri": disk_uri, "dst_path": "/mnt/disk"},
         ]
@@ -2124,18 +2125,24 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_submit: dict[str, Any],
         test_cluster_name: str,
+        test_org_name: str,
         regular_user_factory: UserFactory,
         disk_client_factory: Callable[..., AbstractAsyncContextManager[DiskAPIClient]],
         read_only: bool,
     ) -> None:
         cluster = test_cluster_name
-        usr_1 = await regular_user_factory(clusters=[(cluster, Balance(), Quota())])
-        usr_2 = await regular_user_factory(clusters=[(cluster, Balance(), Quota())])
+        usr_1 = await regular_user_factory(
+            clusters=[(cluster, test_org_name, Balance(), Quota())]
+        )
+        usr_2 = await regular_user_factory(
+            clusters=[(cluster, test_org_name, Balance(), Quota())]
+        )
 
         async with disk_client_factory(usr_1) as disk_client:
             disk = await disk_client.create_disk(
                 storage=1024 * 1024,
                 project_name=usr_1.name,
+                org_name=test_org_name,
             )
 
         disk_volumes = [
