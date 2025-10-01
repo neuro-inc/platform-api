@@ -1080,10 +1080,8 @@ class TestJobFilterFactory:
         query = MultiDict([("logs_removed", "False")])
         assert factory(query) == JobFilter(logs_removed=False)
 
-        query = MultiDict(
-            [("org_name", "NO_ORG"), ("org_name", "org1"), ("org_name", "org2")]
-        )
-        assert factory(query) == JobFilter(orgs={None, "org1", "org2"})
+        query = MultiDict([("org_name", "org1"), ("org_name", "org2")])
+        assert factory(query) == JobFilter(orgs={"org1", "org2"})
 
     def test_create_from_query_with_status(self) -> None:
         factory = JobFilterFactory().create_from_query

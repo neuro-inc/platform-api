@@ -4028,11 +4028,6 @@ class TestJobs:
 
         job_request = job_request_factory()
         job_request["container"]["resources"]["memory_mb"] = 100_500
-        async with client.post(url, headers=headers, json=job_request) as resp:
-            assert resp.status == HTTPAccepted.status_code, await resp.text()
-            result = await resp.json()
-            job_id_no_org = result["id"]
-
         job_request["org_name"] = "org1"
         async with client.post(url, headers=headers, json=job_request) as resp:
             assert resp.status == HTTPAccepted.status_code, await resp.text()
@@ -4046,7 +4041,6 @@ class TestJobs:
             job_id_org2 = result["id"]
 
         jobs_client = jobs_client_factory(org_user)
-        await jobs_client.long_polling_by_job_id(job_id_no_org, status="pending")
         await jobs_client.long_polling_by_job_id(job_id_org1, status="pending")
         await jobs_client.long_polling_by_job_id(job_id_org2, status="pending")
 

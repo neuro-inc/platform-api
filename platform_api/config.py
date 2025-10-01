@@ -11,9 +11,6 @@ from .orchestrator.kube_config import KubeConfig
 
 STORAGE_URI_SCHEME = "storage"
 
-NO_ORG = "NO_ORG"
-NO_ORG_NORMALIZED = "no-org"
-
 
 @dataclass(frozen=True)
 class RegistryConfig:

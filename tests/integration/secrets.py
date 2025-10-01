@@ -14,7 +14,7 @@ from aiodocker.types import JSONObject
 from aiohttp import ClientError
 from yarl import URL
 
-from platform_api.config import NO_ORG_NORMALIZED, AuthConfig
+from platform_api.config import AuthConfig
 from platform_api.orchestrator.kube_config import KubeConfig
 from tests.integration.auth import _User
 
@@ -188,7 +188,7 @@ class SecretsClient:
             data = await resp.json()
             assert data == {
                 "key": key,
-                "org_name": org_name or NO_ORG_NORMALIZED,
+                "org_name": org_name,
                 "owner": project_name,
                 "project_name": project_name,
             }

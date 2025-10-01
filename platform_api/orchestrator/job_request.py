@@ -10,8 +10,6 @@ from typing import Any
 from neuro_config_client import ResourcePoolType, ResourcePreset
 from yarl import URL
 
-from platform_api.config import NO_ORG_NORMALIZED
-
 
 class JobException(Exception):
     pass
@@ -83,23 +81,8 @@ class Disk:
         )
 
     def to_permission_uri(self) -> str:
-        """
-        Permission URI must not include a `no-org`.
-        This method can be removed whenever we'll get rid of `no-org` concept.
-        """
-        joined_path = self.path
-        if "/" in self.path:
-            path = []
-            org_name, project_name, *parts = self.path.split("/")
-            if org_name == NO_ORG_NORMALIZED:
-                path.extend([project_name, *parts])
-            else:
-                path.extend([org_name, project_name, *parts])
-            joined_path = "/".join(path)
         return str(
-            URL.build(scheme="disk", host=self.cluster_name)
-            / joined_path
-            / self.disk_id
+            URL.build(scheme="disk", host=self.cluster_name) / self.path / self.disk_id
         )
 
     @classmethod
@@ -175,8 +158,6 @@ class Secret:
 
     @staticmethod
     def path_with_org(path: str) -> str:
-        if "/" not in path:
-            path = f"{NO_ORG_NORMALIZED}/{path}"
         return path
 
 

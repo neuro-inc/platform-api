@@ -31,7 +31,6 @@ from neuro_config_client import (
 from yarl import URL
 
 from platform_api.config import (
-    NO_ORG_NORMALIZED,
     STORAGE_URI_SCHEME,
     RegistryConfig,
 )
@@ -1456,6 +1455,7 @@ class TestKubeOrchestrator:
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
                 preset_name="cpu-micro",
+                org_name="test-org",
             ),
         )
         await delete_job_later(job)
@@ -1466,12 +1466,12 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/preset": job.preset_name,
             "platform.neuromation.io/user": job.owner,
-            "platform.neuromation.io/org": "no_org",
+            "platform.neuromation.io/org": "test-org",
             "platform.neuromation.io/project": job.owner,
             "platform.apolo.us/job": job.id,
             "platform.apolo.us/preset": job.preset_name,
             "platform.apolo.us/user": job.owner,
-            "platform.apolo.us/org": "no_org",
+            "platform.apolo.us/org": "test-org",
             "platform.apolo.us/project": job.owner,
         }
 
@@ -1547,11 +1547,11 @@ class TestKubeOrchestrator:
         assert service.labels == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
-            "platform.neuromation.io/org": "no_org",
+            "platform.neuromation.io/org": "test-org",
             "platform.neuromation.io/project": job.owner,
             "platform.apolo.us/job": job.id,
             "platform.apolo.us/user": job.owner,
-            "platform.apolo.us/org": "no_org",
+            "platform.apolo.us/org": "test-org",
             "platform.apolo.us/project": job.owner,
         }
 
@@ -1560,11 +1560,11 @@ class TestKubeOrchestrator:
         assert ingress.labels == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
-            "platform.neuromation.io/org": "no_org",
+            "platform.neuromation.io/org": "test-org",
             "platform.neuromation.io/project": job.owner,
             "platform.apolo.us/job": job.id,
             "platform.apolo.us/user": job.owner,
-            "platform.apolo.us/org": "no_org",
+            "platform.apolo.us/org": "test-org",
             "platform.apolo.us/project": job.owner,
         }
 
@@ -1602,11 +1602,11 @@ class TestKubeOrchestrator:
         assert service.labels == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
-            "platform.neuromation.io/org": "no_org",
+            "platform.neuromation.io/org": "test-org",
             "platform.neuromation.io/project": job.owner,
             "platform.apolo.us/job": job.id,
             "platform.apolo.us/user": job.owner,
-            "platform.apolo.us/org": "no_org",
+            "platform.apolo.us/org": "test-org",
             "platform.apolo.us/project": job.owner,
         }
 
@@ -1616,12 +1616,12 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/job-name": job.name,
             "platform.neuromation.io/user": job.owner,
-            "platform.neuromation.io/org": "no_org",
+            "platform.neuromation.io/org": "test-org",
             "platform.neuromation.io/project": job.owner,
             "platform.apolo.us/job": job.id,
             "platform.apolo.us/job-name": job.name,
             "platform.apolo.us/user": job.owner,
-            "platform.apolo.us/org": "no_org",
+            "platform.apolo.us/org": "test-org",
             "platform.apolo.us/project": job.owner,
         }
 
@@ -1830,7 +1830,7 @@ class TestKubeOrchestrator:
                 labels={
                     "platform.neuromation.io/user": "another_user",
                     "platform.neuromation.io/project": "test_project",
-                    "platform.neuromation.io/org_name": NO_ORG_NORMALIZED,
+                    "platform.neuromation.io/org_name": "test-org",
                 },
             )
 
@@ -1859,7 +1859,7 @@ class TestKubeOrchestrator:
 
             missing = await orchestrator.get_missing_disks(
                 namespace=kube_config.namespace,
-                org_name=NO_ORG_NORMALIZED,
+                org_name="test-org",
                 project_name="test-project",
                 disks=[disk1, disk2, disk3, disk4],
             )

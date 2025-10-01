@@ -16,8 +16,6 @@ from neuro_config_client import OrchestratorConfig, ResourcePreset
 from neuro_config_client.entities import DEFAULT_ENERGY_SCHEDULE_NAME
 from yarl import URL
 
-from platform_api.config import NO_ORG
-
 from .job_request import (
     ContainerResources,
     ContainerVolume,
@@ -338,15 +336,17 @@ class JobRecord:
         org_name = kwargs.get("org_name")
         project_name = kwargs["project_name"]
 
+        assert org_name is not None, "org_name is required"
+
         kwargs["org_project_hash"] = cls._create_org_project_hash(
             org_name, project_name
         )
-        kwargs["namespace"] = generate_namespace_name(org_name or NO_ORG, project_name)
+        kwargs["namespace"] = generate_namespace_name(org_name, project_name)
         return cls(**kwargs)
 
     @classmethod
-    def _create_org_project_hash(cls, org_name: str | None, project_name: str) -> bytes:
-        return cls._create_hash(org_name or NO_ORG, project_name)[:5]
+    def _create_org_project_hash(cls, org_name: str, project_name: str) -> bytes:
+        return cls._create_hash(org_name, project_name)[:5]
 
     @classmethod
     def _create_hash(cls, *args: str) -> bytes:
@@ -539,6 +539,7 @@ class JobRecord:
         if org_project_hash and isinstance(org_project_hash, str):
             org_project_hash = bytes.fromhex(org_project_hash)
         elif not org_project_hash:
+            assert org_name is not None, "org_name is required"
             org_project_hash = cls._create_org_project_hash(org_name, project_name)
         return cls(
             request=request,
