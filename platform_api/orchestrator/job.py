@@ -15,6 +15,8 @@ from neuro_config_client import OrchestratorConfig, ResourcePreset
 from neuro_config_client.entities import DEFAULT_ENERGY_SCHEDULE_NAME
 from yarl import URL
 
+from platform_api.old_kube_client.apolo import generate_namespace_name
+
 from .job_request import (
     ContainerResources,
     ContainerVolume,
