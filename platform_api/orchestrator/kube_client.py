@@ -15,15 +15,16 @@ from typing import Any, ClassVar, NoReturn, Optional
 
 import aiohttp
 import iso8601
-from apolo_kube_client.client import KubeClient as ApoloKubeClient
-from apolo_kube_client.errors import (
+from yarl import URL
+
+from platform_api.old_kube_client.client import KubeClient as ApoloKubeClient
+from platform_api.old_kube_client.errors import (
     KubeClientException,
     KubeClientUnauthorized,
     ResourceExists,
     ResourceGone,
     ResourceNotFound,
 )
-from yarl import URL
 
 from .job_request import (
     Container,
