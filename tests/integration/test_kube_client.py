@@ -11,7 +11,7 @@ from typing import Any
 import aiohttp
 import aiohttp.web
 import pytest
-from apolo_kube_client.errors import KubeClientException, ResourceExists
+from platform_api.old_kube_client.errors import KubeClientException, ResourceExists
 
 from platform_api.config import KubeConfig
 from platform_api.orchestrator.job_request import (

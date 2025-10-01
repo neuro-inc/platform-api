@@ -9,8 +9,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 import aiohttp
-from apolo_kube_client.apolo import create_namespace, normalize_name
-from apolo_kube_client.errors import (
+from platform_api.old_kube_client.apolo import create_namespace, normalize_name
+from platform_api.old_kube_client.errors import (
     KubeClientException,
     ResourceExists,
     ResourceNotFound,

@@ -17,7 +17,7 @@ import aiohttp.web
 import neuro_config_client
 import pytest
 from apolo_events_client import EventsClientConfig
-from apolo_kube_client.errors import ResourceExists
+from platform_api.old_kube_client.errors import ResourceExists
 from neuro_config_client import (
     AMDGPU,
     ACMEEnvironment,
