@@ -15,7 +15,7 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.11,<4.0"
+python = ">=3.13,<4.0"
 aiohttp = {version = "^3.12.15", extras = ["speedups"]}
 iso8601 = ">=2.1.0"
 trafaret = "2.1.1"
@@ -33,7 +33,7 @@ typing-extensions = "4.15.0"
 neuro-admin-client = "25.9.1"
 yarl = "^1.20.1"
 python-jose = ">=3.4.0"
-apolo-kube-client = "25.7.4"
+apolo-kube-client = "^25.9.6"
 apolo-events-client = "25.8.0"
 neuro-config-client = "25.9.4"
 

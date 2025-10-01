@@ -9,15 +9,15 @@ from datetime import UTC, datetime
 from typing import Any
 
 import aiohttp
-from apolo_kube_client.apolo import create_namespace, normalize_name
-from apolo_kube_client.errors import (
+from neuro_config_client import OrchestratorConfig, ResourcePoolType
+
+from platform_api.config import NO_ORG, RegistryConfig
+from platform_api.old_kube_client.apolo import create_namespace, normalize_name
+from platform_api.old_kube_client.errors import (
     KubeClientException,
     ResourceExists,
     ResourceNotFound,
 )
-from neuro_config_client import OrchestratorConfig, ResourcePoolType
-
-from platform_api.config import NO_ORG, RegistryConfig
 
 from .base import Orchestrator
 from .job import Job, JobRestartPolicy, JobStatusItem, JobStatusReason
