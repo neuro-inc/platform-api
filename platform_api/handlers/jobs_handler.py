@@ -693,10 +693,10 @@ class JobsHandler:
             None,
         )
         # Use first org from user's cluster access as default
-        assert cluster_config_for_default_org is not None, (
-            "User must have cluster access"
-        )
-        assert cluster_config_for_default_org.orgs, "User must have at least one org"
+        if cluster_config_for_default_org is None:
+            raise aiohttp.web.HTTPForbidden(text="User must have cluster access")
+        if not cluster_config_for_default_org.orgs:
+            raise aiohttp.web.HTTPForbidden(text="User must have at least one org")
         default_org_name = cluster_config_for_default_org.orgs[0]
 
         job_cluster_org_name_validator = create_job_cluster_org_name_validator(

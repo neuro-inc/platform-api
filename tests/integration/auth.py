@@ -209,7 +209,7 @@ async def regular_user_factory(
         if not name:
             name = random_str()
         if clusters is None:
-            clusters = [(test_cluster_name, Balance(), Quota())]
+            clusters = [(test_cluster_name, test_org_name, Balance(), Quota())]
         await admin_client.create_user(name=name, email=f"{name}@email.com")
         user_token = token_factory(name)
         user_admin_client = await admin_client_factory(user_token)

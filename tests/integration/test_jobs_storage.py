@@ -46,10 +46,16 @@ class TestJobsStorage:
         return JobRequest.create(container)
 
     def _create_job(
-        self, cluster_name: str = "test-cluster", **kwargs: Any
+        self,
+        cluster_name: str = "test-cluster",
+        org_name: str = "test-org",
+        **kwargs: Any,
     ) -> JobRecord:
         return JobRecord.create(
-            request=self._create_job_request(), cluster_name=cluster_name, **kwargs
+            request=self._create_job_request(),
+            cluster_name=cluster_name,
+            org_name=org_name,
+            **kwargs,
         )
 
     def _create_pending_job(

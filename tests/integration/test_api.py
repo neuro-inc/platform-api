@@ -5292,6 +5292,7 @@ class TestJobs:
         regular_user_factory: UserFactory,
         regular_user: _User,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         url = api.jobs_base_url
         async with client.post(
@@ -5310,7 +5311,7 @@ class TestJobs:
                 "missing": [
                     {
                         "action": "write",
-                        "uri": f"job://{cluster_name}/{regular_user.name}/{job_id}",
+                        "uri": f"job://{cluster_name}/{test_org_name}/{regular_user.name}/{job_id}",
                     }
                 ]
             }
@@ -5509,6 +5510,7 @@ class TestJobs:
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
+                "org_name": test_org_name,
                 "project_name": regular_user.name,
                 "org_project_hash": mock.ANY,
                 "namespace": actual_namespace,
@@ -5570,6 +5572,7 @@ class TestJobs:
             "id": job_id,
             "owner": regular_user.name,
             "cluster_name": "test-cluster",
+            "org_name": test_org_name,
             "project_name": regular_user.name,
             "org_project_hash": mock.ANY,
             "namespace": actual_namespace,
@@ -5670,6 +5673,7 @@ class TestJobs:
             "id": job_id,
             "owner": regular_user.name,
             "cluster_name": "test-cluster",
+            "org_name": test_org_name,
             "project_name": regular_user.name,
             "org_project_hash": mock.ANY,
             "namespace": actual_namespace,
@@ -5765,6 +5769,7 @@ class TestJobs:
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
+                "org_name": test_org_name,
                 "project_name": regular_user.name,
                 "org_project_hash": mock.ANY,
                 "namespace": actual_namespace,
@@ -5877,6 +5882,7 @@ class TestJobs:
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
+                "org_name": test_org_name,
                 "project_name": regular_user.name,
                 "org_project_hash": mock.ANY,
                 "namespace": actual_namespace,
