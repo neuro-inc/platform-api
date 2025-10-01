@@ -1652,12 +1652,14 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_disk_api_client: DiskAPIClient,
+        test_org_name: str,
     ) -> None:
         disk_path = "/mnt/disk"
 
         disk = await regular_disk_api_client.create_disk(
             storage=1024 * 1024,
             project_name=regular_user.name,
+            org_name=test_org_name,
         )
 
         disk_volumes = [
@@ -1768,6 +1770,7 @@ class TestJobs:
         service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         disk_client_factory: Callable[[_User], DiskAPIClient],
+        test_org_name: str,
     ) -> None:
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
@@ -1778,6 +1781,7 @@ class TestJobs:
             disk = await disk_client.create_disk(
                 storage=1024 * 1024,
                 project_name=service_user.name.split("/")[0],
+                org_name=test_org_name,
             )
 
         disk_volumes = [
@@ -1824,6 +1828,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_disk_api_client: DiskAPIClient,
+        test_org_name: str,
     ) -> None:
         disk_path1 = "/mnt/disk1"
         disk_path2 = "/mnt/disk2"
@@ -1831,6 +1836,7 @@ class TestJobs:
         disk = await regular_disk_api_client.create_disk(
             storage=1024 * 1024,
             project_name=regular_user.name,
+            org_name=test_org_name,
         )
 
         disk_volumes = [
