@@ -300,6 +300,7 @@ async def service_account_factory(
     token_factory: Callable[[str], str],
     admin_token: str,
     test_cluster_name: str,
+    test_org_name: str,
 ) -> ServiceAccountFactory:
     async def _factory(
         owner: _User,
@@ -310,17 +311,30 @@ async def service_account_factory(
         user = AuthUser(name=f"{owner.name}/service-accounts/{name}")
         await auth_client.add_user(user, token=admin_token)
         permissions = []
-        # Fake grant access to SA staff
+        # Fake grant access to SA stuff
         for cluster in owner.clusters:
             permissions.extend(
                 [
                     Permission(
-                        uri=f"storage://{cluster}/{owner.name}", action="manage"
+                        uri=f"storage://{cluster}/{test_org_name}/{owner.name}",
+                        action="manage",
                     ),
-                    Permission(uri=f"image://{cluster}/{owner.name}", action="manage"),
-                    Permission(uri=f"job://{cluster}/{owner.name}", action="manage"),
-                    Permission(uri=f"secret://{cluster}/{owner.name}", action="manage"),
-                    Permission(uri=f"disk://{cluster}/{owner.name}", action="write"),
+                    Permission(
+                        uri=f"image://{cluster}/{test_org_name}/{owner.name}",
+                        action="manage",
+                    ),
+                    Permission(
+                        uri=f"job://{cluster}/{test_org_name}/{owner.name}",
+                        action="manage",
+                    ),
+                    Permission(
+                        uri=f"secret://{cluster}/{test_org_name}/{owner.name}",
+                        action="manage",
+                    ),
+                    Permission(
+                        uri=f"disk://{cluster}/{test_org_name}/{owner.name}",
+                        action="write",
+                    ),
                 ]
             )
         await auth_client.grant_user_permissions(
