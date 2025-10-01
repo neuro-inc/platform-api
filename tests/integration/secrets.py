@@ -174,7 +174,7 @@ class SecretsClient:
         key: str,
         value: str,
         project_name: str,
-        org_name: str | None = None,
+        org_name: str,
     ) -> None:
         url = self._base_url / "secrets"
         payload = {
