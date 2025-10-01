@@ -246,13 +246,17 @@ def create_job_cluster_org_name_validator(
     default_org_name: str | None,
     default_project_name: str,
 ) -> t.Trafaret:
+    if default_org_name is not None:
+        org_name_key = t.Key("org_name", default=default_org_name)
+    else:
+        org_name_key = t.Key("org_name")
+
     return t.Dict(
         {
             t.Key(
                 "cluster_name", default=default_cluster_name
             ): create_cluster_name_validator(),
-            t.Key("org_name", default=default_org_name): create_org_name_validator()
-            | t.Null,
+            org_name_key: create_org_name_validator(),
             t.Key(
                 "project_name", default=default_project_name
             ): create_project_name_validator(),
@@ -693,15 +697,16 @@ class JobsHandler:
             ),
             None,
         )
-        # always use NO_ORG as default if a user has direct access to cluster.
-        # if cluster_config_for_default_org is None,
-        # the validator below will raise an error
+        # Determine default org_name:
+        # - If user has org-based access, use first org as default
+        # - If user only has direct cluster access (no orgs), org_name will be required
         default_org_name = None
-        if (
-            cluster_config_for_default_org is not None
-            and None not in cluster_config_for_default_org.orgs
-        ):
-            default_org_name = cluster_config_for_default_org.orgs[0]
+        if cluster_config_for_default_org is not None:
+            available_orgs = [
+                org for org in cluster_config_for_default_org.orgs if org is not None
+            ]
+            if available_orgs:
+                default_org_name = available_orgs[0]
 
         job_cluster_org_name_validator = create_job_cluster_org_name_validator(
             default_cluster_name=default_cluster_name,

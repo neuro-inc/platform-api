@@ -360,6 +360,7 @@ class TestJobClusterNameValidator:
         }
         request = {
             "container": container,
+            "org_name": "test-org",
         }
         validator = create_job_cluster_org_name_validator(
             default_cluster_name="default",
@@ -368,7 +369,7 @@ class TestJobClusterNameValidator:
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "default"
-        assert payload["org_name"] is None
+        assert payload["org_name"] == "test-org"
         assert payload["project_name"] == "default-project"
 
     def test_without_org_name(self) -> None:
@@ -398,6 +399,7 @@ class TestJobClusterNameValidator:
         }
         request = {
             "cluster_name": "testcluster",
+            "org_name": "test-org",
             "container": container,
         }
         validator = create_job_cluster_org_name_validator(
@@ -407,7 +409,7 @@ class TestJobClusterNameValidator:
         )
         payload = validator.check(request)
         assert payload["cluster_name"] == "testcluster"
-        assert payload["org_name"] is None
+        assert payload["org_name"] == "test-org"
 
     def test_with_org_name(self) -> None:
         container = {

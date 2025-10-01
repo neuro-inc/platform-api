@@ -1005,19 +1005,23 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: UserFactory,
         admin_client_factory: Callable[[str], Awaitable[AdminClient]],
+        test_org_name: str,
     ) -> None:
         url = api.jobs_base_url
         project_name = random_str()
         job_name = f"j-{random_str()}"
 
         regular_user = await regular_user_factory(
-            cluster_user_role=ClusterUserRoleType.MANAGER
+            clusters=[("test-cluster", test_org_name, Balance(), Quota())],
+            cluster_user_role=ClusterUserRoleType.MANAGER,
         )
 
         jobs_client = jobs_client_factory(regular_user)
         admin_client = await admin_client_factory(regular_user.token)
 
-        await admin_client.create_project(project_name, regular_user.cluster_name, None)
+        await admin_client.create_project(
+            project_name, regular_user.cluster_name, test_org_name
+        )
 
         job_submit["project_name"] = project_name
         job_submit["name"] = job_name

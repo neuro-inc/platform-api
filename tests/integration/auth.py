@@ -336,8 +336,12 @@ async def service_account_factory(
 
 
 @pytest.fixture
-async def regular_user(regular_user_factory: UserFactory) -> _User:
-    return await regular_user_factory()
+async def regular_user(
+    regular_user_factory: UserFactory, test_cluster_name: str, test_org_name: str
+) -> _User:
+    return await regular_user_factory(
+        clusters=[(test_cluster_name, test_org_name, Balance(), Quota())]
+    )
 
 
 @pytest.fixture
