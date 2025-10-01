@@ -1412,16 +1412,22 @@ class TestJobs:
         regular_user: _User,
         regular_secrets_client: SecretsClient,
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
+        test_org_name: str,
     ) -> None:
         secret_name, secret_value = "key1", "value1"
         secret_path = "/etc/foo/file.txt"
 
         await regular_secrets_client.create_secret(
-            secret_name, secret_value, project_name=regular_user.name
+            secret_name,
+            secret_value,
+            project_name=regular_user.name,
+            org_name=test_org_name,
         )
 
         user = regular_user
-        secret_uri = f"secret://{user.cluster_name}/{user.name}/{secret_name}"
+        secret_uri = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{secret_name}"
+        )
         secret_volumes = [
             {"src_secret_uri": secret_uri, "dst_path": secret_path},
         ]
@@ -1555,6 +1561,7 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         secrets_client_factory: Callable[[_User], SecretsClient],
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
+        test_org_name: str,
     ) -> None:
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
@@ -1567,12 +1574,13 @@ class TestJobs:
 
         async with secrets_client_factory(service_user) as secrets_client:
             await secrets_client.create_secret(
-                secret_name, secret_value, project_name=project_name
+                secret_name,
+                secret_value,
+                project_name=project_name,
+                org_name=test_org_name,
             )
 
-        secret_uri = (
-            f"secret://{service_user.cluster_name}/{project_name}/{secret_name}"
-        )
+        secret_uri = f"secret://{service_user.cluster_name}/{test_org_name}/{project_name}/{secret_name}"
         secret_volumes = [
             {"src_secret_uri": secret_uri, "dst_path": secret_path},
         ]
@@ -1612,6 +1620,7 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         secrets_client_factory: Callable[[_User], SecretsClient],
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
+        test_org_name: str,
     ) -> None:
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
@@ -1621,10 +1630,12 @@ class TestJobs:
         key, value = "key1", "value1"
 
         async with secrets_client_factory(service_user) as secrets_client:
-            await secrets_client.create_secret(key, value, project_name=project_name)
+            await secrets_client.create_secret(
+                key, value, project_name=project_name, org_name=test_org_name
+            )
 
         secret_env = {
-            "ENV_SECRET": f"secret://{service_user.cluster_name}/{project_name}/{key}",
+            "ENV_SECRET": f"secret://{service_user.cluster_name}/{test_org_name}/{project_name}/{key}",
         }
         job_submit["container"]["secret_env"] = secret_env
 
