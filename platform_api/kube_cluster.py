@@ -51,6 +51,7 @@ class KubeCluster(Cluster):
             kube_config=self._kube_config,
             kube_client=self._kube_client,
         )
+        await self._exit_stack.enter_async_context(orchestrator)
         orchestrator.subscribe_to_kube_events(kube_node_watcher, kube_pod_watcher)
         await self._exit_stack.enter_async_context(kube_node_watcher)
         await self._exit_stack.enter_async_context(kube_pod_watcher)

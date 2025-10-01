@@ -1,10 +1,11 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
+from contextlib import AbstractAsyncContextManager
 
 from .job import Job, JobStatusItem
 from .job_request import Disk, JobStatus
 
 
-class Orchestrator(ABC):
+class Orchestrator(AbstractAsyncContextManager[None]):
     @abstractmethod
     async def start_job(self, job: Job) -> JobStatus:
         pass
