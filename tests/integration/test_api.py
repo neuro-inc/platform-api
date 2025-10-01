@@ -3253,12 +3253,13 @@ class TestJobs:
         job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
+        test_org_name: str,
     ) -> None:
         headers = regular_user.headers
         url = api.jobs_base_url
         job_submit["container"]["volumes"] = [
             {
-                "src_storage_uri": f"storage://wrong-cluster/{regular_user.name}",
+                "src_storage_uri": f"storage://wrong-cluster/{test_org_name}/{regular_user.name}",
                 "dst_path": "/var/storage",
                 "read_only": False,
             }
@@ -3338,6 +3339,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         payload = {
             "container": {
@@ -3347,13 +3349,13 @@ class TestJobs:
                 "volumes": [
                     {
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}",
+                        f"{test_org_name}/{regular_user.name}",
                         "dst_path": "/var/storage",
                         "read_only": False,
                     },
                     {
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}/result",
+                        f"{test_org_name}/{regular_user.name}/result",
                         "dst_path": "/var/storage/result",
                         "read_only": True,
                     },
@@ -4168,13 +4170,14 @@ class TestJobs:
 
     @pytest.fixture
     async def share_job(
-        self, auth_client: AuthClient, cluster_name: str
+        self, auth_client: AuthClient, cluster_name: str, test_org_name: str
     ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
         async def _impl(
             owner: _User, follower: _User, job_id: str, action: str = "read"
         ) -> None:
             permission = Permission(
-                uri=f"job://{cluster_name}/{owner.name}/{job_id}", action=action
+                uri=f"job://{cluster_name}/{test_org_name}/{owner.name}/{job_id}",
+                action=action,
             )
             await auth_client.grant_user_permissions(
                 follower.name, [permission], token=owner.token
@@ -4184,13 +4187,14 @@ class TestJobs:
 
     @pytest.fixture
     async def share_secret(
-        self, auth_client: AuthClient, cluster_name: str
+        self, auth_client: AuthClient, cluster_name: str, test_org_name: str
     ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
         async def _impl(
             owner: _User, follower: _User, secret_name: str, action: str = "read"
         ) -> None:
             permission = Permission(
-                uri=f"secret://{cluster_name}/{owner.name}/{secret_name}", action=action
+                uri=f"secret://{cluster_name}/{test_org_name}/{owner.name}/{secret_name}",
+                action=action,
             )
             await auth_client.grant_user_permissions(
                 follower.name, [permission], token=owner.token
@@ -4200,12 +4204,13 @@ class TestJobs:
 
     @pytest.fixture
     async def share_project(
-        self, auth_client: AuthClient, cluster_name: str
+        self, auth_client: AuthClient, cluster_name: str, test_org_name: str
     ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
         async def _impl(owner: _User, follower: _User, project_name: str) -> None:
             for action in ("read", "write"):
                 permission = Permission(
-                    uri=f"job://{cluster_name}/{project_name}", action=action
+                    uri=f"job://{cluster_name}/{test_org_name}/{project_name}",
+                    action=action,
                 )
                 await auth_client.grant_user_permissions(
                     follower.name, [permission], token=owner.token
@@ -5473,6 +5478,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user: _User,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         request_payload = {
             "container": {
@@ -5482,7 +5488,7 @@ class TestJobs:
                 "volumes": [
                     {
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}",
+                        f"{test_org_name}/{regular_user.name}",
                         "dst_path": "/var/storage",
                         "read_only": False,
                     }
@@ -5534,7 +5540,7 @@ class TestJobs:
                             "dst_path": "/var/storage",
                             "read_only": False,
                             "src_storage_uri": f"storage://{cluster_name}/"
-                            f"{regular_user.name}",
+                            f"{test_org_name}/{regular_user.name}",
                         }
                     ],
                 },
@@ -5544,7 +5550,7 @@ class TestJobs:
                 "is_preemptible_node_required": False,
                 "materialized": False,
                 "pass_config": False,
-                "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+                "uri": f"job://test-cluster/{test_org_name}/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
                 "privileged": False,
                 "being_dropped": False,
@@ -5591,7 +5597,7 @@ class TestJobs:
                         "dst_path": "/var/storage",
                         "read_only": False,
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}",
+                        f"{test_org_name}/{regular_user.name}",
                     }
                 ],
             },
@@ -5601,7 +5607,7 @@ class TestJobs:
             "is_preemptible_node_required": False,
             "materialized": mock.ANY,
             "pass_config": False,
-            "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+            "uri": f"job://test-cluster/{test_org_name}/{regular_user.name}/{job_id}",
             "restart_policy": "never",
             "privileged": False,
             "being_dropped": False,
@@ -5619,6 +5625,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user: _User,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         command = 'bash -c "echo Failed!; false"'
         payload = {
@@ -5634,13 +5641,13 @@ class TestJobs:
                         "dst_path": f"/var/storage/{regular_user.name}",
                         "read_only": True,
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}",
+                        f"{test_org_name}/{regular_user.name}",
                     },
                     {
                         "dst_path": f"/var/storage/{regular_user.name}/result",
                         "read_only": False,
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}/result",
+                        f"{test_org_name}/{regular_user.name}/result",
                     },
                 ],
             }
@@ -5694,13 +5701,13 @@ class TestJobs:
                         "dst_path": f"/var/storage/{regular_user.name}",
                         "read_only": True,
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}",
+                        f"{test_org_name}/{regular_user.name}",
                     },
                     {
                         "dst_path": f"/var/storage/{regular_user.name}/result",
                         "read_only": False,
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}/result",
+                        f"{test_org_name}/{regular_user.name}/result",
                     },
                 ],
             },
@@ -5710,7 +5717,7 @@ class TestJobs:
             "is_preemptible_node_required": False,
             "materialized": mock.ANY,
             "pass_config": False,
-            "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+            "uri": f"job://test-cluster/{test_org_name}/{regular_user.name}/{job_id}",
             "restart_policy": "never",
             "privileged": False,
             "being_dropped": False,
@@ -5729,6 +5736,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user: _User,
+        test_org_name: str,
         kube_node_gpu: str,
         kube_client: MyKubeClient,
     ) -> None:
@@ -5797,7 +5805,7 @@ class TestJobs:
                 "is_preemptible_node_required": False,
                 "materialized": False,
                 "pass_config": False,
-                "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+                "uri": f"job://test-cluster/{test_org_name}/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
                 "privileged": False,
                 "being_dropped": False,
@@ -5843,6 +5851,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user: _User,
+        test_org_name: str,
     ) -> None:
         request_payload = {
             "container": {
@@ -5907,7 +5916,7 @@ class TestJobs:
                 "is_preemptible_node_required": False,
                 "materialized": False,
                 "pass_config": False,
-                "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+                "uri": f"job://test-cluster/{test_org_name}/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
                 "privileged": False,
                 "being_dropped": False,
