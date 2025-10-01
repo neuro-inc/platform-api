@@ -852,13 +852,6 @@ class KubeOrchestrator(Orchestrator):
 
         return pod
 
-    async def _check_pod_exists(self, namespace: str, pod_name: str) -> bool:
-        try:
-            await self._client.get_pod_status(namespace, pod_name)
-            return True
-        except JobNotFoundException:
-            return False
-
     async def _create_service(
         self, namespace: str, pod: PodDescriptor, name: str | None = None
     ) -> Service:
