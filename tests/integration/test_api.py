@@ -431,7 +431,7 @@ class TestApi:
                     expected_cluster_payload,
                     {**expected_cluster_payload, "name": "testcluster2"},
                 ],
-                "orgs": [],
+                "orgs": [{"name": test_org_name, "role": "user"}],
                 "projects": [],
             }
             assert result == expected_payload
@@ -939,7 +939,7 @@ class TestApi:
                 ],
                 "admin_url": f"{admin_url}",
                 "clusters": [expected_cluster_payload],
-                "orgs": [],
+                "orgs": [{"name": test_org_name, "role": "user"}],
                 "projects": [],
             }
             assert result == expected_payload
@@ -953,6 +953,7 @@ class TestJobs:
         job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
+        test_org_name: str,
     ) -> None:
         url = api.jobs_base_url
         project_name = random_str()
@@ -965,7 +966,7 @@ class TestJobs:
             assert result == {
                 "missing": [
                     {
-                        "uri": f"job://{regular_user.cluster_name}/{project_name}",
+                        "uri": f"job://{regular_user.cluster_name}/{test_org_name}/{project_name}",
                         "action": "write",
                     }
                 ]
