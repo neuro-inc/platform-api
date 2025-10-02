@@ -47,7 +47,6 @@ from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
     ContainerResources,
-    ContainerTPUResource,
     ContainerVolume,
     Disk,
     DiskContainerVolume,
