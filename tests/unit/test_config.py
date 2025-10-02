@@ -9,11 +9,8 @@ from yarl import URL
 from platform_api.config import RegistryConfig
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_client import KubeClient, SecretVolume
-from platform_api.orchestrator.kube_config import KubeClientAuthType
-from platform_api.orchestrator.kube_orchestrator import (
-    KubeConfig,
-    KubeOrchestrator,
-)
+from platform_api.orchestrator.kube_config import KubeClientAuthType, KubeConfig
+from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
 
 
 @pytest.fixture

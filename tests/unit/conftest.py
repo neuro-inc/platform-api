@@ -4,6 +4,7 @@ from datetime import UTC, datetime, time, timedelta, timezone
 from decimal import Decimal
 from functools import partial
 from pathlib import Path
+from types import TracebackType
 from typing import Any
 
 import neuro_config_client
@@ -108,6 +109,17 @@ class MockOrchestrator(Orchestrator):
     @property
     def config(self) -> OrchestratorConfig:
         return self._config.orchestrator
+
+    async def __aenter__(self) -> None:
+        pass
+
+    async def __aexit__(
+        self,
+        exc_typ: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        pass
 
     def _get_status(self, job_id: str) -> JobStatus:
         return self._mock_statuses.get(job_id, self._mock_status_to_return)
