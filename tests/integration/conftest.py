@@ -65,8 +65,8 @@ from platform_api.orchestrator.kube_client import (
     PodDescriptor,
     Resources,
 )
-from platform_api.orchestrator.kube_config import KubeClientAuthType
-from platform_api.orchestrator.kube_orchestrator import KubeConfig, KubeOrchestrator
+from platform_api.orchestrator.kube_config import KubeClientAuthType, KubeConfig
+from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
 
 
 @pytest.fixture(scope="session")
