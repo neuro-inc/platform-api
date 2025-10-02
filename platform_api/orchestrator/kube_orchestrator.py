@@ -4,11 +4,13 @@ import logging
 import operator
 import secrets
 from collections.abc import Sequence
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
+from types import TracebackType
 from typing import Any
 
 import aiohttp
+from apolo_kube_client import KubeClientSelector, KubeConfig
 from neuro_config_client import OrchestratorConfig, ResourcePoolType
 
 from platform_api.config import RegistryConfig
@@ -51,7 +53,7 @@ from .kube_client import (
     Service,
     Toleration,
 )
-from .kube_config import KubeConfig
+from .kube_config import KubeConfig as OldKubeConfig
 from .kube_orchestrator_scheduler import (
     KubeOrchestratorPreemption,
     KubeOrchestratorScheduler,
@@ -139,7 +141,7 @@ class KubeOrchestrator(Orchestrator):
         cluster_name: str,
         registry_config: RegistryConfig,
         orchestrator_config: OrchestratorConfig,
-        kube_config: KubeConfig,
+        kube_config: OldKubeConfig,
         kube_client: KubeClient,
     ) -> None:
         self._loop = asyncio.get_event_loop()
@@ -148,6 +150,7 @@ class KubeOrchestrator(Orchestrator):
         self._orchestrator_config = orchestrator_config
         self._kube_config = kube_config
         self._client = kube_client
+        self._selector = KubeClientSelector(config=KubeConfig(**asdict(kube_config)))
 
         self._nodes_handler = NodesHandler()
         self._node_resources_handler = NodeResourcesHandler()
@@ -173,8 +176,19 @@ class KubeOrchestrator(Orchestrator):
         return self._orchestrator_config
 
     @property
-    def kube_config(self) -> KubeConfig:
+    def kube_config(self) -> OldKubeConfig:
         return self._kube_config
+
+    async def __aenter__(self) -> None:
+        await self._selector.__aenter__()
+
+    async def __aexit__(
+        self,
+        exc_typ: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        await self._selector.__aexit__(exc_typ, exc_val, exc_tb)
 
     def subscribe_to_kube_events(
         self, node_watcher: NodeWatcher, pod_watcher: PodWatcher

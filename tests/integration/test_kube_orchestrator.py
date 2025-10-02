@@ -78,10 +78,10 @@ from platform_api.orchestrator.kube_client import (
     Service,
     Toleration,
 )
+from platform_api.orchestrator.kube_config import KubeConfig
 from platform_api.orchestrator.kube_orchestrator import (
     INJECT_STORAGE_KEY,
     JobStatusItemFactory,
-    KubeConfig,
     KubeOrchestrator,
 )
 from tests.conftest import random_str
