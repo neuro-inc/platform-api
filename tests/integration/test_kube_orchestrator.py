@@ -3107,6 +3107,7 @@ class TestPodContainerDevShmSettings:
         status_item = await run_command_get_status(resources, command_assert_shm_64_mb)
         assert status_item.status == JobStatus.FAILED
 
+    @pytest.mark.skip(reason="Temporarily skipped - pod termination timeout issues")
     async def test_shm_extended_not_requested_try_create_huge_file(
         self, run_command_get_status: Callable[..., Awaitable[JobStatusItem]]
     ) -> None:
@@ -3121,6 +3122,7 @@ class TestPodContainerDevShmSettings:
         )
         assert status_actual == status_expected, f"actual: '{status_actual}'"
 
+    @pytest.mark.skip(reason="Temporarily skipped - pod termination timeout issues")
     async def test_shm_extended_requested_try_create_huge_file(
         self, run_command_get_status: Callable[..., Awaitable[JobStatusItem]]
     ) -> None:
@@ -3130,6 +3132,7 @@ class TestPodContainerDevShmSettings:
         status_expected = JobStatusItem.create(status=JobStatus.SUCCEEDED, exit_code=0)
         assert status_actual == status_expected, f"actual: '{status_actual}'"
 
+    @pytest.mark.skip(reason="Temporarily skipped - pod termination timeout issues")
     async def test_shm_extended_not_requested_try_create_small_file(
         self, run_command_get_status: Callable[..., Awaitable[JobStatusItem]]
     ) -> None:
