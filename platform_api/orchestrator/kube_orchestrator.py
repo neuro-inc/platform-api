@@ -501,9 +501,11 @@ class KubeOrchestrator(Orchestrator):
                 pvc_org: str = pvc["metadata"]["labels"].get(
                     "platform.neuromation.io/disk-api-org-name"
                 )
-                if pvc_project != project_name and normalize_name(
-                    pvc_org
-                ) != normalize_name(org_name):
+                if pvc_project != project_name and (
+                    not pvc_org
+                    or not org_name
+                    or normalize_name(pvc_org) != normalize_name(org_name)
+                ):
                     missing.append(disk)
             except (KubeClientException, KeyError):
                 missing.append(disk)

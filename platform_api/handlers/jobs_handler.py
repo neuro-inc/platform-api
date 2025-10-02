@@ -681,22 +681,50 @@ class JobsHandler:
         cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
         self._check_user_can_submit_jobs(cluster_configs)
         default_cluster_name = cluster_configs[0].config.name
-        cluster_for_default_org = (
-            orig_payload.get("cluster_name") or default_cluster_name
-        )
-        cluster_config_for_default_org = next(
-            (
-                cluster_config
-                for cluster_config in cluster_configs
-                if cluster_config.config.name == cluster_for_default_org
-            ),
-            None,
-        )
-        # Use first org from user's cluster access as default
-        if cluster_config_for_default_org is None:
-            raise aiohttp.web.HTTPForbidden(text="User must have cluster access")
-        if not cluster_config_for_default_org.orgs:
-            raise aiohttp.web.HTTPForbidden(text="User must have at least one org")
+
+        # Check if user explicitly specified a cluster they don't have access to
+        requested_cluster = orig_payload.get("cluster_name")
+        if requested_cluster is not None:
+            cluster_config_for_default_org = next(
+                (
+                    cluster_config
+                    for cluster_config in cluster_configs
+                    if cluster_config.config.name == requested_cluster
+                ),
+                None,
+            )
+            if cluster_config_for_default_org is None:
+                raise aiohttp.web.HTTPForbidden(
+                    text=json.dumps(
+                        {
+                            "error": (
+                                "User is not allowed to submit jobs to the "
+                                "specified cluster"
+                            )
+                        }
+                    ),
+                    content_type="application/json",
+                )
+            if not cluster_config_for_default_org.orgs:
+                raise aiohttp.web.HTTPForbidden(
+                    text=json.dumps(
+                        {
+                            "error": (
+                                "User is not allowed to submit jobs to the "
+                                "specified cluster as a member of given organization"
+                            )
+                        }
+                    ),
+                    content_type="application/json",
+                )
+        else:
+            cluster_config_for_default_org = cluster_configs[0]
+            if not cluster_config_for_default_org.orgs:
+                raise aiohttp.web.HTTPForbidden(
+                    text=json.dumps({"error": "User must have at least one org"}),
+                    content_type="application/json",
+                )
+
         default_org_name = cluster_config_for_default_org.orgs[0]
 
         job_cluster_org_name_validator = create_job_cluster_org_name_validator(

@@ -995,21 +995,42 @@ class TestJobsStorage:
         self, storage: JobsStorage
     ) -> list[JobRecord]:
         jobs = [
-            self._create_running_job(owner="user1", cluster_name="test-cluster"),
+            self._create_running_job(
+                owner="user1", cluster_name="test-cluster", org_name="other-org"
+            ),
             self._create_succeeded_job(
-                owner="user1", cluster_name="test-cluster", job_name="jobname1"
+                owner="user1",
+                cluster_name="test-cluster",
+                job_name="jobname1",
+                org_name="other-org",
             ),
             self._create_failed_job(
-                owner="user2", cluster_name="test-cluster", job_name="jobname1"
+                owner="user2",
+                cluster_name="test-cluster",
+                job_name="jobname1",
+                org_name="other-org",
             ),
             self._create_succeeded_job(
-                owner="user3", cluster_name="test-cluster", job_name="jobname1"
+                owner="user3",
+                cluster_name="test-cluster",
+                job_name="jobname1",
+                org_name="other-org",
             ),
-            self._create_succeeded_job(owner="user1", cluster_name="my-cluster"),
-            self._create_failed_job(owner="user3", cluster_name="my-cluster"),
-            self._create_failed_job(owner="user1", cluster_name="other-cluster"),
-            self._create_succeeded_job(owner="user2", cluster_name="other-cluster"),
-            self._create_running_job(owner="user3", cluster_name="other-cluster"),
+            self._create_succeeded_job(
+                owner="user1", cluster_name="my-cluster", org_name="other-org"
+            ),
+            self._create_failed_job(
+                owner="user3", cluster_name="my-cluster", org_name="other-org"
+            ),
+            self._create_failed_job(
+                owner="user1", cluster_name="other-cluster", org_name="other-org"
+            ),
+            self._create_succeeded_job(
+                owner="user2", cluster_name="other-cluster", org_name="other-org"
+            ),
+            self._create_running_job(
+                owner="user3", cluster_name="other-cluster", org_name="other-org"
+            ),
         ]
         for job in jobs:
             async with storage.try_create_job(job):

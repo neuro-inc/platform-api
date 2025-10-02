@@ -4668,6 +4668,7 @@ class TestJobs:
         regular_user_factory: UserFactory,
         auth_client: AuthClient,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
@@ -4700,7 +4701,8 @@ class TestJobs:
             assert not job_ids
 
         permission = Permission(
-            uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
+            uri=f"job://{cluster_name}/{test_org_name}/{owner.name}/{job_id}",
+            action="read",
         )
         await auth_client.grant_user_permissions(
             follower.name, [permission], token=owner.token
@@ -4721,6 +4723,7 @@ class TestJobs:
         regular_user_factory: UserFactory,
         auth_client: AuthClient,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
@@ -4746,13 +4749,14 @@ class TestJobs:
                 "missing": [
                     {
                         "action": "read",
-                        "uri": f"job://{cluster_name}/{owner.name}/{job_id}",
+                        "uri": f"job://{cluster_name}/{test_org_name}/{owner.name}/{job_id}",
                     }
                 ]
             }
 
         permission = Permission(
-            uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
+            uri=f"job://{cluster_name}/{test_org_name}/{owner.name}/{job_id}",
+            action="read",
         )
         await auth_client.grant_user_permissions(
             follower.name, [permission], token=owner.token
