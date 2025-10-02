@@ -710,6 +710,7 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name=cluster_name,
+                org_name="test-org",
                 owner=user_name,
                 name="test-job",
             ),
@@ -1954,6 +1955,7 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name=cluster_name,
+                org_name="test-org",
                 owner=user_name,
             ),
         )
@@ -2020,6 +2022,7 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name=cluster_name,
+                org_name="test-org",
                 owner=user_name,
             ),
         )
@@ -2058,6 +2061,7 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name=cluster_name,
+                org_name="test-org",
                 owner=user_name,
             ),
         )
@@ -2117,6 +2121,7 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name=cluster_name,
+                org_name="test-org",
                 owner=user_name,
             ),
         )

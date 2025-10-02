@@ -1745,7 +1745,9 @@ class TestInferPermissionsFromContainer:
         )
         assert permissions == [
             Permission(uri="job://test-cluster/test-org/testproject", action="write"),
-            Permission(uri="image://test-cluster/testuser/image", action="read"),
+            Permission(
+                uri="image://test-cluster/test-org/testuser/image", action="read"
+            ),
         ]
 
 
