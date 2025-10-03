@@ -137,6 +137,8 @@ jobs:
     name: Upload integration tests coverage
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout commit
+      uses: actions/checkout@v5
     - name: Download All Coverages
       uses: actions/download-artifact@v5
       with:
