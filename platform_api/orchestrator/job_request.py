@@ -435,8 +435,7 @@ class Container:
         repo = self.image[len(prefix) :]
         path, *_ = repo.split(":", 1)
         assert cluster_name
-        assert org_name
-        return URL.build(scheme="image", host=cluster_name) / org_name / path
+        return URL.build(scheme="image", host=cluster_name) / path
 
     def get_secrets(self) -> list[Secret]:
         return list(
