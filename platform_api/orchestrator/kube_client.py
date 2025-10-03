@@ -15,6 +15,30 @@ from typing import Any, ClassVar, NoReturn, Optional
 
 import aiohttp
 import iso8601
+from apolo_kube_client import KubeClientProxy
+from kubernetes.client.model import (
+    V1Affinity,
+    V1Container,
+    V1ContainerPort,
+    V1EmptyDirVolumeSource,
+    V1HTTPGetAction,
+    V1LabelSelector,
+    V1LabelSelectorRequirement,
+    V1NodeAffinity,
+    V1NodeSelector,
+    V1ObjectMeta,
+    V1Pod,
+    V1PodAffinity,
+    V1PodAffinityTerm,
+    V1PodSpec,
+    V1Probe,
+    V1ResourceRequirements,
+    V1SecurityContext,
+    V1Toleration,
+    V1Volume,
+    V1VolumeMount,
+    V1WeightedPodAffinityTerm,
+)
 from yarl import URL
 
 from platform_api.old_kube_client.client import KubeClient as ApoloKubeClient
@@ -109,6 +133,9 @@ class Volume(metaclass=abc.ABCMeta):
     def to_primitive(self) -> dict[str, Any]:
         raise NotImplementedError
 
+    def to_model(self) -> V1Volume:
+        raise NotImplementedError
+
 
 @dataclass(frozen=True)
 class PathVolume(Volume):
@@ -140,6 +167,11 @@ class PathVolume(Volume):
 class SharedMemoryVolume(Volume):
     def to_primitive(self) -> dict[str, Any]:
         return {"name": self.name, "emptyDir": {"medium": "Memory"}}
+
+    def to_model(self) -> V1Volume:
+        return V1Volume(
+            name=self.name, empty_dir=V1EmptyDirVolumeSource(medium="Memory")
+        )
 
     def create_mount(
         self,
@@ -193,6 +225,17 @@ class VolumeMount:
         if sub_path:
             raw["subPath"] = sub_path
         return raw
+
+    def to_model(self) -> V1VolumeMount:
+        ret = V1VolumeMount(
+            name=self.volume.name,
+            mount_path=str(self.mount_path),
+            read_only=self.read_only,
+        )
+        sub_path = str(self.sub_path)
+        if sub_path:
+            ret.sub_path = sub_path
+        return ret
 
 
 @dataclass(frozen=True)
@@ -290,6 +333,27 @@ class Resources:
         if self.memory_request:
             payload["requests"]["memory"] = self.memory_request_str
         return payload
+
+    def to_model(self) -> V1ResourceRequirements:
+        ret = V1ResourceRequirements(
+            requests={"cpu": f"{self.cpu_mcores}m", "memory": self.memory_str},
+            limits={"cpu": f"{self.cpu_mcores}m", "memory": self.memory_str},
+        )
+        if self.nvidia_gpu:
+            ret.requests[self.nvidia_gpu_key] = self.nvidia_gpu
+            ret.limits[self.nvidia_gpu_key] = self.nvidia_gpu
+        if self.amd_gpu:
+            ret.requests[self.amd_gpu_key] = self.amd_gpu
+            ret.limits[self.amd_gpu_key] = self.amd_gpu
+        if self.intel_gpu:
+            ret.requests[self.intel_gpu_key] = self.intel_gpu
+            ret.limits[self.intel_gpu_key] = self.intel_gpu
+        if self.tpu_version:
+            ret.requests[self.tpu_key] = self.tpu_cores
+            ret.limits[self.tpu_key] = self.tpu_cores
+        if self.memory_request:
+            ret.requests["memory"] = self.memory_request_str
+        return ret
 
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "Resources":
@@ -698,6 +762,14 @@ class Toleration:
             "effect": self.effect,
         }
 
+    def to_model(self) -> V1Toleration:
+        return V1Toleration(
+            key=self.key,
+            operator=self.operator,
+            value=self.value,
+            effect=self.effect,
+        )
+
 
 class SelectorOperator(str, Enum):
     DOES_NOT_EXIST = "DoesNotExist"
@@ -770,6 +842,12 @@ class LabelSelectorMatchExpression:
             payload["values"] = self.values.copy()
         return payload
 
+    def to_model(self) -> V1LabelSelectorRequirement:
+        ret = V1LabelSelectorRequirement(key=self.key, operator=self.operator.value)
+        if self.values:
+            ret.values = self.values.copy()
+        return ret
+
 
 @dataclass(frozen=True)
 class LabelSelectorTerm:
@@ -786,6 +864,11 @@ class LabelSelectorTerm:
         return {
             "matchExpressions": [expr.to_primitive() for expr in self.match_expressions]
         }
+
+    def to_model(self) -> V1LabelSelector:
+        return V1LabelSelector(
+            match_expressions=[expr.to_model() for expr in self.match_expressions]
+        )
 
 
 @dataclass(frozen=True)
@@ -821,6 +904,18 @@ class NodeAffinity:
             ]
         return payload
 
+    def to_model(self) -> V1NodeAffinity:
+        ret = V1NodeAffinity()
+        if self.required:
+            ret.required_during_scheduling_ignored_during_execution = V1NodeSelector(
+                node_selector_terms=[term.to_model() for term in self.required]
+            )
+        if self.preferred:
+            ret.preferred_during_scheduling_ignored_during_execution = [
+                term.to_model() for term in self.preferred
+            ]
+        return ret
+
 
 @dataclass(frozen=True)
 class PodAffinityTerm:
@@ -840,6 +935,15 @@ class PodAffinityTerm:
             result["namespaces"] = self.namespaces.copy()
         return result
 
+    def to_model(self) -> V1PodAffinityTerm:
+        result = V1PodAffinityTerm(
+            label_selector=self.label_selector.to_model(),
+            topology_key=self.topologyKey,
+        )
+        if self.namespaces:
+            result.namespaces = self.namespaces.copy()
+        return result
+
 
 @dataclass(frozen=True)
 class PodPreferredSchedulingTerm:
@@ -851,6 +955,12 @@ class PodPreferredSchedulingTerm:
             "podAffinityTerm": self.pod_affinity_term.to_primitive(),
             "weight": self.weight,
         }
+
+    def to_model(self) -> V1WeightedPodAffinityTerm:
+        return V1WeightedPodAffinityTerm(
+            pod_affinity_term=self.pod_affinity_term.to_model(),
+            weight=self.weight,
+        )
 
 
 @dataclass(frozen=True)
@@ -864,6 +974,14 @@ class PodAffinity:
                 term.to_primitive() for term in self.preferred
             ]
         return payload
+
+    def to_model(self) -> V1PodAffinity:
+        ret = V1PodAffinity()
+        if self.preferred:
+            ret.preferred_during_scheduling_ignored_during_execution = [
+                term.to_model() for term in self.preferred
+            ]
+        return ret
 
 
 @enum.unique
@@ -1066,6 +1184,72 @@ class PodDescriptor:
             affinities.append(self.node_affinity)
         return all(a.is_satisfied(node_labels) for a in affinities)
 
+    def to_model(self) -> V1Pod:
+        volume_mounts = [mount.to_model() for mount in self.volume_mounts]
+        volumes = [volume.to_model() for volume in self.volumes]
+        env_list = self.env_list + [env.to_model() for env in self.secret_env_list]
+
+        container = V1Container(
+            name=f"{self.name}",
+            image=f"{self.image}",
+            image_pull_policy="Always",
+            env=env_list,
+            volumeMounts=volume_mounts,
+            termination_message_policy="FallbackToLogsOnError",
+        )
+        if self.command:
+            container.command = self.command
+        if self.args:
+            container.args = self.args
+        if self.resources:
+            container.resources = self.resources.to_model()
+        if self.tty:
+            container.tty = True
+        container.stdin = True
+        if self.working_dir is not None:
+            container.working_dir = self.working_dir
+        if self.privileged:
+            container.security_context = V1SecurityContext(
+                privileged=self.privileged,
+            )
+
+        ports = self._to_model_ports()
+        if ports:
+            container.ports = ports
+        if self.readiness_probe and self.port:
+            container.readiness_probe = self._to_model_readiness_probe()
+
+        model = V1Pod(
+            kind="Pod",
+            apiVersion="v1",
+            metadata=V1ObjectMeta(name=self.name),
+            spec=V1PodSpec(
+                automount_service_account_token=False,
+                containers=[container],
+                volumes=volumes,
+                restartPolicy=str(self.restart_policy),
+                image_pull_secrets=[
+                    secret.to_model() for secret in self.image_pull_secrets
+                ],
+                tolerations=[toleration.to_model() for toleration in self.tolerations],
+            ),
+        )
+        if self.labels:
+            model.metadata.labels = self.labels
+        if self.annotations:
+            model.metadata.annotations = self.annotations.copy()
+        if self.node_selector:
+            model.spec.nodeSelector = self.node_selector.copy()
+        if self.node_affinity or self.pod_affinity:
+            model.spec.affinity = V1Affinity()
+        if self.node_affinity:
+            model.spec.affinity.node_affinity = self.node_affinity.to_model()
+        if self.pod_affinity:
+            model.spec.affinity.pod_affinity = self.pod_affinity.to_model()
+        if self.priority_class_name:
+            model.spec.priority_class_name = self.priority_class_name
+        return model
+
     def to_primitive(self) -> dict[str, Any]:
         volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
         volumes = [volume.to_primitive() for volume in self.volumes]
@@ -1147,6 +1331,12 @@ class PodDescriptor:
             ports.append({"containerPort": self.port})
         return ports
 
+    def _to_model_ports(self) -> list[V1ContainerPort]:
+        ports = []
+        if self.port:
+            ports.append(V1ContainerPort(container_port=self.port))
+        return ports
+
     def _to_primitive_readiness_probe(self) -> dict[str, Any]:
         if not self.readiness_probe:
             return {}
@@ -1159,6 +1349,13 @@ class PodDescriptor:
             }
 
         return {}
+
+    def _to_model_readiness_probe(self) -> V1Probe:
+        return V1Probe(
+            http_get=V1HTTPGetAction(port=self.port, path=self.health_check_path),
+            initial_delay_seconds=1,
+            period_seconds=1,
+        )
 
     @classmethod
     def _assert_resource_kind(cls, expected_kind: str, payload: dict[str, Any]) -> None:
@@ -2556,3 +2753,44 @@ class KubePreemption:
             r2.cpu_mcores,
         )
         return key1 < key2
+
+
+# New API helpers
+
+
+async def get_pod(client_proxy: KubeClientProxy, pod_name: str) -> PodDescriptor:
+    pod = await client_proxy.core_v1.pod.get(pod_name)
+    return PodDescriptor.from_model(pod)
+
+
+async def create_pod(
+    client_proxy: KubeClientProxy, descriptor: PodDescriptor
+) -> PodDescriptor:
+    model = descriptor.to_model()
+    pod = await client_proxy.core_v1.pod.create(model)
+    return PodDescriptor.from_model(pod)
+
+
+async def delete_pod(
+    client_proxy: KubeClientProxy, pod_name: str, *, force: bool = False
+) -> PodStatus:
+    payload = None
+    if force:
+        payload = {
+            "apiVersion": "v1",
+            "kind": "DeleteOptions",
+            "gracePeriodSeconds": 0,
+        }
+    model = await client_proxy.core_v1.pod.delete(pod_name, payload=payload)
+    pod = PodDescriptor.from_model(model)
+    return pod.status  # type: ignore
+
+
+async def set_raw_pod_status(
+    namespace: str,
+    name: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {}
+    # url = self._generate_pod_url(namespace, name) + "/status"
+    # return await self.put(url=url, json=payload)
