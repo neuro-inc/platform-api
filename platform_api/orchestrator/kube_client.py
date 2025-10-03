@@ -11,7 +11,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
 from pathlib import PurePath
-from typing import Any, ClassVar, NoReturn, Optional
+from typing import Any, ClassVar, NoReturn, Optional, Self
 
 import aiohttp
 import iso8601
@@ -20,6 +20,7 @@ from kubernetes.client.model import (
     V1Affinity,
     V1Container,
     V1ContainerPort,
+    V1ContainerStatus,
     V1EmptyDirVolumeSource,
     V1EnvVar,
     V1EnvVarSource,
@@ -33,7 +34,9 @@ from kubernetes.client.model import (
     V1Pod,
     V1PodAffinity,
     V1PodAffinityTerm,
+    V1PodCondition,
     V1PodSpec,
+    V1PodStatus,
     V1PreferredSchedulingTerm,
     V1Probe,
     V1ResourceRequirements,
@@ -373,6 +376,29 @@ class Resources:
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "Resources":
         requests = payload.get("requests", {})
+        nvidia_gpu = None
+        if cls.nvidia_gpu_key in requests:
+            nvidia_gpu = int(requests[cls.nvidia_gpu_key])
+        amd_gpu = None
+        if cls.amd_gpu_key in requests:
+            amd_gpu = int(requests[cls.amd_gpu_key])
+        intel_gpu = None
+        if cls.intel_gpu_key in requests:
+            intel_gpu = int(requests[cls.intel_gpu_key])
+        tpu_version, tpu_cores = cls._parse_tpu(requests)
+        return cls(
+            cpu=cls.parse_cpu(requests.get("cpu", "0")),
+            memory=cls.parse_memory(requests.get("memory", "0Mi")),
+            nvidia_gpu=nvidia_gpu,
+            amd_gpu=amd_gpu,
+            intel_gpu=intel_gpu,
+            tpu_version=tpu_version,
+            tpu_cores=tpu_cores,
+        )
+
+    @classmethod
+    def from_model(cls, model: V1ResourceRequirements) -> "Resources":
+        requests = model.requests or {}
         nvidia_gpu = None
         if cls.nvidia_gpu_key in requests:
             nvidia_gpu = int(requests[cls.nvidia_gpu_key])
@@ -759,6 +785,10 @@ class SecretRef:
     @classmethod
     def from_primitive(cls, payload: dict[str, str]) -> "SecretRef":
         return cls(**payload)
+
+    @classmethod
+    def from_model(cls, model: V1LocalObjectReference) -> "SecretRef":
+        return cls(name=model.name)
 
 
 @dataclass(frozen=True)
@@ -1435,6 +1465,59 @@ class PodDescriptor:
             resources=Resources.from_primitive(container_payload.get("resources", {})),
         )
 
+    @classmethod
+    def from_model(cls, model: V1Pod) -> "PodDescriptor":
+        # AS: not sure if we should check kind here,
+        # maybe model constructor raise and exception for us?
+        # cls._assert_resource_kind(expected_kind="Pod", payload=payload)
+
+        metadata = model.metadata
+        container = model.spec.containers[0]
+        # TODO (R Zubairov 09/13/18): remove medium emptyDir
+        # TODO (A Danshyn 06/19/18): set rest of attributes
+        status = None
+        if model.status is not None:
+            status = PodStatus.from_model(model.status)
+        if model.spec.image_pull_secrets is not None:
+            secrets = [
+                SecretRef.from_model(secret) for secret in model.spec.image_pull_secrets
+            ]
+        else:
+            secrets = []
+        tolerations = [
+            Toleration(
+                key=t.key or "",
+                operator=t.operator or Toleration.operator,
+                value=t.value or Toleration.value,
+                effect=t.effect or Toleration.effect,
+            )
+            for t in (model.spec.tolerations or ())
+        ]
+        return cls(
+            name=metadata.name,
+            created_at=iso8601.parse_date(metadata.creation_timestamp),
+            image=container.image,
+            status=status,
+            image_pull_secrets=secrets,
+            node_name=model.spec.node_name,
+            command=container.command,
+            args=container.args,
+            tty=container.tty or False,
+            tolerations=tolerations,
+            labels=metadata.labels or {},
+            priority_class_name=model.spec.priority_class_name,
+            restart_policy=PodRestartPolicy(
+                model.spec.restart_policy or str(cls.restart_policy)
+            ),
+            working_dir=container.working_dir,
+            resources=Resources.from_model(container.resources or {}),
+        )
+
+
+@dataclass(frozen=True)
+class ContainerStateRunning:
+    started_at: datetime
+
 
 class ContainerStatus:
     def __init__(self, payload: dict[str, Any] | None = None) -> None:
@@ -1495,6 +1578,14 @@ class ContainerStatus:
         # https://github.com/kubernetes/kubernetes/blob/886e04f1fffbb04faf8a9f9ee141143b2684ae68/pkg/kubelet/images/types.go#L25-L43
         return self.is_waiting and self.reason in (None, "ContainerCreating")
 
+    @classmethod
+    def from_primitive(cls, payload: dict[str, Any]) -> Self:
+        return cls(payload)
+
+    @classmethod
+    def from_model(cls, model: V1ContainerStatus) -> Self:
+        return cls(model.to_dict())
+
 
 class PodConditionType(enum.Enum):
     UNKNOWN = "Unknown"
@@ -1539,6 +1630,14 @@ class PodCondition:
             return PodConditionType(self._payload["type"])
         except (KeyError, ValueError):
             return PodConditionType.UNKNOWN
+
+    @classmethod
+    def from_primitive(cls, payload: dict[str, Any]) -> Self:
+        return cls(payload)
+
+    @classmethod
+    def from_model(cls, model: V1PodCondition) -> Self:
+        return cls(model.to_dict())
 
 
 class KubernetesEvent:
@@ -1602,22 +1701,25 @@ class KubernetesEvent:
 
 
 class PodStatus:
-    def __init__(self, payload: dict[str, Any]) -> None:
-        self._payload = payload
-        self._container_statuses = self._create_container_status()
-
-    def _create_container_status(self) -> Sequence[ContainerStatus]:
-        container_statuses = self._payload.get("containerStatuses")
-        if not container_statuses:
-            return (ContainerStatus(),)
-        return tuple(ContainerStatus(p) for p in container_statuses)
+    def __init__(
+        self,
+        *,
+        phase: str,
+        container_statuses: tuple[ContainerStatus, ...],
+        reason: str | None,
+        conditions: list[PodCondition],
+    ) -> None:
+        self._phase = phase
+        self._container_statuses = container_statuses
+        self._reason = reason
+        self._conditions = conditions
 
     @property
     def phase(self) -> str:
         """
         "Pending", "Running", "Succeeded", "Failed", "Unknown"
         """
-        return self._payload["phase"]
+        return self._phase
 
     @property
     def is_phase_pending(self) -> bool:
@@ -1656,7 +1758,7 @@ class PodStatus:
         https://github.com/kubernetes/kubernetes/blob/a3ccea9d8743f2ff82e41b6c2af6dc2c41dc7b10/pkg/controller/util/node/controller_utils.go#L109-L126
         """
         # the pod status reason has a greater priority
-        return self._payload.get("reason") or self.container_status.reason
+        return self._reason or self.container_status.reason
 
     @property
     def container_status(self) -> ContainerStatus:
@@ -1672,11 +1774,31 @@ class PodStatus:
 
     @property
     def conditions(self) -> list[PodCondition]:
-        return [PodCondition(val) for val in self._payload.get("conditions", [])]
+        return list(self._conditions)
 
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "PodStatus":
-        return cls(payload)
+        return cls(
+            phase=payload["phase"],
+            container_statuses=tuple(
+                ContainerStatus.from_primitive(s) for s in payload["containerStatuses"]
+            ),
+            reason=payload.get("reason"),
+            conditions=[
+                PodCondition.from_primitive(c) for c in payload.get("conditions", [])
+            ],
+        )
+
+    @classmethod
+    def from_model(cls, model: V1PodStatus) -> "PodStatus":
+        return cls(
+            phase=model.phase,
+            container_statuses=tuple(
+                ContainerStatus.from_model(s) for s in model.container_statuses
+            ),
+            reason=model.reason,
+            conditions=[PodCondition.from_model(c) for c in model.conditions or []],
+        )
 
 
 @dataclass(frozen=True)

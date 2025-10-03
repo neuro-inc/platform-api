@@ -709,7 +709,7 @@ class KubeOrchestrator(Orchestrator):
         # we need to reschedule external job runner to continue manage
         # external job state, we treat it as restartable.
         async with self._selector.get_client(
-            job.org_name, job.project_name
+            org_name=job.org_name, project_name=job.project_name
         ) as client_proxy:
             if job.is_restartable or job.is_external:
                 pod = await self._check_pod_lost(client_proxy, job)
