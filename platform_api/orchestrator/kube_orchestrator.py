@@ -359,31 +359,13 @@ class KubeOrchestrator(Orchestrator):
 
         return pool_types
 
-    # TODO: remove after cluster resources monitoring process is released
     def _update_pod_container_resources(
         self, pod: PodDescriptor, pool_types: Sequence[ResourcePoolType]
     ) -> PodDescriptor:
         if not pod.resources:
             return pod
-        max_node_cpu = max(p.available_cpu or 0 for p in pool_types)
         max_node_memory = max(p.available_memory or 0 for p in pool_types)
-        max_node_nvidia_gpu = max(
-            p.nvidia_gpu.count if p.nvidia_gpu else 0 for p in pool_types
-        )
-        max_node_amd_gpu = max(p.amd_gpu.count if p.amd_gpu else 0 for p in pool_types)
-        max_node_intel_gpu = max(
-            p.intel_gpu.count if p.intel_gpu else 0 for p in pool_types
-        )
-        pod_nvidia_gpu = pod.resources.nvidia_gpu or 0
-        pod_amd_gpu = pod.resources.amd_gpu or 0
-        pod_intel_gpu = pod.resources.intel_gpu or 0
-        if (
-            max_node_cpu > pod.resources.cpu
-            or max_node_memory > pod.resources.memory
-            or max_node_nvidia_gpu > pod_nvidia_gpu
-            or max_node_amd_gpu > pod_amd_gpu
-            or max_node_intel_gpu > pod_intel_gpu
-        ):
+        if max_node_memory > pod.resources.memory:
             # Ignore pods that don't require all node's resources
             return pod
         # By default resources request is not specified which means
@@ -396,7 +378,7 @@ class KubeOrchestrator(Orchestrator):
         # will be triggered.
         new_resources = replace(
             pod.resources, memory_request=int(pod.resources.memory * 0.8)
-        )  # 1GB
+        )
         return replace(pod, resources=new_resources)
 
     def _update_pod_image(self, job: Job, pod: PodDescriptor) -> PodDescriptor:

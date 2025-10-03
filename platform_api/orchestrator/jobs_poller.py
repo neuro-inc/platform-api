@@ -22,6 +22,7 @@ from .job import (
 from .job_request import (
     Container,
     ContainerHTTPServer,
+    ContainerNvidiaMIGResource,
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
@@ -69,18 +70,24 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
         )
 
     def _parse_resources(data: Mapping[str, Any]) -> ContainerResources:
+        nvidia_migs = None
+        if nvidia_migs_data := data.get("nvidia_migs"):
+            nvidia_migs = {
+                profile_name: ContainerNvidiaMIGResource.from_primitive(mig)
+                for profile_name, mig in nvidia_migs_data.items()
+            }
         tpu = None
-        if "tpu" in data:
-            tpu = ContainerTPUResource.from_primitive(data["tpu"])
-
+        if tpu_data := data.get("tpu"):
+            tpu = ContainerTPUResource.from_primitive(tpu_data)
         return ContainerResources(
             cpu=data["cpu"],
             memory=data["memory"],
             nvidia_gpu=data.get("nvidia_gpu"),
+            nvidia_gpu_model=data.get("nvidia_gpu_model"),
+            nvidia_migs=nvidia_migs,
             amd_gpu=data.get("amd_gpu"),
-            intel_gpu=data.get("intel_gpu"),
-            nvidia_gpu_model=data.get("nvidia_gpu_model") or data.get("gpu_model"),
             amd_gpu_model=data.get("amd_gpu_model"),
+            intel_gpu=data.get("intel_gpu"),
             intel_gpu_model=data.get("intel_gpu_model"),
             shm=data.get("shm"),
             tpu=tpu,
