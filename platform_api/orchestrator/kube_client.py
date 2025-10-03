@@ -366,6 +366,10 @@ class Resources:
         if self.nvidia_gpu:
             ret.requests[self.nvidia_gpu_key] = self.nvidia_gpu
             ret.limits[self.nvidia_gpu_key] = self.nvidia_gpu
+        if self.nvidia_migs:
+            for key, value in self.nvidia_migs.items():
+                ret.requests[self.nvidia_mig_key_prefix + key] = value
+                ret.limits[self.nvidia_mig_key_prefix + key] = value
         if self.amd_gpu:
             ret.requests[self.amd_gpu_key] = self.amd_gpu
             ret.limits[self.amd_gpu_key] = self.amd_gpu
@@ -413,6 +417,10 @@ class Resources:
         nvidia_gpu = None
         if cls.nvidia_gpu_key in requests:
             nvidia_gpu = int(requests[cls.nvidia_gpu_key])
+        nvidia_migs: dict[str, int] = {}
+        for key, value in requests.items():
+            if key.startswith(cls.nvidia_mig_key_prefix):
+                nvidia_migs[key[len(cls.nvidia_mig_key_prefix) :]] = int(value)
         amd_gpu = None
         if cls.amd_gpu_key in requests:
             amd_gpu = int(requests[cls.amd_gpu_key])
@@ -424,6 +432,7 @@ class Resources:
             cpu=cls.parse_cpu(requests.get("cpu", "0")),
             memory=cls.parse_memory(requests.get("memory", "0Mi")),
             nvidia_gpu=nvidia_gpu,
+            nvidia_migs=nvidia_migs or None,
             amd_gpu=amd_gpu,
             intel_gpu=intel_gpu,
             tpu_version=tpu_version,
