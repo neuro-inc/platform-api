@@ -4260,7 +4260,7 @@ class TestExternalJobsPreemption:
         container = Container(
             image="ubuntu:20.10",
             command="bash -c 'sleep 300'",
-            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
+            resources=ContainerResources(cpu=0.1, memory=96 * 10**6),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,

@@ -10,7 +10,7 @@ from types import TracebackType
 from typing import Any
 
 import aiohttp
-from apolo_kube_client import KubeClientSelector, KubeConfig
+from apolo_kube_client import KubeClientProxy, KubeClientSelector, KubeConfig
 from neuro_config_client import OrchestratorConfig, ResourcePoolType
 
 from platform_api.config import RegistryConfig
@@ -52,6 +52,9 @@ from .kube_client import (
     SecretVolume,
     Service,
     Toleration,
+    create_pod,
+    delete_pod,
+    get_pod,
 )
 from .kube_config import KubeConfig as OldKubeConfig
 from .kube_orchestrator_scheduler import (
@@ -651,10 +654,13 @@ class KubeOrchestrator(Orchestrator):
         # In case this is an external job, and node/pod was lost
         # we need to reschedule external job runner to continue manage
         # external job state, we treat it as restartable.
-        if job.is_restartable or job.is_external:
-            pod = await self._check_pod_lost(job)
-        else:
-            pod = await self._client.get_pod(job.namespace, self._get_job_pod_name(job))
+        async with self._selector.get_client(
+            org_name=job.org_name, project_name=job.project_name
+        ) as client_proxy:
+            if job.is_restartable or job.is_external:
+                pod = await self._check_pod_lost(client_proxy, job)
+            else:
+                pod = await get_pod(client_proxy, self._get_job_pod_name(job))
 
         return await self._get_job_status(job, pod)
 
@@ -775,11 +781,13 @@ class KubeOrchestrator(Orchestrator):
             description="Failed to scale up the cluster to get more resources",
         )
 
-    async def _check_pod_lost(self, job: Job) -> PodDescriptor:
+    async def _check_pod_lost(
+        self, client_proxy: KubeClientProxy, job: Job
+    ) -> PodDescriptor:
         pod_name = self._get_job_pod_name(job)
         do_recreate_pod = False
         try:
-            pod = await self._client.get_pod(job.namespace, pod_name)
+            pod = await get_pod(client_proxy, pod_name)
             pod_status = pod.status
             assert pod_status is not None
             if pod_status.is_node_lost:
@@ -788,7 +796,7 @@ class KubeOrchestrator(Orchestrator):
                 # the pod's status phase, we need to forcefully delete the
                 # pod and reschedule another one instead.
                 logger.info("Forcefully deleting pod '%s'. Job '%s'", pod_name, job.id)
-                await self._client.delete_pod(job.namespace, pod_name, force=True)
+                await delete_pod(client_proxy, pod_name, force=True)
                 do_recreate_pod = True
         except JobNotFoundException:
             logger.info("Pod '%s' was lost. Job '%s'", pod_name, job.id)
@@ -803,7 +811,7 @@ class KubeOrchestrator(Orchestrator):
             logger.info("Recreating preempted pod '%s'. Job '%s'", pod_name, job.id)
             descriptor = self._create_pod_descriptor(job)
             try:
-                pod = await self._client.create_pod(job.namespace, descriptor)
+                pod = await create_pod(client_proxy, descriptor)
             except JobError:
                 # handling possible 422 and other failures
                 raise JobNotFoundException(

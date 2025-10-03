@@ -11,10 +11,42 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
 from pathlib import PurePath
-from typing import Any, ClassVar, NoReturn, Optional
+from typing import Any, ClassVar, NoReturn, Optional, Self
 
 import aiohttp
 import iso8601
+from apolo_kube_client import KubeClientProxy
+from kubernetes.client.model import (
+    V1Affinity,
+    V1Container,
+    V1ContainerPort,
+    V1ContainerStatus,
+    V1EmptyDirVolumeSource,
+    V1EnvVar,
+    V1EnvVarSource,
+    V1HTTPGetAction,
+    V1LabelSelector,
+    V1LabelSelectorRequirement,
+    V1LocalObjectReference,
+    V1NodeAffinity,
+    V1NodeSelector,
+    V1ObjectMeta,
+    V1Pod,
+    V1PodAffinity,
+    V1PodAffinityTerm,
+    V1PodCondition,
+    V1PodSpec,
+    V1PodStatus,
+    V1PreferredSchedulingTerm,
+    V1Probe,
+    V1ResourceRequirements,
+    V1SecretKeySelector,
+    V1SecurityContext,
+    V1Toleration,
+    V1Volume,
+    V1VolumeMount,
+    V1WeightedPodAffinityTerm,
+)
 from yarl import URL
 
 from platform_api.old_kube_client.client import KubeClient as ApoloKubeClient
@@ -109,6 +141,9 @@ class Volume(metaclass=abc.ABCMeta):
     def to_primitive(self) -> dict[str, Any]:
         raise NotImplementedError
 
+    def to_model(self) -> V1Volume:
+        raise NotImplementedError
+
 
 @dataclass(frozen=True)
 class PathVolume(Volume):
@@ -140,6 +175,11 @@ class PathVolume(Volume):
 class SharedMemoryVolume(Volume):
     def to_primitive(self) -> dict[str, Any]:
         return {"name": self.name, "emptyDir": {"medium": "Memory"}}
+
+    def to_model(self) -> V1Volume:
+        return V1Volume(
+            name=self.name, empty_dir=V1EmptyDirVolumeSource(medium="Memory")
+        )
 
     def create_mount(
         self,
@@ -175,6 +215,16 @@ class SecretEnvVar:
             },
         }
 
+    def to_model(self) -> V1EnvVar:
+        return V1EnvVar(
+            name=self.name,
+            value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(
+                    name=self.secret.k8s_secret_name, key=self.secret.secret_key
+                )
+            ),
+        )
+
 
 @dataclass(frozen=True)
 class VolumeMount:
@@ -193,6 +243,17 @@ class VolumeMount:
         if sub_path:
             raw["subPath"] = sub_path
         return raw
+
+    def to_model(self) -> V1VolumeMount:
+        ret = V1VolumeMount(
+            name=self.volume.name,
+            mount_path=str(self.mount_path),
+            read_only=self.read_only,
+        )
+        sub_path = str(self.sub_path)
+        if sub_path:
+            ret.sub_path = sub_path
+        return ret
 
 
 @dataclass(frozen=True)
@@ -297,9 +358,62 @@ class Resources:
             payload["requests"]["memory"] = self.memory_request_str
         return payload
 
+    def to_model(self) -> V1ResourceRequirements:
+        ret = V1ResourceRequirements(
+            requests={"cpu": f"{self.cpu_mcores}m", "memory": self.memory_str},
+            limits={"cpu": f"{self.cpu_mcores}m", "memory": self.memory_str},
+        )
+        if self.nvidia_gpu:
+            ret.requests[self.nvidia_gpu_key] = self.nvidia_gpu
+            ret.limits[self.nvidia_gpu_key] = self.nvidia_gpu
+        if self.nvidia_migs:
+            for key, value in self.nvidia_migs.items():
+                ret.requests[self.nvidia_mig_key_prefix + key] = value
+                ret.limits[self.nvidia_mig_key_prefix + key] = value
+        if self.amd_gpu:
+            ret.requests[self.amd_gpu_key] = self.amd_gpu
+            ret.limits[self.amd_gpu_key] = self.amd_gpu
+        if self.intel_gpu:
+            ret.requests[self.intel_gpu_key] = self.intel_gpu
+            ret.limits[self.intel_gpu_key] = self.intel_gpu
+        if self.tpu_version:
+            ret.requests[self.tpu_key] = self.tpu_cores
+            ret.limits[self.tpu_key] = self.tpu_cores
+        if self.memory_request:
+            ret.requests["memory"] = self.memory_request_str
+        return ret
+
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "Resources":
         requests = payload.get("requests", {})
+        nvidia_gpu = None
+        if cls.nvidia_gpu_key in requests:
+            nvidia_gpu = int(requests[cls.nvidia_gpu_key])
+        nvidia_migs: dict[str, int] = {}
+        for key, value in requests.items():
+            if key.startswith(cls.nvidia_mig_key_prefix):
+                nvidia_migs[key[len(cls.nvidia_mig_key_prefix) :]] = int(value)
+        amd_gpu = None
+        if cls.amd_gpu_key in requests:
+            amd_gpu = int(requests[cls.amd_gpu_key])
+        intel_gpu = None
+        if cls.intel_gpu_key in requests:
+            intel_gpu = int(requests[cls.intel_gpu_key])
+        tpu_version, tpu_cores = cls._parse_tpu(requests)
+        return cls(
+            cpu=cls.parse_cpu(requests.get("cpu", "0")),
+            memory=cls.parse_memory(requests.get("memory", "0Mi")),
+            nvidia_gpu=nvidia_gpu,
+            nvidia_migs=nvidia_migs or None,
+            amd_gpu=amd_gpu,
+            intel_gpu=intel_gpu,
+            tpu_version=tpu_version,
+            tpu_cores=tpu_cores,
+        )
+
+    @classmethod
+    def from_model(cls, model: V1ResourceRequirements) -> "Resources":
+        requests = model.requests or {}
         nvidia_gpu = None
         if cls.nvidia_gpu_key in requests:
             nvidia_gpu = int(requests[cls.nvidia_gpu_key])
@@ -685,9 +799,16 @@ class SecretRef:
     def to_primitive(self) -> dict[str, str]:
         return {"name": self.name}
 
+    def to_model(self) -> V1LocalObjectReference:
+        return V1LocalObjectReference(name=self.name)
+
     @classmethod
     def from_primitive(cls, payload: dict[str, str]) -> "SecretRef":
         return cls(**payload)
+
+    @classmethod
+    def from_model(cls, model: V1LocalObjectReference) -> "SecretRef":
+        return cls(name=model.name)
 
 
 @dataclass(frozen=True)
@@ -708,6 +829,14 @@ class Toleration:
             "value": self.value,
             "effect": self.effect,
         }
+
+    def to_model(self) -> V1Toleration:
+        return V1Toleration(
+            key=self.key,
+            operator=self.operator,
+            value=self.value,
+            effect=self.effect,
+        )
 
 
 class SelectorOperator(str, Enum):
@@ -781,6 +910,12 @@ class LabelSelectorMatchExpression:
             payload["values"] = self.values.copy()
         return payload
 
+    def to_model(self) -> V1LabelSelectorRequirement:
+        ret = V1LabelSelectorRequirement(key=self.key, operator=self.operator.value)
+        if self.values:
+            ret.values = self.values.copy()
+        return ret
+
 
 @dataclass(frozen=True)
 class LabelSelectorTerm:
@@ -798,6 +933,11 @@ class LabelSelectorTerm:
             "matchExpressions": [expr.to_primitive() for expr in self.match_expressions]
         }
 
+    def to_model(self) -> V1LabelSelector:
+        return V1LabelSelector(
+            match_expressions=[expr.to_model() for expr in self.match_expressions]
+        )
+
 
 @dataclass(frozen=True)
 class NodePreferredSchedulingTerm:
@@ -806,6 +946,11 @@ class NodePreferredSchedulingTerm:
 
     def to_primitive(self) -> dict[str, Any]:
         return {"preference": self.preference.to_primitive(), "weight": self.weight}
+
+    def to_model(self) -> V1PreferredSchedulingTerm:
+        return V1PreferredSchedulingTerm(
+            preference=self.preference.to_model(), weight=self.weight
+        )
 
 
 @dataclass(frozen=True)
@@ -832,6 +977,18 @@ class NodeAffinity:
             ]
         return payload
 
+    def to_model(self) -> V1NodeAffinity:
+        ret = V1NodeAffinity()
+        if self.required:
+            ret.required_during_scheduling_ignored_during_execution = V1NodeSelector(
+                node_selector_terms=[term.to_model() for term in self.required]
+            )
+        if self.preferred:
+            ret.preferred_during_scheduling_ignored_during_execution = [
+                term.to_model() for term in self.preferred
+            ]
+        return ret
+
 
 @dataclass(frozen=True)
 class PodAffinityTerm:
@@ -851,6 +1008,15 @@ class PodAffinityTerm:
             result["namespaces"] = self.namespaces.copy()
         return result
 
+    def to_model(self) -> V1PodAffinityTerm:
+        result = V1PodAffinityTerm(
+            label_selector=self.label_selector.to_model(),
+            topology_key=self.topologyKey,
+        )
+        if self.namespaces:
+            result.namespaces = self.namespaces.copy()
+        return result
+
 
 @dataclass(frozen=True)
 class PodPreferredSchedulingTerm:
@@ -862,6 +1028,12 @@ class PodPreferredSchedulingTerm:
             "podAffinityTerm": self.pod_affinity_term.to_primitive(),
             "weight": self.weight,
         }
+
+    def to_model(self) -> V1WeightedPodAffinityTerm:
+        return V1WeightedPodAffinityTerm(
+            pod_affinity_term=self.pod_affinity_term.to_model(),
+            weight=self.weight,
+        )
 
 
 @dataclass(frozen=True)
@@ -875,6 +1047,14 @@ class PodAffinity:
                 term.to_primitive() for term in self.preferred
             ]
         return payload
+
+    def to_model(self) -> V1PodAffinity:
+        ret = V1PodAffinity()
+        if self.preferred:
+            ret.preferred_during_scheduling_ignored_during_execution = [
+                term.to_model() for term in self.preferred
+            ]
+        return ret
 
 
 @enum.unique
@@ -1077,6 +1257,72 @@ class PodDescriptor:
             affinities.append(self.node_affinity)
         return all(a.is_satisfied(node_labels) for a in affinities)
 
+    def to_model(self) -> V1Pod:
+        volume_mounts = [mount.to_model() for mount in self.volume_mounts]
+        volumes = [volume.to_model() for volume in self.volumes]
+        env_list = self.env_list + [env.to_model() for env in self.secret_env_list]
+
+        container = V1Container(
+            name=f"{self.name}",
+            image=f"{self.image}",
+            image_pull_policy="Always",
+            env=env_list,
+            volumeMounts=volume_mounts,
+            termination_message_policy="FallbackToLogsOnError",
+        )
+        if self.command:
+            container.command = self.command
+        if self.args:
+            container.args = self.args
+        if self.resources:
+            container.resources = self.resources.to_model()
+        if self.tty:
+            container.tty = True
+        container.stdin = True
+        if self.working_dir is not None:
+            container.working_dir = self.working_dir
+        if self.privileged:
+            container.security_context = V1SecurityContext(
+                privileged=self.privileged,
+            )
+
+        ports = self._to_model_ports()
+        if ports:
+            container.ports = ports
+        if self.readiness_probe and self.port:
+            container.readiness_probe = self._to_model_readiness_probe()
+
+        model = V1Pod(
+            kind="Pod",
+            apiVersion="v1",
+            metadata=V1ObjectMeta(name=self.name),
+            spec=V1PodSpec(
+                automount_service_account_token=False,
+                containers=[container],
+                volumes=volumes,
+                restartPolicy=str(self.restart_policy),
+                image_pull_secrets=[
+                    secret.to_model() for secret in self.image_pull_secrets
+                ],
+                tolerations=[toleration.to_model() for toleration in self.tolerations],
+            ),
+        )
+        if self.labels:
+            model.metadata.labels = self.labels
+        if self.annotations:
+            model.metadata.annotations = self.annotations.copy()
+        if self.node_selector:
+            model.spec.nodeSelector = self.node_selector.copy()
+        if self.node_affinity or self.pod_affinity:
+            model.spec.affinity = V1Affinity()
+        if self.node_affinity:
+            model.spec.affinity.node_affinity = self.node_affinity.to_model()
+        if self.pod_affinity:
+            model.spec.affinity.pod_affinity = self.pod_affinity.to_model()
+        if self.priority_class_name:
+            model.spec.priority_class_name = self.priority_class_name
+        return model
+
     def to_primitive(self) -> dict[str, Any]:
         volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
         volumes = [volume.to_primitive() for volume in self.volumes]
@@ -1158,6 +1404,12 @@ class PodDescriptor:
             ports.append({"containerPort": self.port})
         return ports
 
+    def _to_model_ports(self) -> list[V1ContainerPort]:
+        ports = []
+        if self.port:
+            ports.append(V1ContainerPort(container_port=self.port))
+        return ports
+
     def _to_primitive_readiness_probe(self) -> dict[str, Any]:
         if not self.readiness_probe:
             return {}
@@ -1170,6 +1422,13 @@ class PodDescriptor:
             }
 
         return {}
+
+    def _to_model_readiness_probe(self) -> V1Probe:
+        return V1Probe(
+            http_get=V1HTTPGetAction(port=self.port, path=self.health_check_path),
+            initial_delay_seconds=1,
+            period_seconds=1,
+        )
 
     @classmethod
     def _assert_resource_kind(cls, expected_kind: str, payload: dict[str, Any]) -> None:
@@ -1225,6 +1484,59 @@ class PodDescriptor:
             working_dir=container_payload.get("workingDir"),
             resources=Resources.from_primitive(container_payload.get("resources", {})),
         )
+
+    @classmethod
+    def from_model(cls, model: V1Pod) -> "PodDescriptor":
+        # AS: not sure if we should check kind here,
+        # maybe model constructor raise and exception for us?
+        # cls._assert_resource_kind(expected_kind="Pod", payload=payload)
+
+        metadata = model.metadata
+        container = model.spec.containers[0]
+        # TODO (R Zubairov 09/13/18): remove medium emptyDir
+        # TODO (A Danshyn 06/19/18): set rest of attributes
+        status = None
+        if model.status is not None:
+            status = PodStatus.from_model(model.status)
+        if model.spec.image_pull_secrets is not None:
+            secrets = [
+                SecretRef.from_model(secret) for secret in model.spec.image_pull_secrets
+            ]
+        else:
+            secrets = []
+        tolerations = [
+            Toleration(
+                key=t.key or "",
+                operator=t.operator or Toleration.operator,
+                value=t.value or Toleration.value,
+                effect=t.effect or Toleration.effect,
+            )
+            for t in (model.spec.tolerations or ())
+        ]
+        return cls(
+            name=metadata.name,
+            created_at=iso8601.parse_date(metadata.creation_timestamp),
+            image=container.image,
+            status=status,
+            image_pull_secrets=secrets,
+            node_name=model.spec.node_name,
+            command=container.command,
+            args=container.args,
+            tty=container.tty or False,
+            tolerations=tolerations,
+            labels=metadata.labels or {},
+            priority_class_name=model.spec.priority_class_name,
+            restart_policy=PodRestartPolicy(
+                model.spec.restart_policy or str(cls.restart_policy)
+            ),
+            working_dir=container.working_dir,
+            resources=Resources.from_model(container.resources or {}),
+        )
+
+
+@dataclass(frozen=True)
+class ContainerStateRunning:
+    started_at: datetime
 
 
 class ContainerStatus:
@@ -1286,6 +1598,14 @@ class ContainerStatus:
         # https://github.com/kubernetes/kubernetes/blob/886e04f1fffbb04faf8a9f9ee141143b2684ae68/pkg/kubelet/images/types.go#L25-L43
         return self.is_waiting and self.reason in (None, "ContainerCreating")
 
+    @classmethod
+    def from_primitive(cls, payload: dict[str, Any]) -> Self:
+        return cls(payload)
+
+    @classmethod
+    def from_model(cls, model: V1ContainerStatus) -> Self:
+        return cls(model.to_dict())
+
 
 class PodConditionType(enum.Enum):
     UNKNOWN = "Unknown"
@@ -1330,6 +1650,14 @@ class PodCondition:
             return PodConditionType(self._payload["type"])
         except (KeyError, ValueError):
             return PodConditionType.UNKNOWN
+
+    @classmethod
+    def from_primitive(cls, payload: dict[str, Any]) -> Self:
+        return cls(payload)
+
+    @classmethod
+    def from_model(cls, model: V1PodCondition) -> Self:
+        return cls(model.to_dict())
 
 
 class KubernetesEvent:
@@ -1393,22 +1721,25 @@ class KubernetesEvent:
 
 
 class PodStatus:
-    def __init__(self, payload: dict[str, Any]) -> None:
-        self._payload = payload
-        self._container_statuses = self._create_container_status()
-
-    def _create_container_status(self) -> Sequence[ContainerStatus]:
-        container_statuses = self._payload.get("containerStatuses")
-        if not container_statuses:
-            return (ContainerStatus(),)
-        return tuple(ContainerStatus(p) for p in container_statuses)
+    def __init__(
+        self,
+        *,
+        phase: str,
+        container_statuses: tuple[ContainerStatus, ...],
+        reason: str | None,
+        conditions: list[PodCondition],
+    ) -> None:
+        self._phase = phase
+        self._container_statuses = container_statuses
+        self._reason = reason
+        self._conditions = conditions
 
     @property
     def phase(self) -> str:
         """
         "Pending", "Running", "Succeeded", "Failed", "Unknown"
         """
-        return self._payload["phase"]
+        return self._phase
 
     @property
     def is_phase_pending(self) -> bool:
@@ -1447,7 +1778,7 @@ class PodStatus:
         https://github.com/kubernetes/kubernetes/blob/a3ccea9d8743f2ff82e41b6c2af6dc2c41dc7b10/pkg/controller/util/node/controller_utils.go#L109-L126
         """
         # the pod status reason has a greater priority
-        return self._payload.get("reason") or self.container_status.reason
+        return self._reason or self.container_status.reason
 
     @property
     def container_status(self) -> ContainerStatus:
@@ -1463,11 +1794,31 @@ class PodStatus:
 
     @property
     def conditions(self) -> list[PodCondition]:
-        return [PodCondition(val) for val in self._payload.get("conditions", [])]
+        return list(self._conditions)
 
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "PodStatus":
-        return cls(payload)
+        return cls(
+            phase=payload["phase"],
+            container_statuses=tuple(
+                ContainerStatus.from_primitive(s) for s in payload["containerStatuses"]
+            ),
+            reason=payload.get("reason"),
+            conditions=[
+                PodCondition.from_primitive(c) for c in payload.get("conditions", [])
+            ],
+        )
+
+    @classmethod
+    def from_model(cls, model: V1PodStatus) -> "PodStatus":
+        return cls(
+            phase=model.phase,
+            container_statuses=tuple(
+                ContainerStatus.from_model(s) for s in model.container_statuses
+            ),
+            reason=model.reason,
+            conditions=[PodCondition.from_model(c) for c in model.conditions or []],
+        )
 
 
 @dataclass(frozen=True)
@@ -2594,3 +2945,44 @@ class KubePreemption:
             r2.cpu_mcores,
         )
         return key1 < key2
+
+
+# New API helpers
+
+
+async def get_pod(client_proxy: KubeClientProxy, pod_name: str) -> PodDescriptor:
+    pod = await client_proxy.core_v1.pod.get(pod_name)
+    return PodDescriptor.from_model(pod)
+
+
+async def create_pod(
+    client_proxy: KubeClientProxy, descriptor: PodDescriptor
+) -> PodDescriptor:
+    model = descriptor.to_model()
+    pod = await client_proxy.core_v1.pod.create(model)
+    return PodDescriptor.from_model(pod)
+
+
+async def delete_pod(
+    client_proxy: KubeClientProxy, pod_name: str, *, force: bool = False
+) -> PodStatus:
+    payload = None
+    if force:
+        payload = {
+            "apiVersion": "v1",
+            "kind": "DeleteOptions",
+            "gracePeriodSeconds": 0,
+        }
+    model = await client_proxy.core_v1.pod.delete(pod_name, payload=payload)
+    pod = PodDescriptor.from_model(model)
+    return pod.status  # type: ignore
+
+
+async def set_raw_pod_status(
+    namespace: str,
+    name: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {}
+    # url = self._generate_pod_url(namespace, name) + "/status"
+    # return await self.put(url=url, json=payload)
