@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class _Pod:
     def __init__(self, payload: dict[str, Any]) -> None:
         self._payload = payload
-        self._status = PodStatus(payload["status"])
+        self._status = PodStatus.from_primitive(payload["status"])
 
     @property
     def payload(self) -> dict[str, Any]:
