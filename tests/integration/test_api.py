@@ -5454,7 +5454,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
-                    "run_time_seconds": 0,
+                    "run_time_seconds": 0.0,
                     "restarts": 0,
                 },
                 "container": {
@@ -5714,7 +5714,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
-                    "run_time_seconds": 0,
+                    "run_time_seconds": 0.0,
                     "restarts": 0,
                 },
                 "container": {
@@ -5833,7 +5833,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
-                    "run_time_seconds": 0,
+                    "run_time_seconds": 0.0,
                     "restarts": 0,
                 },
                 "container": {
