@@ -229,39 +229,6 @@ class KubeOrchestrator(Orchestrator):
         await self._client.update_docker_secret(secret, create_non_existent=True)
         return secret
 
-    async def _create_pod_network_policy(self, job: Job) -> None:
-        tpu_ipv4_cidr_block = self._orchestrator_config.tpu_ipv4_cidr_block
-        if not job.request.container.resources.tpu or not tpu_ipv4_cidr_block:
-            # no need to create a network policy
-            return
-
-        name = self._get_job_pod_name(job)
-        pod_labels = self._get_job_labels(job)
-        rules: list[dict[str, Any]] = [
-            # allowing the pod to connect to TPU nodes within internal network
-            {"to": [{"ipBlock": {"cidr": tpu_ipv4_cidr_block}}]}
-        ]
-        labels = self._get_pod_labels(job)
-        await self._client.create_egress_network_policy(
-            job.namespace,
-            name,
-            pod_labels=pod_labels,
-            rules=rules,
-            labels=labels,
-        )
-
-    async def _delete_pod_network_policy(self, job: Job) -> None:
-        name = self._get_job_pod_name(job)
-        try:
-            await self._client.delete_network_policy(
-                job.namespace,
-                name,
-            )
-        except ResourceNotFound:
-            logger.info("Network policy %s not found", name)
-        except Exception as e:
-            logger.error("Failed to remove network policy %s: %s", name, e)
-
     def _create_pod_descriptor(
         self, job: Job, tolerate_unreachable_node: bool = False
     ) -> PodDescriptor:
@@ -539,8 +506,6 @@ class KubeOrchestrator(Orchestrator):
         await self._create_docker_secret(job)
 
         try:
-            await self._create_pod_network_policy(job)
-
             descriptor = self._create_pod_descriptor(
                 job, tolerate_unreachable_node=tolerate_unreachable_node
             )
@@ -847,13 +812,6 @@ class KubeOrchestrator(Orchestrator):
 
         return pod
 
-    async def _check_pod_exists(self, namespace: str, pod_name: str) -> bool:
-        try:
-            await self._client.get_pod_status(namespace, pod_name)
-            return True
-        except JobNotFoundException:
-            return False
-
     async def _create_service(
         self, namespace: str, pod: PodDescriptor, name: str | None = None
     ) -> Service:
@@ -893,8 +851,6 @@ class KubeOrchestrator(Orchestrator):
             await self._delete_service(
                 job.namespace, service.name, uid=service.uid, ignore_missing=True
             )
-
-        await self._delete_pod_network_policy(job)
 
         pod_id = self._get_job_pod_name(job)
         status = await self._client.delete_pod(job.namespace, pod_id)
@@ -965,14 +921,6 @@ class KubeOrchestrator(Orchestrator):
             await self._client.delete_ingress(job.namespace, name)
         except Exception as e:
             logger.warning("Failed to remove ingress %s: %s", name, e)
-
-    async def delete_all_job_resources(self, namespace: str, job_id: str) -> None:
-        labels = {NEURO_JOB_LABEL_KEY: job_id}
-        await self._client.delete_all_pods(namespace, labels=labels)
-        # todo: check this
-        await self._client.delete_all_ingresses(namespace, labels=labels)
-        await self._client.delete_all_services(namespace, labels=labels)
-        await self._client.delete_all_network_policies(namespace, labels=labels)
 
     async def preempt_jobs(
         self, jobs_to_schedule: list[Job], preemptible_jobs: list[Job]

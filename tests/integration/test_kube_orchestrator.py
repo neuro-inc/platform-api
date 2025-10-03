@@ -46,7 +46,6 @@ from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
     ContainerResources,
-    ContainerTPUResource,
     ContainerVolume,
     Disk,
     DiskContainerVolume,
@@ -2380,55 +2379,6 @@ class TestKubeOrchestrator:
                 "subPath": secret_bc.secret_key,
             },
         ]
-
-    async def test_delete_all_job_resources(
-        self,
-        kube_client: MyKubeClient,
-        kube_orchestrator: KubeOrchestrator,
-        delete_job_later: Callable[[Job], Awaitable[None]],
-    ) -> None:
-        container = Container(
-            image="ubuntu:20.10",
-            command="sleep 1h",
-            http_server=ContainerHTTPServer(80),
-            resources=ContainerResources(
-                cpu=0.1,
-                memory=128 * 10**6,
-                tpu=ContainerTPUResource(type="v2-8", software_version="1.14"),
-            ),
-        )
-        job = MyJob(
-            orchestrator=kube_orchestrator,
-            record=JobRecord.create(
-                request=JobRequest.create(container),
-                cluster_name="test-cluster",
-                org_name="test-org",
-            ),
-        )
-        await delete_job_later(job)
-        await kube_orchestrator.start_job(job)
-
-        pod_name = ingress_name = service_name = networkpolicy_name = job.id
-
-        assert await kube_client.get_pod(job.namespace, pod_name)
-        await kube_client.get_ingress(job.namespace, ingress_name)
-        await kube_client.get_service(job.namespace, service_name)
-        await kube_client.get_network_policy(job.namespace, networkpolicy_name)
-
-        await kube_orchestrator.delete_all_job_resources(job.namespace, job.id)
-
-        await kube_client.wait_pod_non_existent(job.namespace, pod_name, timeout_s=60.0)
-        with pytest.raises(JobNotFoundException):
-            await kube_client.get_pod(job.namespace, pod_name)
-
-        with pytest.raises(ResourceNotFound):
-            await kube_client.get_ingress(job.namespace, ingress_name)
-
-        with pytest.raises(KubeClientException, match="NotFound"):
-            await kube_client.get_service(job.namespace, service_name)
-
-        with pytest.raises(KubeClientException, match="NotFound"):
-            await kube_client.get_network_policy(job.namespace, networkpolicy_name)
 
     async def test_cleanup_old_named_ingresses(
         self,
