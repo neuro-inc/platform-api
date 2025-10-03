@@ -4,6 +4,7 @@ from typing import Any
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
+    ContainerNvidiaMIGResource,
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
@@ -63,19 +64,26 @@ def create_container_from_payload(payload: dict[str, Any]) -> Container:
 
 
 def create_resources_from_payload(payload: dict[str, Any]) -> ContainerResources:
+    nvidia_migs = None
+    if nvidia_migs_payload := payload.get("nvidia_migs"):
+        nvidia_migs = {
+            profile_name: ContainerNvidiaMIGResource.from_primitive(item)
+            for profile_name, item in nvidia_migs_payload.items()
+        }
     tpu = None
-    if "tpu" in payload:
-        tpu = create_tpu_resource_from_payload(payload["tpu"])
+    if tpu_payload := payload.get("tpu"):
+        tpu = create_tpu_resource_from_payload(tpu_payload)
     return ContainerResources(
         cpu=payload["cpu"],
         memory=(
             payload["memory"] if "memory" in payload else payload["memory_mb"] * 2**20
         ),
         nvidia_gpu=payload.get("nvidia_gpu"),
-        amd_gpu=payload.get("amd_gpu"),
-        intel_gpu=payload.get("intel_gpu"),
         nvidia_gpu_model=payload.get("nvidia_gpu_model") or payload.get("gpu_model"),
+        nvidia_migs=nvidia_migs,
+        amd_gpu=payload.get("amd_gpu"),
         amd_gpu_model=payload.get("amd_gpu_model"),
+        intel_gpu=payload.get("intel_gpu"),
         intel_gpu_model=payload.get("intel_gpu_model"),
         shm=payload.get("shm"),
         tpu=tpu,

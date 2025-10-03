@@ -232,39 +232,6 @@ class KubeOrchestrator(Orchestrator):
         await self._client.update_docker_secret(secret, create_non_existent=True)
         return secret
 
-    async def _create_pod_network_policy(self, job: Job) -> None:
-        tpu_ipv4_cidr_block = self._orchestrator_config.tpu_ipv4_cidr_block
-        if not job.request.container.resources.tpu or not tpu_ipv4_cidr_block:
-            # no need to create a network policy
-            return
-
-        name = self._get_job_pod_name(job)
-        pod_labels = self._get_job_labels(job)
-        rules: list[dict[str, Any]] = [
-            # allowing the pod to connect to TPU nodes within internal network
-            {"to": [{"ipBlock": {"cidr": tpu_ipv4_cidr_block}}]}
-        ]
-        labels = self._get_pod_labels(job)
-        await self._client.create_egress_network_policy(
-            job.namespace,
-            name,
-            pod_labels=pod_labels,
-            rules=rules,
-            labels=labels,
-        )
-
-    async def _delete_pod_network_policy(self, job: Job) -> None:
-        name = self._get_job_pod_name(job)
-        try:
-            await self._client.delete_network_policy(
-                job.namespace,
-                name,
-            )
-        except ResourceNotFound:
-            logger.info("Network policy %s not found", name)
-        except Exception as e:
-            logger.error("Failed to remove network policy %s: %s", name, e)
-
     def _create_pod_descriptor(
         self, job: Job, tolerate_unreachable_node: bool = False
     ) -> PodDescriptor:
@@ -395,31 +362,13 @@ class KubeOrchestrator(Orchestrator):
 
         return pool_types
 
-    # TODO: remove after cluster resources monitoring process is released
     def _update_pod_container_resources(
         self, pod: PodDescriptor, pool_types: Sequence[ResourcePoolType]
     ) -> PodDescriptor:
         if not pod.resources:
             return pod
-        max_node_cpu = max(p.available_cpu or 0 for p in pool_types)
         max_node_memory = max(p.available_memory or 0 for p in pool_types)
-        max_node_nvidia_gpu = max(
-            p.nvidia_gpu.count if p.nvidia_gpu else 0 for p in pool_types
-        )
-        max_node_amd_gpu = max(p.amd_gpu.count if p.amd_gpu else 0 for p in pool_types)
-        max_node_intel_gpu = max(
-            p.intel_gpu.count if p.intel_gpu else 0 for p in pool_types
-        )
-        pod_nvidia_gpu = pod.resources.nvidia_gpu or 0
-        pod_amd_gpu = pod.resources.amd_gpu or 0
-        pod_intel_gpu = pod.resources.intel_gpu or 0
-        if (
-            max_node_cpu > pod.resources.cpu
-            or max_node_memory > pod.resources.memory
-            or max_node_nvidia_gpu > pod_nvidia_gpu
-            or max_node_amd_gpu > pod_amd_gpu
-            or max_node_intel_gpu > pod_intel_gpu
-        ):
+        if max_node_memory > pod.resources.memory:
             # Ignore pods that don't require all node's resources
             return pod
         # By default resources request is not specified which means
@@ -432,7 +381,7 @@ class KubeOrchestrator(Orchestrator):
         # will be triggered.
         new_resources = replace(
             pod.resources, memory_request=int(pod.resources.memory * 0.8)
-        )  # 1GB
+        )
         return replace(pod, resources=new_resources)
 
     def _update_pod_image(self, job: Job, pod: PodDescriptor) -> PodDescriptor:
@@ -561,8 +510,6 @@ class KubeOrchestrator(Orchestrator):
         await self._create_docker_secret(job)
 
         try:
-            await self._create_pod_network_policy(job)
-
             descriptor = self._create_pod_descriptor(
                 job, tolerate_unreachable_node=tolerate_unreachable_node
             )
@@ -914,8 +861,6 @@ class KubeOrchestrator(Orchestrator):
                 job.namespace, service.name, uid=service.uid, ignore_missing=True
             )
 
-        await self._delete_pod_network_policy(job)
-
         pod_id = self._get_job_pod_name(job)
         status = await self._client.delete_pod(job.namespace, pod_id)
         return convert_pod_status_to_job_status(status).status
@@ -985,14 +930,6 @@ class KubeOrchestrator(Orchestrator):
             await self._client.delete_ingress(job.namespace, name)
         except Exception as e:
             logger.warning("Failed to remove ingress %s: %s", name, e)
-
-    async def delete_all_job_resources(self, namespace: str, job_id: str) -> None:
-        labels = {NEURO_JOB_LABEL_KEY: job_id}
-        await self._client.delete_all_pods(namespace, labels=labels)
-        # todo: check this
-        await self._client.delete_all_ingresses(namespace, labels=labels)
-        await self._client.delete_all_services(namespace, labels=labels)
-        await self._client.delete_all_network_policies(namespace, labels=labels)
 
     async def preempt_jobs(
         self, jobs_to_schedule: list[Job], preemptible_jobs: list[Job]

@@ -13,6 +13,7 @@ from neuro_config_client import (
     AMDGPUPreset,
     IntelGPUPreset,
     NvidiaGPUPreset,
+    NvidiaMIGPreset,
     ResourcePreset,
     TPUPreset,
     TPUResource,
@@ -49,6 +50,7 @@ from platform_api.orchestrator.job import (
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
+    ContainerNvidiaMIGResource,
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
@@ -204,12 +206,16 @@ class TestContainerRequestValidator:
             "resources": {
                 "cpu": 0.1,
                 "memory_mb": 16,
-                "gpu_model": "unknown",
+                "nvidia_gpu_model": "nvidia-gpu",
+                "amd_gpu_model": "amd-gpu",
+                "intel_gpu_model": "intel-gpu",
             },
         }
         validator = create_container_request_validator(cluster_name=cluster)
         result = validator.check(payload)
-        assert result["resources"]["nvidia_gpu_model"] == "unknown"
+        assert result["resources"]["nvidia_gpu_model"] == "nvidia-gpu"
+        assert result["resources"]["amd_gpu_model"] == "amd-gpu"
+        assert result["resources"]["intel_gpu_model"] == "intel-gpu"
 
     def test_gpu_tpu_conflict(self) -> None:
         cluster = "test-cluster"
@@ -307,21 +313,32 @@ class TestContainerRequestValidator:
 
 
 class TestContainerResponseValidator:
-    def test_gpu_model(self) -> None:
+    def test_gpu(self) -> None:
         payload = {
             "image": "testimage",
             "resources": {
                 "cpu": 0.1,
                 "memory_mb": 16,
                 "nvidia_gpu": 1,
-                "gpu": 1,
-                "gpu_model": "unknown",
+                "nvidia_gpu_model": "nvidia-gpu",
+                "nvidia_migs": {"1g.5gb": {"count": 1, "model": "nvidia-mig"}},
+                "amd_gpu": 2,
+                "amd_gpu_model": "amd-gpu",
+                "intel_gpu": 3,
+                "intel_gpu_model": "intel-gpu",
             },
         }
         validator = create_container_response_validator()
         result = validator.check(payload)
         assert result["resources"]["nvidia_gpu"] == 1
-        assert result["resources"]["nvidia_gpu_model"] == "unknown"
+        assert result["resources"]["nvidia_gpu_model"] == "nvidia-gpu"
+        assert result["resources"]["nvidia_migs"] == {
+            "1g.5gb": {"count": 1, "model": "nvidia-mig"}
+        }
+        assert result["resources"]["amd_gpu"] == 2
+        assert result["resources"]["amd_gpu_model"] == "amd-gpu"
+        assert result["resources"]["intel_gpu"] == 3
+        assert result["resources"]["intel_gpu_model"] == "intel-gpu"
 
     def test_tpu(self) -> None:
         payload = {
@@ -643,9 +660,14 @@ class TestJobPresetValidator:
                     credits_per_hour=Decimal("10"),
                     cpu=0.1,
                     memory=100 * 10**6,
-                    nvidia_gpu=NvidiaGPUPreset(count=1, model="nvidia-tesla-k80"),
-                    amd_gpu=AMDGPUPreset(count=1),
-                    intel_gpu=IntelGPUPreset(count=1),
+                    nvidia_gpu=NvidiaGPUPreset(count=1, model="nvidia-gpu"),
+                    nvidia_migs=[
+                        NvidiaMIGPreset(
+                            profile_name="1g.5gb", count=1, model="nvidia-mig"
+                        )
+                    ],
+                    amd_gpu=AMDGPUPreset(count=2, model="amd-gpu"),
+                    intel_gpu=IntelGPUPreset(count=3, model="intel-gpu"),
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),
                     scheduler_enabled=True,
                     preemptible_node=True,
@@ -662,10 +684,12 @@ class TestJobPresetValidator:
                     "memory": 100 * 10**6,
                     "shm": True,
                     "nvidia_gpu": 1,
-                    "amd_gpu": 1,
-                    "intel_gpu": 1,
-                    "gpu_model": "nvidia-tesla-k80",
-                    "nvidia_gpu_model": "nvidia-tesla-k80",
+                    "nvidia_gpu_model": "nvidia-gpu",
+                    "nvidia_migs": {"1g.5gb": {"count": 1, "model": "nvidia-mig"}},
+                    "amd_gpu": 2,
+                    "amd_gpu_model": "amd-gpu",
+                    "intel_gpu": 3,
+                    "intel_gpu_model": "intel-gpu",
                     "tpu": {
                         "type": "v2-8",
                         "software_version": "1.14",
@@ -997,9 +1021,14 @@ class TestJobContainerToJson:
                 cpu=0.1,
                 memory=16 * 10**6,
                 nvidia_gpu=1,
+                nvidia_gpu_model="nvidia-gpu",
+                nvidia_migs={
+                    "1g.5gb": ContainerNvidiaMIGResource(count=1, model="nvidia-mig")
+                },
                 amd_gpu=2,
+                amd_gpu_model="amd-gpu",
                 intel_gpu=3,
-                nvidia_gpu_model="gpu-model",
+                intel_gpu_model="intel-gpu",
                 shm=True,
             ),
         )
@@ -1010,12 +1039,13 @@ class TestJobContainerToJson:
                 "cpu": 0.1,
                 "memory": 16 * 10**6,
                 "memory_mb": 15,
-                "gpu": 1,
                 "nvidia_gpu": 1,
+                "nvidia_gpu_model": "nvidia-gpu",
+                "nvidia_migs": {"1g.5gb": {"count": 1, "model": "nvidia-mig"}},
                 "amd_gpu": 2,
+                "amd_gpu_model": "amd-gpu",
                 "intel_gpu": 3,
-                "gpu_model": "gpu-model",
-                "nvidia_gpu_model": "gpu-model",
+                "intel_gpu_model": "intel-gpu",
                 "shm": True,
             },
             "volumes": [],
@@ -1753,8 +1783,16 @@ async def test_parse_response(mock_orchestrator: MockOrchestrator) -> None:
                         cpu=1,
                         memory=128 * 10**6,
                         nvidia_gpu=1,
+                        nvidia_gpu_model="nvidia-gpu",
+                        nvidia_migs={
+                            "1g.5gb": ContainerNvidiaMIGResource(
+                                count=1, model="nvidia-mig"
+                            )
+                        },
                         amd_gpu=2,
-                        nvidia_gpu_model="nvidia-tesla-k80",
+                        amd_gpu_model="amd-gpu",
+                        intel_gpu=3,
+                        intel_gpu_model="intel-gpu",
                         shm=True,
                         tpu=ContainerTPUResource(type="type", software_version="1.0"),
                     ),

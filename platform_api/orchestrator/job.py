@@ -408,7 +408,14 @@ class JobRecord:
 
     @property
     def has_nvidia_gpu(self) -> bool:
-        return bool(self.request.container.resources.nvidia_gpu)
+        if self.request.container.resources.nvidia_gpu:
+            return True
+        if self.request.container.resources.nvidia_migs:
+            return any(
+                mig.count > 0
+                for mig in self.request.container.resources.nvidia_migs.values()
+            )
+        return False
 
     @property
     def has_amd_gpu(self) -> bool:
