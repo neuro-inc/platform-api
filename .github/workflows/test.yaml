@@ -116,18 +116,18 @@ jobs:
       env:
         COUNT: ${{ strategy.job-total }}
         GROUP: ${{ strategy.job-index + 1 }}
-        COVERAGE_FILE: ${{ strategy.job-index }} + ".coverage"
+        COVERAGE_FILE: ${{ strategy.job-index }}.coverage
     - name: Upload coverage part
       uses: actions/upload-artifact@v4
       with:
-        name: "coverage-${{ strategy.job-index }}"
-        path: "${{ strategy.job-index }}.coverage"
-
+        name: coverage-${{ strategy.job-index }}
+        path: ${{ strategy.job-index }}.coverage
 
   upload-coverage:
     needs: integration
     name: Upload integration tests coverage
     runs-on: ubuntu-latest
+    steps:
     - name: Download All Coverages
       uses: actions/download-artifact@v5
       with:
