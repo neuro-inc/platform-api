@@ -10,7 +10,6 @@ from unittest import mock
 import pytest
 from yarl import URL
 
-from platform_api.config import NO_ORG
 from platform_api.handlers.job_request_builder import create_container_from_payload
 from platform_api.orchestrator.job import (
     Job,
@@ -119,31 +118,31 @@ class TestContainer:
             resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         with pytest.raises(AssertionError, match="Unknown registry"):
-            container.to_image_uri("example.com", "test-cluster")
+            container.to_image_uri("example.com", "test-cluster", "test-org")
 
     def test_to_image_uri(self) -> None:
         container = Container(
             image="example.com/project/testimage%2d",
             resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
-        uri = container.to_image_uri("example.com", "test-cluster")
-        assert uri == URL("image://test-cluster/project/testimage%252d")
+        uri = container.to_image_uri("example.com", "test-cluster", "test-org")
+        assert uri == URL("image://test-cluster/test-org/project/testimage%252d")
 
     def test_to_image_uri_registry_with_custom_port(self) -> None:
         container = Container(
             image="example.com:5000/project/testimage",
             resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
-        uri = container.to_image_uri("example.com:5000", "test-cluster")
-        assert uri == URL("image://test-cluster/project/testimage")
+        uri = container.to_image_uri("example.com:5000", "test-cluster", "test-org")
+        assert uri == URL("image://test-cluster/test-org/project/testimage")
 
     def test_to_image_uri_ignore_tag(self) -> None:
         container = Container(
             image="example.com/project/testimage:latest",
             resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
-        uri = container.to_image_uri("example.com", "test-cluster")
-        assert uri == URL("image://test-cluster/project/testimage")
+        uri = container.to_image_uri("example.com", "test-cluster", "test-org")
+        assert uri == URL("image://test-cluster/test-org/project/testimage")
 
 
 class TestContainerVolumeCreate:
@@ -237,7 +236,7 @@ class TestSecret:
     def test_k8s_secret_name(self) -> None:
         uri = "secret://test-cluster/test-user/test-secret%252d"
         sec = Secret.create(uri)
-        assert sec.k8s_secret_name == "project--no-org--test-user--secrets"
+        assert sec.k8s_secret_name == "project--test-user--secrets"
 
     def test_to_uri(self) -> None:
         uri = "secret://test-cluster/test-user/test-secret%252d"
@@ -609,11 +608,8 @@ class TestJob:
         assert job.http_host == "testjob.jobs"
 
     @classmethod
-    def _create_http_host_named_suffix(
-        cls, org_name: str | None, project_name: str
-    ) -> str:
+    def _create_http_host_named_suffix(cls, org_name: str, project_name: str) -> str:
         hasher = hashlib.new("sha256")
-        org_name = org_name or NO_ORG
         hasher.update(org_name.encode("utf-8"))
         hasher.update(project_name.encode("utf-8"))
         return hasher.hexdigest()[:10]

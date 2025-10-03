@@ -127,12 +127,13 @@ class TestApi:
         client: aiohttp.ClientSession,
         regular_user_factory: UserFactory,
         admin_url: URL,
+        test_org_name: str,
     ) -> None:
         url = api.config_url
         regular_user = await regular_user_factory(
             clusters=[
-                ("test-cluster", Balance(), Quota()),
-                ("testcluster2", Balance(), Quota()),
+                ("test-cluster", test_org_name, Balance(), Quota()),
+                ("testcluster2", test_org_name, Balance(), Quota()),
             ],
             do_create_project=False,
         )
@@ -430,13 +431,13 @@ class TestApi:
                     expected_cluster_payload,
                     {**expected_cluster_payload, "name": "testcluster2"},
                 ],
-                "orgs": [],
+                "orgs": [{"name": test_org_name, "role": "user"}],
                 "projects": [],
             }
             assert result == expected_payload
 
             result_orgs = result["clusters"][0]["orgs"]
-            assert None in result_orgs
+            assert test_org_name in result_orgs
 
     async def test_config__with_orgs_and_projects(
         self,
@@ -449,7 +450,6 @@ class TestApi:
         url = api.config_url
         regular_user = await regular_user_factory(
             clusters=[
-                ("test-cluster", Balance(), Quota()),
                 ("test-cluster", "org1", Balance(), Quota()),
                 ("test-cluster", "org2", Balance(), Quota()),
             ],
@@ -461,9 +461,6 @@ class TestApi:
 
         org3 = await admin_client.create_org(random_str())
 
-        project1 = await admin_client.create_project(
-            random_str(), regular_user.cluster_name, None
-        )
         project2 = await admin_client.create_project(
             random_str(), regular_user.cluster_name, "org1"
         )
@@ -679,7 +676,6 @@ class TestApi:
             assert result == expected_payload
 
             result_orgs = result["clusters"][0]["orgs"]
-            assert None in result_orgs
             assert "org1" in result_orgs
             assert "org2" in result_orgs
 
@@ -703,12 +699,6 @@ class TestApi:
             assert sorted(result["projects"], key=lambda o: o["name"]) == sorted(
                 [
                     {
-                        "name": project1.name,
-                        "cluster_name": regular_user.cluster_name,
-                        "org_name": None,
-                        "role": "admin",
-                    },
-                    {
                         "name": project2.name,
                         "cluster_name": regular_user.cluster_name,
                         "org_name": "org1",
@@ -724,8 +714,11 @@ class TestApi:
         client: aiohttp.ClientSession,
         regular_user_factory: UserFactory,
         admin_url: URL,
+        test_cluster_name: str,
+        test_org_name: str,
     ) -> None:
         regular_user = await regular_user_factory(
+            clusters=[(test_cluster_name, test_org_name, Balance(), Quota())],
             do_create_project=False,
         )
         url = api_with_oauth.config_url
@@ -946,7 +939,7 @@ class TestApi:
                 ],
                 "admin_url": f"{admin_url}",
                 "clusters": [expected_cluster_payload],
-                "orgs": [],
+                "orgs": [{"name": test_org_name, "role": "user"}],
                 "projects": [],
             }
             assert result == expected_payload
@@ -960,6 +953,7 @@ class TestJobs:
         job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
+        test_org_name: str,
     ) -> None:
         url = api.jobs_base_url
         project_name = random_str()
@@ -972,7 +966,7 @@ class TestJobs:
             assert result == {
                 "missing": [
                     {
-                        "uri": f"job://{regular_user.cluster_name}/{project_name}",
+                        "uri": f"job://{regular_user.cluster_name}/{test_org_name}/{project_name}",
                         "action": "write",
                     }
                 ]
@@ -1005,19 +999,23 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         regular_user_factory: UserFactory,
         admin_client_factory: Callable[[str], Awaitable[AdminClient]],
+        test_org_name: str,
     ) -> None:
         url = api.jobs_base_url
         project_name = random_str()
         job_name = f"j-{random_str()}"
 
         regular_user = await regular_user_factory(
-            cluster_user_role=ClusterUserRoleType.MANAGER
+            clusters=[("test-cluster", test_org_name, Balance(), Quota())],
+            cluster_user_role=ClusterUserRoleType.MANAGER,
         )
 
         jobs_client = jobs_client_factory(regular_user)
         admin_client = await admin_client_factory(regular_user.token)
 
-        await admin_client.create_project(project_name, regular_user.cluster_name, None)
+        await admin_client.create_project(
+            project_name, regular_user.cluster_name, test_org_name
+        )
 
         job_submit["project_name"] = project_name
         job_submit["name"] = job_name
@@ -1214,47 +1212,6 @@ class TestJobs:
         await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
         await jobs_client.delete_job(job_id=job_id)
 
-    async def test_create_job_use_default_org(
-        self,
-        api: ApiConfig,
-        client: aiohttp.ClientSession,
-        job_submit: dict[str, Any],
-        service_account_factory: ServiceAccountFactory,
-        regular_user_factory: UserFactory,
-        jobs_client_factory: Callable[[_User], JobsClient],
-    ) -> None:
-        org_user = await regular_user_factory(
-            clusters=[
-                ("testcluster2", "org", Balance(), Quota()),
-                ("test-cluster", "org2", Balance(), Quota()),
-                ("test-cluster", Balance(), Quota()),
-            ],
-        )
-        url = api.jobs_base_url
-        job_submit["cluster_name"] = "test-cluster"
-
-        async with client.post(
-            url, headers=org_user.headers, json=job_submit
-        ) as response:
-            assert response.status == HTTPAccepted.status_code, await response.text()
-            result = await response.json()
-            assert result["status"] in ["pending"]
-            job_id = result["id"]
-            assert result.get("org_name") is None
-
-        url = api.jobs_base_url
-
-        async with client.get(url, headers=org_user.headers) as response:
-            assert response.status == HTTPOk.status_code, await response.text()
-            assert response.headers["Content-Type"] == "application/json; charset=utf-8"
-            result = await response.json()
-
-        assert job_id in {job["id"] for job in result["jobs"]}
-
-        jobs_client = jobs_client_factory(org_user)
-        await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
-        await jobs_client.delete_job(job_id=job_id)
-
     async def test_create_job_with_pass_config(
         self,
         api: ApiConfig,
@@ -1428,15 +1385,16 @@ class TestJobs:
         regular_user: _User,
         regular_secrets_client: SecretsClient,
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
+        test_org_name: str,
     ) -> None:
         key, value = "key1", "value1"
         await regular_secrets_client.create_secret(
-            key, value, project_name=regular_user.name
+            key, value, project_name=regular_user.name, org_name=test_org_name
         )
 
         user = regular_user
         secret_env = {
-            "ENV_SECRET": f"secret://{user.cluster_name}/{user.name}/{key}",
+            "ENV_SECRET": f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key}",
         }
         job_submit["container"]["secret_env"] = secret_env
 
@@ -1454,16 +1412,22 @@ class TestJobs:
         regular_user: _User,
         regular_secrets_client: SecretsClient,
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
+        test_org_name: str,
     ) -> None:
         secret_name, secret_value = "key1", "value1"
         secret_path = "/etc/foo/file.txt"
 
         await regular_secrets_client.create_secret(
-            secret_name, secret_value, project_name=regular_user.name
+            secret_name,
+            secret_value,
+            project_name=regular_user.name,
+            org_name=test_org_name,
         )
 
         user = regular_user
-        secret_uri = f"secret://{user.cluster_name}/{user.name}/{secret_name}"
+        secret_uri = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{secret_name}"
+        )
         secret_volumes = [
             {"src_secret_uri": secret_uri, "dst_path": secret_path},
         ]
@@ -1597,6 +1561,7 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         secrets_client_factory: Callable[[_User], SecretsClient],
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
+        test_org_name: str,
     ) -> None:
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
@@ -1609,12 +1574,13 @@ class TestJobs:
 
         async with secrets_client_factory(service_user) as secrets_client:
             await secrets_client.create_secret(
-                secret_name, secret_value, project_name=project_name
+                secret_name,
+                secret_value,
+                project_name=project_name,
+                org_name=test_org_name,
             )
 
-        secret_uri = (
-            f"secret://{service_user.cluster_name}/{project_name}/{secret_name}"
-        )
+        secret_uri = f"secret://{service_user.cluster_name}/{test_org_name}/{project_name}/{secret_name}"
         secret_volumes = [
             {"src_secret_uri": secret_uri, "dst_path": secret_path},
         ]
@@ -1654,6 +1620,7 @@ class TestJobs:
         jobs_client_factory: Callable[[_User], JobsClient],
         secrets_client_factory: Callable[[_User], SecretsClient],
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
+        test_org_name: str,
     ) -> None:
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
@@ -1663,10 +1630,12 @@ class TestJobs:
         key, value = "key1", "value1"
 
         async with secrets_client_factory(service_user) as secrets_client:
-            await secrets_client.create_secret(key, value, project_name=project_name)
+            await secrets_client.create_secret(
+                key, value, project_name=project_name, org_name=test_org_name
+            )
 
         secret_env = {
-            "ENV_SECRET": f"secret://{service_user.cluster_name}/{project_name}/{key}",
+            "ENV_SECRET": f"secret://{service_user.cluster_name}/{test_org_name}/{project_name}/{key}",
         }
         job_submit["container"]["secret_env"] = secret_env
 
@@ -1683,12 +1652,14 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_disk_api_client: DiskAPIClient,
+        test_org_name: str,
     ) -> None:
         disk_path = "/mnt/disk"
 
         disk = await regular_disk_api_client.create_disk(
             storage=1024 * 1024,
             project_name=regular_user.name,
+            org_name=test_org_name,
         )
 
         disk_volumes = [
@@ -1799,6 +1770,7 @@ class TestJobs:
         service_account_factory: ServiceAccountFactory,
         jobs_client_factory: Callable[[_User], JobsClient],
         disk_client_factory: Callable[[_User], DiskAPIClient],
+        test_org_name: str,
     ) -> None:
         service_user = await service_account_factory(
             owner=regular_user, name="some-really-long-name"
@@ -1809,6 +1781,7 @@ class TestJobs:
             disk = await disk_client.create_disk(
                 storage=1024 * 1024,
                 project_name=service_user.name.split("/")[0],
+                org_name=test_org_name,
             )
 
         disk_volumes = [
@@ -1855,6 +1828,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_disk_api_client: DiskAPIClient,
+        test_org_name: str,
     ) -> None:
         disk_path1 = "/mnt/disk1"
         disk_path2 = "/mnt/disk2"
@@ -1862,6 +1836,7 @@ class TestJobs:
         disk = await regular_disk_api_client.create_disk(
             storage=1024 * 1024,
             project_name=regular_user.name,
+            org_name=test_org_name,
         )
 
         disk_volumes = [
@@ -1913,6 +1888,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_disk_api_client: DiskAPIClient,
+        test_org_name: str,
     ) -> None:
         disk_path1 = "/mnt/disk1"
         disk_path2 = "/mnt/disk2"
@@ -1920,10 +1896,12 @@ class TestJobs:
         disk1 = await regular_disk_api_client.create_disk(
             storage=1024 * 1024,
             project_name=regular_user.name,
+            org_name=test_org_name,
         )
         disk2 = await regular_disk_api_client.create_disk(
             storage=1024 * 1024,
             project_name=regular_user.name,
+            org_name=test_org_name,
         )
 
         disk_volumes = [
@@ -1978,6 +1956,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_disk_api_client: DiskAPIClient,
+        test_org_name: str,
     ) -> None:
         disk_path = "/mnt/disk1"
         file_name = "test.txt"
@@ -1986,6 +1965,7 @@ class TestJobs:
         disk = await regular_disk_api_client.create_disk(
             storage=1024 * 1024,
             project_name=regular_user.name,
+            org_name=test_org_name,
         )
 
         disk_volumes = [
@@ -2041,6 +2021,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         regular_disk_api_client: DiskAPIClient,
+        test_org_name: str,
     ) -> None:
         disk_path = "/mnt/disk1"
         file_name = "test.txt"
@@ -2051,6 +2032,7 @@ class TestJobs:
         disk = await regular_disk_api_client.create_disk(
             storage=1024 * 1024,
             project_name=regular_user.name,
+            org_name=test_org_name,
         )
 
         disk_volumes = [
@@ -2112,10 +2094,11 @@ class TestJobs:
         job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
+        test_org_name: str,
     ) -> None:
         url = api.jobs_base_url
         user = regular_user
-        disk_uri = f"disk://{user.cluster_name}/{user.name}/disk-1"
+        disk_uri = f"disk://{user.cluster_name}/{test_org_name}/{user.name}/disk-1"
         disk_volumes = [
             {"src_disk_uri": disk_uri, "dst_path": "/mnt/disk"},
         ]
@@ -2142,18 +2125,24 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_submit: dict[str, Any],
         test_cluster_name: str,
+        test_org_name: str,
         regular_user_factory: UserFactory,
         disk_client_factory: Callable[..., AbstractAsyncContextManager[DiskAPIClient]],
         read_only: bool,
     ) -> None:
         cluster = test_cluster_name
-        usr_1 = await regular_user_factory(clusters=[(cluster, Balance(), Quota())])
-        usr_2 = await regular_user_factory(clusters=[(cluster, Balance(), Quota())])
+        usr_1 = await regular_user_factory(
+            clusters=[(cluster, test_org_name, Balance(), Quota())]
+        )
+        usr_2 = await regular_user_factory(
+            clusters=[(cluster, test_org_name, Balance(), Quota())]
+        )
 
         async with disk_client_factory(usr_1) as disk_client:
             disk = await disk_client.create_disk(
                 storage=1024 * 1024,
                 project_name=usr_1.name,
+                org_name=test_org_name,
             )
 
         disk_volumes = [
@@ -2309,20 +2298,25 @@ class TestJobs:
         regular_user: _User,
         regular_secrets_client: SecretsClient,
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
+        test_org_name: str,
     ) -> None:
         user = regular_user
         key_1, key_2 = "key_1", "key_2"
         secret_value_1 = "value1"
         secret_value_2 = "value2"
         await regular_secrets_client.create_secret(
-            key_1, secret_value_1, project_name=user.name
+            key_1, secret_value_1, project_name=user.name, org_name=test_org_name
         )
         await regular_secrets_client.create_secret(
-            key_2, secret_value_2, project_name=user.name
+            key_2, secret_value_2, project_name=user.name, org_name=test_org_name
         )
 
-        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
-        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
+        secret_uri_1 = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_1}"
+        )
+        secret_uri_2 = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_2}"
+        )
 
         secret_path_a = "/etc/path_a/file.txt"
         secret_path_b = "/etc/path_b/file.txt"
@@ -2353,6 +2347,7 @@ class TestJobs:
         regular_user: _User,
         regular_secrets_client: SecretsClient,
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
+        test_org_name: str,
     ) -> None:
         """Mount multiple different secrets as both secret env and
         secret volumes in a single job.
@@ -2364,30 +2359,42 @@ class TestJobs:
         value_1, value_2, value_3 = "value_1", "value_2", "value_3"
         value_a, value_b, value_c = "value_a", "value_b", "value_c"
         await regular_secrets_client.create_secret(
-            key_1, value_1, project_name=user.name
+            key_1, value_1, project_name=user.name, org_name=test_org_name
         )
         await regular_secrets_client.create_secret(
-            key_2, value_2, project_name=user.name
+            key_2, value_2, project_name=user.name, org_name=test_org_name
         )
         await regular_secrets_client.create_secret(
-            key_3, value_3, project_name=user.name
+            key_3, value_3, project_name=user.name, org_name=test_org_name
         )
         await regular_secrets_client.create_secret(
-            key_a, value_a, project_name=user.name
+            key_a, value_a, project_name=user.name, org_name=test_org_name
         )
         await regular_secrets_client.create_secret(
-            key_b, value_b, project_name=user.name
+            key_b, value_b, project_name=user.name, org_name=test_org_name
         )
         await regular_secrets_client.create_secret(
-            key_c, value_c, project_name=user.name
+            key_c, value_c, project_name=user.name, org_name=test_org_name
         )
 
-        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
-        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
-        secret_uri_3 = f"secret://{user.cluster_name}/{user.name}/{key_3}"
-        secret_uri_a = f"secret://{user.cluster_name}/{user.name}/{key_a}"
-        secret_uri_b = f"secret://{user.cluster_name}/{user.name}/{key_b}"
-        secret_uri_c = f"secret://{user.cluster_name}/{user.name}/{key_c}"
+        secret_uri_1 = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_1}"
+        )
+        secret_uri_2 = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_2}"
+        )
+        secret_uri_3 = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_3}"
+        )
+        secret_uri_a = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_a}"
+        )
+        secret_uri_b = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_b}"
+        )
+        secret_uri_c = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_c}"
+        )
 
         env_var_a = "ENV_SECRET_A"
         env_var_b = "ENV_SECRET_B"
@@ -2435,6 +2442,7 @@ class TestJobs:
         regular_user: _User,
         regular_secrets_client: SecretsClient,
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
+        test_org_name: str,
     ) -> None:
         """Same secret key is allowed to be mounted as a secret volume
         and a secret env simultaneously.
@@ -2445,18 +2453,27 @@ class TestJobs:
         secret_value_env = "value2"
         secret_value_vol = "value3"
         await regular_secrets_client.create_secret(
-            key_common, secret_value_common, project_name=user.name
+            key_common,
+            secret_value_common,
+            project_name=user.name,
+            org_name=test_org_name,
         )
         await regular_secrets_client.create_secret(
-            key_env, secret_value_env, project_name=user.name
+            key_env, secret_value_env, project_name=user.name, org_name=test_org_name
         )
         await regular_secrets_client.create_secret(
-            key_vol, secret_value_vol, project_name=user.name
+            key_vol, secret_value_vol, project_name=user.name, org_name=test_org_name
         )
 
-        secret_uri_common = f"secret://{user.cluster_name}/{user.name}/{key_common}"
-        secret_uri_env = f"secret://{user.cluster_name}/{user.name}/{key_env}"
-        secret_uri_vol = f"secret://{user.cluster_name}/{user.name}/{key_vol}"
+        secret_uri_common = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_common}"
+        )
+        secret_uri_env = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_env}"
+        )
+        secret_uri_vol = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_vol}"
+        )
 
         env_var_common = "ENV_SECRET_A"
         env_var_env = "ENV_SECRET_B"
@@ -2498,6 +2515,7 @@ class TestJobs:
         regular_user: _User,
         regular_secrets_client: SecretsClient,
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
+        test_org_name: str,
     ) -> None:
         user = regular_user
         key_1, key_2, key_3 = "key_1", "key_2", "key_3"
@@ -2505,17 +2523,21 @@ class TestJobs:
         secret_value_2 = "value2"
         secret_value_3 = "value3"
         await regular_secrets_client.create_secret(
-            key_1, secret_value_1, project_name=user.name
+            key_1, secret_value_1, project_name=user.name, org_name=test_org_name
         )
         await regular_secrets_client.create_secret(
-            key_2, secret_value_2, project_name=user.name
+            key_2, secret_value_2, project_name=user.name, org_name=test_org_name
         )
         await regular_secrets_client.create_secret(
-            key_3, secret_value_3, project_name=user.name
+            key_3, secret_value_3, project_name=user.name, org_name=test_org_name
         )
 
-        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
-        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
+        secret_uri_1 = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_1}"
+        )
+        secret_uri_2 = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_2}"
+        )
 
         env_var_a = "ENV_SECRET_A"
         env_var_b = "ENV_SECRET_B"
@@ -2549,6 +2571,7 @@ class TestJobs:
         regular_user: _User,
         regular_secrets_client: SecretsClient,
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
+        test_org_name: str,
     ) -> None:
         user = regular_user
         key_1, key_2, key_3 = "key_1", "key_2", "key_3"
@@ -2556,17 +2579,21 @@ class TestJobs:
         secret_value_2 = "value2"
         secret_value_3 = "value3"
         await regular_secrets_client.create_secret(
-            key_1, secret_value_1, project_name=user.name
+            key_1, secret_value_1, project_name=user.name, org_name=test_org_name
         )
         await regular_secrets_client.create_secret(
-            key_2, secret_value_2, project_name=user.name
+            key_2, secret_value_2, project_name=user.name, org_name=test_org_name
         )
         await regular_secrets_client.create_secret(
-            key_3, secret_value_3, project_name=user.name
+            key_3, secret_value_3, project_name=user.name, org_name=test_org_name
         )
 
-        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
-        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
+        secret_uri_1 = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_1}"
+        )
+        secret_uri_2 = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_2}"
+        )
 
         secret_path_a = "/etc/path_a/file.txt"
         secret_path_b = "/etc/path_b/file.txt"
@@ -2600,6 +2627,7 @@ class TestJobs:
         regular_user: _User,
         regular_secrets_client: SecretsClient,
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
+        test_org_name: str,
     ) -> None:
         user = regular_user
         key_1, key_2, key_3 = "key_1", "key_2", "key_3"
@@ -2607,17 +2635,21 @@ class TestJobs:
         secret_value_2 = "value2"
         secret_value_3 = "value3"
         await regular_secrets_client.create_secret(
-            key_1, secret_value_1, project_name=user.name
+            key_1, secret_value_1, project_name=user.name, org_name=test_org_name
         )
         await regular_secrets_client.create_secret(
-            key_2, secret_value_2, project_name=user.name
+            key_2, secret_value_2, project_name=user.name, org_name=test_org_name
         )
         await regular_secrets_client.create_secret(
-            key_3, secret_value_3, project_name=user.name
+            key_3, secret_value_3, project_name=user.name, org_name=test_org_name
         )
 
-        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
-        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
+        secret_uri_1 = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_1}"
+        )
+        secret_uri_2 = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_2}"
+        )
 
         secret_path_a = "/etc/path/file_a.txt"
         secret_path_b = "/etc/path/file_b.txt"
@@ -2651,20 +2683,25 @@ class TestJobs:
         regular_user: _User,
         regular_secrets_client: SecretsClient,
         _run_job_with_secrets: Callable[..., Awaitable[None]],  # noqa: PT019
+        test_org_name: str,
     ) -> None:
         user = regular_user
         key_1, key_2 = "key_1", "key_2"
         secret_value_1 = "value1"
         secret_value_2 = "value2"
         await regular_secrets_client.create_secret(
-            key_1, secret_value_1, project_name=user.name
+            key_1, secret_value_1, project_name=user.name, org_name=test_org_name
         )
         await regular_secrets_client.create_secret(
-            key_2, secret_value_2, project_name=user.name
+            key_2, secret_value_2, project_name=user.name, org_name=test_org_name
         )
 
-        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/{key_1}"
-        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/{key_2}"
+        secret_uri_1 = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_1}"
+        )
+        secret_uri_2 = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/{key_2}"
+        )
 
         secret_path_a = "/foo/file_a.txt"
         secret_path_b = "/foo/bar/file_b.txt"
@@ -2695,10 +2732,11 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         secret_kind: str,
+        test_org_name: str,
     ) -> None:
         user = regular_user
-        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/key2"
-        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/key1"
+        secret_uri_2 = f"secret://{user.cluster_name}/{test_org_name}/{user.name}/key2"
+        secret_uri_1 = f"secret://{user.cluster_name}/{test_org_name}/{user.name}/key1"
 
         if secret_kind == "secret_env":
             secret_env = {
@@ -2738,17 +2776,18 @@ class TestJobs:
         regular_user: _User,
         regular_secrets_client: SecretsClient,
         secret_kind: str,
+        test_org_name: str,
     ) -> None:
         """This test checks the case when the user's k8s secret
         'project--{user_name}--secrets' is present, but requested secret
         key not found
         """
         user = regular_user
-        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/key2"
-        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/key1"
+        secret_uri_2 = f"secret://{user.cluster_name}/{test_org_name}/{user.name}/key2"
+        secret_uri_1 = f"secret://{user.cluster_name}/{test_org_name}/{user.name}/key1"
 
         await regular_secrets_client.create_secret(
-            "key3", "value1", project_name=user.name
+            "key3", "value1", project_name=user.name, org_name=test_org_name
         )
 
         if secret_kind == "secret_env":
@@ -2789,13 +2828,14 @@ class TestJobs:
         regular_user: _User,
         regular_secrets_client: SecretsClient,
         secret_kind: str,
+        test_org_name: str,
     ) -> None:
         user = regular_user
-        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/key2"
-        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/key1"
+        secret_uri_2 = f"secret://{user.cluster_name}/{test_org_name}/{user.name}/key2"
+        secret_uri_1 = f"secret://{user.cluster_name}/{test_org_name}/{user.name}/key1"
 
         await regular_secrets_client.create_secret(
-            "key1", "value1", project_name=user.name
+            "key1", "value1", project_name=user.name, org_name=test_org_name
         )
 
         if secret_kind == "secret_env":
@@ -2833,6 +2873,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         job_submit: dict[str, Any],
         test_cluster_name: str,
+        test_org_name: str,
         regular_user_factory: UserFactory,
         secrets_client_factory: Callable[
             ..., AbstractAsyncContextManager[SecretsClient]
@@ -2840,19 +2881,27 @@ class TestJobs:
         secret_kind: str,
     ) -> None:
         cluster = test_cluster_name
-        usr_1 = await regular_user_factory(clusters=[(cluster, Balance(), Quota())])
-        usr_2 = await regular_user_factory(clusters=[(cluster, Balance(), Quota())])
+        usr_1 = await regular_user_factory(
+            clusters=[(cluster, test_org_name, Balance(), Quota())]
+        )
+        usr_2 = await regular_user_factory(
+            clusters=[(cluster, test_org_name, Balance(), Quota())]
+        )
 
         key_1, key_2 = "key_1", "key_2"
 
         async with secrets_client_factory(usr_1) as sec_client:
-            await sec_client.create_secret(key_1, "value1", project_name=usr_1.name)
+            await sec_client.create_secret(
+                key_1, "value1", project_name=usr_1.name, org_name=test_org_name
+            )
 
         async with secrets_client_factory(usr_1) as sec_client:
-            await sec_client.create_secret(key_2, "value2", project_name=usr_1.name)
+            await sec_client.create_secret(
+                key_2, "value2", project_name=usr_1.name, org_name=test_org_name
+            )
 
-        secret_uri_1 = f"secret://{cluster}/{usr_1.name}/{key_1}"
-        secret_uri_2 = f"secret://{cluster}/{usr_2.name}/{key_2}"
+        secret_uri_1 = f"secret://{cluster}/{test_org_name}/{usr_1.name}/{key_1}"
+        secret_uri_2 = f"secret://{cluster}/{test_org_name}/{usr_2.name}/{key_2}"
 
         if secret_kind == "secret_env":
             secret_env = {
@@ -2881,6 +2930,7 @@ class TestJobs:
         job_submit: dict[str, Any],
         jobs_client: JobsClient,
         test_cluster_name: str,
+        test_org_name: str,
         regular_user_factory: UserFactory,
         secrets_client_factory: Callable[
             ..., AbstractAsyncContextManager[SecretsClient]
@@ -2892,10 +2942,10 @@ class TestJobs:
     ) -> None:
         cluster_name = test_cluster_name
         usr_1 = await regular_user_factory(
-            clusters=[(cluster_name, Balance(), Quota())]
+            clusters=[(cluster_name, test_org_name, Balance(), Quota())]
         )
         usr_2 = await regular_user_factory(
-            clusters=[(cluster_name, Balance(), Quota())]
+            clusters=[(cluster_name, test_org_name, Balance(), Quota())]
         )
 
         key_1, key_2, key_3 = "key_1", "key_2", "key_3"
@@ -2903,22 +2953,34 @@ class TestJobs:
         value_1, value_2, value_3 = "value_1", "value_2", "value_3"
         value_a, value_b, value_c = "value_a", "value_b", "value_c"
         async with secrets_client_factory(usr_1) as sec_client:
-            await sec_client.create_secret(key_1, value_1, project_name=usr_1.name)
-            await sec_client.create_secret(key_2, value_2, project_name=usr_1.name)
-            await sec_client.create_secret(key_3, value_3, project_name=usr_1.name)
-            await sec_client.create_secret(key_a, value_a, project_name=usr_1.name)
-            await sec_client.create_secret(key_b, value_b, project_name=usr_1.name)
-            await sec_client.create_secret(key_c, value_c, project_name=usr_1.name)
+            await sec_client.create_secret(
+                key_1, value_1, project_name=usr_1.name, org_name=test_org_name
+            )
+            await sec_client.create_secret(
+                key_2, value_2, project_name=usr_1.name, org_name=test_org_name
+            )
+            await sec_client.create_secret(
+                key_3, value_3, project_name=usr_1.name, org_name=test_org_name
+            )
+            await sec_client.create_secret(
+                key_a, value_a, project_name=usr_1.name, org_name=test_org_name
+            )
+            await sec_client.create_secret(
+                key_b, value_b, project_name=usr_1.name, org_name=test_org_name
+            )
+            await sec_client.create_secret(
+                key_c, value_c, project_name=usr_1.name, org_name=test_org_name
+            )
 
         for key in (key_1, key_2, key_3, key_a, key_b, key_c):
             await share_secret(usr_1, usr_2, key)
 
-        secret_uri_1 = f"secret://{cluster_name}/{usr_1.name}/{key_1}"
-        secret_uri_2 = f"secret://{cluster_name}/{usr_1.name}/{key_2}"
-        secret_uri_3 = f"secret://{cluster_name}/{usr_1.name}/{key_3}"
-        secret_uri_a = f"secret://{cluster_name}/{usr_1.name}/{key_a}"
-        secret_uri_b = f"secret://{cluster_name}/{usr_1.name}/{key_b}"
-        secret_uri_c = f"secret://{cluster_name}/{usr_1.name}/{key_c}"
+        secret_uri_1 = f"secret://{cluster_name}/{test_org_name}/{usr_1.name}/{key_1}"
+        secret_uri_2 = f"secret://{cluster_name}/{test_org_name}/{usr_1.name}/{key_2}"
+        secret_uri_3 = f"secret://{cluster_name}/{test_org_name}/{usr_1.name}/{key_3}"
+        secret_uri_a = f"secret://{cluster_name}/{test_org_name}/{usr_1.name}/{key_a}"
+        secret_uri_b = f"secret://{cluster_name}/{test_org_name}/{usr_1.name}/{key_b}"
+        secret_uri_c = f"secret://{cluster_name}/{test_org_name}/{usr_1.name}/{key_c}"
 
         env_var_a = "ENV_SECRET_A"
         env_var_b = "ENV_SECRET_B"
@@ -2968,12 +3030,17 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         secret_kind: str,
+        test_org_name: str,
     ) -> None:
         url = api.jobs_base_url
         user = regular_user
         wrong_scheme = "wrong-scheme"
-        secret_uri_good = f"secret://{user.cluster_name}/{user.name}/key_1"
-        secret_uri_wrong = f"{wrong_scheme}://{user.cluster_name}/{user.name}/key_2"
+        secret_uri_good = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/key_1"
+        )
+        secret_uri_wrong = (
+            f"{wrong_scheme}://{user.cluster_name}/{test_org_name}/{user.name}/key_2"
+        )
 
         if secret_kind == "secret_env":
             secret_env = {
@@ -3005,12 +3072,15 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         secret_kind: str,
+        test_org_name: str,
     ) -> None:
         url = api.jobs_base_url
         user = regular_user
         wrong_cluster = "wrong-cluster-name"
-        secret_uri_good = f"secret://{user.cluster_name}/{user.name}/key_1"
-        secret_uri_wrong = f"secret://{wrong_cluster}/{user.name}/key_2"
+        secret_uri_good = (
+            f"secret://{user.cluster_name}/{test_org_name}/{user.name}/key_1"
+        )
+        secret_uri_wrong = f"secret://{wrong_cluster}/{test_org_name}/{user.name}/key_2"
 
         if secret_kind == "secret_env":
             secret_env = {
@@ -3041,10 +3111,11 @@ class TestJobs:
         job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
+        test_org_name: str,
     ) -> None:
         url = api.jobs_base_url
         user = regular_user
-        secret_uri = f"secret://{user.cluster_name}/{user.name}/key_1"
+        secret_uri = f"secret://{user.cluster_name}/{test_org_name}/{user.name}/key_1"
         invalid_path = "/container/path_1/../path_2"
         secret_volumes = [
             {"src_secret_uri": secret_uri, "dst_path": invalid_path},
@@ -3063,10 +3134,11 @@ class TestJobs:
         job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
+        test_org_name: str,
     ) -> None:
         url = api.jobs_base_url
         user = regular_user
-        secret_uri = f"secret://{user.cluster_name}/{user.name}/key_1"
+        secret_uri = f"secret://{user.cluster_name}/{test_org_name}/{user.name}/key_1"
         invalid_path = "container/path_1"
         secret_volumes = [
             {"src_secret_uri": secret_uri, "dst_path": invalid_path},
@@ -3085,11 +3157,12 @@ class TestJobs:
         job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
+        test_org_name: str,
     ) -> None:
         url = api.jobs_base_url
         user = regular_user
-        secret_uri_1 = f"secret://{user.cluster_name}/{user.name}/key_1"
-        secret_uri_2 = f"secret://{user.cluster_name}/{user.name}/key_2"
+        secret_uri_1 = f"secret://{user.cluster_name}/{test_org_name}/{user.name}/key_1"
+        secret_uri_2 = f"secret://{user.cluster_name}/{test_org_name}/{user.name}/key_2"
         secret_volumes = [
             {"src_secret_uri": secret_uri_1, "dst_path": "/container/path"},
             {"src_secret_uri": secret_uri_2, "dst_path": "/container/path"},
@@ -3180,12 +3253,13 @@ class TestJobs:
         job_submit: dict[str, Any],
         jobs_client: JobsClient,
         regular_user: _User,
+        test_org_name: str,
     ) -> None:
         headers = regular_user.headers
         url = api.jobs_base_url
         job_submit["container"]["volumes"] = [
             {
-                "src_storage_uri": f"storage://wrong-cluster/{regular_user.name}",
+                "src_storage_uri": f"storage://wrong-cluster/{test_org_name}/{regular_user.name}",
                 "dst_path": "/var/storage",
                 "read_only": False,
             }
@@ -3265,6 +3339,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         payload = {
             "container": {
@@ -3274,13 +3349,13 @@ class TestJobs:
                 "volumes": [
                     {
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}",
+                        f"{test_org_name}/{regular_user.name}",
                         "dst_path": "/var/storage",
                         "read_only": False,
                     },
                     {
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}/result",
+                        f"{test_org_name}/{regular_user.name}/result",
                         "dst_path": "/var/storage/result",
                         "read_only": True,
                     },
@@ -3337,6 +3412,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         payload = {
             "container": {
@@ -3356,7 +3432,7 @@ class TestJobs:
                 "missing": [
                     {
                         "action": "read",
-                        "uri": f"image://{cluster_name}/anotheruser/image",
+                        "uri": f"image://{cluster_name}/{test_org_name}/anotheruser/image",
                     }
                 ]
             }
@@ -4028,11 +4104,6 @@ class TestJobs:
 
         job_request = job_request_factory()
         job_request["container"]["resources"]["memory_mb"] = 100_500
-        async with client.post(url, headers=headers, json=job_request) as resp:
-            assert resp.status == HTTPAccepted.status_code, await resp.text()
-            result = await resp.json()
-            job_id_no_org = result["id"]
-
         job_request["org_name"] = "org1"
         async with client.post(url, headers=headers, json=job_request) as resp:
             assert resp.status == HTTPAccepted.status_code, await resp.text()
@@ -4046,7 +4117,6 @@ class TestJobs:
             job_id_org2 = result["id"]
 
         jobs_client = jobs_client_factory(org_user)
-        await jobs_client.long_polling_by_job_id(job_id_no_org, status="pending")
         await jobs_client.long_polling_by_job_id(job_id_org1, status="pending")
         await jobs_client.long_polling_by_job_id(job_id_org2, status="pending")
 
@@ -4101,13 +4171,14 @@ class TestJobs:
 
     @pytest.fixture
     async def share_job(
-        self, auth_client: AuthClient, cluster_name: str
+        self, auth_client: AuthClient, cluster_name: str, test_org_name: str
     ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
         async def _impl(
             owner: _User, follower: _User, job_id: str, action: str = "read"
         ) -> None:
             permission = Permission(
-                uri=f"job://{cluster_name}/{owner.name}/{job_id}", action=action
+                uri=f"job://{cluster_name}/{test_org_name}/{owner.name}/{job_id}",
+                action=action,
             )
             await auth_client.grant_user_permissions(
                 follower.name, [permission], token=owner.token
@@ -4117,13 +4188,14 @@ class TestJobs:
 
     @pytest.fixture
     async def share_secret(
-        self, auth_client: AuthClient, cluster_name: str
+        self, auth_client: AuthClient, cluster_name: str, test_org_name: str
     ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
         async def _impl(
             owner: _User, follower: _User, secret_name: str, action: str = "read"
         ) -> None:
             permission = Permission(
-                uri=f"secret://{cluster_name}/{owner.name}/{secret_name}", action=action
+                uri=f"secret://{cluster_name}/{test_org_name}/{owner.name}/{secret_name}",
+                action=action,
             )
             await auth_client.grant_user_permissions(
                 follower.name, [permission], token=owner.token
@@ -4133,12 +4205,13 @@ class TestJobs:
 
     @pytest.fixture
     async def share_project(
-        self, auth_client: AuthClient, cluster_name: str
+        self, auth_client: AuthClient, cluster_name: str, test_org_name: str
     ) -> AsyncIterator[Callable[[_User, _User, Any], Awaitable[None]]]:
         async def _impl(owner: _User, follower: _User, project_name: str) -> None:
             for action in ("read", "write"):
                 permission = Permission(
-                    uri=f"job://{cluster_name}/{project_name}", action=action
+                    uri=f"job://{cluster_name}/{test_org_name}/{project_name}",
+                    action=action,
                 )
                 await auth_client.grant_user_permissions(
                     follower.name, [permission], token=owner.token
@@ -4596,6 +4669,7 @@ class TestJobs:
         regular_user_factory: UserFactory,
         auth_client: AuthClient,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
@@ -4628,7 +4702,8 @@ class TestJobs:
             assert not job_ids
 
         permission = Permission(
-            uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
+            uri=f"job://{cluster_name}/{test_org_name}/{owner.name}/{job_id}",
+            action="read",
         )
         await auth_client.grant_user_permissions(
             follower.name, [permission], token=owner.token
@@ -4649,6 +4724,7 @@ class TestJobs:
         regular_user_factory: UserFactory,
         auth_client: AuthClient,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         owner = await regular_user_factory()
         follower = await regular_user_factory()
@@ -4674,13 +4750,14 @@ class TestJobs:
                 "missing": [
                     {
                         "action": "read",
-                        "uri": f"job://{cluster_name}/{owner.name}/{job_id}",
+                        "uri": f"job://{cluster_name}/{test_org_name}/{owner.name}/{job_id}",
                     }
                 ]
             }
 
         permission = Permission(
-            uri=f"job://{cluster_name}/{owner.name}/{job_id}", action="read"
+            uri=f"job://{cluster_name}/{test_org_name}/{owner.name}/{job_id}",
+            action="read",
         )
         await auth_client.grant_user_permissions(
             follower.name, [permission], token=owner.token
@@ -5220,6 +5297,7 @@ class TestJobs:
         regular_user_factory: UserFactory,
         regular_user: _User,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         url = api.jobs_base_url
         async with client.post(
@@ -5238,7 +5316,7 @@ class TestJobs:
                 "missing": [
                     {
                         "action": "write",
-                        "uri": f"job://{cluster_name}/{regular_user.name}/{job_id}",
+                        "uri": f"job://{cluster_name}/{test_org_name}/{regular_user.name}/{job_id}",
                     }
                 ]
             }
@@ -5406,6 +5484,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user: _User,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         request_payload = {
             "container": {
@@ -5415,7 +5494,7 @@ class TestJobs:
                 "volumes": [
                     {
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}",
+                        f"{test_org_name}/{regular_user.name}",
                         "dst_path": "/var/storage",
                         "read_only": False,
                     }
@@ -5436,6 +5515,7 @@ class TestJobs:
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
+                "org_name": test_org_name,
                 "project_name": regular_user.name,
                 "org_project_hash": mock.ANY,
                 "namespace": actual_namespace,
@@ -5467,7 +5547,7 @@ class TestJobs:
                             "dst_path": "/var/storage",
                             "read_only": False,
                             "src_storage_uri": f"storage://{cluster_name}/"
-                            f"{regular_user.name}",
+                            f"{test_org_name}/{regular_user.name}",
                         }
                     ],
                 },
@@ -5477,7 +5557,7 @@ class TestJobs:
                 "is_preemptible_node_required": False,
                 "materialized": False,
                 "pass_config": False,
-                "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+                "uri": f"job://test-cluster/{test_org_name}/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
                 "privileged": False,
                 "being_dropped": False,
@@ -5497,6 +5577,7 @@ class TestJobs:
             "id": job_id,
             "owner": regular_user.name,
             "cluster_name": "test-cluster",
+            "org_name": test_org_name,
             "project_name": regular_user.name,
             "org_project_hash": mock.ANY,
             "namespace": actual_namespace,
@@ -5524,7 +5605,7 @@ class TestJobs:
                         "dst_path": "/var/storage",
                         "read_only": False,
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}",
+                        f"{test_org_name}/{regular_user.name}",
                     }
                 ],
             },
@@ -5534,7 +5615,7 @@ class TestJobs:
             "is_preemptible_node_required": False,
             "materialized": mock.ANY,
             "pass_config": False,
-            "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+            "uri": f"job://test-cluster/{test_org_name}/{regular_user.name}/{job_id}",
             "restart_policy": "never",
             "privileged": False,
             "being_dropped": False,
@@ -5552,6 +5633,7 @@ class TestJobs:
         client: aiohttp.ClientSession,
         regular_user: _User,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         command = 'bash -c "echo Failed!; false"'
         payload = {
@@ -5567,13 +5649,13 @@ class TestJobs:
                         "dst_path": f"/var/storage/{regular_user.name}",
                         "read_only": True,
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}",
+                        f"{test_org_name}/{regular_user.name}",
                     },
                     {
                         "dst_path": f"/var/storage/{regular_user.name}/result",
                         "read_only": False,
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}/result",
+                        f"{test_org_name}/{regular_user.name}/result",
                     },
                 ],
             }
@@ -5596,6 +5678,7 @@ class TestJobs:
             "id": job_id,
             "owner": regular_user.name,
             "cluster_name": "test-cluster",
+            "org_name": test_org_name,
             "project_name": regular_user.name,
             "org_project_hash": mock.ANY,
             "namespace": actual_namespace,
@@ -5627,13 +5710,13 @@ class TestJobs:
                         "dst_path": f"/var/storage/{regular_user.name}",
                         "read_only": True,
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}",
+                        f"{test_org_name}/{regular_user.name}",
                     },
                     {
                         "dst_path": f"/var/storage/{regular_user.name}/result",
                         "read_only": False,
                         "src_storage_uri": f"storage://{cluster_name}/"
-                        f"{regular_user.name}/result",
+                        f"{test_org_name}/{regular_user.name}/result",
                     },
                 ],
             },
@@ -5643,7 +5726,7 @@ class TestJobs:
             "is_preemptible_node_required": False,
             "materialized": mock.ANY,
             "pass_config": False,
-            "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+            "uri": f"job://test-cluster/{test_org_name}/{regular_user.name}/{job_id}",
             "restart_policy": "never",
             "privileged": False,
             "being_dropped": False,
@@ -5662,6 +5745,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user: _User,
+        test_org_name: str,
         kube_node_gpu: str,
         kube_client: MyKubeClient,
     ) -> None:
@@ -5696,6 +5780,7 @@ class TestJobs:
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
+                "org_name": test_org_name,
                 "project_name": regular_user.name,
                 "org_project_hash": mock.ANY,
                 "namespace": actual_namespace,
@@ -5743,7 +5828,7 @@ class TestJobs:
                 "is_preemptible_node_required": False,
                 "materialized": False,
                 "pass_config": False,
-                "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+                "uri": f"job://test-cluster/{test_org_name}/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
                 "privileged": False,
                 "being_dropped": False,
@@ -5789,6 +5874,7 @@ class TestJobs:
         api: ApiConfig,
         client: aiohttp.ClientSession,
         regular_user: _User,
+        test_org_name: str,
     ) -> None:
         request_payload = {
             "container": {
@@ -5814,6 +5900,7 @@ class TestJobs:
                 "id": mock.ANY,
                 "owner": regular_user.name,
                 "cluster_name": "test-cluster",
+                "org_name": test_org_name,
                 "project_name": regular_user.name,
                 "org_project_hash": mock.ANY,
                 "namespace": actual_namespace,
@@ -5853,7 +5940,7 @@ class TestJobs:
                 "is_preemptible_node_required": False,
                 "materialized": False,
                 "pass_config": False,
-                "uri": f"job://test-cluster/{regular_user.name}/{job_id}",
+                "uri": f"job://test-cluster/{test_org_name}/{regular_user.name}/{job_id}",
                 "restart_policy": "never",
                 "privileged": False,
                 "being_dropped": False,

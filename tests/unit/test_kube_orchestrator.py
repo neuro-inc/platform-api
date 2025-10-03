@@ -124,7 +124,7 @@ class TestSecretEnvVar:
             "name": "sec-name",
             "valueFrom": {
                 "secretKeyRef": {
-                    "name": "project--no-org--test-user--secrets",
+                    "name": "project--test-user--secrets",
                     "key": "sec1",
                 }
             },

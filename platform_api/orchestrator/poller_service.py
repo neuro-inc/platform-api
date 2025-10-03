@@ -20,7 +20,7 @@ from platform_api.cluster import (
     ClusterNotAvailable,
     ClusterNotFound,
 )
-from platform_api.config import NO_ORG_NORMALIZED, JobsConfig, JobsSchedulerConfig
+from platform_api.config import JobsConfig, JobsSchedulerConfig
 
 from ..utils.asyncio import run_and_log_exceptions
 from ..utils.retry import retries
@@ -332,11 +332,10 @@ class JobsPollerService:
             disk_volume.disk for disk_volume in job.request.container.disk_volumes
         ]
         if job_disks:
-            org_name = job.org_name or NO_ORG_NORMALIZED
-
+            assert job.org_name is not None, "org_name is required"
             missing = await orchestrator.get_missing_disks(
                 namespace=job.namespace,
-                org_name=org_name,
+                org_name=job.org_name,
                 project_name=job.project_name,
                 disks=job_disks,
             )
