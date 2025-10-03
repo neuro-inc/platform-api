@@ -21,9 +21,12 @@ from kubernetes.client.model import (
     V1Container,
     V1ContainerPort,
     V1EmptyDirVolumeSource,
+    V1EnvVar,
+    V1EnvVarSource,
     V1HTTPGetAction,
     V1LabelSelector,
     V1LabelSelectorRequirement,
+    V1LocalObjectReference,
     V1NodeAffinity,
     V1NodeSelector,
     V1ObjectMeta,
@@ -31,8 +34,10 @@ from kubernetes.client.model import (
     V1PodAffinity,
     V1PodAffinityTerm,
     V1PodSpec,
+    V1PreferredSchedulingTerm,
     V1Probe,
     V1ResourceRequirements,
+    V1SecretKeySelector,
     V1SecurityContext,
     V1Toleration,
     V1Volume,
@@ -206,6 +211,16 @@ class SecretEnvVar:
                 }
             },
         }
+
+    def to_model(self) -> V1EnvVar:
+        return V1EnvVar(
+            name=self.name,
+            value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(
+                    name=self.secret.k8s_secret_name, key=self.secret.secret_key
+                )
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -738,6 +753,9 @@ class SecretRef:
     def to_primitive(self) -> dict[str, str]:
         return {"name": self.name}
 
+    def to_model(self) -> V1LocalObjectReference:
+        return V1LocalObjectReference(name=self.name)
+
     @classmethod
     def from_primitive(cls, payload: dict[str, str]) -> "SecretRef":
         return cls(**payload)
@@ -878,6 +896,11 @@ class NodePreferredSchedulingTerm:
 
     def to_primitive(self) -> dict[str, Any]:
         return {"preference": self.preference.to_primitive(), "weight": self.weight}
+
+    def to_model(self) -> V1PreferredSchedulingTerm:
+        return V1PreferredSchedulingTerm(
+            preference=self.preference.to_model(), weight=self.weight
+        )
 
 
 @dataclass(frozen=True)
