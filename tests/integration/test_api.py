@@ -5534,7 +5534,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
-                    "run_time_seconds": 0,
+                    "run_time_seconds": 0.0,
                     "restarts": 0,
                 },
                 "container": {
@@ -5758,6 +5758,12 @@ class TestJobs:
                     "memory_mb": 32,
                     "memory": 32 * 2**20,
                     "nvidia_gpu": 1,
+                    "nvidia_gpu_model": "nvidia-gpu",
+                    "nvidia_migs": {"1g.5gb": {"count": 1, "model": "nvidia-mig"}},
+                    "amd_gpu": 2,
+                    "amd_gpu_model": "amd-gpu",
+                    "intel_gpu": 3,
+                    "intel_gpu_model": "intel-gpu",
                 },
             }
         }
@@ -5793,7 +5799,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
-                    "run_time_seconds": 0,
+                    "run_time_seconds": 0.0,
                     "restarts": 0,
                 },
                 "container": {
@@ -5804,8 +5810,15 @@ class TestJobs:
                         "cpu": 0.1,
                         "memory": 32 * 2**20,
                         "memory_mb": 32,
-                        "gpu": 1,
                         "nvidia_gpu": 1,
+                        "nvidia_gpu_model": "nvidia-gpu",
+                        "nvidia_migs": {
+                            "1g.5gb": {"count": 1, "model": "nvidia-mig"},
+                        },
+                        "amd_gpu": 2,
+                        "amd_gpu_model": "amd-gpu",
+                        "intel_gpu": 3,
+                        "intel_gpu_model": "intel-gpu",
                     },
                     "volumes": [],
                 },
@@ -5906,7 +5919,7 @@ class TestJobs:
                     "reason": "Creating",
                     "description": None,
                     "created_at": mock.ANY,
-                    "run_time_seconds": 0,
+                    "run_time_seconds": 0.0,
                     "restarts": 0,
                 },
                 "container": {
