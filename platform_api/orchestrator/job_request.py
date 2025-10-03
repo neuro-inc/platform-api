@@ -2,7 +2,7 @@ import enum
 import shlex
 import uuid
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import PurePath
 from typing import Any
@@ -206,6 +206,22 @@ class SecretContainerVolume:
 
 
 @dataclass(frozen=True)
+class ContainerNvidiaMIGResource:
+    count: int
+    model: str | None = None
+
+    @classmethod
+    def from_primitive(cls, payload: dict[str, Any]) -> "ContainerNvidiaMIGResource":
+        return cls(count=payload["count"], model=payload.get("model"))
+
+    def to_primitive(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {"count": self.count}
+        if self.model:
+            payload["model"] = self.model
+        return payload
+
+
+@dataclass(frozen=True)
 class ContainerTPUResource:
     type: str
     software_version: str
@@ -223,19 +239,26 @@ class ContainerResources:
     cpu: float
     memory: int
     nvidia_gpu: int | None = None
-    amd_gpu: int | None = None
-    intel_gpu: int | None = None
     nvidia_gpu_model: str | None = None
+    nvidia_migs: Mapping[str, ContainerNvidiaMIGResource] | None = None
+    amd_gpu: int | None = None
     amd_gpu_model: str | None = None
+    intel_gpu: int | None = None
     intel_gpu_model: str | None = None
     shm: bool | None = None
     tpu: ContainerTPUResource | None = None
 
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "ContainerResources":
+        nvidia_migs = None
+        if nvidia_migs_payload := payload.get("nvidia_migs"):
+            nvidia_migs = {
+                profile_name: ContainerNvidiaMIGResource.from_primitive(item)
+                for profile_name, item in nvidia_migs_payload.items()
+            }
         tpu = None
-        if payload.get("tpu"):
-            tpu = ContainerTPUResource.from_primitive(payload["tpu"])
+        if tpu_payload := payload.get("tpu"):
+            tpu = ContainerTPUResource.from_primitive(tpu_payload)
         return cls(
             cpu=payload["cpu"],
             memory=(
@@ -243,13 +266,12 @@ class ContainerResources:
                 if "memory" in payload
                 else payload["memory_mb"] * 2**20
             ),
-            nvidia_gpu=payload.get("nvidia_gpu") or payload.get("gpu"),
+            nvidia_gpu=payload.get("nvidia_gpu"),
+            nvidia_gpu_model=payload.get("nvidia_gpu_model"),
+            nvidia_migs=nvidia_migs,
             amd_gpu=payload.get("amd_gpu"),
-            intel_gpu=payload.get("intel_gpu"),
-            nvidia_gpu_model=(
-                payload.get("nvidia_gpu_model") or payload.get("gpu_model_id")
-            ),
             amd_gpu_model=payload.get("amd_gpu_model"),
+            intel_gpu=payload.get("intel_gpu"),
             intel_gpu_model=payload.get("intel_gpu_model"),
             shm=payload.get("shm"),
             tpu=tpu,
@@ -259,17 +281,19 @@ class ContainerResources:
         payload: dict[str, Any] = {"cpu": self.cpu, "memory": self.memory}
         if self.nvidia_gpu is not None:
             payload["nvidia_gpu"] = self.nvidia_gpu
-            payload["gpu"] = self.nvidia_gpu
+        if self.nvidia_gpu_model:
+            payload["nvidia_gpu_model"] = self.nvidia_gpu_model
+        if self.nvidia_migs:
+            payload["nvidia_migs"] = {
+                profile_name: mig.to_primitive()
+                for profile_name, mig in self.nvidia_migs.items()
+            }
         if self.amd_gpu is not None:
             payload["amd_gpu"] = self.amd_gpu
-        if self.intel_gpu is not None:
-            payload["intel_gpu"] = self.intel_gpu
-        if self.nvidia_gpu_model:
-            # todo: gpu_model_id is deprecated. it is here for a backward compatability
-            payload["gpu_model_id"] = self.nvidia_gpu_model
-            payload["nvidia_gpu_model"] = self.nvidia_gpu_model
         if self.amd_gpu_model:
             payload["amd_gpu_model"] = self.amd_gpu_model
+        if self.intel_gpu is not None:
+            payload["intel_gpu"] = self.intel_gpu
         if self.intel_gpu_model:
             payload["intel_gpu_model"] = self.intel_gpu_model
         if self.shm is not None:

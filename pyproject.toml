@@ -35,7 +35,7 @@ yarl = "^1.20.1"
 python-jose = ">=3.4.0"
 apolo-kube-client = "^25.9.6"
 apolo-events-client = "25.8.0"
-neuro-config-client = "25.9.4"
+neuro-config-client = "25.9.5"
 
 [tool.poetry.scripts]
 platform-api = "platform_api.api:main"
@@ -61,6 +61,7 @@ requests="2.32.5"
 ruff = "0.13.3"
 pytest-retry = "^1.7.0"
 apolo-events-client = {extras = ["pytest"], version = "25.8.0"}
+pytest-test-groups = "^1.2.1"
 
 [tool.ruff]
 target-version = "py313"
