@@ -549,7 +549,7 @@ def infer_permissions_from_container(
     container: Container,
     registry_host: str,
     cluster_name: str,
-    org_name: str | None,
+    org_name: str,
     *,
     project_name: str,
 ) -> list[Permission]:
@@ -560,7 +560,6 @@ def infer_permissions_from_container(
         )
     ]
     if container.belongs_to_registry(registry_host):
-        assert org_name, "org_name is required for image URIs"
         permissions.append(
             Permission(
                 uri=str(container.to_image_uri(registry_host, cluster_name, org_name)),

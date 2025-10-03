@@ -289,7 +289,7 @@ class JobRecord:
     project_name: str
     org_project_hash: bytes
     namespace: str
-    org_name: str | None = None
+    org_name: str
     name: str | None = None
     preset_name: str | None = None
     tags: Sequence[str] = ()
@@ -334,10 +334,8 @@ class JobRecord:
         if not kwargs.get("project_name"):
             kwargs["project_name"] = get_base_owner(kwargs["owner"])
 
-        org_name = kwargs.get("org_name")
+        org_name = kwargs["org_name"]
         project_name = kwargs["project_name"]
-
-        assert org_name is not None, "org_name is required"
 
         kwargs["org_project_hash"] = cls._create_org_project_hash(
             org_name, project_name
@@ -541,13 +539,12 @@ class JobRecord:
             request.job_id, payload
         )
         owner = payload.get("owner") or orphaned_job_owner
-        org_name = payload.get("org_name", None)
+        org_name = payload["org_name"]
         project_name = payload["project_name"]
         org_project_hash = payload.get("org_project_hash")
         if org_project_hash and isinstance(org_project_hash, str):
             org_project_hash = bytes.fromhex(org_project_hash)
         elif not org_project_hash:
-            assert org_name is not None, "org_name is required"
             org_project_hash = cls._create_org_project_hash(org_name, project_name)
         return cls(
             request=request,
@@ -951,7 +948,7 @@ class Job:
         return runtime_hours * self.price_credits_per_hour
 
     @property
-    def org_name(self) -> str | None:
+    def org_name(self) -> str:
         return self._record.org_name
 
     @property

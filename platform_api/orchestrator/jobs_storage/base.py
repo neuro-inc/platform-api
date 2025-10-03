@@ -71,7 +71,6 @@ class JobFilter:
             if orgs is None:
                 return False
             if orgs:
-                assert job.org_name is not None, "org_name is required"
                 projects = orgs.get(job.org_name)
                 if projects is None:
                     return False
