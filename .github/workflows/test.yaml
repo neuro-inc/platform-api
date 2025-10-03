@@ -120,9 +120,9 @@ jobs:
       with:
         name: "coverage-" + ${{ strategy.job-index }}
         path: ${{ strategy.job-index }} + ".coverage"
-        
 
-  upload-coverage:      
+
+  upload-coverage:
     needs: integration
     name: Upload integration tests coverage
     runs-on: ubuntu-latest
