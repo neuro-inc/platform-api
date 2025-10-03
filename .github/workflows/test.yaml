@@ -111,11 +111,20 @@ jobs:
         make start_k8s
     - name: Pull test images
       run: make docker_pull_test_images
+    - name: Increment index
+      id: group
+      shell: python
+      run:
+        import os
+        with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+          f.write(f"group={int(os.environ['ARG']) + 1}")
+      env:
+        ARG: ${{ strategy.job-index }}
     - name: Run integration tests
       run: make test_integration
       env:
         COUNT: ${{ strategy.job-total }}
-        GROUP: ${{ strategy.job-index + 1 }}
+        GROUP: ${{ steps.group.outputs.group }}
         COVERAGE_FILE: ${{ strategy.job-index }}.coverage
     - name: Upload coverage part
       uses: actions/upload-artifact@v4
