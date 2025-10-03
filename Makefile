@@ -3,13 +3,13 @@ PLATFORMSECRETS_IMAGE = $(shell cat PLATFORMSECRETS_IMAGE)
 PLATFORMDISKAPI_IMAGE = $(shell cat PLATFORMDISKAPI_IMAGE)
 PLATFORMADMIN_IMAGE = $(shell cat PLATFORMADMIN_IMAGE)
 
-COUNT = ""
-GROUP = ""
+COUNT ?= 
+GROUP ?= 
 
-ifeq ($(COUNT),)
-EXTRA_ARGS = ""
+ifeq ($(COUNT), )
+EXTRA_ARGS := 
 else
-EXTRA_ARGS = " --test-group-count $(COUNT) --test-group=$(GROUP) "
+EXTRA_ARGS :=  --test-group-count=$(COUNT) --test-group=$(GROUP) 
 endif
 
 include k8s.mk
@@ -47,7 +47,7 @@ test_unit:
 
 .PHONY: test_integration
 test_integration:
-	poetry run pytest -vv --retries=3 --retry-delay=3 --maxfail=3 --durations=20 --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-integration$(GROUP).xml $(EXTRA_ARGS) tests/integration/
+	poetry run pytest -vv --retries=3 --retry-delay=3 --maxfail=3 --durations=20 --cov platform_api --cov-config=pyproject.toml --cov-report xml:.coverage-integration.xml $(EXTRA_ARGS) tests/integration/
 
 .PHONY: docker_build
 docker_build: .python-version dist
