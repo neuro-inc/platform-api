@@ -143,6 +143,10 @@ jobs:
         path: coverage
         pattern: coverage-*
         merge-multiple: true
+    - name: ls
+      run: |
+        apt install tree
+        tree
     - name: Combine coverages
       run: |
         pip install coverage
