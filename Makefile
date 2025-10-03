@@ -3,13 +3,13 @@ PLATFORMSECRETS_IMAGE = $(shell cat PLATFORMSECRETS_IMAGE)
 PLATFORMDISKAPI_IMAGE = $(shell cat PLATFORMDISKAPI_IMAGE)
 PLATFORMADMIN_IMAGE = $(shell cat PLATFORMADMIN_IMAGE)
 
-COUNT ?= 
-GROUP ?= 
+COUNT ?=
+GROUP ?=
 
 ifeq ($(COUNT), )
-EXTRA_ARGS := 
+EXTRA_ARGS :=
 else
-EXTRA_ARGS :=  --test-group-count=$(COUNT) --test-group=$(GROUP) 
+EXTRA_ARGS :=  --test-group-count=$(COUNT) --test-group=$(GROUP)
 endif
 
 include k8s.mk
