@@ -150,7 +150,7 @@ jobs:
     - name: Combine coverages
       run: |
         pip install coverage
-        coverage combine coverage/**/*.coverage
+        coverage combine coverage/*.coverage
         coverage xml -o .coverage-integration.xml
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
