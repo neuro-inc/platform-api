@@ -110,6 +110,33 @@ jobs:
       run: make docker_pull_test_images
     - name: Run integration tests
       run: make test_integration
+      env:
+        COUNT: ${{ strategy.job-total }}
+        GROUP: ${{ strategy.job-index + 1 }}
+        COVERAGE_FILE: ${{ strategy.job-index }} + ".coverage"
+
+    - name: Upload coverage part
+      uses: actions/upload-artifact@v4
+      with:
+        name: "coverage-" + ${{ strategy.job-index }}
+        path: ${{ strategy.job-index }} + ".coverage"
+        
+
+  upload-coverage:      
+    needs: integration
+    name: Upload integration tests coverage
+    runs-on: ubuntu-latest
+    - name: Download All Coverages
+      uses: actions/download-artifact@v5
+      with:
+        path: coverage
+        pattern: coverage-*
+        merge-multiple: true
+    - name: Combine coverages
+      run: |
+        pip install coverage
+        coverage combine coverage/**/*.coverage
+        coverage xml -o .coverage-integration.xml
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
@@ -160,6 +187,7 @@ jobs:
     - lint
     - unit
     - integration
+    - upload-coverage
     - image-upload
     runs-on: ubuntu-latest
     if: always()
