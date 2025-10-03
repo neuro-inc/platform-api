@@ -995,42 +995,27 @@ class TestJobsStorage:
         self, storage: JobsStorage
     ) -> list[JobRecord]:
         jobs = [
-            self._create_running_job(
-                owner="user1", cluster_name="test-cluster", org_name="other-org"
-            ),
+            self._create_running_job(owner="user1", cluster_name="test-cluster"),
             self._create_succeeded_job(
                 owner="user1",
                 cluster_name="test-cluster",
                 job_name="jobname1",
-                org_name="other-org",
             ),
             self._create_failed_job(
                 owner="user2",
                 cluster_name="test-cluster",
                 job_name="jobname1",
-                org_name="other-org",
             ),
             self._create_succeeded_job(
                 owner="user3",
                 cluster_name="test-cluster",
                 job_name="jobname1",
-                org_name="other-org",
             ),
-            self._create_succeeded_job(
-                owner="user1", cluster_name="my-cluster", org_name="other-org"
-            ),
-            self._create_failed_job(
-                owner="user3", cluster_name="my-cluster", org_name="other-org"
-            ),
-            self._create_failed_job(
-                owner="user1", cluster_name="other-cluster", org_name="other-org"
-            ),
-            self._create_succeeded_job(
-                owner="user2", cluster_name="other-cluster", org_name="other-org"
-            ),
-            self._create_running_job(
-                owner="user3", cluster_name="other-cluster", org_name="other-org"
-            ),
+            self._create_succeeded_job(owner="user1", cluster_name="my-cluster"),
+            self._create_failed_job(owner="user3", cluster_name="my-cluster"),
+            self._create_failed_job(owner="user1", cluster_name="other-cluster"),
+            self._create_succeeded_job(owner="user2", cluster_name="other-cluster"),
+            self._create_running_job(owner="user3", cluster_name="other-cluster"),
         ]
         for job in jobs:
             async with storage.try_create_job(job):
@@ -1042,13 +1027,13 @@ class TestJobsStorage:
     ) -> list[JobRecord]:
         jobs = [
             self._create_running_job(
-                owner="user1", cluster_name="test-cluster", org_name=None
+                owner="user1", cluster_name="test-cluster", org_name="another-org"
             ),
             self._create_succeeded_job(
                 owner="user1",
                 cluster_name="test-cluster",
                 job_name="jobname1",
-                org_name=None,
+                org_name="another-org",
             ),
             self._create_failed_job(
                 owner="user2",
@@ -1071,7 +1056,7 @@ class TestJobsStorage:
                 org_name="test-org",
             ),
             self._create_failed_job(
-                owner="user1", cluster_name="other-cluster", org_name=None
+                owner="user1", cluster_name="other-cluster", org_name="another-org"
             ),
             self._create_succeeded_job(
                 owner="user2",

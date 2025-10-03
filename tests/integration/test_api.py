@@ -3412,6 +3412,7 @@ class TestJobs:
         jobs_client: JobsClient,
         regular_user: _User,
         cluster_name: str,
+        test_org_name: str,
     ) -> None:
         payload = {
             "container": {
@@ -3431,7 +3432,7 @@ class TestJobs:
                 "missing": [
                     {
                         "action": "read",
-                        "uri": f"image://{cluster_name}/anotheruser/image",
+                        "uri": f"image://{cluster_name}/{test_org_name}/anotheruser/image",
                     }
                 ]
             }
