@@ -9,7 +9,11 @@ from platform_api.orchestrator.job import (
     JobStatus,
     current_datetime_factory,
 )
-from platform_api.orchestrator.job_request import Container, ContainerResources
+from platform_api.orchestrator.job_request import (
+    Container,
+    ContainerNvidiaMIGResource,
+    ContainerResources,
+)
 from platform_api.orchestrator.jobs_storage import (
     InMemoryJobsStorage,
     JobFilter,
@@ -32,8 +36,16 @@ class TestInMemoryJobsStorage:
                         cpu=1,
                         memory=128,
                         nvidia_gpu=1,
-                        amd_gpu=1,
-                        nvidia_gpu_model="nvidia-tesla-k80",
+                        nvidia_migs={
+                            "1g.5gb": ContainerNvidiaMIGResource(
+                                count=1, model="nvidia-mig"
+                            )
+                        },
+                        nvidia_gpu_model="nvidia-gpu",
+                        amd_gpu=2,
+                        amd_gpu_model="amd-gpu",
+                        intel_gpu=3,
+                        intel_gpu_model="intel-gpu",
                     )
                     if is_gpu_job
                     else ContainerResources(cpu=1, memory=128)

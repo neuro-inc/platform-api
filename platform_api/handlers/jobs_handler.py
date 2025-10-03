@@ -217,7 +217,14 @@ def create_job_preset_validator(presets: Sequence[ResourcePreset]) -> t.Trafaret
             container_resources["nvidia_gpu"] = preset.nvidia_gpu.count
             if preset.nvidia_gpu.model:
                 container_resources["nvidia_gpu_model"] = preset.nvidia_gpu.model
-                container_resources["gpu_model"] = preset.nvidia_gpu.model
+        if preset.nvidia_migs:
+            container_resources["nvidia_migs"] = {
+                mig.profile_name: {
+                    "count": mig.count,
+                    **({"model": mig.model} if mig.model else {}),
+                }
+                for mig in preset.nvidia_migs
+            }
         if preset.amd_gpu:
             container_resources["amd_gpu"] = preset.amd_gpu.count
             if preset.amd_gpu.model:
@@ -387,16 +394,22 @@ def convert_job_container_to_json(container: Container) -> dict[str, Any]:
     }
     if container.resources.nvidia_gpu is not None:
         resources["nvidia_gpu"] = container.resources.nvidia_gpu
-        resources["gpu"] = container.resources.nvidia_gpu
+    if container.resources.nvidia_gpu_model:
+        resources["nvidia_gpu_model"] = container.resources.nvidia_gpu_model
+    if container.resources.nvidia_migs is not None:
+        resources["nvidia_migs"] = {
+            profile_name: {
+                "count": mig.count,
+                **({"model": mig.model} if mig.model else {}),
+            }
+            for profile_name, mig in container.resources.nvidia_migs.items()
+        }
     if container.resources.amd_gpu is not None:
         resources["amd_gpu"] = container.resources.amd_gpu
-    if container.resources.intel_gpu is not None:
-        resources["intel_gpu"] = container.resources.intel_gpu
-    if container.resources.nvidia_gpu_model:
-        resources["gpu_model"] = container.resources.nvidia_gpu_model
-        resources["nvidia_gpu_model"] = container.resources.nvidia_gpu_model
     if container.resources.amd_gpu_model:
         resources["amd_gpu_model"] = container.resources.amd_gpu_model
+    if container.resources.intel_gpu is not None:
+        resources["intel_gpu"] = container.resources.intel_gpu
     if container.resources.intel_gpu_model:
         resources["intel_gpu_model"] = container.resources.intel_gpu_model
     if container.resources.shm is not None:
