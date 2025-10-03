@@ -5,7 +5,7 @@ import json
 import logging
 from asyncio import timeout
 from base64 import b64encode
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -238,6 +238,7 @@ class Resources:
     memory: int
     memory_request: int | None = None
     nvidia_gpu: int | None = None
+    nvidia_migs: Mapping[str, int] | None = None
     amd_gpu: int | None = None
     intel_gpu: int | None = None
     shm: bool | None = None
@@ -245,6 +246,7 @@ class Resources:
     tpu_cores: int | None = None
 
     nvidia_gpu_key: ClassVar[str] = "nvidia.com/gpu"
+    nvidia_mig_key_prefix: ClassVar[str] = "nvidia.com/mig-"
     amd_gpu_key: ClassVar[str] = "amd.com/gpu"
     intel_gpu_key: ClassVar[str] = "gpu.intel.com/i915"
     tpu_key_prefix: ClassVar[str] = "cloud-tpus.google.com/"
@@ -278,6 +280,10 @@ class Resources:
         if self.nvidia_gpu:
             payload["requests"][self.nvidia_gpu_key] = self.nvidia_gpu
             payload["limits"][self.nvidia_gpu_key] = self.nvidia_gpu
+        if self.nvidia_migs:
+            for key, value in self.nvidia_migs.items():
+                payload["requests"][self.nvidia_mig_key_prefix + key] = value
+                payload["limits"][self.nvidia_mig_key_prefix + key] = value
         if self.amd_gpu:
             payload["requests"][self.amd_gpu_key] = self.amd_gpu
             payload["limits"][self.amd_gpu_key] = self.amd_gpu
@@ -297,6 +303,10 @@ class Resources:
         nvidia_gpu = None
         if cls.nvidia_gpu_key in requests:
             nvidia_gpu = int(requests[cls.nvidia_gpu_key])
+        nvidia_migs: dict[str, int] = {}
+        for key, value in requests.items():
+            if key.startswith(cls.nvidia_mig_key_prefix):
+                nvidia_migs[key[len(cls.nvidia_mig_key_prefix) :]] = int(value)
         amd_gpu = None
         if cls.amd_gpu_key in requests:
             amd_gpu = int(requests[cls.amd_gpu_key])
@@ -308,6 +318,7 @@ class Resources:
             cpu=cls.parse_cpu(requests.get("cpu", "0")),
             memory=cls.parse_memory(requests.get("memory", "0Mi")),
             nvidia_gpu=nvidia_gpu,
+            nvidia_migs=nvidia_migs or None,
             amd_gpu=amd_gpu,
             intel_gpu=intel_gpu,
             tpu_version=tpu_version,
@@ -1474,10 +1485,12 @@ class NodeResources:
     cpu: float = 0
     memory: int = 0
     nvidia_gpu: int = 0
+    nvidia_migs: Mapping[str, int] = field(default_factory=dict)
     amd_gpu: int = 0
     intel_gpu: int = 0
 
     nvidia_gpu_key: ClassVar[str] = "nvidia.com/gpu"
+    nvidia_mig_key_prefix: ClassVar[str] = "nvidia.com/mig-"
     amd_gpu_key: ClassVar[str] = "amd.com/gpu"
     intel_gpu_key: ClassVar[str] = "gpu.intel.com/i915"
 
@@ -1488,6 +1501,9 @@ class NodeResources:
             raise ValueError(f"Invalid memory: {self.memory}")
         if self.nvidia_gpu < 0:
             raise ValueError(f"Invalid nvidia gpu: {self.nvidia_gpu}")
+        for k, v in self.nvidia_migs.items():
+            if v < 0:
+                raise ValueError(f"Invalid nvidia mig {k}: {v}")
         if self.amd_gpu < 0:
             raise ValueError(f"Invalid amd gpu:  {self.amd_gpu}")
         if self.intel_gpu < 0:
@@ -1499,6 +1515,11 @@ class NodeResources:
             cpu=Resources.parse_cpu(payload.get("cpu", "0")),
             memory=Resources.parse_memory(payload.get("memory", "0Mi")),
             nvidia_gpu=int(payload.get(cls.nvidia_gpu_key, 0)),
+            nvidia_migs={
+                k[len(cls.nvidia_mig_key_prefix) :]: int(v)
+                for k, v in payload.items()
+                if k.startswith(cls.nvidia_mig_key_prefix)
+            },
             amd_gpu=int(payload.get(cls.amd_gpu_key, 0)),
             intel_gpu=int(payload.get(cls.intel_gpu_key, 0)),
         )
@@ -1509,6 +1530,7 @@ class NodeResources:
             self.cpu_mcores > 0
             or self.memory > 0
             or self.nvidia_gpu > 0
+            or any(v > 0 for v in self.nvidia_migs.values())
             or self.amd_gpu > 0
             or self.intel_gpu > 0
         )
@@ -1525,6 +1547,10 @@ class NodeResources:
             self.cpu_mcores >= r.cpu_mcores
             and self.memory >= r.memory
             and self.nvidia_gpu >= (r.nvidia_gpu or 0)
+            and all(
+                self.nvidia_migs.get(k, 0) >= v
+                for k, v in (r.nvidia_migs or {}).items()
+            )
             and self.amd_gpu >= (r.amd_gpu or 0)
             and self.intel_gpu >= (r.intel_gpu or 0)
         )
@@ -1534,6 +1560,10 @@ class NodeResources:
             cpu=self.cpu + other.cpu,
             memory=self.memory + other.memory,
             nvidia_gpu=self.nvidia_gpu + other.nvidia_gpu,
+            nvidia_migs={
+                k: self.nvidia_migs.get(k, 0) + other.nvidia_migs.get(k, 0)
+                for k in set(self.nvidia_migs) | set(other.nvidia_migs)
+            },
             amd_gpu=self.amd_gpu + other.amd_gpu,
             intel_gpu=self.intel_gpu + other.intel_gpu,
         )
@@ -1543,6 +1573,10 @@ class NodeResources:
             cpu=self.cpu - other.cpu,
             memory=self.memory - other.memory,
             nvidia_gpu=self.nvidia_gpu - other.nvidia_gpu,
+            nvidia_migs={
+                k: self.nvidia_migs.get(k, 0) - other.nvidia_migs.get(k, 0)
+                for k in set(self.nvidia_migs) | set(other.nvidia_migs)
+            },
             amd_gpu=self.amd_gpu - other.amd_gpu,
             intel_gpu=self.intel_gpu - other.intel_gpu,
         )
@@ -1574,7 +1608,7 @@ class NodeConditionType(enum.Enum):
 class NodeCondition:
     type: NodeConditionType
     status: bool | None
-    transition_time: datetime
+    transition_time: datetime | None
     message: str = ""
     reason: str = ""
 
@@ -1585,7 +1619,11 @@ class NodeCondition:
             status=cls._parse_status(payload["status"]),
             message=payload.get("message", ""),
             reason=payload.get("reason", ""),
-            transition_time=iso8601.parse_date(payload["lastTransitionTime"]),
+            transition_time=(
+                iso8601.parse_date(t)
+                if (t := payload.get("lastTransitionTime"))
+                else None
+            ),
         )
 
     @classmethod

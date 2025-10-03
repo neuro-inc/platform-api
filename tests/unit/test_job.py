@@ -25,6 +25,7 @@ from platform_api.orchestrator.job import (
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerHTTPServer,
+    ContainerNvidiaMIGResource,
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
@@ -335,8 +336,12 @@ class TestContainerBuilder:
                     "cpu": 0.1,
                     "memory_mb": 128,
                     "nvidia_gpu": 1,
+                    "nvidia_migs": {"1g.5gb": {"count": 1, "model": "nvidia-mig"}},
+                    "nvidia_gpu_model": "nvidia-gpu",
                     "amd_gpu": 2,
+                    "amd_gpu_model": "amd-gpu",
                     "intel_gpu": 3,
+                    "intel_gpu_model": "intel-gpu",
                 },
                 "http": {"port": 80},
                 "volumes": [
@@ -366,37 +371,18 @@ class TestContainerBuilder:
                 cpu=0.1,
                 memory=128 * 2**20,
                 nvidia_gpu=1,
+                nvidia_migs={
+                    "1g.5gb": ContainerNvidiaMIGResource(count=1, model="nvidia-mig")
+                },
+                nvidia_gpu_model="nvidia-gpu",
                 amd_gpu=2,
+                amd_gpu_model="amd-gpu",
                 intel_gpu=3,
+                intel_gpu_model="intel-gpu",
                 shm=None,
             ),
             http_server=ContainerHTTPServer(port=80, health_check_path="/"),
             tty=False,
-        )
-
-    def test_from_payload_build_gpu_model(self) -> None:
-        payload = {
-            "image": "testimage",
-            "resources": {
-                "cpu": 0.1,
-                "memory_mb": 128,
-                "nvidia_gpu": 1,
-                "amd_gpu": 2,
-                "intel_gpu": 3,
-                "gpu_model": "gpumodel",
-            },
-        }
-        container = create_container_from_payload(payload)
-        assert container == Container(
-            image="testimage",
-            resources=ContainerResources(
-                cpu=0.1,
-                memory=128 * 2**20,
-                nvidia_gpu=1,
-                amd_gpu=2,
-                intel_gpu=3,
-                nvidia_gpu_model="gpumodel",
-            ),
         )
 
     def test_from_payload_build_tpu(self) -> None:
@@ -563,8 +549,33 @@ class TestJob:
                 cpu=1,
                 memory=64 * 10**6,
                 nvidia_gpu=1,
+                nvidia_gpu_model="nvidia-gpu",
+                nvidia_migs={
+                    "1g.5gb": ContainerNvidiaMIGResource(count=1, model="nvidia-mig")
+                },
                 amd_gpu=2,
-                nvidia_gpu_model="nvidia-tesla-k80",
+                amd_gpu_model="amd-gpu",
+                intel_gpu=3,
+                intel_gpu_model="intel-gpu",
+            ),
+        )
+        return JobRequest(
+            job_id="testjob",
+            container=container,
+            description="Description of the testjob with gpu",
+        )
+
+    @pytest.fixture
+    def job_request_with_nvidia_mig(self) -> JobRequest:
+        container = Container(
+            image="testimage",
+            resources=ContainerResources(
+                cpu=1,
+                memory=64 * 10**6,
+                nvidia_migs={
+                    "1g.5gb": ContainerNvidiaMIGResource(count=1, model="nvidia-mig")
+                },
+                nvidia_gpu_model="nvidia-gpu",
             ),
         )
         return JobRequest(
@@ -653,7 +664,10 @@ class TestJob:
         assert not job.has_amd_gpu
 
     def test_job_has_gpu_true(
-        self, mock_orchestrator: MockOrchestrator, job_request_with_gpu: JobRequest
+        self,
+        mock_orchestrator: MockOrchestrator,
+        job_request_with_gpu: JobRequest,
+        job_request_with_nvidia_mig: JobRequest,
     ) -> None:
         job = Job(
             orchestrator_config=mock_orchestrator.config,
@@ -665,6 +679,16 @@ class TestJob:
         )
         assert job.has_nvidia_gpu
         assert job.has_amd_gpu
+
+        job = Job(
+            orchestrator_config=mock_orchestrator.config,
+            record=JobRecord.create(
+                request=job_request_with_nvidia_mig,
+                cluster_name="test-cluster",
+                org_name="test-org",
+            ),
+        )
+        assert job.has_nvidia_gpu
 
     def _mocked_datetime_factory(self) -> datetime:
         return datetime(year=2019, month=1, day=1)
