@@ -5734,7 +5734,6 @@ class TestJobs:
                         "amd_gpu_model": "amd-gpu",
                         "intel_gpu": 3,
                         "intel_gpu_model": "intel-gpu",
-                        "tpu": {"type": "v2-8", "software_version": "1.14"},
                     },
                     "volumes": [],
                 },
