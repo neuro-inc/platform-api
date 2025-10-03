@@ -120,8 +120,8 @@ jobs:
     - name: Upload coverage part
       uses: actions/upload-artifact@v4
       with:
-        name: "coverage-" + ${{ strategy.job-index }}
-        path: ${{ strategy.job-index }} + ".coverage"
+        name: "coverage-${{ strategy.job-index }}"
+        path: "${{ strategy.job-index }}.coverage"
 
 
   upload-coverage:
