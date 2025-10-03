@@ -32,9 +32,10 @@ from platform_api.config import (
     STORAGE_URI_SCHEME,
     RegistryConfig,
 )
-from platform_api.old_kube_client.apolo import NO_ORG, create_namespace
+from platform_api.old_kube_client.apolo import create_namespace
 from platform_api.old_kube_client.errors import KubeClientException, ResourceNotFound
 from platform_api.orchestrator.job import (
+    DEFAULT_ORPHANED_JOB_OWNER,
     Job,
     JobRecord,
     JobRestartPolicy,
@@ -552,7 +553,7 @@ class TestKubeOrchestrator:
     ) -> None:
         user_name = self._create_username()
         ns = await create_namespace(
-            kube_client, org_name="test-org", project_name="test-owner"
+            kube_client, org_name="test-org", project_name=DEFAULT_ORPHANED_JOB_OWNER
         )
 
         disk_id = f"disk-{str(uuid.uuid4())}"
@@ -1878,7 +1879,7 @@ class TestKubeOrchestrator:
                 kube_config.namespace,
                 labels={
                     "platform.neuromation.io/user": "user",
-                    "platform.neuromation.io/project": "test_project",
+                    "platform.neuromation.io/project": "test-project",
                 },
             )
             await kube_client.create_pvc(  # type: ignore
@@ -1886,7 +1887,7 @@ class TestKubeOrchestrator:
                 kube_config.namespace,
                 labels={
                     "platform.neuromation.io/user": "another_user",
-                    "platform.neuromation.io/project": "test_project",
+                    "platform.neuromation.io/project": "test-project",
                     "platform.neuromation.io/disk-api-org-name": "test-org",
                 },
             )
@@ -1994,7 +1995,7 @@ class TestKubeOrchestrator:
     ) -> None:
         user_name = self._create_username()
         ns = await create_namespace(
-            kube_client, org_name=NO_ORG, project_name=user_name
+            kube_client, org_name="test-org", project_name=user_name
         )
 
         disk_id_1, disk_id_2 = f"disk-{str(uuid.uuid4())}", f"disk-{str(uuid.uuid4())}"
@@ -2161,7 +2162,7 @@ class TestKubeOrchestrator:
     ) -> None:
         user_name = self._create_username()
         ns = await create_namespace(
-            kube_client, org_name=NO_ORG, project_name=user_name
+            kube_client, org_name="test-org", project_name=user_name
         )
 
         secret_name = "key1"
@@ -2229,7 +2230,7 @@ class TestKubeOrchestrator:
     ) -> None:
         user_name = self._create_username()
         ns = await create_namespace(
-            kube_client, org_name=NO_ORG, project_name=user_name
+            kube_client, org_name="test-org", project_name=user_name
         )
 
         sec_name_1, sec_name_2 = "key1", "key2"
@@ -2278,7 +2279,7 @@ class TestKubeOrchestrator:
     ) -> None:
         user_name = self._create_username()
         ns = await create_namespace(
-            kube_client, org_name=NO_ORG, project_name=user_name
+            kube_client, org_name="test-org", project_name=user_name
         )
 
         secret_a = Secret("aaa", user_name, cluster_name)
@@ -2329,6 +2330,7 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name=cluster_name,
+                org_name="test-org",
                 owner=user_name,
             ),
         )
