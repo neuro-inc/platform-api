@@ -13,7 +13,6 @@ from neuro_config_client import (
     AMDGPUPreset,
     IntelGPUPreset,
     NvidiaGPUPreset,
-    NvidiaMIGPreset,
     ResourcePreset,
     TPUPreset,
     TPUResource,
@@ -661,11 +660,9 @@ class TestJobPresetValidator:
                     cpu=0.1,
                     memory=100 * 10**6,
                     nvidia_gpu=NvidiaGPUPreset(count=1, model="nvidia-gpu"),
-                    nvidia_migs=[
-                        NvidiaMIGPreset(
-                            profile_name="1g.5gb", count=1, model="nvidia-mig"
-                        )
-                    ],
+                    nvidia_migs={
+                        "1g.5gb": NvidiaGPUPreset(count=1, model="nvidia-mig")
+                    },
                     amd_gpu=AMDGPUPreset(count=2, model="amd-gpu"),
                     intel_gpu=IntelGPUPreset(count=3, model="intel-gpu"),
                     tpu=TPUPreset(type="v2-8", software_version="1.14"),

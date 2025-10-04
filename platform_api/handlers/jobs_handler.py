@@ -219,11 +219,11 @@ def create_job_preset_validator(presets: Sequence[ResourcePreset]) -> t.Trafaret
                 container_resources["nvidia_gpu_model"] = preset.nvidia_gpu.model
         if preset.nvidia_migs:
             container_resources["nvidia_migs"] = {
-                mig.profile_name: {
-                    "count": mig.count,
-                    **({"model": mig.model} if mig.model else {}),
+                key: {
+                    "count": value.count,
+                    **({"model": value.model} if value.model else {}),
                 }
-                for mig in preset.nvidia_migs
+                for key, value in preset.nvidia_migs.items()
             }
         if preset.amd_gpu:
             container_resources["amd_gpu"] = preset.amd_gpu.count
