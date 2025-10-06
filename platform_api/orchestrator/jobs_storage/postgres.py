@@ -412,16 +412,10 @@ class JobFilterClauseBuilder:
                         & org_pred
                         & project_pred
                     )
-            not_null_orgs = [org for org in orgs_empty_projects if org is not None]
-            if not_null_orgs:
+            if orgs_empty_projects:
                 cluster_clauses.append(
                     (self._tables.jobs.c.cluster_name == cluster)
-                    & self._tables.jobs.c.org_name.in_(not_null_orgs)
-                )
-            if None in orgs_empty_projects:
-                cluster_clauses.append(
-                    (self._tables.jobs.c.cluster_name == cluster)
-                    & self._tables.jobs.c.org_name.is_(None)
+                    & self._tables.jobs.c.org_name.in_(orgs_empty_projects)
                 )
         if clusters_empty_orgs:
             cluster_clauses.append(
@@ -432,14 +426,8 @@ class JobFilterClauseBuilder:
     def filter_projects(self, projects: AbstractSet[str]) -> None:
         self._clauses.append(self._tables.jobs.c.project_name.in_(projects))
 
-    def filter_orgs(self, orgs: AbstractSet[str | None]) -> None:
-        not_null_orgs = [org for org in orgs if org is not None]
-        or_clauses = []
-        if not_null_orgs:
-            or_clauses.append(self._tables.jobs.c.org_name.in_(not_null_orgs))
-        if None in orgs:
-            or_clauses.append(self._tables.jobs.c.org_name.is_(None))
-        self._clauses.append(or_(*or_clauses))
+    def filter_orgs(self, orgs: AbstractSet[str]) -> None:
+        self._clauses.append(self._tables.jobs.c.org_name.in_(orgs))
 
     def filter_name(self, name: str) -> None:
         self._clauses.append(self._tables.jobs.c.name == name)

@@ -13,7 +13,7 @@ import aiohttp
 from apolo_kube_client import KubeClientSelector, KubeConfig
 from neuro_config_client import OrchestratorConfig, ResourcePoolType
 
-from platform_api.config import NO_ORG, RegistryConfig
+from platform_api.config import RegistryConfig
 from platform_api.old_kube_client.apolo import create_namespace, normalize_name
 from platform_api.old_kube_client.errors import (
     KubeClientException,
@@ -403,11 +403,10 @@ class KubeOrchestrator(Orchestrator):
         }
 
     def _get_org_pod_labels(self, job: Job) -> dict[str, str]:
-        # Org label must always be set. Prometheus doesn't return empty labels
-        # in response which are required for Grafana tables plugin.
+        assert job.org_name is not None, "org_name is required"
         return {
-            "platform.neuromation.io/org": job.org_name or "no_org",
-            APOLO_ORG_LABEL_KEY: job.org_name or "no_org",
+            "platform.neuromation.io/org": job.org_name,
+            APOLO_ORG_LABEL_KEY: job.org_name,
         }
 
     def _get_project_pod_labels(self, job: Job) -> dict[str, str]:
@@ -462,15 +461,14 @@ class KubeOrchestrator(Orchestrator):
                 pvc_project: str = pvc["metadata"]["labels"].get(
                     "platform.neuromation.io/project"
                 )
-                pvc_org: str = (
-                    pvc["metadata"]["labels"].get(
-                        "platform.neuromation.io/disk-api-org-name", NO_ORG
-                    )
-                    or NO_ORG
+                pvc_org: str = pvc["metadata"]["labels"].get(
+                    "platform.neuromation.io/disk-api-org-name"
                 )
-                if pvc_project != project_name and normalize_name(
-                    pvc_org
-                ) != normalize_name(org_name):
+                if pvc_project != project_name and (
+                    not pvc_org
+                    or not org_name
+                    or normalize_name(pvc_org) != normalize_name(org_name)
+                ):
                     missing.append(disk)
             except (KubeClientException, KeyError):
                 missing.append(disk)
@@ -499,9 +497,10 @@ class KubeOrchestrator(Orchestrator):
         """
         tolerate_unreachable_node: used only in tests
         """
+        assert job.org_name is not None, "org_name is required"
         await create_namespace(
             self._client,
-            org_name=job.org_name or NO_ORG,
+            org_name=job.org_name,
             project_name=job.project_name,
         )
         await self._create_docker_secret(job)

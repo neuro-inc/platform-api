@@ -209,7 +209,7 @@ async def regular_user_factory(
         if not name:
             name = random_str()
         if clusters is None:
-            clusters = [(test_cluster_name, Balance(), Quota())]
+            clusters = [(test_cluster_name, test_org_name, Balance(), Quota())]
         await admin_client.create_user(name=name, email=f"{name}@email.com")
         user_token = token_factory(name)
         user_admin_client = await admin_client_factory(user_token)
@@ -300,6 +300,7 @@ async def service_account_factory(
     token_factory: Callable[[str], str],
     admin_token: str,
     test_cluster_name: str,
+    test_org_name: str,
 ) -> ServiceAccountFactory:
     async def _factory(
         owner: _User,
@@ -310,17 +311,30 @@ async def service_account_factory(
         user = AuthUser(name=f"{owner.name}/service-accounts/{name}")
         await auth_client.add_user(user, token=admin_token)
         permissions = []
-        # Fake grant access to SA staff
+        # Fake grant access to SA stuff
         for cluster in owner.clusters:
             permissions.extend(
                 [
                     Permission(
-                        uri=f"storage://{cluster}/{owner.name}", action="manage"
+                        uri=f"storage://{cluster}/{test_org_name}/{owner.name}",
+                        action="manage",
                     ),
-                    Permission(uri=f"image://{cluster}/{owner.name}", action="manage"),
-                    Permission(uri=f"job://{cluster}/{owner.name}", action="manage"),
-                    Permission(uri=f"secret://{cluster}/{owner.name}", action="manage"),
-                    Permission(uri=f"disk://{cluster}/{owner.name}", action="write"),
+                    Permission(
+                        uri=f"image://{cluster}/{test_org_name}/{owner.name}",
+                        action="manage",
+                    ),
+                    Permission(
+                        uri=f"job://{cluster}/{test_org_name}/{owner.name}",
+                        action="manage",
+                    ),
+                    Permission(
+                        uri=f"secret://{cluster}/{test_org_name}/{owner.name}",
+                        action="manage",
+                    ),
+                    Permission(
+                        uri=f"disk://{cluster}/{test_org_name}/{owner.name}",
+                        action="write",
+                    ),
                 ]
             )
         await auth_client.grant_user_permissions(
@@ -336,8 +350,12 @@ async def service_account_factory(
 
 
 @pytest.fixture
-async def regular_user(regular_user_factory: UserFactory) -> _User:
-    return await regular_user_factory()
+async def regular_user(
+    regular_user_factory: UserFactory, test_cluster_name: str, test_org_name: str
+) -> _User:
+    return await regular_user_factory(
+        clusters=[(test_cluster_name, test_org_name, Balance(), Quota())]
+    )
 
 
 @pytest.fixture

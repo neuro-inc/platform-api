@@ -46,10 +46,16 @@ class TestJobsStorage:
         return JobRequest.create(container)
 
     def _create_job(
-        self, cluster_name: str = "test-cluster", **kwargs: Any
+        self,
+        cluster_name: str = "test-cluster",
+        org_name: str = "test-org",
+        **kwargs: Any,
     ) -> JobRecord:
         return JobRecord.create(
-            request=self._create_job_request(), cluster_name=cluster_name, **kwargs
+            request=self._create_job_request(),
+            cluster_name=cluster_name,
+            org_name=org_name,
+            **kwargs,
         )
 
     def _create_pending_job(
@@ -902,7 +908,9 @@ class TestJobsStorage:
 
         job_filter = JobFilter(
             clusters={
-                "test-cluster": {None: {"user1": {"jobname2"}, "user2": {"jobname3"}}}
+                "test-cluster": {
+                    "test-org": {"user1": {"jobname2"}, "user2": {"jobname3"}}
+                }
             },
             owners={"user1", "user2"},
             statuses={JobStatus.FAILED},
@@ -989,13 +997,19 @@ class TestJobsStorage:
         jobs = [
             self._create_running_job(owner="user1", cluster_name="test-cluster"),
             self._create_succeeded_job(
-                owner="user1", cluster_name="test-cluster", job_name="jobname1"
+                owner="user1",
+                cluster_name="test-cluster",
+                job_name="jobname1",
             ),
             self._create_failed_job(
-                owner="user2", cluster_name="test-cluster", job_name="jobname1"
+                owner="user2",
+                cluster_name="test-cluster",
+                job_name="jobname1",
             ),
             self._create_succeeded_job(
-                owner="user3", cluster_name="test-cluster", job_name="jobname1"
+                owner="user3",
+                cluster_name="test-cluster",
+                job_name="jobname1",
             ),
             self._create_succeeded_job(owner="user1", cluster_name="my-cluster"),
             self._create_failed_job(owner="user3", cluster_name="my-cluster"),
@@ -1013,13 +1027,13 @@ class TestJobsStorage:
     ) -> list[JobRecord]:
         jobs = [
             self._create_running_job(
-                owner="user1", cluster_name="test-cluster", org_name=None
+                owner="user1", cluster_name="test-cluster", org_name="another-org"
             ),
             self._create_succeeded_job(
                 owner="user1",
                 cluster_name="test-cluster",
                 job_name="jobname1",
-                org_name=None,
+                org_name="another-org",
             ),
             self._create_failed_job(
                 owner="user2",
@@ -1042,7 +1056,7 @@ class TestJobsStorage:
                 org_name="test-org",
             ),
             self._create_failed_job(
-                owner="user1", cluster_name="other-cluster", org_name=None
+                owner="user1", cluster_name="other-cluster", org_name="another-org"
             ),
             self._create_succeeded_job(
                 owner="user2",
@@ -1080,19 +1094,19 @@ class TestJobsStorage:
     ) -> list[JobRecord]:
         jobs = [
             self._create_running_job(
-                owner="user1", cluster_name="test-cluster", org_name=None
+                owner="user1", cluster_name="test-cluster", org_name="no-org"
             ),
             self._create_succeeded_job(
                 owner="user1",
                 cluster_name="test-cluster",
                 job_name="jobname1",
-                org_name=None,
+                org_name="no-org",
             ),
             self._create_failed_job(
                 owner="user2",
                 cluster_name="test-cluster",
                 job_name="jobname1",
-                org_name=None,
+                org_name="no-org",
             ),
             self._create_succeeded_job(
                 owner="user3",
@@ -1128,11 +1142,11 @@ class TestJobsStorage:
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == {job.id for job in jobs[7:]}
 
-        job_filter = JobFilter(orgs={None})
+        job_filter = JobFilter(orgs={"no-org"})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == {job.id for job in jobs[:3]}
 
-        job_filter = JobFilter(orgs={None, "test-org"})
+        job_filter = JobFilter(orgs={"no-org", "test-org"})
         job_ids = {job.id for job in await storage.get_all_jobs(job_filter)}
         assert job_ids == {job.id for job in jobs[:7]}
 
@@ -1199,8 +1213,8 @@ class TestJobsStorage:
 
         job_filter = JobFilter(
             clusters={
-                "test-cluster": {None: {"user1": set()}},
-                "other-cluster": {None: {"user2": set()}},
+                "test-cluster": {"test-org": {"user1": set()}},
+                "other-cluster": {"test-org": {"user2": set()}},
             },
             owners={"user1", "user2"},
         )
@@ -1208,7 +1222,10 @@ class TestJobsStorage:
         assert job_ids == [jobs[0].id, jobs[1].id, jobs[7].id]
 
         job_filter = JobFilter(
-            clusters={"test-cluster": {None: {"user1": set()}}, "other-cluster": {}},
+            clusters={
+                "test-cluster": {"test-org": {"user1": set()}},
+                "other-cluster": {},
+            },
             owners={"user1", "user2"},
         )
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
@@ -1216,9 +1233,9 @@ class TestJobsStorage:
 
         job_filter = JobFilter(
             clusters={
-                "test-cluster": {None: {"user1": set(), "user2": set()}},
-                "my-cluster": {None: {"user2": set(), "user3": set()}},
-                "other-cluster": {None: {"user2": set()}},
+                "test-cluster": {"test-org": {"user1": set(), "user2": set()}},
+                "my-cluster": {"test-org": {"user2": set(), "user3": set()}},
+                "other-cluster": {"test-org": {"user2": set()}},
             },
             owners={"user1", "user2", "user3"},
         )
@@ -1226,7 +1243,10 @@ class TestJobsStorage:
         assert job_ids == [jobs[0].id, jobs[1].id, jobs[2].id, jobs[5].id, jobs[7].id]
 
         job_filter = JobFilter(
-            clusters={"test-cluster": {None: {"user1": set()}}, "other-cluster": {}},
+            clusters={
+                "test-cluster": {"test-org": {"user1": set()}},
+                "other-cluster": {},
+            },
         )
         job_ids = [job.id for job in await storage.get_all_jobs(job_filter)]
         assert job_ids == [jobs[0].id, jobs[1].id, jobs[6].id, jobs[7].id, jobs[8].id]

@@ -169,17 +169,13 @@ class DiskAPIClient:
             txt = await resp.text()
             assert txt == "Pong"
 
-    async def create_disk(
-        self, storage: int, project_name: str, org_name: str | None = None
-    ) -> Disk:
+    async def create_disk(self, storage: int, project_name: str, org_name: str) -> Disk:
         url = self._base_url / "disk"
         payload = {
             "storage": storage,
             "project_name": project_name,
-            # "org_name": org_name
+            "org_name": org_name,
         }
-        if org_name:
-            payload["org_name"] = org_name
 
         async with self._client.post(url, json=payload) as resp:
             assert resp.status == 201, await resp.text()

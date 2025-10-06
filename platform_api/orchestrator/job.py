@@ -15,7 +15,6 @@ from neuro_config_client import OrchestratorConfig, ResourcePreset
 from neuro_config_client.entities import DEFAULT_ENERGY_SCHEDULE_NAME
 from yarl import URL
 
-from platform_api.config import NO_ORG
 from platform_api.old_kube_client.apolo import generate_namespace_name
 
 from .job_request import (
@@ -290,7 +289,7 @@ class JobRecord:
     project_name: str
     org_project_hash: bytes
     namespace: str
-    org_name: str | None = None
+    org_name: str
     name: str | None = None
     preset_name: str | None = None
     tags: Sequence[str] = ()
@@ -335,18 +334,18 @@ class JobRecord:
         if not kwargs.get("project_name"):
             kwargs["project_name"] = get_base_owner(kwargs["owner"])
 
-        org_name = kwargs.get("org_name")
+        org_name = kwargs["org_name"]
         project_name = kwargs["project_name"]
 
         kwargs["org_project_hash"] = cls._create_org_project_hash(
             org_name, project_name
         )
-        kwargs["namespace"] = generate_namespace_name(org_name or NO_ORG, project_name)
+        kwargs["namespace"] = generate_namespace_name(org_name, project_name)
         return cls(**kwargs)
 
     @classmethod
-    def _create_org_project_hash(cls, org_name: str | None, project_name: str) -> bytes:
-        return cls._create_hash(org_name or NO_ORG, project_name)[:5]
+    def _create_org_project_hash(cls, org_name: str, project_name: str) -> bytes:
+        return cls._create_hash(org_name, project_name)[:5]
 
     @classmethod
     def _create_hash(cls, *args: str) -> bytes:
@@ -540,7 +539,7 @@ class JobRecord:
             request.job_id, payload
         )
         owner = payload.get("owner") or orphaned_job_owner
-        org_name = payload.get("org_name", None)
+        org_name = payload["org_name"]
         project_name = payload["project_name"]
         org_project_hash = payload.get("org_project_hash")
         if org_project_hash and isinstance(org_project_hash, str):
@@ -949,7 +948,7 @@ class Job:
         return runtime_hours * self.price_credits_per_hour
 
     @property
-    def org_name(self) -> str | None:
+    def org_name(self) -> str:
         return self._record.org_name
 
     @property

@@ -131,7 +131,6 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
             http_server=http_server,
         )
 
-    project_name = payload["project_name"]
     return JobRecord(
         request=JobRequest(
             job_id=payload["id"],
@@ -143,8 +142,8 @@ def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
             [_parse_status_item(item) for item in payload["statuses"]]
         ),
         cluster_name=payload["cluster_name"],
-        org_name=payload.get("org_name"),
-        project_name=project_name,
+        org_name=payload["org_name"],
+        project_name=payload["project_name"],
         org_project_hash=bytes.fromhex(payload["org_project_hash"]),
         namespace=payload["namespace"],
         name=payload.get("name"),

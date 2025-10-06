@@ -21,7 +21,7 @@ from neuro_auth_client.client import ClientAccessSubTreeView, ClientSubTreeViewR
 from neuro_config_client import Cluster, ResourcePreset, TPUResource
 from yarl import URL
 
-from platform_api.config import NO_ORG, STORAGE_URI_SCHEME, Config
+from platform_api.config import STORAGE_URI_SCHEME, Config
 from platform_api.log import log_debug_time
 from platform_api.orchestrator.job import (
     JOB_NAME_SEPARATOR,
@@ -250,7 +250,7 @@ def create_job_preset_validator(presets: Sequence[ResourcePreset]) -> t.Trafaret
 def create_job_cluster_org_name_validator(
     *,
     default_cluster_name: str,
-    default_org_name: str | None,
+    default_org_name: str,
     default_project_name: str,
 ) -> t.Trafaret:
     return t.Dict(
@@ -258,8 +258,7 @@ def create_job_cluster_org_name_validator(
             t.Key(
                 "cluster_name", default=default_cluster_name
             ): create_cluster_name_validator(),
-            t.Key("org_name", default=default_org_name): create_org_name_validator()
-            | t.Null,
+            t.Key("org_name", default=default_org_name): create_org_name_validator(),
             t.Key(
                 "project_name", default=default_project_name
             ): create_project_name_validator(),
@@ -550,7 +549,7 @@ def infer_permissions_from_container(
     container: Container,
     registry_host: str,
     cluster_name: str,
-    org_name: str | None,
+    org_name: str,
     *,
     project_name: str,
 ) -> list[Permission]:
@@ -563,7 +562,7 @@ def infer_permissions_from_container(
     if container.belongs_to_registry(registry_host):
         permissions.append(
             Permission(
-                uri=str(container.to_image_uri(registry_host, cluster_name)),
+                uri=str(container.to_image_uri(registry_host, cluster_name, org_name)),
                 action="read",
             )
         )
@@ -695,26 +694,51 @@ class JobsHandler:
         cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
         self._check_user_can_submit_jobs(cluster_configs)
         default_cluster_name = cluster_configs[0].config.name
-        cluster_for_default_org = (
-            orig_payload.get("cluster_name") or default_cluster_name
-        )
-        cluster_config_for_default_org = next(
-            (
-                cluster_config
-                for cluster_config in cluster_configs
-                if cluster_config.config.name == cluster_for_default_org
-            ),
-            None,
-        )
-        # always use NO_ORG as default if a user has direct access to cluster.
-        # if cluster_config_for_default_org is None,
-        # the validator below will raise an error
-        default_org_name = None
-        if (
-            cluster_config_for_default_org is not None
-            and None not in cluster_config_for_default_org.orgs
-        ):
-            default_org_name = cluster_config_for_default_org.orgs[0]
+
+        # Check if user explicitly specified a cluster they don't have access to
+        requested_cluster = orig_payload.get("cluster_name")
+        if requested_cluster is not None:
+            cluster_config_for_default_org = next(
+                (
+                    cluster_config
+                    for cluster_config in cluster_configs
+                    if cluster_config.config.name == requested_cluster
+                ),
+                None,
+            )
+            if cluster_config_for_default_org is None:
+                raise aiohttp.web.HTTPForbidden(
+                    text=json.dumps(
+                        {
+                            "error": (
+                                "User is not allowed to submit jobs to the "
+                                "specified cluster"
+                            )
+                        }
+                    ),
+                    content_type="application/json",
+                )
+            if not cluster_config_for_default_org.orgs:
+                raise aiohttp.web.HTTPForbidden(
+                    text=json.dumps(
+                        {
+                            "error": (
+                                "User is not allowed to submit jobs to the "
+                                "specified cluster as a member of given organization"
+                            )
+                        }
+                    ),
+                    content_type="application/json",
+                )
+        else:
+            cluster_config_for_default_org = cluster_configs[0]
+            if not cluster_config_for_default_org.orgs:
+                raise aiohttp.web.HTTPForbidden(
+                    text=json.dumps({"error": "User must have at least one org"}),
+                    content_type="application/json",
+                )
+
+        default_org_name = cluster_config_for_default_org.orgs[0]
 
         job_cluster_org_name_validator = create_job_cluster_org_name_validator(
             default_cluster_name=default_cluster_name,
@@ -1108,7 +1132,7 @@ class JobFilterFactory:
                 for cluster_name in query.getall("cluster_name", [])
             }
             orgs = {
-                self._parse_org_name(org_name)
+                self._org_name_validator.check(org_name)
                 for org_name in query.getall("org_name", [])
             }
             projects = {
@@ -1154,13 +1178,6 @@ class JobFilterFactory:
             **bool_filters,  # type: ignore
         )
 
-    def _parse_org_name(self, org_name: str) -> str | None:
-        return (
-            None
-            if org_name.upper() == NO_ORG
-            else self._org_name_validator.check(org_name)
-        )
-
 
 @dataclass(frozen=True)
 class BulkJobFilter:
@@ -1180,11 +1197,11 @@ class BulkJobFilterBuilder:
         self._has_access_to_all: bool = False
         self._has_clusters_shared_all: bool = False
         self._has_orgs_shared_all: bool = False
-        self._clusters_shared_any: dict[str, dict[str | None, dict[str, set[str]]]] = (
+        self._clusters_shared_any: dict[str, dict[str, dict[str, set[str]]]] = (
             defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
         )
         self._projects_shared_any: set[str] = set()
-        self._orgs_shared_any: set[str | None] = set()
+        self._orgs_shared_any: set[str] = set()
         self._shared_ids: set[str] = set()
 
     def build(self) -> BulkJobFilter:
@@ -1239,10 +1256,6 @@ class BulkJobFilterBuilder:
                 self._clusters_shared_any[cluster_name] = {}
             else:
                 self._traverse_orgs(sub_tree, cluster_name)
-                if self._query_filter.orgs and None not in self._query_filter.orgs:
-                    # skipping None org
-                    continue
-                self._traverse_projects(sub_tree, cluster_name, None)
 
     def _traverse_orgs(self, tree: ClientAccessSubTreeView, cluster_name: str) -> None:
         for org_name, sub_tree in tree.children.items():
@@ -1267,7 +1280,7 @@ class BulkJobFilterBuilder:
         self,
         tree: ClientAccessSubTreeView,
         cluster_name: str,
-        org_name: str | None,
+        org_name: str,
     ) -> None:
         for project, sub_tree in tree.children.items():
             if not sub_tree.can_list():
@@ -1294,7 +1307,7 @@ class BulkJobFilterBuilder:
         self,
         tree: ClientAccessSubTreeView,
         cluster_name: str,
-        org_name: str | None,
+        org_name: str,
         project_name: str,
     ) -> None:
         for name, sub_tree in tree.children.items():
@@ -1365,7 +1378,7 @@ class BulkJobFilterBuilder:
 
     def _optimize_clusters_projects(
         self,
-        orgs: AbstractSet[str | None],
+        orgs: AbstractSet[str],
         projects: AbstractSet[str],
         name: str | None,
     ) -> None:
