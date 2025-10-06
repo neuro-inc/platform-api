@@ -67,7 +67,7 @@ class JobsScheduler:
         self._current_datetime_factory = current_datetime_factory
 
     async def _get_user_running_jobs_quota(
-        self, username: str, cluster: str, org_name: str | None
+        self, username: str, cluster: str, org_name: str
     ) -> int | None:
         try:
             base_name = username.split("/", 1)[0]  # SA same quota as user
@@ -83,10 +83,8 @@ class JobsScheduler:
             return cluster_user.quota.total_running_jobs
 
     async def _get_org_running_jobs_quota(
-        self, cluster: str, org_name: str | None
+        self, cluster: str, org_name: str
     ) -> int | None:
-        if org_name is None:
-            return None
         try:
             org_cluster = await self._admin_client.get_org_cluster(
                 cluster_name=cluster, org_name=org_name
@@ -108,9 +106,7 @@ class JobsScheduler:
         jobs_to_update: list[JobRecord] = []
 
         # Grouping by (username, cluster_name, org_name):
-        grouped_jobs: dict[tuple[str, str, str | None], list[JobRecord]] = defaultdict(
-            list
-        )
+        grouped_jobs: dict[tuple[str, str, str], list[JobRecord]] = defaultdict(list)
         for record in unfinished:
             grouped_jobs[(record.owner, record.cluster_name, record.org_name)].append(
                 record
@@ -138,9 +134,7 @@ class JobsScheduler:
             jobs_to_update.extend(_filter_our_for_quota(quota, jobs))
 
         # Grouping by (cluster_name, org_name):
-        grouped_by_org_jobs: dict[tuple[str, str | None], list[JobRecord]] = (
-            defaultdict(list)
-        )
+        grouped_by_org_jobs: dict[tuple[str, str], list[JobRecord]] = defaultdict(list)
         for record in jobs_to_update:
             grouped_by_org_jobs[(record.cluster_name, record.org_name)].append(record)
         jobs_to_update = []
@@ -318,7 +312,7 @@ class JobsPollerService:
         for secret_path, path_secrets in grouped_secrets.items():
             missing.extend(
                 await orchestrator.get_missing_secrets(
-                    job.namespace,
+                    job,
                     secret_path,
                     [secret.secret_key for secret in path_secrets],
                 )

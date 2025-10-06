@@ -10,22 +10,23 @@ from types import TracebackType
 from typing import Any
 
 import aiohttp
-from apolo_kube_client import KubeClientProxy, KubeClientSelector, KubeConfig
+from aiohttp import ClientSession
+from apolo_kube_client import (
+    KubeClientException,
+    KubeClientProxy,
+    KubeClientSelector,
+    KubeConfig,
+    ResourceNotFound,
+)
+from apolo_kube_client.apolo import normalize_name
 from neuro_config_client import OrchestratorConfig, ResourcePoolType
 
 from platform_api.config import RegistryConfig
-from platform_api.old_kube_client.apolo import create_namespace, normalize_name
-from platform_api.old_kube_client.errors import (
-    KubeClientException,
-    ResourceExists,
-    ResourceNotFound,
-)
 
 from .base import Orchestrator
 from .job import Job, JobRestartPolicy, JobStatusItem, JobStatusReason
 from .job_request import (
     Disk,
-    JobAlreadyExistsException,
     JobError,
     JobNotFoundException,
     JobStatus,
@@ -34,8 +35,8 @@ from .job_request import (
 )
 from .kube_client import (
     DockerRegistrySecret,
+    Ingress,
     IngressRule,
-    KubeClient,
     LabelSelectorMatchExpression,
     LabelSelectorTerm,
     NodeAffinity,
@@ -52,9 +53,18 @@ from .kube_client import (
     SecretVolume,
     Service,
     Toleration,
+    create_ingress as selector_create_ingress,
     create_pod,
+    create_service as selector_create_service,
+    delete_all_ingresses as selector_delete_all_ingresses,
+    delete_ingress as selector_delete_ingress,
     delete_pod,
+    delete_service as selector_delete_service,
     get_pod,
+    get_pod_events,
+    get_raw_secret as selector_get_raw_secret,
+    list_services as selector_list_services,
+    update_docker_secret as selector_update_docker_secret,
 )
 from .kube_config import KubeConfig as OldKubeConfig
 from .kube_orchestrator_scheduler import (
@@ -145,15 +155,17 @@ class KubeOrchestrator(Orchestrator):
         registry_config: RegistryConfig,
         orchestrator_config: OrchestratorConfig,
         kube_config: OldKubeConfig,
-        kube_client: KubeClient,
+        kube_client_selector: KubeClientSelector | None = None,
     ) -> None:
         self._loop = asyncio.get_event_loop()
         self._cluster_name = cluster_name
         self._registry_config = registry_config
         self._orchestrator_config = orchestrator_config
         self._kube_config = kube_config
-        self._client = kube_client
-        self._selector = KubeClientSelector(config=KubeConfig(**asdict(kube_config)))
+        self._http = ClientSession()
+        self._selector = kube_client_selector or KubeClientSelector(
+            config=KubeConfig(**asdict(kube_config))
+        )
 
         self._nodes_handler = NodesHandler()
         self._node_resources_handler = NodeResourcesHandler()
@@ -161,7 +173,7 @@ class KubeOrchestrator(Orchestrator):
             self._nodes_handler, self._node_resources_handler
         )
         self._preemption = KubeOrchestratorPreemption(
-            kube_client, self._nodes_handler, self._node_resources_handler
+            self._nodes_handler, self._node_resources_handler
         )
 
         # TODO (A Danshyn 11/16/18): make this configurable at some point
@@ -192,6 +204,7 @@ class KubeOrchestrator(Orchestrator):
         exc_tb: TracebackType | None,
     ) -> None:
         await self._selector.__aexit__(exc_typ, exc_val, exc_tb)
+        await self._http.close()
 
     def subscribe_to_kube_events(
         self, node_watcher: NodeWatcher, pod_watcher: PodWatcher
@@ -229,7 +242,11 @@ class KubeOrchestrator(Orchestrator):
             email=self._registry_config.email,
             registry_server=self._registry_config.host,
         )
-        await self._client.update_docker_secret(secret, create_non_existent=True)
+        # Use selector to create or update the docker registry secret
+        async with self._selector.get_client(
+            org_name=job.org_name, project_name=job.project_name
+        ) as client_proxy:
+            await selector_update_docker_secret(client_proxy, secret)
         return secret
 
     def _create_pod_descriptor(
@@ -455,41 +472,47 @@ class KubeOrchestrator(Orchestrator):
     ) -> list[Disk]:
         assert disks, "no disks"
         missing = []
-        for disk in disks:
-            try:
-                pvc = await self._client.get_raw_pvc(
-                    disk.disk_id,
-                    namespace,
-                )
-                pvc_project: str = pvc["metadata"]["labels"].get(
-                    "platform.neuromation.io/project"
-                )
-                pvc_org: str = pvc["metadata"]["labels"].get(
-                    "platform.neuromation.io/disk-api-org-name"
-                )
-                if pvc_project != project_name and (
-                    not pvc_org
-                    or not org_name
-                    or normalize_name(pvc_org) != normalize_name(org_name)
-                ):
+        async with self._selector.get_client(
+            org_name=org_name,
+            project_name=project_name,
+        ) as kube_client:
+            for disk in disks:
+                try:
+                    pvc = await kube_client.core_v1.persistent_volume_claim.get(
+                        disk.disk_id,
+                    )
+                    pvc_project = pvc.metadata.labels.get(
+                        "platform.neuromation.io/project"
+                    )
+                    pvc_org = pvc.metadata.labels.get(
+                        "platform.neuromation.io/disk-api-org-name"
+                    )
+                    if pvc_project != project_name and (
+                        not pvc_org
+                        or not org_name
+                        or normalize_name(pvc_org) != normalize_name(org_name)
+                    ):
+                        missing.append(disk)
+                except (KubeClientException, KeyError):
                     missing.append(disk)
-            except (KubeClientException, KeyError):
-                missing.append(disk)
         return sorted(missing, key=lambda disk: disk.disk_id)
 
     async def get_missing_secrets(
-        self, namespace: str, secret_path: str, secret_names: list[str]
+        self, job: Job, secret_path: str, secret_names: list[str]
     ) -> list[str]:
         assert secret_names, "no sec names"
         user_secret_name = self._get_k8s_secret_name(secret_path)
-        try:
-            raw = await self._client.get_raw_secret(user_secret_name, namespace)
-            keys = raw.get("data", {}).keys()
-            missing = set(secret_names) - set(keys)
-            return sorted(missing)
-
-        except KubeClientException:
-            return secret_names
+        async with self._selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            try:
+                raw = await selector_get_raw_secret(kube_client, user_secret_name)
+                keys = raw.get("data", {}).keys()
+                missing = set(secret_names) - set(keys)
+                return sorted(missing)
+            except KubeClientException:
+                return secret_names
 
     def _get_service_name_for_named(self, job: Job) -> str:
         return job.host_segment_named
@@ -500,37 +523,31 @@ class KubeOrchestrator(Orchestrator):
         """
         tolerate_unreachable_node: used only in tests
         """
-        assert job.org_name is not None, "org_name is required"
-        await create_namespace(
-            self._client,
-            org_name=job.org_name,
-            project_name=job.project_name,
-        )
         await self._create_docker_secret(job)
-
         try:
             descriptor = self._create_pod_descriptor(
                 job, tolerate_unreachable_node=tolerate_unreachable_node
             )
-            pod = await self._client.create_pod(job.namespace, descriptor)
+            # Use the new KubeClientSelector for pod creation
+            assert job.org_name is not None
+            async with self._selector.get_client(
+                org_name=job.org_name, project_name=job.project_name
+            ) as client_proxy:
+                pod = await create_pod(client_proxy, descriptor)
 
             logger.info("Starting Service for %s.", job.id)
-            service = await self._create_service(job.namespace, descriptor)
+            service = await self._create_service(descriptor)
             if job.is_named:
                 # If an old job finished recently, its pod can be still there
                 #  with the corresponding service,
                 #  so we should delete it here
                 service_name = self._get_service_name_for_named(job)
-                await self._delete_service(
-                    job.namespace, service_name, ignore_missing=True
-                )
-                await self._create_service(job.namespace, descriptor, name=service_name)
+                await self._delete_service(job, service_name, ignore_missing=True)
+                await self._create_service(descriptor, name=service_name)
 
             if job.has_http_server_exposed:
                 logger.info("Starting Ingress for %s", job.id)
                 await self._create_ingress(job, service)
-        except ResourceExists as e:
-            raise JobAlreadyExistsException(str(e))
         except Exception as e:
             logger.exception("unhandled error")
             raise e
@@ -677,7 +694,8 @@ class KubeOrchestrator(Orchestrator):
         try:
             port = int(job.env.get("EXTERNAL_JOB_RUNNER_PORT", 8080))
             status_url = f"http://{job.internal_hostname}:{port}/api/v1/status"
-            resp = await self._client.get(status_url, raise_for_status=True)
+            response = await self._http.get(status_url, raise_for_status=True)
+            resp = await response.json()
             return JobStatusItem.create(
                 JobStatus(resp["status"]),
                 transition_time=now,
@@ -718,10 +736,11 @@ class KubeOrchestrator(Orchestrator):
         # -- we will check for FailedAttachVolume event.
         now = datetime.now(UTC)
         assert pod.created_at is not None
-        pod_events = await self._client.get_pod_events(
-            self._get_job_pod_name(job),
-            job.namespace,
-        )
+        async with self._selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            pod_events = await get_pod_events(kube_client, self._get_job_pod_name(job))
 
         if pod_status.is_scheduled:
             if pod_events:
@@ -810,39 +829,42 @@ class KubeOrchestrator(Orchestrator):
         if do_recreate_pod:
             logger.info("Recreating preempted pod '%s'. Job '%s'", pod_name, job.id)
             descriptor = self._create_pod_descriptor(job)
-            try:
-                pod = await create_pod(client_proxy, descriptor)
-            except JobError:
-                # handling possible 422 and other failures
-                raise JobNotFoundException(
-                    f"Pod '{pod_name}' not found. Job '{job.id}'"
-                )
+            pod = await create_pod(client_proxy, descriptor)
 
         return pod
 
     async def _create_service(
-        self, namespace: str, pod: PodDescriptor, name: str | None = None
+        self, pod: PodDescriptor, name: str | None = None
     ) -> Service:
-        service = Service.create_headless_for_pod(namespace, pod)
-        if name is not None:
-            service = service.make_named(name)
-        return await self._client.create_service(namespace, service)
+        org_name = pod.labels[APOLO_ORG_LABEL_KEY]
+        project_name = pod.labels[APOLO_PROJECT_LABEL_KEY]
+        async with self._selector.get_client(
+            org_name=org_name, project_name=project_name
+        ) as client_proxy:
+            service = Service.create_headless_for_pod(client_proxy._namespace, pod)
+            if name is not None:
+                service = service.make_named(name)
+            return await selector_create_service(client_proxy, service)
 
     async def _get_services(self, job: Job) -> list[Service]:
-        return await self._client.list_services(
-            job.namespace, self._get_job_labels(job)
-        )
+        async with self._selector.get_client(
+            org_name=job.org_name, project_name=job.project_name
+        ) as client_proxy:
+            return await selector_list_services(client_proxy, self._get_job_labels(job))
 
     async def _delete_service(
         self,
-        namespace: str,
+        job: Job,
         name: str,
         *,
         uid: str | None = None,
         ignore_missing: bool = False,
     ) -> None:
         try:
-            await self._client.delete_service(namespace=namespace, name=name, uid=uid)
+            async with self._selector.get_client(
+                org_name=job.org_name, project_name=job.project_name
+            ) as client_proxy:
+                await selector_delete_service(client_proxy, name=name, uid=uid)
         except ResourceNotFound:
             if ignore_missing:
                 return
@@ -857,11 +879,19 @@ class KubeOrchestrator(Orchestrator):
 
         for service in await self._get_services(job):
             await self._delete_service(
-                job.namespace, service.name, uid=service.uid, ignore_missing=True
+                job,
+                service.name,
+                uid=service.uid,
+                ignore_missing=True,
             )
 
         pod_id = self._get_job_pod_name(job)
-        status = await self._client.delete_pod(job.namespace, pod_id)
+        # Use the selector to delete the pod
+        assert job.org_name is not None
+        async with self._selector.get_client(
+            org_name=job.org_name, project_name=job.project_name
+        ) as client_proxy:
+            status = await delete_pod(client_proxy, pod_id)
         return convert_pod_status_to_job_status(status).status
 
     def _get_job_ingress_name(self, job: Job) -> str:
@@ -900,7 +930,10 @@ class KubeOrchestrator(Orchestrator):
     async def _delete_ingresses_by_job_name(self, job: Job, service: Service) -> None:
         labels = self._get_job_name_ingress_labels(job, service)
         try:
-            await self._client.delete_all_ingresses(job.namespace, labels=labels)
+            async with self._selector.get_client(
+                org_name=job.org_name, project_name=job.project_name
+            ) as client_proxy:
+                await selector_delete_all_ingresses(client_proxy, labels=labels)
         except Exception as e:
             logger.warning("Failed to remove ingresses %s: %s", labels, e)
 
@@ -914,19 +947,25 @@ class KubeOrchestrator(Orchestrator):
         ]
         labels = self._get_ingress_labels(job, service)
         annotations = self._get_ingress_annotations(job)
-        await self._client.create_ingress(
-            name,
-            job.namespace,
+        ingress = Ingress(
+            name=name,
             ingress_class=self._kube_config.jobs_ingress_class,
             rules=rules,
             annotations=annotations,
             labels=labels,
         )
+        async with self._selector.get_client(
+            org_name=job.org_name, project_name=job.project_name
+        ) as client_proxy:
+            await selector_create_ingress(client_proxy, ingress)
 
     async def _delete_ingress(self, job: Job) -> None:
         name = self._get_job_ingress_name(job)
         try:
-            await self._client.delete_ingress(job.namespace, name)
+            async with self._selector.get_client(
+                org_name=job.org_name, project_name=job.project_name
+            ) as client_proxy:
+                await selector_delete_ingress(client_proxy, name)
         except Exception as e:
             logger.warning("Failed to remove ingress %s: %s", name, e)
 

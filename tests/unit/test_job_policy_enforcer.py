@@ -238,10 +238,8 @@ class TestHasCreditsEnforcer:
         jobs_service: JobsService,
         job_request_factory: Callable[[], JobRequest],
         test_project: str,
-    ) -> Callable[[AuthUser, str | None, int], Awaitable[list[Job]]]:
-        async def _make_jobs(
-            user: AuthUser, org_name: str | None, count: int
-        ) -> list[Job]:
+    ) -> Callable[[AuthUser, str, int], Awaitable[list[Job]]]:
+        async def _make_jobs(user: AuthUser, org_name: str, count: int) -> list[Job]:
             return [
                 (
                     await jobs_service.create_job(

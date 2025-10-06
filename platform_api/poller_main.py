@@ -2,11 +2,13 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack
+from dataclasses import asdict
 
 import aiohttp.web
 import neuro_config_client
 from aiohttp.web_urldispatcher import AbstractRoute
 from apolo_events_client import from_config as create_events_client_from_config
+from apolo_kube_client import KubeClientSelector, KubeConfig as ApoloKubeConfig
 from neuro_admin_client import AdminClient
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
@@ -42,11 +44,15 @@ def create_cluster_factory(
     config: PollerConfig, kube_client: KubeClient
 ) -> Callable[[neuro_config_client.Cluster], Cluster]:
     def _create_cluster(cluster_config: neuro_config_client.Cluster) -> Cluster:
+        selector = KubeClientSelector(
+            config=ApoloKubeConfig(**asdict(config.kube_config))
+        )
         return KubeCluster(
             kube_client=kube_client,
             kube_config=config.kube_config,
             registry_config=config.registry_config,
             cluster_config=cluster_config,
+            kube_client_selector=selector,
         )
 
     return _create_cluster

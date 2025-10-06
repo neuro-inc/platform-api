@@ -7,7 +7,6 @@ from typing import Any
 
 from .kube_client import (
     EventHandler,
-    KubeClient,
     KubePreemption,
     Node,
     NodeResources,
@@ -228,11 +227,9 @@ class KubeOrchestratorScheduler:
 class KubeOrchestratorPreemption:
     def __init__(
         self,
-        kube_client: KubeClient,
         nodes_handler: NodesHandler,
         node_resources_handler: NodeResourcesHandler,
     ) -> None:
-        self._kube_client = kube_client
         self._kube_preemption = KubePreemption()
         self._nodes_handler = nodes_handler
         self._node_resources_handler = node_resources_handler

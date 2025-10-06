@@ -5,7 +5,13 @@ import json
 import logging
 from asyncio import timeout
 from base64 import b64encode
-from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from collections.abc import (
+    AsyncIterator,
+    Callable,
+    Coroutine,
+    Mapping,
+    Sequence,
+)
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -15,8 +21,14 @@ from typing import Any, ClassVar, NoReturn, Optional, Self
 
 import aiohttp
 import iso8601
-from apolo_kube_client import KubeClientProxy
-from kubernetes.client.model import (
+from apolo_kube_client import (
+    KubeClientProxy,
+    ResourceExists as ApoloResourceExists,
+    ResourceInvalid,
+    ResourceNotFound as ApoloResourceNotFound,
+)
+from kubernetes.client import CoreV1Event
+from kubernetes.client.models import (
     V1Affinity,
     V1Container,
     V1ContainerPort,
@@ -25,12 +37,22 @@ from kubernetes.client.model import (
     V1EnvVar,
     V1EnvVarSource,
     V1HTTPGetAction,
+    V1HTTPIngressPath,
+    V1HTTPIngressRuleValue,
+    V1Ingress,
+    V1IngressBackend,
+    V1IngressRule,
+    V1IngressServiceBackend,
+    V1IngressSpec,
     V1LabelSelector,
     V1LabelSelectorRequirement,
     V1LocalObjectReference,
     V1NodeAffinity,
     V1NodeSelector,
+    V1NodeSelectorRequirement,
+    V1NodeSelectorTerm,
     V1ObjectMeta,
+    V1PersistentVolumeClaimVolumeSource,
     V1Pod,
     V1PodAffinity,
     V1PodAffinityTerm,
@@ -40,8 +62,14 @@ from kubernetes.client.model import (
     V1PreferredSchedulingTerm,
     V1Probe,
     V1ResourceRequirements,
+    V1Secret,
     V1SecretKeySelector,
+    V1SecretVolumeSource,
     V1SecurityContext,
+    V1Service,
+    V1ServiceBackendPort,
+    V1ServicePort,
+    V1ServiceSpec,
     V1Toleration,
     V1Volume,
     V1VolumeMount,
@@ -64,6 +92,7 @@ from .job_request import (
     ContainerTPUResource,
     ContainerVolume,
     DiskContainerVolume,
+    JobAlreadyExistsException,
     JobError,
     JobNotFoundException,
     JobRequest,
@@ -274,6 +303,14 @@ class SecretVolume(Volume):
             "secret": {"secretName": self.k8s_secret_name, "defaultMode": 0o400},
         }
 
+    def to_model(self) -> V1Volume:
+        return V1Volume(
+            name=self.name,
+            secret=V1SecretVolumeSource(
+                secret_name=self.k8s_secret_name, default_mode=0o400
+            ),
+        )
+
 
 @dataclass(frozen=True)
 class PVCDiskVolume(Volume):
@@ -291,6 +328,14 @@ class PVCDiskVolume(Volume):
             "name": self.name,
             "persistentVolumeClaim": {"claimName": self.claim_name},
         }
+
+    def to_model(self) -> V1Volume:
+        return V1Volume(
+            name=self.name,
+            persistent_volume_claim=V1PersistentVolumeClaimVolumeSource(
+                claim_name=self.claim_name
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -549,6 +594,24 @@ class Service:
         )
         return service_descriptor
 
+    def to_model(self) -> V1Service:
+        ports: list[V1ServicePort] = []
+        if self.target_port:
+            ports.append(
+                V1ServicePort(name="http", port=self.port, target_port=self.target_port)
+            )
+        spec = V1ServiceSpec(
+            type=self.service_type.value,
+            selector=self.selector or None,
+            ports=ports or None,
+        )
+        if self.cluster_ip is not None:
+            spec.cluster_ip = self.cluster_ip
+        metadata = V1ObjectMeta(name=self.name, namespace=self.namespace)
+        if self.labels:
+            metadata.labels = self.labels.copy()
+        return V1Service(metadata=metadata, spec=spec)
+
     @classmethod
     def create_for_pod(cls, namespace: str, pod: "PodDescriptor") -> "Service":
         return cls(
@@ -597,6 +660,35 @@ class Service:
             service_type=ServiceType(service_type),
             cluster_ip=payload["spec"].get("clusterIP"),
             labels=payload["metadata"].get("labels", {}),
+        )
+
+    @classmethod
+    def from_model(cls, model: V1Service) -> "Service":
+        spec = model.spec or V1ServiceSpec()
+        http_port: V1ServicePort | None = None
+        for p in spec.ports or []:
+            if p.name == "http":
+                http_port = p
+                break
+        target_port: int | None = None
+        if http_port is not None:
+            tp = http_port.target_port
+            if isinstance(tp, int):
+                target_port = tp
+        return cls(
+            namespace=(model.metadata.namespace if model.metadata else "default"),
+            name=(model.metadata.name if model.metadata else ""),
+            uid=(model.metadata.uid if model.metadata else None),
+            selector=(spec.selector or {}),
+            target_port=target_port,
+            port=(http_port.port if http_port and http_port.port else Service.port),
+            service_type=ServiceType(spec.type or Service.service_type.value),
+            cluster_ip=spec.cluster_ip,
+            labels=(
+                model.metadata.labels
+                if model.metadata and model.metadata.labels
+                else {}
+            ),
         )
 
 
@@ -669,6 +761,24 @@ class IngressRule:
     def from_service(cls, host: str, service: Service) -> "IngressRule":
         return cls(host=host, service_name=service.name, service_port=service.port)
 
+    def to_model(self) -> V1IngressRule:
+        http_rule = None
+        if self.service_name and self.service_port:
+            http_rule = V1HTTPIngressRuleValue(
+                paths=[
+                    V1HTTPIngressPath(
+                        path_type="ImplementationSpecific",
+                        backend=V1IngressBackend(
+                            service=V1IngressServiceBackend(
+                                name=self.service_name,
+                                port=V1ServiceBackendPort(number=self.service_port),
+                            )
+                        ),
+                    )
+                ]
+            )
+        return V1IngressRule(host=self.host, http=http_rule)
+
 
 @dataclass(frozen=True)
 class Ingress:
@@ -705,6 +815,20 @@ class Ingress:
             metadata["labels"] = self.labels.copy()
         return primitive
 
+    def to_model(self) -> V1Ingress:
+        spec = V1IngressSpec()
+        annotations = self.annotations.copy()
+        if self.ingress_class:
+            spec.ingress_class_name = self.ingress_class
+            annotations.pop(
+                "kubernetes.io/ingress.class", None
+            )  # deprecated and has conflict with ingressClassName
+        metadata = V1ObjectMeta(name=self.name, annotations=annotations)
+        if self.labels:
+            metadata.labels = self.labels.copy()
+        spec.rules = [rule.to_model() for rule in self.rules] or None
+        return V1Ingress(metadata=metadata, spec=spec)
+
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "Ingress":
         if payload["apiVersion"] == GroupVersion.NETWORKING_V1:
@@ -740,6 +864,38 @@ class Ingress:
             rules=rules,
             annotations=annotations,
             labels=metadata.get("labels", {}),
+        )
+
+    @classmethod
+    def from_model(cls, model: V1Ingress) -> "Ingress":
+        metadata = model.metadata or V1ObjectMeta()
+        spec = model.spec or V1IngressSpec()
+        rules = []
+        for r in spec.rules or []:
+            host = r.host or ""
+            service_name = None
+            service_port = None
+            if r.http and r.http.paths:
+                path0 = r.http.paths[0]
+                if path0 and path0.backend and path0.backend.service:
+                    service_name = path0.backend.service.name
+                    port = path0.backend.service.port
+                    if port and port.number is not None:
+                        service_port = port.number
+            rules.append(
+                IngressRule(
+                    host=host, service_name=service_name, service_port=service_port
+                )
+            )
+        return cls(
+            name=metadata.name or "",
+            ingress_class=(
+                spec.ingress_class_name
+                or (metadata.annotations or {}).get("kubernetes.io/ingress.class")
+            ),
+            rules=rules,
+            annotations=(metadata.annotations or {}),
+            labels=(metadata.labels or {}),
         )
 
     def find_rule_index_by_host(self, host: str) -> int:
@@ -790,6 +946,13 @@ class DockerRegistrySecret:
             "data": {".dockerconfigjson": self._build_json()},
             "type": self.type,
         }
+
+    def to_model(self) -> V1Secret:
+        metadata = V1ObjectMeta(name=self.name, namespace=self.namespace)
+        secret = V1Secret(metadata=metadata, type=self.type)
+        # The client library expects .data as dict[str, str] base64 values
+        secret.data = {".dockerconfigjson": self._build_json()}
+        return secret
 
 
 @dataclass(frozen=True)
@@ -916,6 +1079,12 @@ class LabelSelectorMatchExpression:
             ret.values = self.values.copy()
         return ret
 
+    def to_node_requirement(self) -> V1NodeSelectorRequirement:
+        ret = V1NodeSelectorRequirement(key=self.key, operator=self.operator.value)
+        if self.values:
+            ret.values = self.values.copy()
+        return ret
+
 
 @dataclass(frozen=True)
 class LabelSelectorTerm:
@@ -938,6 +1107,13 @@ class LabelSelectorTerm:
             match_expressions=[expr.to_model() for expr in self.match_expressions]
         )
 
+    def to_node_selector_term(self) -> V1NodeSelectorTerm:
+        return V1NodeSelectorTerm(
+            match_expressions=[
+                expr.to_node_requirement() for expr in self.match_expressions
+            ]
+        )
+
 
 @dataclass(frozen=True)
 class NodePreferredSchedulingTerm:
@@ -949,7 +1125,7 @@ class NodePreferredSchedulingTerm:
 
     def to_model(self) -> V1PreferredSchedulingTerm:
         return V1PreferredSchedulingTerm(
-            preference=self.preference.to_model(), weight=self.weight
+            preference=self.preference.to_node_selector_term(), weight=self.weight
         )
 
 
@@ -981,7 +1157,9 @@ class NodeAffinity:
         ret = V1NodeAffinity()
         if self.required:
             ret.required_during_scheduling_ignored_during_execution = V1NodeSelector(
-                node_selector_terms=[term.to_model() for term in self.required]
+                node_selector_terms=[
+                    term.to_node_selector_term() for term in self.required
+                ]
             )
         if self.preferred:
             ret.preferred_during_scheduling_ignored_during_execution = [
@@ -1267,7 +1445,7 @@ class PodDescriptor:
             image=f"{self.image}",
             image_pull_policy="Always",
             env=env_list,
-            volumeMounts=volume_mounts,
+            volume_mounts=volume_mounts,
             termination_message_policy="FallbackToLogsOnError",
         )
         if self.command:
@@ -1294,13 +1472,13 @@ class PodDescriptor:
 
         model = V1Pod(
             kind="Pod",
-            apiVersion="v1",
+            api_version="v1",
             metadata=V1ObjectMeta(name=self.name),
             spec=V1PodSpec(
                 automount_service_account_token=False,
                 containers=[container],
                 volumes=volumes,
-                restartPolicy=str(self.restart_policy),
+                restart_policy=str(self.restart_policy),
                 image_pull_secrets=[
                     secret.to_model() for secret in self.image_pull_secrets
                 ],
@@ -1487,10 +1665,6 @@ class PodDescriptor:
 
     @classmethod
     def from_model(cls, model: V1Pod) -> "PodDescriptor":
-        # AS: not sure if we should check kind here,
-        # maybe model constructor raise and exception for us?
-        # cls._assert_resource_kind(expected_kind="Pod", payload=payload)
-
         metadata = model.metadata
         container = model.spec.containers[0]
         # TODO (R Zubairov 09/13/18): remove medium emptyDir
@@ -1515,7 +1689,7 @@ class PodDescriptor:
         ]
         return cls(
             name=metadata.name,
-            created_at=iso8601.parse_date(metadata.creation_timestamp),
+            created_at=metadata.creation_timestamp,
             image=container.image,
             status=status,
             image_pull_secrets=secrets,
@@ -1549,11 +1723,17 @@ class ContainerStatus:
 
     @property
     def is_waiting(self) -> bool:
-        return not self._state or "waiting" in self._state
+        return not self._state or (
+            "waiting" in self._state and self._state["waiting"] is not None
+        )
 
     @property
     def is_terminated(self) -> bool:
-        return bool(self._state) and "terminated" in self._state
+        return (
+            bool(self._state)
+            and "terminated" in self._state
+            and self._state["terminated"] is not None
+        )
 
     @property
     def reason(self) -> str | None:
@@ -1577,19 +1757,27 @@ class ContainerStatus:
         https://github.com/kubernetes/kubernetes/blob/c65f65cf6aea0f73115a2858a9d63fc2c21e5e3b/pkg/kubelet/dockershim/docker_container.go#L306-L409
         """
         for state in self._state.values():
+            if not state:
+                continue
             return state.get("reason")
         return None
 
     @property
     def message(self) -> str | None:
         for state in self._state.values():
+            if not state:
+                continue
             return state.get("message")
         return None
 
     @property
     def exit_code(self) -> int | None:
         assert self.is_terminated
-        return self._state["terminated"]["exitCode"]
+        termination_state = self._state["terminated"]
+        for key in ("exitCode", "exit_code"):
+            if key in termination_state:
+                return termination_state[key]
+        return None
 
     @property
     def is_creating(self) -> bool:
@@ -1618,93 +1806,142 @@ class PodConditionType(enum.Enum):
 class PodCondition:
     # https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-conditions
 
-    def __init__(self, payload: dict[str, Any]) -> None:
-        self._payload = payload
-
-    @property
-    def transition_time(self) -> datetime:
-        return iso8601.parse_date(self._payload["lastTransitionTime"])
-
-    @property
-    def reason(self) -> str:
-        return self._payload.get("reason", "")
-
-    @property
-    def message(self) -> str:
-        return self._payload.get("message", "")
-
-    @property
-    def status(self) -> bool | None:
-        val = self._payload["status"]
-        if val == "Unknown":
-            return None
-        if val == "True":
-            return True
-        if val == "False":
-            return False
-        raise ValueError(f"Invalid status {val!r}")
-
-    @property
-    def type(self) -> PodConditionType:
-        try:
-            return PodConditionType(self._payload["type"])
-        except (KeyError, ValueError):
-            return PodConditionType.UNKNOWN
+    def __init__(
+        self,
+        last_transition_time: datetime,
+        reason: str,
+        message: str,
+        status: bool | None,
+        type: PodConditionType,
+    ) -> None:
+        self.transition_time = last_transition_time
+        self.reason = reason
+        self.message = message
+        self.status = status
+        self.type = type
 
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> Self:
-        return cls(payload)
+        if "lastTransitionTime" in payload:
+            last_transition_time = iso8601.parse_date(payload["lastTransitionTime"])
+        else:
+            last_transition_time = payload["last_transition_time"]
+
+        raw_status = payload["status"]
+
+        match raw_status:
+            case "Unknown":
+                status = None
+            case "True":
+                status = True
+            case "False":
+                status = False
+            case _:
+                raise ValueError(f"Invalid status {raw_status!r}")
+
+        try:
+            type = PodConditionType(payload["type"])
+        except (KeyError, ValueError):
+            type = PodConditionType.UNKNOWN
+
+        return cls(
+            last_transition_time=last_transition_time,
+            reason=payload.get("reason", ""),
+            message=payload.get("message", ""),
+            status=status,
+            type=type,
+        )
 
     @classmethod
     def from_model(cls, model: V1PodCondition) -> Self:
-        return cls(model.to_dict())
+        match model.status:
+            case "Unknown":
+                status = None
+            case "True":
+                status = True
+            case "False":
+                status = False
+            case _:
+                raise ValueError(f"Invalid status {model.status!r}")
+        try:
+            type = PodConditionType(model.type)
+        except (KeyError, ValueError):
+            type = PodConditionType.UNKNOWN
+        return cls(
+            last_transition_time=model.last_transition_time,
+            reason=model.reason or "",
+            message=model.message or "",
+            status=status,
+            type=type,
+        )
 
 
 class KubernetesEvent:
-    def __init__(self, payload: dict[str, Any]) -> None:
-        self._payload = payload or {}
+    def __init__(
+        self,
+        involved_object: dict[str, str],
+        count: int,
+        reason: str | None,
+        message: str | None,
+        creation_timestamp: datetime,
+        first_timestamp: datetime | None,
+        event_time: datetime | None,
+        last_timestamp: datetime | None,
+    ) -> None:
+        self.involved_object = involved_object
+        self.creation_timestamp = creation_timestamp
+        self.count = count
+        self.reason = reason
+        self.message = message
+        self.first_timestamp = first_timestamp
+        self.event_time = event_time
+        self.last_timestamp = last_timestamp
 
-    @property
-    def involved_object(self) -> dict[str, str]:
-        return self._payload["involvedObject"]
+    @classmethod
+    def from_primitive(cls, payload: dict[str, Any]) -> Self:
+        first_timestamp = last_timestamp = event_time = None
 
-    @property
-    def reason(self) -> str | None:
-        return self._payload.get("reason", None)
-
-    @property
-    def message(self) -> str | None:
-        return self._payload.get("message", None)
-
-    @property
-    def first_timestamp(self) -> datetime | None:
-        event_time = self._payload.get("firstTimestamp") or self._payload.get(
+        raw_first_timestamp = payload.get("firstTimestamp") or payload.get(
             "deprecatedFirstTimestamp"
         )
-        if event_time:
-            return iso8601.parse_date(event_time)
-        return None
+        if raw_first_timestamp:
+            first_timestamp = iso8601.parse_date(raw_first_timestamp)
 
-    @property
-    def event_time(self) -> datetime | None:
-        event_time = self._payload.get("eventTime")
-        if event_time:
-            return iso8601.parse_date(event_time)
-        return None
-
-    @property
-    def last_timestamp(self) -> datetime | None:
-        event_time = self._payload.get("lastTimestamp") or self._payload.get(
+        raw_last_timestamp = payload.get("lastTimestamp") or payload.get(
             "deprecatedLastTimestamp"
         )
-        if event_time:
-            return iso8601.parse_date(event_time)
-        return None
+        if raw_last_timestamp:
+            last_timestamp = iso8601.parse_date(raw_last_timestamp)
 
-    @property
-    def creation_timestamp(self) -> datetime:
-        event_time = self._payload["metadata"]["lastTimestamp"]
-        return iso8601.parse_date(event_time)
+        raw_event_time = payload.get("eventTime")
+        if raw_event_time:
+            event_time = iso8601.parse_date(raw_event_time)
+
+        return cls(
+            involved_object=payload["involvedObject"],
+            count=payload["count"],
+            reason=payload.get("reason", None),
+            message=payload.get("message", None),
+            creation_timestamp=iso8601.parse_date(
+                payload["metadata"]["creationTimestamp"]
+            ),
+            first_timestamp=first_timestamp,
+            event_time=event_time,
+            last_timestamp=last_timestamp,
+        )
+
+    @classmethod
+    def from_model(cls, event: CoreV1Event) -> Self:
+        return cls(
+            involved_object=event.involved_object,
+            count=event.count,
+            reason=event.reason,
+            message=event.message,
+            creation_timestamp=event.metadata.creation_timestamp,
+            first_timestamp=event.first_timestamp,
+            event_time=event.event_time,
+            last_timestamp=event.last_timestamp,
+        )
 
     @property
     def timestamp(self) -> datetime:
@@ -1714,10 +1951,6 @@ class KubernetesEvent:
             or self.first_timestamp
             or self.creation_timestamp
         )
-
-    @property
-    def count(self) -> int:
-        return self._payload["count"]
 
 
 class PodStatus:
@@ -1778,7 +2011,9 @@ class PodStatus:
         https://github.com/kubernetes/kubernetes/blob/a3ccea9d8743f2ff82e41b6c2af6dc2c41dc7b10/pkg/controller/util/node/controller_utils.go#L109-L126
         """
         # the pod status reason has a greater priority
-        return self._reason or self.container_status.reason
+        return self._reason or (
+            self.container_status.reason if self.container_status else None
+        )
 
     @property
     def container_status(self) -> ContainerStatus:
@@ -1798,11 +2033,15 @@ class PodStatus:
 
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> "PodStatus":
+        if "containerStatuses" in payload and payload["containerStatuses"]:
+            container_statuses = tuple(
+                ContainerStatus.from_primitive(s) for s in payload["containerStatuses"]
+            )
+        else:
+            container_statuses = (ContainerStatus(),)
         return cls(
             phase=payload["phase"],
-            container_statuses=tuple(
-                ContainerStatus.from_primitive(s) for s in payload["containerStatuses"]
-            ),
+            container_statuses=container_statuses,
             reason=payload.get("reason"),
             conditions=[
                 PodCondition.from_primitive(c) for c in payload.get("conditions", [])
@@ -1811,11 +2050,15 @@ class PodStatus:
 
     @classmethod
     def from_model(cls, model: V1PodStatus) -> "PodStatus":
+        if model.container_statuses:
+            container_statuses = tuple(
+                ContainerStatus.from_model(s) for s in model.container_statuses or []
+            )
+        else:
+            container_statuses = (ContainerStatus(),)
         return cls(
             phase=model.phase,
-            container_statuses=tuple(
-                ContainerStatus.from_model(s) for s in model.container_statuses
-            ),
+            container_statuses=container_statuses,
             reason=model.reason,
             conditions=[PodCondition.from_model(c) for c in model.conditions or []],
         )
@@ -2240,12 +2483,6 @@ class KubeClient(ApoloKubeClient):
             # different UID, see https://github.com/neuro-inc/platform-api/pull/1525
             raise ResourceNotFound(str(e))
 
-    async def get_endpoint(
-        self, name: str, namespace: str | None = None
-    ) -> dict[str, Any]:
-        url = self._generate_endpoint_url(name, namespace or self._namespace)
-        return await self.get(url=url)
-
     async def create_node(
         self,
         name: str,
@@ -2380,15 +2617,6 @@ class KubeClient(ApoloKubeClient):
         pod = PodDescriptor.from_primitive(payload)
         return pod.status  # type: ignore
 
-    async def delete_all_pods(self, namespace: str, *, labels: dict[str, str]) -> None:
-        url = self._generate_pods_url(namespace)
-        params: dict[str, str] = {}
-        if labels:
-            params["labelSelector"] = ",".join(
-                "=".join(item) for item in labels.items()
-            )
-        await self.delete(url=url, params=params)
-
     async def create_ingress(
         self,
         name: str,
@@ -2422,52 +2650,9 @@ class KubeClient(ApoloKubeClient):
         payload = await self.get(url=url)
         return Ingress.from_primitive(payload)
 
-    async def delete_all_ingresses(
-        self, namespace: str, *, labels: dict[str, str] | None = None
-    ) -> None:
-        params: dict[str, str] = {}
-        if labels:
-            params["labelSelector"] = ",".join(
-                "=".join(item) for item in labels.items()
-            )
-        url = self._generate_ingresses_url(namespace)
-        await self.delete(url=url, params=params)
-
     async def delete_ingress(self, namespace: str, name: str) -> None:
         url = self._generate_ingress_url(namespace, name)
         await self.delete(url=url)
-
-    async def add_ingress_rule(
-        self, namespace: str, name: str, rule: IngressRule
-    ) -> Ingress:
-        # TODO (A Danshyn 06/13/18): test if does not exist already
-        url = self._generate_ingress_url(namespace, name)
-        headers = {"Content-Type": "application/json-patch+json"}
-        if self._api_resources.has_networking_v1_ingress:
-            rule_payload = rule.to_v1_primitive()
-        else:
-            rule_payload = rule.to_v1beta1_primitive()
-        patches = [{"op": "add", "path": "/spec/rules/-", "value": rule_payload}]
-        payload = await self.patch(url=url, headers=headers, json=patches)
-        return Ingress.from_primitive(payload)
-
-    async def remove_ingress_rule(
-        self, namespace: str, name: str, host: str
-    ) -> Ingress:
-        # TODO (A Danshyn 06/13/18): this one should have a retry in case of
-        # a race condition
-        ingress = await self.get_ingress(namespace, name)
-        rule_index = ingress.find_rule_index_by_host(host)
-        if rule_index < 0:
-            raise KubeClientException("NotFound")
-        url = self._generate_ingress_url(namespace, name)
-        rule = [
-            {"op": "test", "path": f"/spec/rules/{rule_index}/host", "value": host},
-            {"op": "remove", "path": f"/spec/rules/{rule_index}"},
-        ]
-        headers = {"Content-Type": "application/json-patch+json"}
-        payload = await self.patch(url=url, headers=headers, json=rule)
-        return Ingress.from_primitive(payload)
 
     async def create_service(self, namespace: str, service: Service) -> Service:
         url = self._generate_services_url(namespace)
@@ -2492,17 +2677,6 @@ class KubeClient(ApoloKubeClient):
     ) -> None:
         url = self._generate_service_url(namespace, name)
         await self._delete_resource_url(url, uid)
-
-    async def delete_all_services(
-        self, namespace: str, *, labels: dict[str, str] | None = None
-    ) -> None:
-        url = self._generate_services_url(namespace)
-        params: dict[str, str] = {}
-        if labels:
-            params["labelSelector"] = ",".join(
-                "=".join(item) for item in labels.items()
-            )
-        await self.delete(url=url, params=params)
 
     async def create_docker_secret(self, secret: DockerRegistrySecret) -> None:
         url = self._generate_all_secrets_url(secret.namespace)
@@ -2532,12 +2706,6 @@ class KubeClient(ApoloKubeClient):
         url = self._generate_secret_url(secret_name, namespace_name)
         await self._delete_resource_url(url)
 
-    async def get_raw_pvc(
-        self, pvc_name: str, namespace_name: str | None = None
-    ) -> dict[str, Any]:
-        url = self._generate_pvc_url(pvc_name, namespace_name)
-        return await self.get(url=url)
-
     async def get_pod_events(
         self, pod_id: str, namespace: str
     ) -> list[KubernetesEvent]:
@@ -2550,7 +2718,9 @@ class KubeClient(ApoloKubeClient):
         }
         url = f"{self.api_v1_url}/namespaces/{namespace}/events"
         payload = await self.get(url=url, params=params)
-        return [KubernetesEvent(item) for item in payload.get("items", [])]
+        return [
+            KubernetesEvent.from_primitive(item) for item in payload.get("items", [])
+        ]
 
     async def wait_pod_is_running(
         self,
@@ -2623,112 +2793,6 @@ class KubeClient(ApoloKubeClient):
                     await asyncio.sleep(interval_s)
                 except JobNotFoundException:
                     return
-
-    async def create_default_network_policy(
-        self,
-        namespace: str,
-        name: str,
-        pod_labels: dict[str, str],
-        org_project_labels: dict[str, str],
-    ) -> dict[str, Any]:
-        assert pod_labels
-        # https://tools.ietf.org/html/rfc1918#section-3
-        rules: list[dict[str, Any]] = [
-            # allowing pods to connect to public networks only
-            {
-                "to": [
-                    {
-                        "ipBlock": {
-                            "cidr": "0.0.0.0/0",
-                            "except": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
-                        }
-                    }
-                ]
-            },
-            # allowing labeled pods to make DNS queries in our private
-            # networks, because pods' /etc/resolv.conf files still
-            # point to the internal DNS
-            {
-                "to": [
-                    {"ipBlock": {"cidr": "10.0.0.0/8"}},
-                    {"ipBlock": {"cidr": "172.16.0.0/12"}},
-                    {"ipBlock": {"cidr": "192.168.0.0/16"}},
-                ],
-                "ports": [
-                    {"port": 53, "protocol": "UDP"},
-                    {"port": 53, "protocol": "TCP"},
-                ],
-            },
-            {
-                "to": [
-                    # allowing labeled pods to connect to each other
-                    {"podSelector": {"matchLabels": pod_labels}},
-                    # allow connect to namespaces with same project labels
-                    {"namespaceSelector": {"matchLabels": org_project_labels}},
-                ]
-            },
-        ]
-        return await self.create_egress_network_policy(
-            namespace, name, pod_labels=pod_labels, rules=rules
-        )
-
-    async def create_egress_network_policy(
-        self,
-        namespace: str,
-        name: str,
-        *,
-        pod_labels: dict[str, str],
-        rules: list[dict[str, Any]],
-        labels: dict[str, str] | None = None,
-    ) -> dict[str, Any]:
-        assert pod_labels
-        assert rules
-        labels = labels or {}
-        request_payload = {
-            "apiVersion": "networking.k8s.io/v1",
-            "kind": "NetworkPolicy",
-            "metadata": {"name": name, "labels": labels},
-            "spec": {
-                # applying the rules below to labeled pods
-                "podSelector": {"matchLabels": pod_labels},
-                "policyTypes": ["Egress"],
-                "egress": rules,
-            },
-        }
-        url = self.generate_network_policy_url(namespace)
-        return await self.post(url=url, json=request_payload)
-
-    async def get_network_policy(
-        self,
-        namespace: str,
-        name: str,
-    ) -> dict[str, Any]:
-        url = self._generate_network_policy_url(name, namespace)
-        return await self.get(url=url)
-
-    async def delete_network_policy(
-        self,
-        namespace: str,
-        name: str,
-    ) -> None:
-        url = self._generate_network_policy_url(name, namespace)
-        await self._delete_resource_url(url)
-
-    async def delete_all_network_policies(
-        self,
-        namespace: str,
-        *,
-        labels: dict[str, str] | None = None,
-    ) -> None:
-        params: dict[str, str] = {}
-        if labels:
-            params["labelSelector"] = ",".join(
-                "=".join(item) for item in labels.items()
-            )
-        await self.delete(
-            url=self.generate_network_policy_url(namespace),
-            params=params,
-        )
 
 
 class EventHandler:
@@ -2948,10 +3012,21 @@ class KubePreemption:
 
 
 # New API helpers
+async def wrap_job_error(coro: Coroutine[Any, Any, V1Pod]) -> V1Pod:
+    try:
+        return await coro
+    except ApoloResourceNotFound:
+        raise JobNotFoundException("job was not found")
+    except ApoloResourceExists:
+        raise JobAlreadyExistsException("job already exists")
+    except ResourceInvalid:
+        raise JobError("cant create job")
+    except KubeClientException:
+        raise JobError("unexpected error")
 
 
 async def get_pod(client_proxy: KubeClientProxy, pod_name: str) -> PodDescriptor:
-    pod = await client_proxy.core_v1.pod.get(pod_name)
+    pod = await wrap_job_error(client_proxy.core_v1.pod.get(pod_name))
     return PodDescriptor.from_model(pod)
 
 
@@ -2959,21 +3034,23 @@ async def create_pod(
     client_proxy: KubeClientProxy, descriptor: PodDescriptor
 ) -> PodDescriptor:
     model = descriptor.to_model()
-    pod = await client_proxy.core_v1.pod.create(model)
+    pod = await wrap_job_error(client_proxy.core_v1.pod.create(model))
     return PodDescriptor.from_model(pod)
 
 
 async def delete_pod(
     client_proxy: KubeClientProxy, pod_name: str, *, force: bool = False
 ) -> PodStatus:
-    payload = None
+    payload: dict[str, Any] | None = None
     if force:
         payload = {
             "apiVersion": "v1",
             "kind": "DeleteOptions",
             "gracePeriodSeconds": 0,
         }
-    model = await client_proxy.core_v1.pod.delete(pod_name, payload=payload)
+    model = await wrap_job_error(
+        client_proxy.core_v1.pod.delete(pod_name, payload=payload)
+    )
     pod = PodDescriptor.from_model(model)
     return pod.status  # type: ignore
 
@@ -2986,3 +3063,92 @@ async def set_raw_pod_status(
     return {}
     # url = self._generate_pod_url(namespace, name) + "/status"
     # return await self.put(url=url, json=payload)
+
+
+async def create_service(client_proxy: KubeClientProxy, service: Service) -> Service:
+    model = service.to_model()
+    created = await client_proxy.core_v1.service.create(model)
+    return Service.from_model(created)
+
+
+async def get_service(client_proxy: KubeClientProxy, name: str) -> Service:
+    service = await client_proxy.core_v1.service.get(name)
+    return Service.from_model(service)
+
+
+async def list_services(
+    client_proxy: KubeClientProxy, labels: dict[str, str] | None = None
+) -> list[Service]:
+    label_selector = None
+    if labels:
+        label_selector = ",".join([f"{k}={v}" for k, v in labels.items()])
+    svc_list = await client_proxy.core_v1.service.get_list(
+        label_selector=label_selector
+    )
+    return [Service.from_model(item) for item in (svc_list.items or [])]
+
+
+async def delete_service(
+    client_proxy: KubeClientProxy,
+    name: str,
+    *,
+    uid: str | None = None,
+) -> None:
+    payload: dict[str, Any] | None = None
+    if uid:
+        payload = {"preconditions": {"uid": uid}}
+    await client_proxy.core_v1.service.delete(name, payload=payload)
+
+
+async def get_ingress(client_proxy: KubeClientProxy, ingress_name: str) -> Ingress:
+    ingress = await client_proxy.networking_k8s_io_v1.ingress.get(name=ingress_name)
+    return Ingress.from_model(ingress)
+
+
+async def create_ingress(client_proxy: KubeClientProxy, ingress: Ingress) -> Ingress:
+    model = ingress.to_model()
+    ingress = await client_proxy.networking_k8s_io_v1.ingress.create(model)
+    return Ingress.from_model(ingress)
+
+
+async def delete_ingress(client_proxy: KubeClientProxy, name: str) -> None:
+    await client_proxy.networking_k8s_io_v1.ingress.delete(name)
+
+
+async def delete_all_ingresses(
+    client_proxy: KubeClientProxy, labels: dict[str, str]
+) -> None:
+    label_selector = ",".join([f"{k}={v}" for k, v in labels.items()])
+    lst = await client_proxy.networking_k8s_io_v1.ingress.get_list(
+        label_selector=label_selector
+    )
+    for item in lst.items or []:
+        await client_proxy.networking_k8s_io_v1.ingress.delete(item.metadata.name)
+
+
+async def update_docker_secret(
+    client_proxy: KubeClientProxy, secret: DockerRegistrySecret
+) -> None:
+    model = secret.to_model()
+    await client_proxy.core_v1.secret.create_or_update(model)
+
+
+async def get_raw_secret(
+    client_proxy: KubeClientProxy, secret_name: str
+) -> dict[str, Any]:
+    secret = await client_proxy.core_v1.secret.get(secret_name)
+    return secret.to_dict()
+
+
+async def get_pod_events(
+    client_proxy: KubeClientProxy,
+    pod_id: str,
+) -> list[KubernetesEvent]:
+    events = await client_proxy.core_v1.event.get_list(
+        field_selector=(
+            "involvedObject.kind=Pod"
+            f",involvedObject.namespace={client_proxy._namespace}"
+            f",involvedObject.name={pod_id}"
+        )
+    )
+    return [KubernetesEvent.from_model(event) for event in events.items]
