@@ -34,7 +34,7 @@ class Orchestrator(AbstractAsyncContextManager[None]):
 
     @abstractmethod
     async def get_missing_secrets(
-        self, namespace: str, secret_path: str, secret_names: list[str]
+        self, job: Job, secret_path: str, secret_names: list[str]
     ) -> list[str]:
         pass
 

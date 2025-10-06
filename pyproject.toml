@@ -246,5 +246,5 @@ module = "sqlalchemy.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = "kubernetes.client.model"
+module = "kubernetes.client.*"
 ignore_missing_imports = true

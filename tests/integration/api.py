@@ -211,6 +211,7 @@ class JobsClient:
         job_id: str,
         status: str,
         interval_s: float = 0.5,
+        max_interval_s: float = 10.0,
         max_time: float = 300,
         unreachable_optimization: bool = True,
         headers: dict[str, str] | None = None,

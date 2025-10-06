@@ -2,6 +2,7 @@ import logging
 from contextlib import AsyncExitStack
 
 import neuro_config_client
+from apolo_kube_client import KubeClientSelector
 
 from .cluster import Cluster
 from .config import RegistryConfig
@@ -19,11 +20,13 @@ class KubeCluster(Cluster):
         kube_config: KubeConfig,
         registry_config: RegistryConfig,
         cluster_config: neuro_config_client.Cluster,
+        kube_client_selector: KubeClientSelector | None = None,
     ) -> None:
         self._kube_client = kube_client
         self._kube_config = kube_config
         self._registry_config = registry_config
         self._cluster_config = cluster_config
+        self._kube_client_selector = kube_client_selector
 
         self._exit_stack = AsyncExitStack()
 
@@ -49,7 +52,7 @@ class KubeCluster(Cluster):
             registry_config=self._registry_config,
             orchestrator_config=self._cluster_config.orchestrator,
             kube_config=self._kube_config,
-            kube_client=self._kube_client,
+            kube_client_selector=self._kube_client_selector,
         )
         await self._exit_stack.enter_async_context(orchestrator)
         orchestrator.subscribe_to_kube_events(kube_node_watcher, kube_pod_watcher)

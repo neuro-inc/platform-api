@@ -13,7 +13,7 @@ import aiohttp.web
 import pytest
 
 from platform_api.config import KubeConfig
-from platform_api.old_kube_client.errors import KubeClientException, ResourceExists
+from platform_api.old_kube_client.errors import KubeClientException
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
@@ -34,7 +34,6 @@ from platform_api.orchestrator.kube_client import (
 from platform_api.orchestrator.kube_config import KubeClientAuthType
 
 from .api import ApiRunner
-from .conftest import MyKubeClient
 
 PodFactory = Callable[..., Awaitable[PodDescriptor]]
 
@@ -330,106 +329,6 @@ class TestKubeClient:
         assert raw["metadata"]["namespace"] == kube_config.namespace
         assert raw["data"] == docker_secret.to_primitive()["data"]
 
-    @pytest.fixture
-    async def delete_network_policy_later(
-        self, kube_client: KubeClient
-    ) -> AsyncIterator[Callable[[str], Awaitable[None]]]:
-        names = []
-
-        async def _add_name(name: str) -> None:
-            names.append(name)
-
-        yield _add_name
-
-        for name in names:
-            try:
-                await kube_client.delete_network_policy(kube_client.namespace, name)
-            except Exception:
-                pass
-
-    async def test_create_default_network_policy(
-        self,
-        kube_config: KubeConfig,
-        kube_client: KubeClient,
-        delete_network_policy_later: Callable[[str], Awaitable[None]],
-    ) -> None:
-        name = str(uuid.uuid4())
-        await delete_network_policy_later(name)
-        payload = await kube_client.create_default_network_policy(
-            kube_client.namespace,
-            name,
-            pod_labels={"testlabel": name},
-            org_project_labels={"testlabel": name},
-        )
-
-        assert payload["metadata"]["name"] == name
-        assert len(payload["spec"]["egress"]) == 3
-        egress_via_labels = payload["spec"]["egress"][2]["to"]
-        egress_pod_selectors = egress_via_labels[0]["podSelector"]
-        egress_ns_selectors = egress_via_labels[1]["namespaceSelector"]
-        assert egress_pod_selectors == {"matchLabels": {"testlabel": name}}
-        assert egress_ns_selectors == {"matchLabels": {"testlabel": name}}
-
-    async def test_create_default_network_policy_twice(
-        self,
-        kube_config: KubeConfig,
-        kube_client: KubeClient,
-        delete_network_policy_later: Callable[[str], Awaitable[None]],
-    ) -> None:
-        name = str(uuid.uuid4())
-        await delete_network_policy_later(name)
-        payload = await kube_client.create_default_network_policy(
-            kube_client.namespace,
-            name,
-            pod_labels={"testlabel": name},
-            org_project_labels={"testlabel": name},
-        )
-        assert payload["metadata"]["name"] == name
-        with pytest.raises(ResourceExists):
-            await kube_client.create_default_network_policy(
-                kube_client.namespace,
-                name,
-                {"testlabel": name},
-                {"testlabel": name},
-            )
-
-    async def test_get_network_policy_not_found(self, kube_client: KubeClient) -> None:
-        name = str(uuid.uuid4())
-        with pytest.raises(KubeClientException, match="NotFound"):
-            await kube_client.get_network_policy(kube_client.namespace, name)
-
-    async def test_delete_network_policy_not_found(
-        self, kube_client: KubeClient
-    ) -> None:
-        name = str(uuid.uuid4())
-        with pytest.raises(KubeClientException, match="NotFound"):
-            await kube_client.delete_network_policy(kube_client.namespace, name)
-
-    async def test_get_pod_events(
-        self,
-        kube_client: MyKubeClient,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    ) -> None:
-        container = Container(
-            image="ubuntu:20.10",
-            command="true",
-            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(job_request)
-        await delete_pod_later(pod)
-        await kube_client.create_pod(kube_client.namespace, pod)
-        await kube_client.wait_pod_is_terminated(kube_client.namespace, pod.name)
-
-        events = await kube_client.get_pod_events(pod.name, kube_client.namespace)
-
-        assert events
-        for event in events:
-            involved_object = event.involved_object
-            assert involved_object["kind"] == "Pod"
-            assert involved_object["namespace"] == kube_client.namespace
-            assert involved_object["name"] == pod.name
-
     async def test_get_pod_events_empty(
         self, kube_config: KubeConfig, kube_client: KubeClient
     ) -> None:
@@ -457,6 +356,7 @@ class TestKubeClient:
         )
         pod_status = await kube_client.get_pod_status(kube_client.namespace, pod.name)
 
+        assert pod_status.container_status
         assert pod_status.container_status.exit_code != 0
 
     async def test_get_node(self, kube_client: KubeClient, kube_node: str) -> None:
@@ -549,27 +449,6 @@ class TestKubeClient:
             service = await kube_client.create_service(kube_client.namespace, service)
             await delete_service_later(service)
             return service
-
-        return _f
-
-    @pytest.fixture
-    async def create_network_policy(
-        self,
-        kube_client: KubeClient,
-        delete_network_policy_later: Callable[[str], Awaitable[None]],
-    ) -> Callable[[str], Awaitable[dict[str, Any]]]:
-        async def _f(job_id: str) -> dict[str, Any]:
-            np_name = f"networkpolicy-{uuid.uuid4().hex[:6]}"
-            labels = {"platform.neuromation.io/job": job_id}
-
-            await delete_network_policy_later(np_name)
-            return await kube_client.create_egress_network_policy(
-                kube_client.namespace,
-                np_name,
-                pod_labels=labels,
-                labels=labels,
-                rules=[{}],
-            )
 
         return _f
 

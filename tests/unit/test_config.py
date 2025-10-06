@@ -19,9 +19,7 @@ def kube_client() -> KubeClient:
 
 
 class TestSecretVolume:
-    def test_create_secret_volume(
-        self, kube_client: KubeClient, registry_config: RegistryConfig
-    ) -> None:
+    async def test_create_secret_volume(self, registry_config: RegistryConfig) -> None:
         orchestrator_config = OrchestratorConfig(
             job_hostname_template="{job_id}.testdomain",
             job_fallback_hostname="default.jobs.testdomain",
@@ -36,7 +34,6 @@ class TestSecretVolume:
             registry_config=registry_config,
             orchestrator_config=orchestrator_config,
             kube_config=kube_config,
-            kube_client=kube_client,
         )
         user_name = "test-user"
         volume = kube_orchestrator.create_secret_volume(user_name)
