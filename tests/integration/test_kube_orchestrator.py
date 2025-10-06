@@ -4175,6 +4175,26 @@ class TestExternalJobsPreemption:
         )
 
     @pytest.fixture
+    async def kube_main_node_cpu_regular_labels(
+        self,
+        kube_client: MyKubeClient,
+        kube_orchestrator: KubeOrchestrator,
+    ) -> AsyncIterator[None]:
+        assert kube_orchestrator.kube_config.node_label_node_pool
+        labels = {kube_orchestrator.kube_config.node_label_node_pool: "cpu-small"}
+        # driver=docker or driver=none
+        try:
+            node_name = "minikube"
+            await kube_client.get_node(node_name)
+        except ResourceNotFound:
+            node_name = os.uname()[1]
+        await kube_client.add_node_labels(node_name, labels=labels)
+
+        yield
+
+        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
+
+    @pytest.fixture
     async def kube_main_node_cpu_preemptible_labels(
         self,
         kube_client: MyKubeClient,
@@ -4230,17 +4250,17 @@ class TestExternalJobsPreemption:
         )
         yield node_name
 
-    @pytest.mark.skip(reason="FIXME LATER")
     async def test_job_lost_running_pod(
         self,
         kube_client: KubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        kube_main_node_cpu_regular_labels: None,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
             command="bash -c 'sleep 300'",
-            resources=ContainerResources(cpu=0.1, memory=96 * 10**6),
+            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
         )
         job = MyJob(
             orchestrator=kube_orchestrator,

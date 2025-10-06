@@ -35,7 +35,7 @@ yarl = "^1.20.1"
 python-jose = ">=3.4.0"
 apolo-kube-client = "^25.10.0"
 apolo-events-client = "25.8.0"
-neuro-config-client = "25.9.5"
+neuro-config-client = "25.10.0"
 
 [tool.poetry.scripts]
 platform-api = "platform_api.api:main"

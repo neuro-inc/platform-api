@@ -221,6 +221,11 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     nvidia_gpu=NvidiaGPU(
                         count=1, model="nvidia-gpu", memory=40 * 2**30
                     ),
+                    nvidia_migs={
+                        "1g.5gb": NvidiaGPU(
+                            count=7, model="nvidia-mig", memory=5 * 2**30
+                        )
+                    },
                     amd_gpu=AMDGPU(count=2, model="amd-gpu"),
                     intel_gpu=IntelGPU(count=3, model="intel-gpu"),
                 ),
@@ -234,6 +239,18 @@ def orchestrator_config_factory() -> Iterator[Callable[..., OrchestratorConfig]]
                     nvidia_gpu=NvidiaGPUPreset(
                         count=1, model="nvidia-tesla-k80", memory=40 * 2**30
                     ),
+                    available_resource_pool_names=["gpu"],
+                ),
+                ResourcePreset(
+                    name="nvidia-mig-small",
+                    credits_per_hour=Decimal("10"),
+                    cpu=7,
+                    memory=30720 * 10**6,
+                    nvidia_migs={
+                        "1g.5gb": NvidiaGPUPreset(
+                            count=1, model="nvidia-mig", memory=5 * 2**30
+                        )
+                    },
                     available_resource_pool_names=["gpu"],
                 ),
                 ResourcePreset(

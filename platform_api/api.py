@@ -197,6 +197,15 @@ class ConfigApiHandler:
             }
             if resource_pool_type.nvidia_gpu.memory:
                 payload["nvidia_gpu"]["memory"] = resource_pool_type.nvidia_gpu.memory
+        if resource_pool_type.nvidia_migs:
+            payload["nvidia_migs"] = {
+                key: {
+                    "count": value.count,
+                    **({"model": value.model} if value.model else {}),
+                    **({"memory": value.memory} if value.memory else {}),
+                }
+                for key, value in resource_pool_type.nvidia_migs.items()
+            }
         if resource_pool_type.amd_gpu is not None:
             payload["amd_gpu"] = {
                 "count": resource_pool_type.amd_gpu.count,
@@ -245,6 +254,15 @@ class ConfigApiHandler:
                 payload["nvidia_gpu"]["model"] = preset.nvidia_gpu.model
             if preset.nvidia_gpu.memory:
                 payload["nvidia_gpu"]["memory"] = preset.nvidia_gpu.memory
+        if preset.nvidia_migs:
+            payload["nvidia_migs"] = {
+                key: {
+                    "count": value.count,
+                    **({"model": value.model} if value.model else {}),
+                    **({"memory": value.memory} if value.memory else {}),
+                }
+                for key, value in preset.nvidia_migs.items()
+            }
         if preset.amd_gpu is not None:
             payload["amd_gpu"] = {
                 "count": preset.amd_gpu.count,

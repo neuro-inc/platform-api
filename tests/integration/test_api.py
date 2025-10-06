@@ -222,6 +222,13 @@ class TestApi:
                             "model": "nvidia-gpu",
                             "memory": 40 * 2**30,
                         },
+                        "nvidia_migs": {
+                            "1g.5gb": {
+                                "count": 7,
+                                "model": "nvidia-mig",
+                                "memory": 5 * 2**30,
+                            }
+                        },
                         "amd_gpu": {"count": 2, "model": "amd-gpu"},
                         "intel_gpu": {"count": 3, "model": "intel-gpu"},
                     },
@@ -237,6 +244,25 @@ class TestApi:
                             "count": 1,
                             "model": "nvidia-tesla-k80",
                             "memory": 40 * 2**30,
+                        },
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
+                    },
+                    {
+                        "name": "nvidia-mig-small",
+                        "credits_per_hour": "10",
+                        "cpu": 7,
+                        "memory": 30720 * 10**6,
+                        "memory_mb": 29296,
+                        "nvidia_migs": {
+                            "1g.5gb": {
+                                "count": 1,
+                                "model": "nvidia-mig",
+                                "memory": 5 * 2**30,
+                            }
                         },
                         "scheduler_enabled": False,
                         "preemptible_node": False,
@@ -550,6 +576,13 @@ class TestApi:
                             "model": "nvidia-gpu",
                             "memory": 40 * 2**30,
                         },
+                        "nvidia_migs": {
+                            "1g.5gb": {
+                                "count": 7,
+                                "model": "nvidia-mig",
+                                "memory": 5 * 2**30,
+                            }
+                        },
                         "amd_gpu": {"count": 2, "model": "amd-gpu"},
                         "intel_gpu": {"count": 3, "model": "intel-gpu"},
                     },
@@ -565,6 +598,25 @@ class TestApi:
                             "count": 1,
                             "model": "nvidia-tesla-k80",
                             "memory": 40 * 2**30,
+                        },
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
+                    },
+                    {
+                        "name": "nvidia-mig-small",
+                        "credits_per_hour": "10",
+                        "cpu": 7,
+                        "memory": 30720 * 10**6,
+                        "memory_mb": 29296,
+                        "nvidia_migs": {
+                            "1g.5gb": {
+                                "count": 1,
+                                "model": "nvidia-mig",
+                                "memory": 5 * 2**30,
+                            }
                         },
                         "scheduler_enabled": False,
                         "preemptible_node": False,
@@ -807,6 +859,13 @@ class TestApi:
                             "model": "nvidia-gpu",
                             "memory": 40 * 2**30,
                         },
+                        "nvidia_migs": {
+                            "1g.5gb": {
+                                "count": 7,
+                                "model": "nvidia-mig",
+                                "memory": 5 * 2**30,
+                            }
+                        },
                         "amd_gpu": {"count": 2, "model": "amd-gpu"},
                         "intel_gpu": {"count": 3, "model": "intel-gpu"},
                     },
@@ -822,6 +881,25 @@ class TestApi:
                             "count": 1,
                             "model": "nvidia-tesla-k80",
                             "memory": 40 * 2**30,
+                        },
+                        "scheduler_enabled": False,
+                        "preemptible_node": False,
+                        "is_preemptible": False,
+                        "is_preemptible_node_required": False,
+                        "available_resource_pool_names": ["gpu"],
+                    },
+                    {
+                        "name": "nvidia-mig-small",
+                        "credits_per_hour": "10",
+                        "cpu": 7,
+                        "memory": 30720 * 10**6,
+                        "memory_mb": 29296,
+                        "nvidia_migs": {
+                            "1g.5gb": {
+                                "count": 1,
+                                "model": "nvidia-mig",
+                                "memory": 5 * 2**30,
+                            }
                         },
                         "scheduler_enabled": False,
                         "preemptible_node": False,
