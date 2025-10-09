@@ -1083,8 +1083,7 @@ class TestKubeOrchestrator:
             await job.delete()
 
             # check if ingresses were deleted:
-
-            with pytest.raises(ResourceNotFound):
+            with pytest.raises(LegacyResourceNotFound):
                 await kube_client.get_ingress(job.namespace, job.id)
 
     @pytest.mark.skipif(
@@ -1243,7 +1242,7 @@ class TestKubeOrchestrator:
 
             # check ingresses were deleted:
 
-            with pytest.raises(ResourceNotFound):
+            with pytest.raises(LegacyResourceNotFound):
                 await kube_client.get_ingress(job.namespace, job.id)
 
     @pytest.mark.skipif(
@@ -1279,10 +1278,10 @@ class TestKubeOrchestrator:
         service_name_id = job.id
         service_name_named = kube_orchestrator._get_service_name_for_named(job)
 
-        with pytest.raises(ResourceNotFound):
+        with pytest.raises(LegacyResourceNotFound):
             await kube_client.get_service(job.namespace, service_name_id)
         if job_named:
-            with pytest.raises(ResourceNotFound):
+            with pytest.raises(LegacyResourceNotFound):
                 await kube_client.get_service(job.namespace, service_name_named)
 
         await job.start()
@@ -1317,10 +1316,10 @@ class TestKubeOrchestrator:
             )
         await kube_orchestrator.delete_job(job)
 
-        with pytest.raises(ResourceNotFound):
+        with pytest.raises(LegacyResourceNotFound):
             await kube_client.get_service(job.namespace, service_name_id)
         if job_named:
-            with pytest.raises(ResourceNotFound):
+            with pytest.raises(LegacyResourceNotFound):
                 await kube_client.get_service(job.namespace, service_name_named)
 
     @pytest.mark.skipif(
