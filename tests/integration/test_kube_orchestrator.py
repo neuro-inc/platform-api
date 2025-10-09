@@ -3283,7 +3283,7 @@ class TestPreemption:
         try:
             node_name = "minikube"
             await kube_client.get_node(node_name)
-        except ResourceNotFound:
+        except LegacyResourceNotFound:
             node_name = os.uname()[1]
 
         await kube_client.add_node_labels(node_name, labels=labels)
@@ -3309,7 +3309,7 @@ class TestPreemption:
         try:
             node_name = "minikube"
             await kube_client.get_node(node_name)
-        except ResourceNotFound:
+        except LegacyResourceNotFound:
             node_name = os.uname()[1]
         await kube_client.add_node_labels(node_name, labels=labels)
 
@@ -4292,7 +4292,7 @@ class TestExternalJobsPreemption:
         try:
             node_name = "minikube"
             await kube_client.get_node(node_name)
-        except ResourceNotFound:
+        except LegacyResourceNotFound:
             node_name = os.uname()[1]
         await kube_client.add_node_labels(node_name, labels=labels)
 
@@ -4317,7 +4317,7 @@ class TestExternalJobsPreemption:
         try:
             node_name = "minikube"
             await kube_client.get_node(node_name)
-        except ResourceNotFound:
+        except LegacyResourceNotFound:
             node_name = os.uname()[1]
         await kube_client.add_node_labels(node_name, labels=labels)
 
