@@ -429,14 +429,13 @@ class Container:
         prefix = f"{registry_host}/"
         return self.image.startswith(prefix)
 
-    def to_image_uri(self, registry_host: str, cluster_name: str, org_name: str) -> URL:
+    def to_image_uri(self, registry_host: str, cluster_name: str) -> URL:
         assert self.belongs_to_registry(registry_host), "Unknown registry"
         prefix = f"{registry_host}/"
         repo = self.image[len(prefix) :]
         path, *_ = repo.split(":", 1)
         assert cluster_name
-        assert org_name
-        return URL.build(scheme="image", host=cluster_name) / org_name / path
+        return URL.build(scheme="image", host=cluster_name) / path
 
     def get_secrets(self) -> list[Secret]:
         return list(
