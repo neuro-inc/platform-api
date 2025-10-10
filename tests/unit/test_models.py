@@ -1760,7 +1760,7 @@ class TestInferPermissionsFromContainer:
 
     def test_image(self) -> None:
         container = Container(
-            image="example.com/testuser/image",
+            image="example.com/test-org/testuser/image",
             resources=ContainerResources(cpu=0.1, memory=16 * 10**6),
         )
         permissions = infer_permissions_from_container(

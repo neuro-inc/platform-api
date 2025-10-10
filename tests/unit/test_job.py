@@ -114,34 +114,34 @@ class TestContainer:
 
     def test_to_image_uri_failure(self) -> None:
         container = Container(
-            image="registry.com/project/testimage",
+            image="registry.com/test-org/project/testimage",
             resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
         with pytest.raises(AssertionError, match="Unknown registry"):
-            container.to_image_uri("example.com", "test-cluster", "test-org")
+            container.to_image_uri("example.com", "test-cluster")
 
     def test_to_image_uri(self) -> None:
         container = Container(
-            image="example.com/project/testimage%2d",
+            image="example.com/test-org/project/testimage%2d",
             resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
-        uri = container.to_image_uri("example.com", "test-cluster", "test-org")
+        uri = container.to_image_uri("example.com", "test-cluster")
         assert uri == URL("image://test-cluster/test-org/project/testimage%252d")
 
     def test_to_image_uri_registry_with_custom_port(self) -> None:
         container = Container(
-            image="example.com:5000/project/testimage",
+            image="example.com:5000/test-org/project/testimage",
             resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
-        uri = container.to_image_uri("example.com:5000", "test-cluster", "test-org")
+        uri = container.to_image_uri("example.com:5000", "test-cluster")
         assert uri == URL("image://test-cluster/test-org/project/testimage")
 
     def test_to_image_uri_ignore_tag(self) -> None:
         container = Container(
-            image="example.com/project/testimage:latest",
+            image="example.com/test-org/project/testimage:latest",
             resources=ContainerResources(cpu=1, memory=128 * 10**6),
         )
-        uri = container.to_image_uri("example.com", "test-cluster", "test-org")
+        uri = container.to_image_uri("example.com", "test-cluster")
         assert uri == URL("image://test-cluster/test-org/project/testimage")
 
 
