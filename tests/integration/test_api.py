@@ -3494,7 +3494,9 @@ class TestJobs:
     ) -> None:
         payload = {
             "container": {
-                "image": "registry.dev.neuromation.io/anotheruser/image:tag",
+                "image": (
+                    f"registry.dev.neuromation.io/{test_org_name}/anotheruser/image:tag"
+                ),
                 "command": "true",
                 "resources": {"cpu": 0.1, "memory_mb": 32, "memory": 32 * 2**20},
             }
