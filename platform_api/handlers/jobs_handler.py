@@ -562,7 +562,7 @@ def infer_permissions_from_container(
     if container.belongs_to_registry(registry_host):
         permissions.append(
             Permission(
-                uri=str(container.to_image_uri(registry_host, cluster_name, org_name)),
+                uri=str(container.to_image_uri(registry_host, cluster_name)),
                 action="read",
             )
         )
