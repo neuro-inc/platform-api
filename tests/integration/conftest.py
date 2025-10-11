@@ -17,6 +17,11 @@ import aiohttp.web
 import neuro_config_client
 import pytest
 from apolo_events_client import EventsClientConfig
+from apolo_kube_client import (
+    KubeClientAuthType as ApoloKubeClientAuthType,
+    KubeClientSelector,
+    KubeConfig as ApoloKubeConfig,
+)
 from neuro_config_client import (
     AMDGPU,
     ACMEEnvironment,
@@ -697,12 +702,32 @@ async def kube_client(
         yield kube_client
 
 
+@pytest.fixture(scope="session")
+async def kube_client_selector(
+    kube_config_cluster_payload: dict[str, Any],
+    kube_config_user_payload: dict[str, Any],
+    cert_authority_data_pem: str | None,
+) -> AsyncIterator[KubeClientSelector]:
+    cluster = kube_config_cluster_payload
+    user = kube_config_user_payload
+    config = ApoloKubeConfig(
+        endpoint_url=cluster["server"],
+        cert_authority_data_pem=cert_authority_data_pem,
+        cert_authority_path=None,
+        auth_type=ApoloKubeClientAuthType.CERTIFICATE,
+        auth_cert_path=user["client-certificate"],
+        auth_cert_key_path=user["client-key"],
+    )
+    async with KubeClientSelector(config=config) as selector:
+        yield selector
+
+
 @pytest.fixture
 async def kube_orchestrator_factory(
     registry_config: RegistryConfig,
     orchestrator_config: OrchestratorConfig,
     kube_config: KubeConfig,
-    kube_client: KubeClient,
+    kube_client_selector: KubeClientSelector,
 ) -> Callable[..., KubeOrchestrator]:
     def _f(**kwargs: Any) -> KubeOrchestrator:
         defaults = {
@@ -710,7 +735,7 @@ async def kube_orchestrator_factory(
             "registry_config": registry_config,
             "orchestrator_config": orchestrator_config,
             "kube_config": kube_config,
-            "kube_client": kube_client,
+            "kube_client_selector": kube_client_selector,
         }
         kwargs = {**defaults, **kwargs}
         return KubeOrchestrator(**kwargs)

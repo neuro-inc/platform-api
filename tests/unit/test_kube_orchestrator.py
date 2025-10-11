@@ -24,7 +24,6 @@ from platform_api.orchestrator.job_request import (
 from platform_api.orchestrator.kube_client import (
     ContainerStatus,
     Ingress,
-    KubeClient,
     Resources,
     SecretEnvVar,
     SecretRef,
@@ -1668,7 +1667,6 @@ class TestContainerStatus:
 class TestKubeOrchestrator:
     @pytest.fixture
     def orchestrator(self) -> KubeOrchestrator:
-        kube_client = mock.AsyncMock(spec=KubeClient)
         return KubeOrchestrator(
             cluster_name="default",
             registry_config=RegistryConfig(username="username", password="password"),
@@ -1681,5 +1679,4 @@ class TestKubeOrchestrator:
                 resource_presets=[],
             ),
             kube_config=KubeConfig(endpoint_url="https://kuberrnetes.svc"),
-            kube_client=kube_client,
         )

@@ -76,7 +76,7 @@ def create_job_request_validator(
     allow_flat_structure: bool = False,
     allowed_tpu_resources: Sequence[TPUResource],
     cluster_name: str,
-    org_name: str | None,
+    org_name: str,
     storage_scheme: str = "storage",
     allowed_energy_schedule_names: Sequence[str] = (),
 ) -> t.Trafaret:
@@ -582,9 +582,9 @@ def infer_permissions_from_container(
 def make_job_uri(
     cluster_name: str,
     project_name: str,
-    org_name: str | None,
+    org_name: str,
 ) -> URL:
-    return URL.build(scheme="job", host=cluster_name) / (org_name or "") / project_name
+    return URL.build(scheme="job", host=cluster_name) / org_name / project_name
 
 
 class JobsHandler:
@@ -642,8 +642,8 @@ class JobsHandler:
     async def _create_job_request_validator(
         self,
         cluster_config: Cluster,
+        org_name: str,
         allow_flat_structure: bool = False,
-        org_name: str | None = None,
     ) -> t.Trafaret:
         return create_job_request_validator(
             allow_flat_structure=allow_flat_structure,
@@ -658,7 +658,7 @@ class JobsHandler:
         self,
         user_cluster_configs: Sequence[UserClusterConfig],
         cluster_name: str,
-        org_name: str | None,
+        org_name: str,
     ) -> Cluster:
         for user_cluster_config in user_cluster_configs:
             if user_cluster_config.config.name == cluster_name:
