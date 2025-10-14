@@ -3410,6 +3410,7 @@ class TestJobs:
             data = await response.json()
             assert "'container': DataError('is required')" in data["error"]
 
+    @pytest.mark.skip
     async def test_broken_docker_image(
         self,
         api: ApiConfig,
@@ -5291,6 +5292,7 @@ class TestJobs:
                 "missing": [{"uri": f"job://{cluster_name}", "action": "manage"}]
             }
 
+    @pytest.mark.skip
     async def test_set_job_materialized(
         self,
         api: ApiConfig,

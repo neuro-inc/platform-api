@@ -191,7 +191,7 @@ class MockOrchestrator(Orchestrator):
         self._mock_exit_codes[job_id] = new_exit_code
 
     async def get_missing_secrets(
-        self, namespace: str, user_name: str, secret_names: list[str]
+        self, job: Job, user_name: str, secret_names: list[str]
     ) -> list[str]:
         return []
 

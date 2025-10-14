@@ -365,10 +365,11 @@ class TestPodStatus:
 
     def test_is_waiting_true(self) -> None:
         payload: dict[str, Any] = {
+            "phase": "Pending",
             "containerStatuses": [
                 {"state": {"waiting": {}}},
                 {"state": {"running": {}}},
-            ]
+            ],
         }
 
         status = PodStatus.from_primitive(payload)
@@ -376,10 +377,11 @@ class TestPodStatus:
 
     def test_is_waiting_false(self) -> None:
         payload: dict[str, Any] = {
+            "phase": "Pending",
             "containerStatuses": [
                 {"state": {"running": {}}},
                 {"state": {"running": {}}},
-            ]
+            ],
         }
 
         status = PodStatus.from_primitive(payload)
@@ -387,10 +389,11 @@ class TestPodStatus:
 
     def test_is_terminated_true(self) -> None:
         payload: dict[str, Any] = {
+            "phase": "Pending",
             "containerStatuses": [
                 {"state": {"terminated": {}}},
                 {"state": {"terminated": {}}},
-            ]
+            ],
         }
 
         status = PodStatus.from_primitive(payload)
@@ -398,10 +401,11 @@ class TestPodStatus:
 
     def test_is_terminated_false(self) -> None:
         payload: dict[str, Any] = {
+            "phase": "Pending",
             "containerStatuses": [
                 {"state": {"running": {}}},
                 {"state": {"terminated": {}}},
-            ]
+            ],
         }
 
         status = PodStatus.from_primitive(payload)
@@ -409,27 +413,57 @@ class TestPodStatus:
 
 
 class TestPodCondition:
-    def test_unknown_type(self) -> None:
-        payload = {"lastTransitionTime": "2019-06-20T11:03:32Z", "type": "Invalid"}
-        cond = PodCondition(payload)
+    @pytest.fixture
+    def pod_condition_payload(self) -> dict[str, str]:
+        return {
+            "lastTransitionTime": "2019-06-20T11:03:32Z",
+            "type": "Invalid",
+            "status": "True",
+            "reason": "reason",
+            "message": "message",
+        }
+
+    def test_unknown_type(
+        self,
+        pod_condition_payload: dict[str, str],
+    ) -> None:
+        pod_condition_payload.update(
+            {"lastTransitionTime": "2019-06-20T11:03:32Z", "type": "Invalid"}
+        )
+        cond = PodCondition.from_primitive(pod_condition_payload)
         assert cond.type == PodConditionType.UNKNOWN
 
-    def test_status_unknown(self) -> None:
-        cond = PodCondition({"status": "Unknown"})
+    def test_status_unknown(
+        self,
+        pod_condition_payload: dict[str, str],
+    ) -> None:
+        pod_condition_payload["status"] = "Unknown"
+        cond = PodCondition.from_primitive(pod_condition_payload)
         assert cond.status is None
 
-    def test_status_true(self) -> None:
-        cond = PodCondition({"status": "True"})
+    def test_status_true(
+        self,
+        pod_condition_payload: dict[str, str],
+    ) -> None:
+        pod_condition_payload["status"] = "True"
+        cond = PodCondition.from_primitive(pod_condition_payload)
         assert cond.status is True
 
-    def test_status_false(self) -> None:
-        cond = PodCondition({"status": "False"})
+    def test_status_false(
+        self,
+        pod_condition_payload: dict[str, str],
+    ) -> None:
+        pod_condition_payload["status"] = "False"
+        cond = PodCondition.from_primitive(pod_condition_payload)
         assert cond.status is False
 
-    def test_status_invalid(self) -> None:
-        cond = PodCondition({"status": "123"})
+    def test_status_invalid(
+        self,
+        pod_condition_payload: dict[str, str],
+    ) -> None:
+        pod_condition_payload["status"] = "123"
         with pytest.raises(ValueError):
-            _ = cond.status
+            PodCondition.from_primitive(pod_condition_payload)
 
 
 class TestKubernetesEvent:
@@ -465,7 +499,7 @@ class TestKubernetesEvent:
             "source": {"component": "cluster-autoscaler"},
             "type": "Normal",
         }
-        event = KubernetesEvent(data)
+        event = KubernetesEvent.from_primitive(data)
         assert event.first_timestamp == datetime(2019, 6, 20, 11, 3, 32, tzinfo=UTC)
         assert event.last_timestamp == datetime(2019, 6, 20, 11, 3, 33, tzinfo=UTC)
         assert event.count == 12
