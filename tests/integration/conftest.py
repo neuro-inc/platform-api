@@ -3,10 +3,10 @@ import base64
 import json
 import uuid
 from asyncio import timeout
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -63,7 +63,6 @@ from platform_api.config import (
     ServerConfig,
 )
 from platform_api.old_kube_client.errors import ResourceExists
-from platform_api.orchestrator.job_request import JobNotFoundException
 from platform_api.orchestrator.kube_client import (
     KubeClient,
     NodeTaint,
@@ -423,66 +422,9 @@ async def kube_ingress_ip(kube_config_cluster_payload: dict[str, Any]) -> str:
 
 
 class MyKubeClient(KubeClient):
-    _created_pvcs: list[tuple[str, str]]
-
-    async def init(self) -> None:
-        await super().init()
-        if not hasattr(self, "_created_pvcs"):
-            self._created_pvcs = []
-
-    async def close(self) -> None:
-        for namespace, pvc_name in self._created_pvcs:
-            await self.delete_pvc(namespace, pvc_name)
-        await super().close()
-
-    async def create_pvc(
-        self,
-        pvc_name: str,
-        namespace: str,
-        storage: int | None = None,
-        labels: Mapping[str, str] | None = None,
-    ) -> None:
-        url = self._generate_all_pvcs_url(namespace)
-        storage = storage or 1024 * 1024
-        primitive = {
-            "apiVersion": "v1",
-            "kind": "PersistentVolumeClaim",
-            "metadata": {"name": pvc_name, "labels": labels},
-            "spec": {
-                "accessModes": ["ReadWriteOnce"],
-                "volumeMode": "Filesystem",
-                "resources": {"requests": {"storage": storage}},
-                # From `tests/k8s/storageclass.yml`:
-                "storageClassName": "test-storage-class",
-            },
-        }
-        payload = await self.post(url=url, json=primitive)
-        self._raise_for_status(payload)
-        self._created_pvcs.append((namespace, pvc_name))
-
-    async def delete_pvc(
-        self,
-        namespace: str,
-        pvc_name: str,
-    ) -> None:
-        url = self._generate_pvc_url(pvc_name, namespace)
-        payload = await self.delete(url=url)
-        self._raise_for_status(payload)
-
-    async def update_or_create_secret(
-        self, secret_name: str, namespace: str, data: dict[str, str] | None = None
-    ) -> None:
-        url = self._generate_all_secrets_url(namespace)
-        data = data or {}
-        primitive = {
-            "apiVersion": "v1",
-            "kind": "Secret",
-            "metadata": {"name": secret_name},
-            "data": data,
-            "type": "Opaque",
-        }
-        payload = await self.post(url=url, json=primitive)
-        self._raise_for_status(payload)
+    """
+    Extended kube client that has methods used for tests only
+    """
 
     async def wait_pod_scheduled(
         self,
@@ -543,108 +485,6 @@ class MyKubeClient(KubeClient):
                         f"{str(pod['spec'].get('nodeName'))}",
                     )
             pytest.fail("Pod unscheduled")
-
-    async def wait_pod_non_existent(
-        self,
-        namespace: str,
-        pod_name: str,
-        timeout_s: float = 5.0,
-        interval_s: float = 1.0,
-    ) -> None:
-        try:
-            async with timeout(timeout_s):
-                while True:
-                    try:
-                        await self.get_pod(namespace, pod_name)
-                    except JobNotFoundException:
-                        return
-                    await asyncio.sleep(interval_s)
-        except TimeoutError:
-            pytest.fail("Pod still exists")
-
-    async def create_triggered_scaleup_event(
-        self,
-        pod_id: str,
-        namespace: str,
-    ) -> None:
-        url = f"{self.generate_namespace_url(namespace)}/events"
-        now = datetime.now(timezone.utc)  # noqa: UP017
-        now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
-        data = {
-            "apiVersion": "v1",
-            "count": 1,
-            "eventTime": None,
-            "firstTimestamp": now_str,
-            "involvedObject": {
-                "apiVersion": "v1",
-                "kind": "Pod",
-                "name": pod_id,
-                "namespace": namespace,
-                "resourceVersion": "48102193",
-                "uid": "eddfe678-86e9-11e9-9d65-42010a800018",
-            },
-            "kind": "Event",
-            "lastTimestamp": now_str,
-            "message": "TriggeredScaleUp",
-            "metadata": {
-                "creationTimestamp": now_str,
-                "name": f"{pod_id}.{uuid.uuid4()}",
-                "namespace": namespace,
-                "selfLink": (
-                    f"/api/v1/namespaces/{namespace}/events/{{pod_id}}.15a870d7e2bb228b"
-                ),
-                "uid": "cb886f64-8f96-11e9-9251-42010a800038",
-            },
-            "reason": "TriggeredScaleUp",
-            "reportingComponent": "",
-            "reportingInstance": "",
-            "source": {"component": "cluster-autoscaler"},
-            "type": "Normal",
-        }
-
-        await self.post(url=url, json=data)
-
-    async def create_failed_attach_volume_event(
-        self,
-        pod_id: str,
-        namespace: str,
-    ) -> None:
-        url = f"{self.generate_namespace_url(namespace)}/events"
-        now = datetime.now(timezone.utc)  # noqa: UP017
-        now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
-        data = {
-            "apiVersion": "v1",
-            "count": 1,
-            "eventTime": None,
-            "firstTimestamp": now_str,
-            "involvedObject": {
-                "apiVersion": "v1",
-                "kind": "Pod",
-                "name": pod_id,
-                "namespace": namespace,
-                "resourceVersion": "48102193",
-                "uid": "eddfe678-86e9-11e9-9d65-42010a800018",
-            },
-            "kind": "Event",
-            "lastTimestamp": now_str,
-            "message": "FailedAttachVolume",
-            "metadata": {
-                "creationTimestamp": now_str,
-                "name": f"{pod_id}.{uuid.uuid4()}",
-                "namespace": namespace,
-                "selfLink": (
-                    f"/api/v1/namespaces/{namespace}/events/{pod_id}.15a870d7e2bb228b"
-                ),
-                "uid": "cb886f64-8f96-11e9-9251-42010a800038",
-            },
-            "reason": "FailedAttachVolume",
-            "reportingComponent": "",
-            "reportingInstance": "",
-            "source": {"component": "attachdetach-controller"},
-            "type": "Warning",
-        }
-
-        await self.post(url=url, json=data)
 
     async def add_node_labels(self, node_name: str, labels: dict[str, Any]) -> None:
         node = await self.get_node(node_name)
