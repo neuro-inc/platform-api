@@ -8,9 +8,11 @@ import shlex
 import sys
 import time
 import uuid
+from asyncio import timeout
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from dataclasses import replace
+from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import PurePath
 from typing import Any, cast
@@ -27,11 +29,14 @@ from apolo_kube_client import (
     ResourceNotFound,
 )
 from kubernetes.client import (
+    V1Node,
     V1ObjectMeta,
     V1PersistentVolumeClaim,
     V1PersistentVolumeClaimSpec,
+    V1Pod,
     V1Secret,
 )
+from kubernetes.client.models.core_v1_event import CoreV1Event
 from neuro_config_client import (
     NvidiaGPU,
     OrchestratorConfig,
@@ -45,7 +50,6 @@ from platform_api.config import (
     STORAGE_URI_SCHEME,
     RegistryConfig,
 )
-from platform_api.old_kube_client.apolo import create_namespace
 from platform_api.old_kube_client.errors import (
     ResourceNotFound as LegacyResourceNotFound,
 )
@@ -77,28 +81,29 @@ from platform_api.orchestrator.kube_client import (
     Ingress,
     IngressRule,
     KubeClient,
-    LabelSelectorMatchExpression,
-    LabelSelectorTerm,
-    NodeAffinity,
     NodeResources,
     NodeTaint,
     NodeWatcher,
-    PodAffinity,
-    PodAffinityTerm,
     PodDescriptor,
-    PodPreferredSchedulingTerm,
     PodWatcher,
     SecretRef,
     Service,
     Toleration,
     create_ingress,
+    create_pod,
     create_service,
     delete_ingress,
+    delete_pod,
     delete_service,
     get_ingress,
     get_pod,
+    get_pod_status,
     get_service,
     list_services,
+    wait_pod_is_deleted,
+    wait_pod_is_finished,
+    wait_pod_is_running,
+    wait_pod_is_terminated,
 )
 from platform_api.orchestrator.kube_config import KubeConfig
 from platform_api.orchestrator.kube_orchestrator import (
@@ -432,7 +437,7 @@ class TestKubeOrchestrator:
 
     async def test_job_requires_all_node_resources(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         orchestrator_config_factory: Callable[..., OrchestratorConfig],
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
         delete_job_later: Callable[[Job], Awaitable[None]],
@@ -470,14 +475,18 @@ class TestKubeOrchestrator:
         await delete_job_later(job)
         await job.start()
 
-        await kube_client.wait_pod_scheduled(job.namespace, job.id)
-        job_pod = await kube_client.get_raw_pod(job.namespace, job.id)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_scheduled(kube_client, job.id)
+            job_pod = await kube_client.core_v1.pod.get(job.id)
 
-        assert job_pod["spec"]["containers"]
-        assert job_pod["spec"]["containers"][0]["resources"] == {
-            "requests": {"cpu": "100m", "memory": "820M"},  # 0.8 of total request
-            "limits": {"cpu": "100m", "memory": "1025M"},
-        }
+            assert job_pod.spec.containers
+            resources = job_pod.spec.containers[0].resources
+            # 0.8 of total request
+            assert resources.requests == {"cpu": "100m", "memory": "820M"}
+            assert resources.limits == {"cpu": "100m", "memory": "1025M"}
 
     async def test_job_bunch_of_cpu(self, kube_orchestrator: KubeOrchestrator) -> None:
         command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
@@ -542,7 +551,9 @@ class TestKubeOrchestrator:
         )
 
     async def test_job_no_memory_after_scaleup(
-        self, kube_orchestrator: KubeOrchestrator, kube_client: MyKubeClient
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        kube_client_selector: KubeClientSelector,
     ) -> None:
         command = "true"
         container = Container(
@@ -560,7 +571,11 @@ class TestKubeOrchestrator:
             ),
         )
         await job.start()
-        await kube_client.create_triggered_scaleup_event(job.id, job.namespace)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await self._create_triggered_scaleup_event(kube_client, job.id)
 
         status_item = await kube_orchestrator.get_job_status(job)
         assert status_item.status == JobStatus.PENDING
@@ -590,66 +605,67 @@ class TestKubeOrchestrator:
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
     ) -> None:
+        org_name = "test-org"
+        project_name = DEFAULT_ORPHANED_JOB_OWNER
         user_name = self._create_username()
-        ns = await create_namespace(
-            kube_client, org_name="test-org", project_name=DEFAULT_ORPHANED_JOB_OWNER
-        )
+        async with kube_client_selector.get_client(
+            org_name=org_name, project_name=project_name
+        ) as kube_client:
+            disk_id = f"disk-{str(uuid.uuid4())}"
+            disk = Disk(disk_id=disk_id, path=user_name, cluster_name=cluster_name)
+            await self._create_pvc(kube_client, disk_id, labels={})
 
-        disk_id = f"disk-{str(uuid.uuid4())}"
-        disk = Disk(disk_id=disk_id, path=user_name, cluster_name=cluster_name)
-        await kube_client.create_pvc(disk_id, ns.name)
-
-        mount_path = PurePath("/mnt/disk")
-        container = Container(
-            image="ubuntu:20.10",
-            command="sleep 10",
-            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
-            disk_volumes=[
-                DiskContainerVolume(disk=disk, dst_path=mount_path, read_only=False)
-            ],
-        )
-        job = MyJob(
-            orchestrator=kube_orchestrator,
-            record=JobRecord.create(
-                request=JobRequest.create(container),
-                cluster_name="test-cluster",
-                org_name="test-org",
-            ),
-        )
-        await delete_job_later(job)
-        await job.start()
-
-        status_item = await kube_orchestrator.get_job_status(job)
-        assert status_item.status == JobStatus.PENDING
-
-        t0 = time.monotonic()
-        while not status_item.status.is_finished:
-            await kube_client.create_failed_attach_volume_event(job.id, job.namespace)
-            t1 = time.monotonic()
-            if status_item.reason == JobStatusReason.DISK_UNAVAILABLE:
-                break
-            assert t1 - t0 < 30, (
-                f"Wait for job failure is timed out "
-                f"after {t1 - t0} secs [{status_item}]"
+            mount_path = PurePath("/mnt/disk")
+            container = Container(
+                image="ubuntu:20.10",
+                command="sleep 10",
+                resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
+                disk_volumes=[
+                    DiskContainerVolume(disk=disk, dst_path=mount_path, read_only=False)
+                ],
             )
+            job = MyJob(
+                orchestrator=kube_orchestrator,
+                record=JobRecord.create(
+                    request=JobRequest.create(container),
+                    cluster_name="test-cluster",
+                    org_name="test-org",
+                ),
+            )
+            await delete_job_later(job)
+            await job.start()
+
             status_item = await kube_orchestrator.get_job_status(job)
+            assert status_item.status == JobStatus.PENDING
 
-        assert status_item == JobStatusItem.create(
-            JobStatus.PENDING,
-            reason=JobStatusReason.DISK_UNAVAILABLE,
-            description="Waiting for another job to release disk resource",
-        )
+            t0 = time.monotonic()
+            while not status_item.status.is_finished:
+                await self._create_failed_attach_volume_event(kube_client, job.id)
+                t1 = time.monotonic()
+                if status_item.reason == JobStatusReason.DISK_UNAVAILABLE:
+                    break
+                assert t1 - t0 < 30, (
+                    f"Wait for job failure is timed out "
+                    f"after {t1 - t0} secs [{status_item}]"
+                )
+                status_item = await kube_orchestrator.get_job_status(job)
 
-        await kube_orchestrator.delete_job(job)
+            assert status_item == JobStatusItem.create(
+                JobStatus.PENDING,
+                reason=JobStatusReason.DISK_UNAVAILABLE,
+                description="Waiting for another job to release disk resource",
+            )
+
+            await kube_orchestrator.delete_job(job)
 
     async def test_volumes(
         self,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         cluster_name: str,
     ) -> None:
         volumes = [
@@ -680,10 +696,14 @@ class TestKubeOrchestrator:
 
         try:
             await job.start()
-            raw_pod = await kube_client.get_raw_pod(job.namespace, job.id)
-            metadata = raw_pod["metadata"]
+            async with kube_client_selector.get_client(
+                org_name=job.org_name, project_name=job.project_name
+            ) as kube_client:
+                pod = await kube_client.core_v1.pod.get(job.id)
+                annotations = pod.metadata.annotations or {}
+                labels = pod.metadata.labels or {}
 
-            assert metadata["annotations"][INJECT_STORAGE_KEY] == json.dumps(
+            assert annotations[INJECT_STORAGE_KEY] == json.dumps(
                 [
                     {
                         "storage_uri": f"storage://{cluster_name}/org/project1",
@@ -697,7 +717,7 @@ class TestKubeOrchestrator:
                     },
                 ]
             )
-            assert metadata["labels"][INJECT_STORAGE_KEY] == "true"
+            assert labels[INJECT_STORAGE_KEY] == "true"
         finally:
             await job.delete()
 
@@ -738,7 +758,7 @@ class TestKubeOrchestrator:
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
     ) -> None:
@@ -762,13 +782,14 @@ class TestKubeOrchestrator:
         await job.start()
 
         pod_name = job.id
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
+        async with kube_client_selector.get_client(
+            org_name=job.org_name, project_name=job.project_name
+        ) as kube_client:
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-        raw = await kube_client.get_raw_pod(job.namespace, pod_name)
+            pod = await kube_client.core_v1.pod.get(pod_name)
 
-        container_raw = raw["spec"]["containers"][0]
+        container_model = pod.spec.containers[0]
 
         expected_values = {
             "NEURO_JOB_ID": job.id,
@@ -783,7 +804,7 @@ class TestKubeOrchestrator:
             # "NEURO_JOB_PRESET": job.preset_name,
         }
         real_values = {
-            item.get("name"): item.get("value", "") for item in container_raw["env"]
+            env.name: (env.value or "") for env in (container_model.env or [])
         }
 
         for key, value in expected_values.items():
@@ -1049,7 +1070,7 @@ class TestKubeOrchestrator:
         self,
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
-        kube_client: KubeClient,
+        kube_client_selector: KubeClientSelector,
     ) -> None:
         container = Container(
             image="python",
@@ -1065,26 +1086,29 @@ class TestKubeOrchestrator:
                 org_name="test-org",
             ),
         )
-        try:
-            await job.start()
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            try:
+                await job.start()
 
-            assert job.http_host is not None
-            assert job.http_host_named is None
+                assert job.http_host is not None
+                assert job.http_host_named is None
 
-            await self._wait_for_job_service(
-                kube_ingress_ip, host=job.http_host, job_id=job.id
-            )
+                await self._wait_for_job_service(
+                    kube_ingress_ip, host=job.http_host, job_id=job.id
+                )
+                ingress = await get_ingress(kube_client, job.id)
+                actual_rules_hosts = {rule.host for rule in ingress.rules}
+                assert actual_rules_hosts == {job.http_host}
 
-            ingress = await kube_client.get_ingress(job.namespace, job.id)
-            actual_rules_hosts = {rule.host for rule in ingress.rules}
-            assert actual_rules_hosts == {job.http_host}
+            finally:
+                await job.delete()
 
-        finally:
-            await job.delete()
-
-            # check if ingresses were deleted:
-            with pytest.raises(LegacyResourceNotFound):
-                await kube_client.get_ingress(job.namespace, job.id)
+                # check if ingresses were deleted:
+                with pytest.raises(ResourceNotFound):
+                    await get_ingress(kube_client, job.id)
 
     @pytest.mark.skipif(
         sys.platform == "darwin",
@@ -1141,7 +1165,6 @@ class TestKubeOrchestrator:
                 await job.delete()
 
                 # check ingresses were deleted:
-
                 with pytest.raises(ResourceNotFound):
                     await get_ingress(kube_client, job.id)
 
@@ -1153,7 +1176,7 @@ class TestKubeOrchestrator:
         self,
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
-        kube_client: KubeClient,
+        kube_client_selector: KubeClientSelector,
     ) -> None:
         container = Container(
             image="python",
@@ -1169,28 +1192,32 @@ class TestKubeOrchestrator:
                 org_name="test-org",
             ),
         )
-        try:
-            await job.start()
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            try:
+                await job.start()
 
-            assert job.http_host is not None
-            assert job.http_host_named is None
+                assert job.http_host is not None
+                assert job.http_host_named is None
 
-            await self._wait_for_job_service(
-                kube_ingress_ip, host=job.http_host, job_id=job.id
-            )
+                await self._wait_for_job_service(
+                    kube_ingress_ip, host=job.http_host, job_id=job.id
+                )
 
-            # job ingress auth:
-            ingress = await kube_client.get_ingress(job.namespace, job.id)
-            actual_rules_hosts = {rule.host for rule in ingress.rules}
-            assert actual_rules_hosts == {job.http_host}
+                # job ingress auth:
+                ingress = await get_ingress(kube_client, job.id)
+                actual_rules_hosts = {rule.host for rule in ingress.rules}
+                assert actual_rules_hosts == {job.http_host}
 
-        finally:
-            await job.delete()
+            finally:
+                await job.delete()
 
-            # check ingresses were deleted:
+                # check ingresses were deleted:
 
-            with pytest.raises(LegacyResourceNotFound):
-                await kube_client.get_ingress(job.namespace, job.id)
+                with pytest.raises(ResourceNotFound):
+                    await get_ingress(kube_client, job.id)
 
     @pytest.mark.skipif(
         sys.platform == "darwin",
@@ -1201,7 +1228,7 @@ class TestKubeOrchestrator:
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
-        kube_client: KubeClient,
+        kube_client_selector: KubeClientSelector,
     ) -> None:
         container = Container(
             image="python",
@@ -1219,31 +1246,35 @@ class TestKubeOrchestrator:
                 owner="owner",
             ),
         )
-        try:
-            await job.start()
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            try:
+                await job.start()
 
-            assert job.http_host is not None
-            assert job.http_host_named is not None
+                assert job.http_host is not None
+                assert job.http_host_named is not None
 
-            await self._wait_for_job_service(
-                kube_ingress_ip, host=job.http_host, job_id=job.id
-            )
-            await self._wait_for_job_service(
-                kube_ingress_ip, host=job.http_host_named, job_id=job.id
-            )
+                await self._wait_for_job_service(
+                    kube_ingress_ip, host=job.http_host, job_id=job.id
+                )
+                await self._wait_for_job_service(
+                    kube_ingress_ip, host=job.http_host_named, job_id=job.id
+                )
 
-            # job ingress auth:
-            ingress = await kube_client.get_ingress(job.namespace, job.id)
-            actual_rules_hosts = {rule.host for rule in ingress.rules}
-            assert actual_rules_hosts == {job.http_host, job.http_host_named}
+                # job ingress auth:
+                ingress = await get_ingress(kube_client, job.id)
+                actual_rules_hosts = {rule.host for rule in ingress.rules}
+                assert actual_rules_hosts == {job.http_host, job.http_host_named}
 
-        finally:
-            await job.delete()
+            finally:
+                await job.delete()
 
-            # check ingresses were deleted:
+                # check ingresses were deleted:
 
-            with pytest.raises(LegacyResourceNotFound):
-                await kube_client.get_ingress(job.namespace, job.id)
+                with pytest.raises(ResourceNotFound):
+                    await get_ingress(kube_client, job.id)
 
     @pytest.mark.skipif(
         sys.platform == "darwin",
@@ -1254,7 +1285,7 @@ class TestKubeOrchestrator:
         self,
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
-        kube_client: KubeClient,
+        kube_client_selector: KubeClientSelector,
         job_named: bool,
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
@@ -1278,11 +1309,15 @@ class TestKubeOrchestrator:
         service_name_id = job.id
         service_name_named = kube_orchestrator._get_service_name_for_named(job)
 
-        with pytest.raises(LegacyResourceNotFound):
-            await kube_client.get_service(job.namespace, service_name_id)
-        if job_named:
-            with pytest.raises(LegacyResourceNotFound):
-                await kube_client.get_service(job.namespace, service_name_named)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            with pytest.raises(ResourceNotFound):
+                await get_service(kube_client, service_name_id)
+            if job_named:
+                with pytest.raises(ResourceNotFound):
+                    await get_service(kube_client, service_name_named)
 
         await job.start()
 
@@ -1316,11 +1351,15 @@ class TestKubeOrchestrator:
             )
         await kube_orchestrator.delete_job(job)
 
-        with pytest.raises(LegacyResourceNotFound):
-            await kube_client.get_service(job.namespace, service_name_id)
-        if job_named:
-            with pytest.raises(LegacyResourceNotFound):
-                await kube_client.get_service(job.namespace, service_name_named)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            with pytest.raises(ResourceNotFound):
+                await get_service(kube_client, service_name_id)
+            if job_named:
+                with pytest.raises(ResourceNotFound):
+                    await get_service(kube_client, service_name_named)
 
     @pytest.mark.skipif(
         sys.platform == "darwin",
@@ -1548,7 +1587,7 @@ class TestKubeOrchestrator:
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -1568,8 +1607,11 @@ class TestKubeOrchestrator:
         await delete_job_later(job)
         await job.start()
 
-        raw_pod = await kube_client.get_raw_pod(job.namespace, job.id)
-        assert raw_pod["metadata"]["labels"] == {
+        async with kube_client_selector.get_client(
+            org_name=job.org_name, project_name=job.project_name
+        ) as kube_client:
+            pod = await kube_client.core_v1.pod.get(job.id)
+        assert pod.metadata.labels == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/preset": job.preset_name,
             "platform.neuromation.io/user": job.owner,
@@ -1585,7 +1627,7 @@ class TestKubeOrchestrator:
     async def test_job_org_pod_labels(
         self,
         kube_config: KubeConfig,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
     ) -> None:
@@ -1606,12 +1648,13 @@ class TestKubeOrchestrator:
         await job.start()
 
         pod_name = job.id
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
-        raw_pod = await kube_client.get_raw_pod(job.namespace, pod_name)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name, project_name=job.project_name
+        ) as kube_client:
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
+            pod = await kube_client.core_v1.pod.get(pod_name)
 
-        assert raw_pod["metadata"]["labels"] == {
+        assert pod.metadata.labels == {
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": job.org_name,
@@ -1626,7 +1669,7 @@ class TestKubeOrchestrator:
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -1646,42 +1689,44 @@ class TestKubeOrchestrator:
         await delete_job_later(job)
         await job.start()
 
-        pod_name = job.id
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            pod_name = job.id
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-        service_name = job.id
-        service = await kube_client.get_service(job.namespace, service_name)
-        assert service.labels == {
-            "platform.neuromation.io/job": job.id,
-            "platform.neuromation.io/user": job.owner,
-            "platform.neuromation.io/org": "test-org",
-            "platform.neuromation.io/project": job.owner,
-            "platform.apolo.us/job": job.id,
-            "platform.apolo.us/user": job.owner,
-            "platform.apolo.us/org": "test-org",
-            "platform.apolo.us/project": job.owner,
-        }
+            service_name = job.id
+            service = await get_service(kube_client, service_name)
+            assert service.labels == {
+                "platform.neuromation.io/job": job.id,
+                "platform.neuromation.io/user": job.owner,
+                "platform.neuromation.io/org": "test-org",
+                "platform.neuromation.io/project": job.owner,
+                "platform.apolo.us/job": job.id,
+                "platform.apolo.us/user": job.owner,
+                "platform.apolo.us/org": "test-org",
+                "platform.apolo.us/project": job.owner,
+            }
 
-        ingress_name = job.id
-        ingress = await kube_client.get_ingress(job.namespace, ingress_name)
-        assert ingress.labels == {
-            "platform.neuromation.io/job": job.id,
-            "platform.neuromation.io/user": job.owner,
-            "platform.neuromation.io/org": "test-org",
-            "platform.neuromation.io/project": job.owner,
-            "platform.apolo.us/job": job.id,
-            "platform.apolo.us/user": job.owner,
-            "platform.apolo.us/org": "test-org",
-            "platform.apolo.us/project": job.owner,
-        }
+            ingress_name = job.id
+            ingress = await get_ingress(kube_client, ingress_name)
+            assert ingress.labels == {
+                "platform.neuromation.io/job": job.id,
+                "platform.neuromation.io/user": job.owner,
+                "platform.neuromation.io/org": "test-org",
+                "platform.neuromation.io/project": job.owner,
+                "platform.apolo.us/job": job.id,
+                "platform.apolo.us/user": job.owner,
+                "platform.apolo.us/org": "test-org",
+                "platform.apolo.us/project": job.owner,
+            }
 
     async def test_named_job_resource_labels(
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -1703,68 +1748,73 @@ class TestKubeOrchestrator:
         await job.start()
 
         pod_name = job.id
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-        service_name = job.id
-        service = await kube_client.get_service(job.namespace, service_name)
-        assert service.labels == {
-            "platform.neuromation.io/job": job.id,
-            "platform.neuromation.io/user": job.owner,
-            "platform.neuromation.io/org": "test-org",
-            "platform.neuromation.io/project": job.owner,
-            "platform.apolo.us/job": job.id,
-            "platform.apolo.us/user": job.owner,
-            "platform.apolo.us/org": "test-org",
-            "platform.apolo.us/project": job.owner,
-        }
+            service_name = job.id
+            service = await get_service(kube_client, service_name)
+            assert service.labels == {
+                "platform.neuromation.io/job": job.id,
+                "platform.neuromation.io/user": job.owner,
+                "platform.neuromation.io/org": "test-org",
+                "platform.neuromation.io/project": job.owner,
+                "platform.apolo.us/job": job.id,
+                "platform.apolo.us/user": job.owner,
+                "platform.apolo.us/org": "test-org",
+                "platform.apolo.us/project": job.owner,
+            }
 
-        ingress_name = job.id
-        ingress = await kube_client.get_ingress(job.namespace, ingress_name)
-        assert ingress.labels == {
-            "platform.neuromation.io/job": job.id,
-            "platform.neuromation.io/job-name": job.name,
-            "platform.neuromation.io/user": job.owner,
-            "platform.neuromation.io/org": "test-org",
-            "platform.neuromation.io/project": job.owner,
-            "platform.apolo.us/job": job.id,
-            "platform.apolo.us/job-name": job.name,
-            "platform.apolo.us/user": job.owner,
-            "platform.apolo.us/org": "test-org",
-            "platform.apolo.us/project": job.owner,
-        }
+            ingress_name = job.id
+            ingress = await get_ingress(kube_client, ingress_name)
+            assert ingress.labels == {
+                "platform.neuromation.io/job": job.id,
+                "platform.neuromation.io/job-name": job.name,
+                "platform.neuromation.io/user": job.owner,
+                "platform.neuromation.io/org": "test-org",
+                "platform.neuromation.io/project": job.owner,
+                "platform.apolo.us/job": job.id,
+                "platform.apolo.us/job-name": job.name,
+                "platform.apolo.us/user": job.owner,
+                "platform.apolo.us/org": "test-org",
+                "platform.apolo.us/project": job.owner,
+            }
 
     async def test_job_check_ingress_annotations_jobs_ingress_class_nginx(
         self,
         kube_config_factory: Callable[..., KubeConfig],
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
-        kube_client_factory: Callable[..., MyKubeClient],
+        kube_client_selector: KubeClientSelector,
     ) -> None:
         kube_config = kube_config_factory(jobs_ingress_class="nginx")
-        async with kube_client_factory(kube_config) as kube_client:
-            orchestrator = kube_orchestrator_factory(kube_config=kube_config)
-            container = Container(
-                image="ubuntu:20.10",
-                command="sleep 1h",
-                resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
-                http_server=ContainerHTTPServer(port=80),
-            )
-            job = MyJob(
-                orchestrator,
-                record=JobRecord.create(
-                    request=JobRequest.create(container),
-                    cluster_name="test-cluster",
-                    org_name="test-org",
-                ),
-            )
+        orchestrator = kube_orchestrator_factory(kube_config=kube_config)
+        container = Container(
+            image="ubuntu:20.10",
+            command="sleep 1h",
+            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
+            http_server=ContainerHTTPServer(port=80),
+        )
+        job = MyJob(
+            orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                org_name="test-org",
+            ),
+        )
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
             try:
                 await job.start()
                 pod_name = job.id
-                await kube_client.wait_pod_is_running(
-                    job.namespace, pod_name=pod_name, timeout_s=60.0
+                await wait_pod_is_running(
+                    kube_client, pod_name=pod_name, timeout_s=60.0
                 )
-                ingress = await kube_client.get_ingress(job.namespace, pod_name)
+                ingress = await get_ingress(kube_client, pod_name)
                 assert ingress.ingress_class == "nginx"
             finally:
                 await orchestrator.delete_job(job)
@@ -1773,32 +1823,35 @@ class TestKubeOrchestrator:
         self,
         kube_config_factory: Callable[..., KubeConfig],
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
-        kube_client_factory: Callable[..., MyKubeClient],
+        kube_client_selector: KubeClientSelector,
     ) -> None:
         kube_config = kube_config_factory(jobs_ingress_class="traefik")
-        async with kube_client_factory(kube_config) as kube_client:
-            orchestrator = kube_orchestrator_factory(kube_config=kube_config)
-            container = Container(
-                image="ubuntu:20.10",
-                command="sleep 1h",
-                resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
-                http_server=ContainerHTTPServer(port=80),
-            )
-            job = MyJob(
-                orchestrator,
-                record=JobRecord.create(
-                    request=JobRequest.create(container),
-                    cluster_name="test-cluster",
-                    org_name="test-org",
-                ),
-            )
+        orchestrator = kube_orchestrator_factory(kube_config=kube_config)
+        container = Container(
+            image="ubuntu:20.10",
+            command="sleep 1h",
+            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
+            http_server=ContainerHTTPServer(port=80),
+        )
+        job = MyJob(
+            orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                org_name="test-org",
+            ),
+        )
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
             try:
                 await job.start()
                 pod_name = job.id
-                await kube_client.wait_pod_is_running(
-                    job.namespace, pod_name=pod_name, timeout_s=60.0
+                await wait_pod_is_running(
+                    kube_client, pod_name=pod_name, timeout_s=60.0
                 )
-                ingress = await kube_client.get_ingress(job.namespace, pod_name)
+                ingress = await get_ingress(kube_client, pod_name)
                 assert ingress.ingress_class == "traefik"
                 assert ingress.annotations == {
                     "traefik.ingress.kubernetes.io/router.middlewares": (
@@ -1812,32 +1865,35 @@ class TestKubeOrchestrator:
         self,
         kube_config_factory: Callable[..., KubeConfig],
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
-        kube_client_factory: Callable[..., MyKubeClient],
+        kube_client_selector: KubeClientSelector,
     ) -> None:
         kube_config = kube_config_factory(jobs_ingress_class="traefik")
-        async with kube_client_factory(kube_config) as kube_client:
-            orchestrator = kube_orchestrator_factory(kube_config=kube_config)
-            container = Container(
-                image="ubuntu:20.10",
-                command="sleep 1h",
-                resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
-                http_server=ContainerHTTPServer(port=80, requires_auth=True),
-            )
-            job = MyJob(
-                orchestrator,
-                record=JobRecord.create(
-                    request=JobRequest.create(container),
-                    cluster_name="test-cluster",
-                    org_name="test-org",
-                ),
-            )
+        orchestrator = kube_orchestrator_factory(kube_config=kube_config)
+        container = Container(
+            image="ubuntu:20.10",
+            command="sleep 1h",
+            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
+            http_server=ContainerHTTPServer(port=80, requires_auth=True),
+        )
+        job = MyJob(
+            orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                org_name="test-org",
+            ),
+        )
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
             try:
                 await job.start()
                 pod_name = job.id
-                await kube_client.wait_pod_is_running(
-                    job.namespace, pod_name=pod_name, timeout_s=60.0
+                await wait_pod_is_running(
+                    kube_client, pod_name=pod_name, timeout_s=60.0
                 )
-                ingress = await kube_client.get_ingress(job.namespace, pod_name)
+                ingress = await get_ingress(kube_client, pod_name)
                 assert ingress.ingress_class == "traefik"
                 assert ingress.annotations == {
                     "traefik.ingress.kubernetes.io/router.middlewares": (
@@ -1851,7 +1907,7 @@ class TestKubeOrchestrator:
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -1872,18 +1928,20 @@ class TestKubeOrchestrator:
         await job.start()
 
         pod_name = job.id
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
 
-        pod = await kube_client.get_pod(job.namespace, pod_name)
-        toleration_expected = Toleration(
-            key="platform.neuromation.io/job",
-            operator="Exists",
-            value="",
-            effect="NoSchedule",
-        )
-        assert toleration_expected in pod.tolerations
+        async with kube_client_selector.get_client(
+            org_name=job.org_name, project_name=job.project_name
+        ) as kube_client:
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
+
+            pod = await get_pod(kube_client, pod_name)
+            toleration_expected = Toleration(
+                key="platform.neuromation.io/job",
+                operator="Exists",
+                value="",
+                effect="NoSchedule",
+            )
+            assert toleration_expected in pod.tolerations
 
     def _create_username(self) -> str:
         return f"user-{uuid.uuid4().hex[:6]}"
@@ -2010,463 +2068,456 @@ class TestKubeOrchestrator:
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
     ) -> None:
         user_name = self._create_username()
-        ns = await create_namespace(
-            kube_client, org_name="test-org", project_name=user_name
-        )
+        org_name = "test-org"
+        project_name = user_name
+        async with kube_client_selector.get_client(
+            org_name=org_name, project_name=project_name
+        ) as kube_client:
+            disk_id = f"disk-{str(uuid.uuid4())}"
+            disk = Disk(disk_id=disk_id, path=user_name, cluster_name=cluster_name)
+            await self._create_pvc(kube_client, disk_id, labels={})
 
-        disk_id = f"disk-{str(uuid.uuid4())}"
-        disk = Disk(disk_id=disk_id, path=user_name, cluster_name=cluster_name)
-        await kube_client.create_pvc(disk_id, ns.name)
+            mount_path = PurePath("/mnt/disk")
+            container = Container(
+                image="ubuntu:20.10",
+                command="sleep infinity",
+                resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
+                http_server=ContainerHTTPServer(port=80),
+                disk_volumes=[
+                    DiskContainerVolume(disk=disk, dst_path=mount_path, read_only=False)
+                ],
+            )
+            job = MyJob(
+                orchestrator=kube_orchestrator,
+                record=JobRecord.create(
+                    request=JobRequest.create(container),
+                    cluster_name=cluster_name,
+                    org_name="test-org",
+                    owner=user_name,
+                ),
+            )
+            await delete_job_later(job)
+            await job.start()
 
-        mount_path = PurePath("/mnt/disk")
-        container = Container(
-            image="ubuntu:20.10",
-            command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
-            http_server=ContainerHTTPServer(port=80),
-            disk_volumes=[
-                DiskContainerVolume(disk=disk, dst_path=mount_path, read_only=False)
-            ],
-        )
-        job = MyJob(
-            orchestrator=kube_orchestrator,
-            record=JobRecord.create(
-                request=JobRequest.create(container),
-                cluster_name=cluster_name,
-                org_name="test-org",
-                owner=user_name,
-            ),
-        )
-        await delete_job_later(job)
-        await job.start()
+            pod_name = job.id
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-        pod_name = job.id
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
+            raw = await kube_client.core_v1.pod.get(pod_name)
 
-        raw = await kube_client.get_raw_pod(job.namespace, pod_name)
+            disk_volumes_raw = [
+                v
+                for v in raw.spec.volumes
+                if v.persistent_volume_claim.claim_name == disk_id
+            ]
+            assert len(disk_volumes_raw) == 1
 
-        disk_volumes_raw = [
-            v
-            for v in raw["spec"]["volumes"]
-            if v.get("persistentVolumeClaim", {}).get("claimName") == disk_id
-        ]
-        assert len(disk_volumes_raw) == 1
-
-        container_raw = raw["spec"]["containers"][0]
-        assert container_raw["volumeMounts"] == [
-            {
-                "name": disk_volumes_raw[0]["name"],
-                "mountPath": str(mount_path),
-                "subPath": ".",
-            }
-        ]
+            container_raw = raw.spec.containers[0]
+            volume_mount = container_raw.volume_mounts[0]
+            assert volume_mount.name == disk_volumes_raw[0].name
+            assert volume_mount.mount_path == str(mount_path)
+            assert volume_mount.sub_path == "."
 
     async def test_job_pod_with_disk_volumes_same_mounts_fail(
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
     ) -> None:
         user_name = self._create_username()
-        ns = await create_namespace(
-            kube_client, org_name="test-org", project_name=user_name
-        )
+        org_name = "test-org"
+        project_name = user_name
 
-        disk_id_1, disk_id_2 = f"disk-{str(uuid.uuid4())}", f"disk-{str(uuid.uuid4())}"
-        disk1 = Disk(disk_id_1, user_name, cluster_name)
-        disk2 = Disk(disk_id_2, user_name, cluster_name)
+        async with kube_client_selector.get_client(
+            org_name=org_name, project_name=project_name
+        ) as kube_client:
+            disk_id_1, disk_id_2 = (
+                f"disk-{str(uuid.uuid4())}",
+                f"disk-{str(uuid.uuid4())}",
+            )
+            disk1 = Disk(disk_id_1, user_name, cluster_name)
+            disk2 = Disk(disk_id_2, user_name, cluster_name)
 
-        await kube_client.create_pvc(disk_id_1, ns.name)
-        await kube_client.create_pvc(disk_id_2, ns.name)
+            await self._create_pvc(kube_client, disk_id_1, labels={})
+            await self._create_pvc(kube_client, disk_id_2, labels={})
 
-        mount_path = PurePath("/mnt/disk")
+            mount_path = PurePath("/mnt/disk")
 
-        container = Container(
-            image="ubuntu:20.10",
-            command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
-            http_server=ContainerHTTPServer(port=80),
-            disk_volumes=[
-                DiskContainerVolume(disk=disk1, dst_path=mount_path),
-                DiskContainerVolume(disk=disk2, dst_path=mount_path),
-            ],
-        )
-        job = MyJob(
-            orchestrator=kube_orchestrator,
-            record=JobRecord.create(
-                request=JobRequest.create(container),
-                cluster_name=cluster_name,
-                org_name="test-org",
-                owner=user_name,
-            ),
-        )
-        with pytest.raises(JobError):
-            await job.start()
+            container = Container(
+                image="ubuntu:20.10",
+                command="sleep infinity",
+                resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
+                http_server=ContainerHTTPServer(port=80),
+                disk_volumes=[
+                    DiskContainerVolume(disk=disk1, dst_path=mount_path),
+                    DiskContainerVolume(disk=disk2, dst_path=mount_path),
+                ],
+            )
+            job = MyJob(
+                orchestrator=kube_orchestrator,
+                record=JobRecord.create(
+                    request=JobRequest.create(container),
+                    cluster_name=cluster_name,
+                    org_name="test-org",
+                    owner=user_name,
+                ),
+            )
+            with pytest.raises(JobError):
+                await job.start()
 
     async def test_job_pod_with_secret_env_ok(
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
     ) -> None:
         user_name = self._create_username()
-        ns = await create_namespace(
-            kube_client, org_name="test-org", project_name=user_name
-        )
+        org_name = "test-org"
+        project_name = user_name
 
-        secret_name = "key1"
-        secret = Secret(secret_name, user_name, cluster_name)
-        await kube_client.update_or_create_secret(
-            secret.k8s_secret_name, ns.name, data={secret_name: "vvvv"}
-        )
+        async with kube_client_selector.get_client(
+            org_name=org_name, project_name=project_name
+        ) as kube_client:
+            secret_name = "key1"
+            secret = Secret(secret_name, user_name, cluster_name)
 
-        secret_env = {"SECRET_VAR": secret}
-        container = Container(
-            image="ubuntu:20.10",
-            command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
-            http_server=ContainerHTTPServer(port=80),
-            secret_env=secret_env,
-        )
-        job = MyJob(
-            orchestrator=kube_orchestrator,
-            record=JobRecord.create(
-                request=JobRequest.create(container),
-                cluster_name=cluster_name,
-                org_name="test-org",
-                owner=user_name,
-            ),
-        )
-        await delete_job_later(job)
-        await job.start()
+            await kube_client.core_v1.secret.create_or_update(
+                V1Secret(
+                    api_version="v1",
+                    metadata=V1ObjectMeta(name=secret.k8s_secret_name),
+                    data={secret_name: "vvvv"},
+                )
+            )
 
-        pod_name = job.id
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
+            secret_env = {"SECRET_VAR": secret}
+            container = Container(
+                image="ubuntu:20.10",
+                command="sleep infinity",
+                resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
+                http_server=ContainerHTTPServer(port=80),
+                secret_env=secret_env,
+            )
+            job = MyJob(
+                orchestrator=kube_orchestrator,
+                record=JobRecord.create(
+                    request=JobRequest.create(container),
+                    cluster_name=cluster_name,
+                    org_name="test-org",
+                    owner=user_name,
+                ),
+            )
+            await delete_job_later(job)
+            await job.start()
 
-        raw = await kube_client.get_raw_pod(job.namespace, pod_name)
+            pod_name = job.id
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-        container_raw = raw["spec"]["containers"][0]
-        assert {
-            "name": "SECRET_VAR",
-            "valueFrom": {
-                "secretKeyRef": {"key": secret_name, "name": secret.k8s_secret_name}
-            },
-        } in container_raw["env"]
+            raw = await kube_client.core_v1.pod.get(pod_name)
+
+            container_raw = raw.spec.containers[0]
+            env_by_name = {e.name: e for e in container_raw.env}
+            assert "SECRET_VAR" in env_by_name
+            secret_env = env_by_name["SECRET_VAR"]
+            assert secret_env.value_from.secret_key_ref.key == secret_name
+            assert secret_env.value_from.secret_key_ref.name == secret.k8s_secret_name
 
     async def test_job_pod_with_secret_env_same_secret_ok(
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
     ) -> None:
         user_name = self._create_username()
-        ns = await create_namespace(
-            kube_client, org_name="test-org", project_name=user_name
-        )
+        org_name = "test-org"
+        project_name = user_name
+        async with kube_client_selector.get_client(
+            org_name=org_name, project_name=project_name
+        ) as kube_client:
+            secret_name_1, secret_name_2 = "key1", "key2"
+            secret1 = Secret(secret_name_1, user_name, cluster_name)
+            secret2 = Secret(secret_name_2, user_name, cluster_name)
 
-        secret_name_1, secret_name_2 = "key1", "key2"
-        secret1 = Secret(secret_name_1, user_name, cluster_name)
-        secret2 = Secret(secret_name_2, user_name, cluster_name)
+            assert secret1.k8s_secret_name == secret2.k8s_secret_name
+            k8s_secret_name = secret1.k8s_secret_name
 
-        assert secret1.k8s_secret_name == secret2.k8s_secret_name
-        k8s_secret_name = secret1.k8s_secret_name
-        await kube_client.update_or_create_secret(
-            k8s_secret_name,
-            ns.name,
-            data={secret_name_1: "vvvv", secret_name_2: "vvvv"},
-        )
+            await kube_client.core_v1.secret.create_or_update(
+                V1Secret(
+                    api_version="v1",
+                    metadata=V1ObjectMeta(name=k8s_secret_name),
+                    data={secret_name_1: "vvvv", secret_name_2: "vvvv"},
+                )
+            )
 
-        secret_env = {"SECRET_VAR_1": secret1, "SECRET_VAR_2": secret2}
-        container = Container(
-            image="ubuntu:20.10",
-            command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
-            http_server=ContainerHTTPServer(port=80),
-            secret_env=secret_env,
-        )
-        job = MyJob(
-            orchestrator=kube_orchestrator,
-            record=JobRecord.create(
-                request=JobRequest.create(container),
-                cluster_name=cluster_name,
-                org_name="test-org",
-                owner=user_name,
-            ),
-        )
-        await delete_job_later(job)
-        await job.start()
+            secret_env = {"SECRET_VAR_1": secret1, "SECRET_VAR_2": secret2}
+            container = Container(
+                image="ubuntu:20.10",
+                command="sleep infinity",
+                resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
+                http_server=ContainerHTTPServer(port=80),
+                secret_env=secret_env,
+            )
+            job = MyJob(
+                orchestrator=kube_orchestrator,
+                record=JobRecord.create(
+                    request=JobRequest.create(container),
+                    cluster_name=cluster_name,
+                    org_name="test-org",
+                    owner=user_name,
+                ),
+            )
+            await delete_job_later(job)
+            await job.start()
 
-        pod_name = job.id
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
+            pod_name = job.id
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-        raw = await kube_client.get_raw_pod(job.namespace, pod_name)
+            raw = await kube_client.core_v1.pod.get(pod_name)
 
-        container_raw = raw["spec"]["containers"][0]
-        for item in [
-            {
-                "name": "SECRET_VAR_1",
-                "valueFrom": {
-                    "secretKeyRef": {"key": secret_name_1, "name": k8s_secret_name}
-                },
-            },
-            {
-                "name": "SECRET_VAR_2",
-                "valueFrom": {
-                    "secretKeyRef": {"key": secret_name_2, "name": k8s_secret_name}
-                },
-            },
-        ]:
-            assert item in container_raw["env"]
+            container_raw = raw.spec.containers[0]
+            env_by_name = {e.name: e for e in container_raw.env}
+            assert "SECRET_VAR_1" in env_by_name
+            assert "SECRET_VAR_2" in env_by_name
+
+            secret_env_1 = env_by_name["SECRET_VAR_1"]
+            assert secret_env_1.value_from.secret_key_ref.key == secret_name_1
+            assert secret_env_1.value_from.secret_key_ref.name == k8s_secret_name
+
+            secret_env_2 = env_by_name["SECRET_VAR_2"]
+            assert secret_env_2.value_from.secret_key_ref.key == secret_name_2
+            assert secret_env_2.value_from.secret_key_ref.name == k8s_secret_name
 
     async def test_job_pod_with_secret_volume_simple_ok(
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
     ) -> None:
         user_name = self._create_username()
-        ns = await create_namespace(
-            kube_client, org_name="test-org", project_name=user_name
-        )
+        org_name = "test-org"
+        project_name = user_name
 
-        secret_name = "key1"
-        secret = Secret(secret_name, user_name, cluster_name)
-        await kube_client.update_or_create_secret(
-            secret.k8s_secret_name, ns.name, data={secret_name: "vvvv"}
-        )
+        async with kube_client_selector.get_client(
+            org_name=org_name, project_name=project_name
+        ) as kube_client:
+            secret_name = "key1"
+            secret = Secret(secret_name, user_name, cluster_name)
+            await kube_client.core_v1.secret.create_or_update(
+                V1Secret(
+                    api_version="v1",
+                    metadata=V1ObjectMeta(name=secret.k8s_secret_name),
+                    data={secret_name: "vvvv"},
+                )
+            )
 
-        secret_path, secret_file = PurePath("/foo/bar"), "secret.txt"
-        container = Container(
-            image="ubuntu:20.10",
-            command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
-            http_server=ContainerHTTPServer(port=80),
-            secret_volumes=[
-                SecretContainerVolume(secret=secret, dst_path=secret_path / secret_file)
-            ],
-        )
-        job = MyJob(
-            orchestrator=kube_orchestrator,
-            record=JobRecord.create(
-                request=JobRequest.create(container),
-                cluster_name=cluster_name,
-                org_name="test-org",
-                owner=user_name,
-            ),
-        )
-        await delete_job_later(job)
-        await job.start()
+            secret_path, secret_file = PurePath("/foo/bar"), "secret.txt"
+            container = Container(
+                image="ubuntu:20.10",
+                command="sleep infinity",
+                resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
+                http_server=ContainerHTTPServer(port=80),
+                secret_volumes=[
+                    SecretContainerVolume(
+                        secret=secret, dst_path=secret_path / secret_file
+                    )
+                ],
+            )
+            job = MyJob(
+                orchestrator=kube_orchestrator,
+                record=JobRecord.create(
+                    request=JobRequest.create(container),
+                    cluster_name=cluster_name,
+                    org_name="test-org",
+                    owner=user_name,
+                ),
+            )
+            await delete_job_later(job)
+            await job.start()
 
-        pod_name = job.id
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
+            pod_name = job.id
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-        raw = await kube_client.get_raw_pod(job.namespace, pod_name)
+            raw = await kube_client.core_v1.pod.get(pod_name)
 
-        sec_volumes_raw = [
-            v for v in raw["spec"]["volumes"] if v["name"] == secret.k8s_secret_name
-        ]
-        assert sec_volumes_raw == [
-            {
-                "name": secret.k8s_secret_name,
-                "secret": {"secretName": secret.k8s_secret_name, "defaultMode": 0o400},
-            }
-        ]
+            sec_volumes_raw = [
+                v for v in raw.spec.volumes if v.name == secret.k8s_secret_name
+            ]
+            assert sec_volumes_raw[0].name == secret.k8s_secret_name
+            assert sec_volumes_raw[0].secret.secret_name == secret.k8s_secret_name
+            assert sec_volumes_raw[0].secret.default_mode == 0o400
 
-        container_raw = raw["spec"]["containers"][0]
-        assert container_raw["volumeMounts"] == [
-            {
-                "name": secret.k8s_secret_name,
-                "readOnly": True,
-                "mountPath": str(secret_path / secret_file),
-                "subPath": secret_name,
-            }
-        ]
+            container_raw = raw.spec.containers[0]
+            volume_mount = container_raw.volume_mounts[0]
+            assert volume_mount.name == secret.k8s_secret_name
+            assert volume_mount.read_only is True
+            assert volume_mount.mount_path == str(secret_path / secret_file)
+            assert volume_mount.sub_path == secret_name
 
     async def test_job_pod_with_secret_volumes_same_mounts_fail(
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
     ) -> None:
         user_name = self._create_username()
-        ns = await create_namespace(
-            kube_client, org_name="test-org", project_name=user_name
-        )
+        org_name = "test-org"
+        project_name = user_name
+        async with kube_client_selector.get_client(
+            org_name=org_name, project_name=project_name
+        ) as kube_client:
+            sec_name_1, sec_name_2 = "key1", "key2"
+            sec1 = Secret(sec_name_1, user_name, cluster_name)
+            sec2 = Secret(sec_name_2, user_name, cluster_name)
+            assert sec1.k8s_secret_name == sec2.k8s_secret_name
+            k8s_sec_name = sec1.k8s_secret_name
 
-        sec_name_1, sec_name_2 = "key1", "key2"
-        sec1 = Secret(sec_name_1, user_name, cluster_name)
-        sec2 = Secret(sec_name_2, user_name, cluster_name)
-        assert sec1.k8s_secret_name == sec2.k8s_secret_name
-        k8s_sec_name = sec1.k8s_secret_name
+            await kube_client.core_v1.secret.create_or_update(
+                V1Secret(
+                    api_version="v1",
+                    metadata=V1ObjectMeta(name=k8s_sec_name),
+                    data={sec_name_1: "vvvv", sec_name_2: "vvvv"},
+                )
+            )
 
-        await kube_client.update_or_create_secret(
-            k8s_sec_name,
-            ns.name,
-            data={sec_name_1: "vvvv", sec_name_2: "vvvv"},
-        )
+            sec_path, sec_file = PurePath("/foo/bar"), "secret.txt"
 
-        sec_path, sec_file = PurePath("/foo/bar"), "secret.txt"
-
-        container = Container(
-            image="ubuntu:20.10",
-            command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
-            http_server=ContainerHTTPServer(port=80),
-            secret_volumes=[
-                SecretContainerVolume(secret=sec1, dst_path=sec_path / sec_file),
-                SecretContainerVolume(secret=sec2, dst_path=sec_path / sec_file),
-            ],
-        )
-        job = MyJob(
-            orchestrator=kube_orchestrator,
-            record=JobRecord.create(
-                request=JobRequest.create(container),
-                cluster_name=cluster_name,
-                org_name="test-org",
-                owner=user_name,
-            ),
-        )
-        with pytest.raises(JobError):
-            await job.start()
+            container = Container(
+                image="ubuntu:20.10",
+                command="sleep infinity",
+                resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
+                http_server=ContainerHTTPServer(port=80),
+                secret_volumes=[
+                    SecretContainerVolume(secret=sec1, dst_path=sec_path / sec_file),
+                    SecretContainerVolume(secret=sec2, dst_path=sec_path / sec_file),
+                ],
+            )
+            job = MyJob(
+                orchestrator=kube_orchestrator,
+                record=JobRecord.create(
+                    request=JobRequest.create(container),
+                    cluster_name=cluster_name,
+                    org_name="test-org",
+                    owner=user_name,
+                ),
+            )
+            with pytest.raises(JobError):
+                await job.start()
 
     async def test_job_pod_with_secret_volumes_overlapping_mounts_ok(
         self,
         kube_config: KubeConfig,
         kube_orchestrator: KubeOrchestrator,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
     ) -> None:
         user_name = self._create_username()
-        ns = await create_namespace(
-            kube_client, org_name="test-org", project_name=user_name
-        )
+        org_name = "test-org"
+        project_name = user_name
 
-        secret_a = Secret("aaa", user_name, cluster_name)
-        secret_b1 = Secret("bbb-1", user_name, cluster_name)
-        secret_b2 = Secret("bbb-2", user_name, cluster_name)
-        secret_bc = Secret("bbb-ccc", user_name, cluster_name)
+        async with kube_client_selector.get_client(
+            org_name=org_name, project_name=project_name
+        ) as kube_client:
+            secret_a = Secret("aaa", user_name, cluster_name)
+            secret_b1 = Secret("bbb-1", user_name, cluster_name)
+            secret_b2 = Secret("bbb-2", user_name, cluster_name)
+            secret_bc = Secret("bbb-ccc", user_name, cluster_name)
 
-        k8s_sec_name = secret_a.k8s_secret_name
-        assert all(
-            s.k8s_secret_name == k8s_sec_name
-            for s in [secret_a, secret_b1, secret_b2, secret_bc]
-        )
+            k8s_sec_name = secret_a.k8s_secret_name
+            assert all(
+                s.k8s_secret_name == k8s_sec_name
+                for s in [secret_a, secret_b1, secret_b2, secret_bc]
+            )
 
-        await kube_client.update_or_create_secret(
-            k8s_sec_name,
-            ns.name,
-            data={
-                secret_a.secret_key: "vvvv",
-                secret_b1.secret_key: "vvvv",
-                secret_b2.secret_key: "vvvv",
-                secret_bc.secret_key: "vvvv",
-            },
-        )
+            await kube_client.core_v1.secret.create_or_update(
+                V1Secret(
+                    api_version="v1",
+                    metadata=V1ObjectMeta(name=k8s_sec_name),
+                    data={
+                        secret_a.secret_key: "vvvv",
+                        secret_b1.secret_key: "vvvv",
+                        secret_b2.secret_key: "vvvv",
+                        secret_bc.secret_key: "vvvv",
+                    },
+                )
+            )
 
-        path_a = PurePath("/aaa")
-        path_b = PurePath("/bbb")
-        path_bc = PurePath("/bbb/ccc")
+            path_a = PurePath("/aaa")
+            path_b = PurePath("/bbb")
+            path_bc = PurePath("/bbb/ccc")
 
-        file_a = "secret1.txt"
-        file_b1 = "secret2.txt"
-        file_b2 = "secret3.txt"
-        file_bc = "secret4.txt"
+            file_a = "secret1.txt"
+            file_b1 = "secret2.txt"
+            file_b2 = "secret3.txt"
+            file_bc = "secret4.txt"
 
-        container = Container(
-            image="ubuntu:20.10",
-            command="sleep infinity",
-            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
-            http_server=ContainerHTTPServer(port=80),
-            secret_volumes=[
-                SecretContainerVolume(secret_a, dst_path=path_a / file_a),
-                SecretContainerVolume(secret_b1, dst_path=path_b / file_b1),
-                SecretContainerVolume(secret_b2, dst_path=path_b / file_b2),
-                SecretContainerVolume(secret_bc, dst_path=path_bc / file_bc),
-            ],
-        )
-        job = MyJob(
-            orchestrator=kube_orchestrator,
-            record=JobRecord.create(
-                request=JobRequest.create(container),
-                cluster_name=cluster_name,
-                org_name="test-org",
-                owner=user_name,
-            ),
-        )
-        await delete_job_later(job)
-        await job.start()
+            container = Container(
+                image="ubuntu:20.10",
+                command="sleep infinity",
+                resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
+                http_server=ContainerHTTPServer(port=80),
+                secret_volumes=[
+                    SecretContainerVolume(secret_a, dst_path=path_a / file_a),
+                    SecretContainerVolume(secret_b1, dst_path=path_b / file_b1),
+                    SecretContainerVolume(secret_b2, dst_path=path_b / file_b2),
+                    SecretContainerVolume(secret_bc, dst_path=path_bc / file_bc),
+                ],
+            )
+            job = MyJob(
+                orchestrator=kube_orchestrator,
+                record=JobRecord.create(
+                    request=JobRequest.create(container),
+                    cluster_name=cluster_name,
+                    org_name="test-org",
+                    owner=user_name,
+                ),
+            )
+            await delete_job_later(job)
+            await job.start()
 
-        pod_name = job.id
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
+            pod_name = job.id
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-        raw = await kube_client.get_raw_pod(job.namespace, pod_name)
-        sec_volumes_raw = [
-            v for v in raw["spec"]["volumes"] if v["name"] == k8s_sec_name
-        ]
-        assert sec_volumes_raw == [
-            {
-                "name": k8s_sec_name,
-                "secret": {"secretName": k8s_sec_name, "defaultMode": 0o400},
-            },
-        ]
+            raw = await kube_client.core_v1.pod.get(pod_name)
+            sec_volumes_raw = [v for v in raw.spec.volumes if v.name == k8s_sec_name]
+            assert sec_volumes_raw[0].name == k8s_sec_name
+            assert sec_volumes_raw[0].secret.secret_name == k8s_sec_name
+            assert sec_volumes_raw[0].secret.default_mode == 0o400
 
-        container_raw = raw["spec"]["containers"][0]
-        assert container_raw["volumeMounts"] == [
-            {
-                "name": k8s_sec_name,
-                "readOnly": True,
-                "mountPath": str(path_a / file_a),
-                "subPath": secret_a.secret_key,
-            },
-            {
-                "name": k8s_sec_name,
-                "readOnly": True,
-                "mountPath": str(path_b / file_b1),
-                "subPath": secret_b1.secret_key,
-            },
-            {
-                "name": k8s_sec_name,
-                "readOnly": True,
-                "mountPath": str(path_b / file_b2),
-                "subPath": secret_b2.secret_key,
-            },
-            {
-                "name": k8s_sec_name,
-                "readOnly": True,
-                "mountPath": str(path_bc / file_bc),
-                "subPath": secret_bc.secret_key,
-            },
-        ]
+            container_raw = raw.spec.containers[0]
+
+            for volume_mount in container_raw.volume_mounts:
+                assert volume_mount.name == k8s_sec_name
+                assert volume_mount.read_only is True
+
+            assert container_raw.volume_mounts[0].mount_path == str(path_a / file_a)
+            assert container_raw.volume_mounts[0].sub_path == secret_a.secret_key
+
+            assert container_raw.volume_mounts[1].mount_path == str(path_b / file_b1)
+            assert container_raw.volume_mounts[1].sub_path == secret_b1.secret_key
+
+            assert container_raw.volume_mounts[2].mount_path == str(path_b / file_b2)
+            assert container_raw.volume_mounts[2].sub_path == secret_b2.secret_key
+
+            assert container_raw.volume_mounts[3].mount_path == str(path_bc / file_bc)
+            assert container_raw.volume_mounts[3].sub_path == secret_bc.secret_key
 
     async def test_cleanup_old_named_ingresses(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> None:
@@ -2503,26 +2554,40 @@ class TestKubeOrchestrator:
         await delete_job_later(job2)
         await kube_orchestrator.start_job(job2)
 
-        await kube_client.get_ingress(job1.namespace, job1.id)
-        await kube_client.get_ingress(job2.namespace, job2.id)
+        async with (
+            kube_client_selector.get_client(
+                org_name=job1.org_name,
+                project_name=job1.project_name,
+            ) as kube_client_1,
+            kube_client_selector.get_client(
+                org_name=job2.org_name,
+                project_name=job2.project_name,
+            ) as kube_client_2,
+        ):
+            await get_ingress(kube_client_1, job1.id)
+            await get_ingress(kube_client_2, job2.id)
 
-        job3 = MyJob(
-            orchestrator=kube_orchestrator,
-            record=JobRecord.create(
-                name=name,
-                owner="owner1",
-                request=JobRequest.create(container),
-                cluster_name="test-cluster",
-                org_name="test-org",
-            ),
-        )
-        await delete_job_later(job3)
-        await kube_orchestrator.start_job(job3)
+            job3 = MyJob(
+                orchestrator=kube_orchestrator,
+                record=JobRecord.create(
+                    name=name,
+                    owner="owner1",
+                    request=JobRequest.create(container),
+                    cluster_name="test-cluster",
+                    org_name="test-org",
+                ),
+            )
+            async with kube_client_selector.get_client(
+                org_name=job3.org_name,
+                project_name=job3.project_name,
+            ) as kube_client_3:
+                await delete_job_later(job3)
+                await kube_orchestrator.start_job(job3)
 
-        with pytest.raises(LegacyResourceNotFound):
-            await kube_client.get_ingress(job1.namespace, job1.id)
-        await kube_client.get_ingress(job2.namespace, job2.id)
-        await kube_client.get_ingress(job3.namespace, job3.id)
+                with pytest.raises(ResourceNotFound):
+                    await get_ingress(kube_client_1, job1.id)
+                await get_ingress(kube_client_2, job2.id)
+                await get_ingress(kube_client_3, job3.id)
 
     @pytest.fixture
     async def node_resources(
@@ -2546,7 +2611,9 @@ class TestKubeOrchestrator:
 
     @pytest.mark.usefixtures("start_watchers")
     async def test_get_scheduled_jobs(
-        self, kube_client: MyKubeClient, kube_orchestrator: KubeOrchestrator
+        self,
+        kube_client_selector: KubeClientSelector,
+        kube_orchestrator: KubeOrchestrator,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -2567,9 +2634,11 @@ class TestKubeOrchestrator:
         assert scheduled == []
 
         await kube_orchestrator.start_job(job)
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=job.id, timeout_s=60.0
-        )
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_is_running(kube_client, pod_name=job.id, timeout_s=60.0)
 
         scheduled = await kube_orchestrator.get_scheduled_jobs([job])
         assert scheduled == [job]
@@ -2645,6 +2714,86 @@ class TestKubeOrchestrator:
                     resources={"requests": {"storage": 1024 * 1024}},
                     storage_class_name="test-storage-class",
                 ),
+            )
+        )
+
+    async def _create_failed_attach_volume_event(
+        self,
+        client_proxy: KubeClientProxy,
+        pod_id: str,
+    ) -> None:
+        namespace = client_proxy._namespace
+        now = datetime.now(timezone.utc)  # noqa: UP017
+        await client_proxy.core_v1.event.create(
+            CoreV1Event(
+                api_version="v1",
+                count=1,
+                first_timestamp=now,
+                involved_object={
+                    "apiVersion": "v1",
+                    "kind": "Pod",
+                    "name": pod_id,
+                    "namespace": namespace,
+                    "resourceVersion": "48102193",
+                    "uid": "eddfe678-86e9-11e9-9d65-42010a800018",
+                },
+                kind="Event",
+                last_timestamp=now,
+                message="FailedAttachVolume",
+                metadata=V1ObjectMeta(
+                    creation_timestamp=now,
+                    name=f"{pod_id}.{uuid.uuid4()}",
+                    namespace=namespace,
+                    self_link=(
+                        f"/api/v1/namespaces/{namespace}/events/{pod_id}.15a870d7e2bb228b"
+                    ),
+                    uid="cb886f64-8f96-11e9-9251-42010a800038",
+                ),
+                reason="FailedAttachVolume",
+                reporting_component="",
+                reporting_instance="",
+                source={"component": "attachdetach-controller"},
+                type="Warning",
+            )
+        )
+
+    async def _create_triggered_scaleup_event(
+        self,
+        client_proxy: KubeClientProxy,
+        pod_id: str,
+    ) -> None:
+        namespace = client_proxy._namespace
+        now = datetime.now(timezone.utc)  # noqa: UP017
+        await client_proxy.core_v1.event.create(
+            CoreV1Event(
+                api_version="v1",
+                count=1,
+                first_timestamp=now,
+                involved_object={
+                    "apiVersion": "v1",
+                    "kind": "Pod",
+                    "name": pod_id,
+                    "namespace": namespace,
+                    "resourceVersion": "48102193",
+                    "uid": "eddfe678-86e9-11e9-9d65-42010a800018",
+                },
+                kind="Event",
+                last_timestamp=now,
+                message="TriggeredScaleUp",
+                metadata=V1ObjectMeta(
+                    creation_timestamp=now,
+                    name=f"{pod_id}.{uuid.uuid4()}",
+                    namespace=namespace,
+                    self_link=(
+                        f"/api/v1/namespaces/{namespace}/events/{{pod_id}}.15a870d7e2bb228b"
+                    ),
+                    uid="cb886f64-8f96-11e9-9251-42010a800038",
+                ),
+                reason="TriggeredScaleUp",
+                reporting_component="",
+                reporting_instance="",
+                source={"component": "cluster-autoscaler"},
+                type="Normal",
             )
         )
 
@@ -2782,7 +2931,7 @@ class TestAffinityFixtures:
 
     @pytest.fixture
     async def start_job(
-        self, kube_client: MyKubeClient
+        self, kube_client_selector: KubeClientSelector
     ) -> Callable[..., AbstractAsyncContextManager[MyJob]]:
         @asynccontextmanager
         async def _create(
@@ -2825,8 +2974,11 @@ class TestAffinityFixtures:
             await kube_orchestrator.delete_job(job)
             # Sometimes pods stuck in terminating state.
             # Force delete to free node resources.
-            await kube_client.delete_pod(job.namespace, job.id, force=True)
-            await kube_client.wait_pod_non_existent(job.namespace, job.id, timeout_s=10)
+            async with kube_client_selector.get_client(
+                org_name=job.org_name, project_name=job.project_name
+            ) as kube_client:
+                await delete_pod(kube_client, job.id, force=True)
+                await wait_pod_non_existent(kube_client, job.id, timeout_s=10)
 
         return _create
 
@@ -2834,7 +2986,6 @@ class TestAffinityFixtures:
 class TestNodeAffinity(TestAffinityFixtures):
     async def test_unschedulable_job_with_preset(
         self,
-        kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
@@ -2844,7 +2995,6 @@ class TestNodeAffinity(TestAffinityFixtures):
 
     async def test_job_with_unknown_preset(
         self,
-        kube_client: MyKubeClient,
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
@@ -2854,28 +3004,25 @@ class TestNodeAffinity(TestAffinityFixtures):
 
     async def test_job_with_preset(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
         async with start_job(kube_orchestrator, preset_name="cpu") as job:
-            await kube_client.wait_pod_scheduled(job.namespace, job.id)
+            async with kube_client_selector.get_client(
+                org_name=job.org_name,
+                project_name=job.project_name,
+            ) as kube_client:
+                await wait_pod_scheduled(kube_client, job.id)
 
-            job_pod = await kube_client.get_raw_pod(job.namespace, job.id)
-            assert (
-                job_pod["spec"]["affinity"]["nodeAffinity"]
-                == NodeAffinity(
-                    required=[
-                        LabelSelectorTerm(
-                            [
-                                LabelSelectorMatchExpression.create_in(
-                                    "nodepool", "cpu-small"
-                                )
-                            ]
-                        )
-                    ]
-                ).to_primitive()
-            )
+                job_pod = await kube_client.core_v1.pod.get(job.id)
+                node_selector_term = job_pod.spec.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms[  # noqa: E501
+                    0
+                ]
+                match_expression = node_selector_term.match_expressions[0]
+                assert match_expression.key == "nodepool"
+                assert match_expression.operator == "In"
+                assert match_expression.values == ["cpu-small"]
 
     async def test_unschedulable_job(
         self,
@@ -2888,64 +3035,61 @@ class TestNodeAffinity(TestAffinityFixtures):
 
     async def test_cpu_job(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
         async with start_job(kube_orchestrator, cpu=0.1, memory=32 * 10**6) as job:
-            await kube_client.wait_pod_scheduled(job.namespace, job.id)
+            async with kube_client_selector.get_client(
+                org_name=job.org_name, project_name=job.project_name
+            ) as kube_client:
+                await wait_pod_scheduled(kube_client, job.id)
+                job_pod = await kube_client.core_v1.pod.get(job.id)
 
-            job_pod = await kube_client.get_raw_pod(job.namespace, job.id)
-            assert (
-                job_pod["spec"]["affinity"]["nodeAffinity"]
-                == NodeAffinity(
-                    required=[
-                        LabelSelectorTerm(
-                            [
-                                LabelSelectorMatchExpression.create_in(
-                                    "nodepool", "cpu-small"
-                                )
-                            ]
-                        ),
-                        LabelSelectorTerm(
-                            [
-                                LabelSelectorMatchExpression.create_in(
-                                    "nodepool", "cpu-large-tpu"
-                                )
-                            ]
-                        ),
-                    ]
-                ).to_primitive()
-            )
+            node_aff = job_pod.spec.affinity.node_affinity
+            assert node_aff
+            assert node_aff.required_during_scheduling_ignored_during_execution
+            terms = (
+                node_aff.required_during_scheduling_ignored_during_execution.node_selector_terms
+                or []
+            )  # noqa: E501
+            actual_values: set[str] = set()
+            for term in terms:
+                for expr in term.match_expressions or []:
+                    if expr.key == "nodepool" and (expr.values or []):
+                        actual_values.update(expr.values)
+            assert actual_values == {"cpu-small", "cpu-large-tpu"}
 
     async def test_cpu_job_on_gpu_node(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator_gpu: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
         async with start_job(kube_orchestrator_gpu, cpu=0.1, memory=32 * 10**6) as job:
-            await kube_client.wait_pod_scheduled(job.namespace, job.id, "nvidia-gpu")
+            async with kube_client_selector.get_client(
+                org_name=job.org_name, project_name=job.project_name
+            ) as kube_client:
+                await wait_pod_scheduled(kube_client, job.id, "nvidia-gpu")
+                job_pod = await kube_client.core_v1.pod.get(job.id)
 
-            job_pod = await kube_client.get_raw_pod(job.namespace, job.id)
-            assert (
-                job_pod["spec"]["affinity"]["nodeAffinity"]
-                == NodeAffinity(
-                    required=[
-                        LabelSelectorTerm(
-                            [
-                                LabelSelectorMatchExpression.create_in(
-                                    "nodepool", "nvidia-gpu"
-                                )
-                            ]
-                        )
-                    ]
-                ).to_primitive()
-            )
+            node_aff = job_pod.spec.affinity.node_affinity
+            assert node_aff
+            assert node_aff.required_during_scheduling_ignored_during_execution
+            terms = (
+                node_aff.required_during_scheduling_ignored_during_execution.node_selector_terms
+                or []
+            )  # noqa: E501
+            actual_values: set[str] = set()
+            for term in terms:
+                for expr in term.match_expressions or []:
+                    if expr.key == "nodepool" and (expr.values or []):
+                        actual_values.update(expr.values)
+            assert actual_values == {"nvidia-gpu"}
 
     async def test_gpu_job(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
@@ -2955,27 +3099,29 @@ class TestNodeAffinity(TestAffinityFixtures):
             memory=32 * 10**6,
             nvidia_gpu=1,
         ) as job:
-            await kube_client.wait_pod_scheduled(job.namespace, job.id, "nvidia-gpu")
+            async with kube_client_selector.get_client(
+                org_name=job.org_name, project_name=job.project_name
+            ) as kube_client:
+                await wait_pod_scheduled(kube_client, job.id, "nvidia-gpu")
+                job_pod = await kube_client.core_v1.pod.get(job.id)
 
-            job_pod = await kube_client.get_raw_pod(job.namespace, job.id)
-            assert (
-                job_pod["spec"]["affinity"]["nodeAffinity"]
-                == NodeAffinity(
-                    required=[
-                        LabelSelectorTerm(
-                            [
-                                LabelSelectorMatchExpression.create_in(
-                                    "nodepool", "nvidia-gpu"
-                                )
-                            ]
-                        )
-                    ]
-                ).to_primitive()
-            )
+            node_aff = job_pod.spec.affinity.node_affinity
+            assert node_aff
+            assert node_aff.required_during_scheduling_ignored_during_execution
+            terms = (
+                node_aff.required_during_scheduling_ignored_during_execution.node_selector_terms
+                or []
+            )  # noqa: E501
+            actual_values: set[str] = set()
+            for term in terms:
+                for expr in term.match_expressions or []:
+                    if expr.key == "nodepool" and (expr.values or []):
+                        actual_values.update(expr.values)
+            assert actual_values == {"nvidia-gpu"}
 
     async def test_scheduled_job_on_not_preemptible_node(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
@@ -2986,28 +3132,33 @@ class TestNodeAffinity(TestAffinityFixtures):
             nvidia_gpu=1,
             scheduler_enabled=True,
         ) as job:
-            await kube_client.wait_pod_scheduled(job.namespace, job.id, "nvidia-gpu")
+            async with kube_client_selector.get_client(
+                org_name=job.org_name, project_name=job.project_name
+            ) as kube_client:
+                await wait_pod_scheduled(kube_client, job.id, "nvidia-gpu")
+                job_pod = await kube_client.core_v1.pod.get(job.id)
 
-            job_pod = await kube_client.get_raw_pod(job.namespace, job.id)
-            assert (
-                job_pod["spec"]["affinity"]["nodeAffinity"]
-                == NodeAffinity(
-                    required=[
-                        LabelSelectorTerm(
-                            [
-                                LabelSelectorMatchExpression.create_in(
-                                    "nodepool", "nvidia-gpu"
-                                )
-                            ]
-                        ),
-                    ],
-                    preferred=[],
-                ).to_primitive()
+            node_aff = job_pod.spec.affinity.node_affinity
+            assert node_aff
+            assert node_aff.required_during_scheduling_ignored_during_execution
+            terms = (
+                node_aff.required_during_scheduling_ignored_during_execution.node_selector_terms
+                or []
+            )  # noqa: E501
+            actual_values: set[str] = set()
+            for term in terms:
+                for expr in term.match_expressions or []:
+                    if expr.key == "nodepool" and (expr.values or []):
+                        actual_values.update(expr.values)
+            assert actual_values == {"nvidia-gpu"}
+            preferred = (
+                node_aff.preferred_during_scheduling_ignored_during_execution or []
             )
+            assert preferred == []
 
     async def test_preemptible_job_on_preemptible_node(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
@@ -3017,57 +3168,61 @@ class TestNodeAffinity(TestAffinityFixtures):
             memory=32 * 10**6,
             preemptible_node=True,
         ) as job:
-            await kube_client.wait_pod_scheduled(job.namespace, job.id, "cpu-small-p")
+            async with kube_client_selector.get_client(
+                org_name=job.org_name, project_name=job.project_name
+            ) as kube_client:
+                await wait_pod_scheduled(kube_client, job.id, "cpu-small-p")
+                job_pod = await kube_client.core_v1.pod.get(job.id)
 
-            job_pod = await kube_client.get_raw_pod(job.namespace, job.id)
-            assert (
-                job_pod["spec"]["affinity"]["nodeAffinity"]
-                == NodeAffinity(
-                    required=[
-                        LabelSelectorTerm(
-                            [
-                                LabelSelectorMatchExpression.create_in(
-                                    "nodepool", "cpu-small-p"
-                                )
-                            ]
-                        ),
-                    ]
-                ).to_primitive()
-            )
+            node_aff = job_pod.spec.affinity.node_affinity
+            assert node_aff
+            assert node_aff.required_during_scheduling_ignored_during_execution
+            terms = (
+                node_aff.required_during_scheduling_ignored_during_execution.node_selector_terms
+                or []
+            )  # noqa: E501
+            actual_values: set[str] = set()
+            for term in terms:
+                for expr in term.match_expressions or []:
+                    if expr.key == "nodepool" and (expr.values or []):
+                        actual_values.update(expr.values)
+            assert actual_values == {"cpu-small-p"}
 
 
 class TestPodAffinity(TestAffinityFixtures):
     async def test_cpu_job(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         start_job: Callable[..., AbstractAsyncContextManager[MyJob]],
     ) -> None:
         async with start_job(kube_orchestrator, cpu=0.1, memory=32 * 10**6) as job:
-            await kube_client.wait_pod_scheduled(job.namespace, job.id)
-
-            job_pod = await kube_client.get_raw_pod(job.namespace, job.id)
-            pod_affinity = PodAffinity(
-                preferred=[
-                    PodPreferredSchedulingTerm(
-                        weight=100,
-                        pod_affinity_term=PodAffinityTerm(
-                            label_selector=LabelSelectorTerm(
-                                match_expressions=[
-                                    LabelSelectorMatchExpression.create_exists(
-                                        "platform.neuromation.io/job"
-                                    )
-                                ]
-                            ),
-                            topologyKey="kubernetes.io/hostname",
-                        ),
-                    )
-                ]
+            async with kube_client_selector.get_client(
+                org_name=job.org_name, project_name=job.project_name
+            ) as kube_client:
+                await wait_pod_scheduled(kube_client, job.id)
+                job_pod = await kube_client.core_v1.pod.get(job.id)
+            affinity = job_pod.spec.affinity
+            assert affinity
+            assert affinity.pod_affinity
+            preferred = (
+                affinity.pod_affinity.preferred_during_scheduling_ignored_during_execution
+                or []
             )
-            assert (
-                job_pod["spec"]["affinity"]["podAffinity"]
-                == pod_affinity.to_primitive()
-            )
+            found = False
+            for item in preferred:
+                term = item.pod_affinity_term
+                if not term or not term.label_selector:
+                    continue
+                exprs = term.label_selector.match_expressions or []
+                if any(
+                    e.key == "platform.neuromation.io/job" and e.operator == "Exists"
+                    for e in exprs
+                ):
+                    assert term.topology_key == "kubernetes.io/hostname"
+                    found = True
+                    break
+            assert found
 
 
 @pytest.fixture
@@ -3116,24 +3271,21 @@ class TestPodContainerDevShmSettings:
     @pytest.fixture
     async def run_command_get_status(
         self,
-        kube_client: KubeClient,
         kube_orchestrator: KubeOrchestrator,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> Callable[..., Awaitable[JobStatusItem]]:
-        async def _f(resources: ContainerResources, command: str) -> JobStatusItem:
+        async def _f(
+            kube_client: KubeClientProxy, resources: ContainerResources, command: str
+        ) -> JobStatusItem:
             container = Container(
                 image="ubuntu:20.10", command=command, resources=resources
             )
             job_request = JobRequest.create(container)
             pod = PodDescriptor.from_job_request(job_request)
             await delete_pod_later(pod)
-            await kube_client.create_pod(kube_client.namespace, pod)
-            await kube_client.wait_pod_is_terminated(
-                kube_client.namespace, pod_name=pod.name, timeout_s=60.0
-            )
-            pod_status = await kube_client.get_pod_status(
-                kube_client.namespace, pod.name
-            )
+            await create_pod(kube_client, pod)
+            await wait_pod_is_terminated(kube_client, pod_name=pod.name, timeout_s=60.0)
+            pod_status = await get_pod_status(kube_client, pod.name)
             return JobStatusItemFactory(pod_status).create()
 
         return _f
@@ -3320,7 +3472,7 @@ class TestPreemption:
     @pytest.fixture
     async def kube_node_preemptible(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         delete_node_later: Callable[[str], Awaitable[None]],
         default_node_capacity: dict[str, Any],
@@ -3343,15 +3495,27 @@ class TestPreemption:
                 key=kube_config.jobs_pod_preemptible_toleration_key, value="present"
             )
         ]
-        await kube_client.create_node(
-            node_name, capacity=default_node_capacity, labels=labels, taints=taints
+        await kube_client_selector.host_client.core_v1.node.create(
+            V1Node(
+                api_version="v1",
+                kind="Node",
+                metadata=V1ObjectMeta(
+                    name=node_name,
+                    labels=labels,
+                ),
+                spec={"taints": [taint.to_model() for taint in taints]},
+                status={
+                    "capacity": default_node_capacity,
+                    "conditions": [{"status": "True", "type": "Ready"}],
+                },
+            )
         )
         yield node_name
 
     async def test_non_preemptible_job(
         self,
         kube_config: KubeConfig,
-        kube_client: KubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_regular_labels: str,
@@ -3374,22 +3538,24 @@ class TestPreemption:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
-        job_status = await kube_orchestrator.get_job_status(job)
-        assert job_status.is_running
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
+            job_status = await kube_orchestrator.get_job_status(job)
+            assert job_status.is_running
 
-        await kube_client.delete_pod(job.namespace, pod_name, force=True)
+            await delete_pod(kube_client, pod_name, force=True)
 
-        # triggering pod recreation
-        with pytest.raises(JobNotFoundException, match="was not found"):
-            await kube_orchestrator.get_job_status(job)
+            # triggering pod recreation
+            with pytest.raises(JobNotFoundException, match="was not found"):
+                await kube_orchestrator.get_job_status(job)
 
     async def test_scheduled_job_lost_running_pod(
         self,
         kube_config: KubeConfig,
-        kube_client: KubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_regular_labels: str,
@@ -3414,28 +3580,28 @@ class TestPreemption:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
-        job_status = await kube_orchestrator.get_job_status(job)
-        assert job_status.is_running
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
+            job_status = await kube_orchestrator.get_job_status(job)
+            assert job_status.is_running
 
-        await kube_client.delete_pod(job.namespace, pod_name, force=True)
+            await delete_pod(kube_client, pod_name, force=True)
 
-        # triggering pod recreation
-        job_status = await kube_orchestrator.get_job_status(job)
-        assert job_status.is_pending
+            # triggering pod recreation
+            job_status = await kube_orchestrator.get_job_status(job)
+            assert job_status.is_pending
 
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
-        job_status = await kube_orchestrator.get_job_status(job)
-        assert job_status.is_running
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
+            job_status = await kube_orchestrator.get_job_status(job)
+            assert job_status.is_running
 
     async def test_preemptible_job_lost_running_pod(
         self,
         kube_config: KubeConfig,
-        kube_client: KubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_preemptible_labels: str,
@@ -3459,28 +3625,28 @@ class TestPreemption:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
-        job_status = await kube_orchestrator.get_job_status(job)
-        assert job_status.is_running
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
+            job_status = await kube_orchestrator.get_job_status(job)
+            assert job_status.is_running
 
-        await kube_client.delete_pod(job.namespace, pod_name, force=True)
+            await delete_pod(kube_client, pod_name, force=True)
 
-        # triggering pod recreation
-        job_status = await kube_orchestrator.get_job_status(job)
-        assert job_status.is_pending
+            # triggering pod recreation
+            job_status = await kube_orchestrator.get_job_status(job)
+            assert job_status.is_pending
 
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
-        job_status = await kube_orchestrator.get_job_status(job)
-        assert job_status.is_running
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
+            job_status = await kube_orchestrator.get_job_status(job)
+            assert job_status.is_running
 
     async def test_preemptible_job_lost_node_lost_pod(
         self,
         kube_config: KubeConfig,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_regular_labels: str,
@@ -3506,15 +3672,19 @@ class TestPreemption:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_scheduled(job.namespace, pod_name, node_name)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_scheduled(kube_client, pod_name, node_name)
 
-        await kube_client.delete_node(node_name)
-        # deleting node initiates it's pods deletion
-        await kube_client.wait_pod_non_existent(job.namespace, pod_name, timeout_s=60.0)
+            await kube_client_selector.host_client.core_v1.node.delete(node_name)
+            # deleting node initiates it's pods deletion
+            await wait_pod_non_existent(kube_client, pod_name, timeout_s=60.0)
 
-        # triggering pod recreation
-        job_status = await kube_orchestrator.get_job_status(job)
-        assert job_status.is_pending
+            # triggering pod recreation
+            job_status = await kube_orchestrator.get_job_status(job)
+            assert job_status.is_pending
 
     async def test_preemptible_job_pending_pod_node_not_ready(
         self,
@@ -3567,7 +3737,7 @@ class TestPreemption:
     async def test_preemptible_job_recreation_failed(
         self,
         kube_config: KubeConfig,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_regular_labels: str,
@@ -3593,9 +3763,12 @@ class TestPreemption:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_scheduled(job.namespace, pod_name, node_name)
-
-        await kube_client.delete_pod(job.namespace, pod_name, force=True)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_scheduled(kube_client, pod_name, node_name)
+            await delete_pod(kube_client, pod_name, force=True)
 
         # changing the job details to trigger pod creation failure
         container = Container(
@@ -3623,7 +3796,7 @@ class TestPreemption:
 class TestRestartPolicy:
     async def test_restart_failing(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
     ) -> None:
@@ -3645,9 +3818,11 @@ class TestRestartPolicy:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
         status = await kube_orchestrator.get_job_status(job)
         assert status in (
@@ -3659,7 +3834,7 @@ class TestRestartPolicy:
 
     async def test_restart_failing_succeeded(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
     ) -> None:
@@ -3681,16 +3856,18 @@ class TestRestartPolicy:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_is_terminated(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_is_terminated(kube_client, pod_name=pod_name, timeout_s=60.0)
 
         status = await kube_orchestrator.get_job_status(job)
         assert status == JobStatusItem.create(status=JobStatus.SUCCEEDED, exit_code=0)
 
     async def test_restart_always(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
     ) -> None:
@@ -3712,9 +3889,11 @@ class TestRestartPolicy:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_is_terminated(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_is_terminated(kube_client, pod_name=pod_name, timeout_s=60.0)
 
         status = await kube_orchestrator.get_job_status(job)
         assert status in (
@@ -3726,7 +3905,7 @@ class TestRestartPolicy:
 
     async def test_restart_always_succeeded(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
     ) -> None:
@@ -3748,9 +3927,11 @@ class TestRestartPolicy:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_is_terminated(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_is_terminated(kube_client, pod_name=pod_name, timeout_s=60.0)
 
         status = await kube_orchestrator.get_job_status(job)
         assert status in (
@@ -3778,7 +3959,7 @@ class TestJobsPreemption:
     @pytest.fixture
     async def job_factory(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         delete_job_later: Callable[[Job], Awaitable[None]],
     ) -> Callable[..., Awaitable[Job]]:
@@ -3804,9 +3985,13 @@ class TestJobsPreemption:
             await kube_orchestrator.start_job(job)
             await delete_job_later(job)
             if wait:
-                await kube_client.wait_pod_is_running(
-                    job.namespace, job.id, timeout_s=wait_timeout_s
-                )
+                async with kube_client_selector.get_client(
+                    org_name=job.org_name,
+                    project_name=job.project_name,
+                ) as kube_client:
+                    await wait_pod_is_running(
+                        kube_client, job.id, timeout_s=wait_timeout_s
+                    )
             return job
 
         return _create
@@ -3820,7 +4005,7 @@ class TestJobsPreemption:
 
     async def test_preempt_jobs(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         job_factory: Callable[..., Awaitable[Job]],
         node_resources: NodeResources,
@@ -3832,35 +4017,41 @@ class TestJobsPreemption:
 
         assert preempted_jobs == [preemptible_job]
 
-        await kube_client.wait_pod_is_deleted(
-            job.namespace, preemptible_job.id, timeout_s=60, interval_s=0.1
-        )
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_is_deleted(
+                kube_client, preemptible_job.id, timeout_s=60, interval_s=0.1
+            )
 
     async def test_cannot_be_scheduled(
         self,
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
         kube_config_factory: Callable[..., KubeConfig],
-        kube_client_factory: Callable[..., MyKubeClient],
+        kube_client_selector: KubeClientSelector,
         job_factory: Callable[..., Awaitable[Job]],
         node_resources: NodeResources,
     ) -> None:
         kube_config = kube_config_factory(node_label_node_pool="nodepool")
-        async with kube_client_factory(kube_config) as kube_client:
-            kube_orchestrator = kube_orchestrator_factory(kube_config=kube_config)
-            preemptible_job = await job_factory(cpu=node_resources.cpu / 2, wait=True)
-            # Node should have less than cpu / 2 left
-            job = await job_factory(cpu=node_resources.cpu / 2)
-            preempted = await kube_orchestrator.preempt_jobs([job], [preemptible_job])
+        kube_orchestrator = kube_orchestrator_factory(kube_config=kube_config)
+        preemptible_job = await job_factory(cpu=node_resources.cpu / 2, wait=True)
+        # Node should have less than cpu / 2 left
+        job = await job_factory(cpu=node_resources.cpu / 2)
+        preempted = await kube_orchestrator.preempt_jobs([job], [preemptible_job])
 
-            assert preempted == []
+        assert preempted == []
 
-            job_pod = await kube_client.get_pod(job.namespace, job.id)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name, project_name=job.project_name
+        ) as kube_client:
+            job_pod = await get_pod(kube_client, job.id)
             assert job_pod.status
             assert job_pod.status.is_phase_pending
 
     async def test_not_enough_resources(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         job_factory: Callable[..., Awaitable[Job]],
         node_resources: NodeResources,
@@ -3872,13 +4063,16 @@ class TestJobsPreemption:
 
         assert preempted == []
 
-        job_pod = await kube_client.get_pod(job.namespace, job.id)
-        assert job_pod.status
-        assert job_pod.status.is_phase_pending
+        async with kube_client_selector.get_client(
+            org_name=job.org_name, project_name=job.project_name
+        ) as kube_client:
+            job_pod = await get_pod(kube_client, job.id)
+            assert job_pod.status
+            assert job_pod.status.is_phase_pending
 
     async def test_running_jobs_ignored(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         job_factory: Callable[..., Awaitable[Job]],
     ) -> None:
@@ -3888,15 +4082,16 @@ class TestJobsPreemption:
 
         assert preempted == []
 
-        preemptible_pod = await kube_client.get_pod(
-            preemptible_job.namespace, preemptible_job.id
-        )
-        assert preemptible_pod.status
-        assert preemptible_pod.status.is_scheduled
+        async with kube_client_selector.get_client(
+            org_name=preemptible_job.org_name, project_name=preemptible_job.project_name
+        ) as kube_client:
+            preemptible_pod = await get_pod(kube_client, preemptible_job.id)
+            assert preemptible_pod.status
+            assert preemptible_pod.status.is_scheduled
 
     async def test_no_preemptible_jobs(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         job_factory: Callable[..., Awaitable[Job]],
         node_resources: NodeResources,
@@ -3907,13 +4102,16 @@ class TestJobsPreemption:
 
         assert preempted == []
 
-        job_pod = await kube_client.get_pod(job.namespace, job.id)
-        assert job_pod.status
-        assert job_pod.status.is_phase_pending
+        async with kube_client_selector.get_client(
+            org_name=job.org_name, project_name=job.project_name
+        ) as kube_client:
+            job_pod = await get_pod(kube_client, job.id)
+            assert job_pod.status
+            assert job_pod.status.is_phase_pending
 
     async def test_no_jobs(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         job_factory: Callable[..., Awaitable[Job]],
     ) -> None:
@@ -3922,11 +4120,12 @@ class TestJobsPreemption:
 
         assert preempted == []
 
-        preemptible_pod = await kube_client.get_pod(
-            preemptible_job.namespace, preemptible_job.id
-        )
-        assert preemptible_pod.status
-        assert preemptible_pod.status.is_scheduled
+        async with kube_client_selector.get_client(
+            org_name=preemptible_job.org_name, project_name=preemptible_job.project_name
+        ) as kube_client:
+            preemptible_pod = await get_pod(kube_client, preemptible_job.id)
+            assert preemptible_pod.status
+            assert preemptible_pod.status.is_scheduled
 
 
 class TestExternalJobs:
@@ -4133,7 +4332,7 @@ class TestExternalJobs:
 
     async def test_job_succeeded(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
     ) -> None:
@@ -4156,14 +4355,18 @@ class TestExternalJobs:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_is_finished(job.namespace, pod_name)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_is_finished(kube_client, pod_name)
 
         job_status = await kube_orchestrator.get_job_status(job)
         assert job_status.status == JobStatus.SUCCEEDED
 
     async def test_job_failed(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
     ) -> None:
@@ -4186,7 +4389,11 @@ class TestExternalJobs:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_is_finished(job.namespace, pod_name)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_is_finished(kube_client, pod_name)
 
         job_status = await kube_orchestrator.get_job_status(job)
         assert job_status.status == JobStatus.FAILED
@@ -4328,7 +4535,7 @@ class TestExternalJobsPreemption:
     @pytest.fixture
     async def kube_node_preemptible(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         delete_node_later: Callable[[str], Awaitable[None]],
         default_node_capacity: dict[str, Any],
@@ -4351,14 +4558,26 @@ class TestExternalJobsPreemption:
                 key=kube_config.jobs_pod_preemptible_toleration_key, value="present"
             )
         ]
-        await kube_client.create_node(
-            node_name, capacity=default_node_capacity, labels=labels, taints=taints
+        await kube_client_selector.host_client.core_v1.node.create(
+            V1Node(
+                api_version="v1",
+                kind="Node",
+                metadata=V1ObjectMeta(
+                    name=node_name,
+                    labels=labels,
+                ),
+                spec={"taints": [taint.to_model() for taint in taints]},
+                status={
+                    "capacity": default_node_capacity,
+                    "conditions": [{"status": "True", "type": "Ready"}],
+                },
+            )
         )
         yield node_name
 
     async def test_job_lost_running_pod(
         self,
-        kube_client: KubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_regular_labels: None,
@@ -4381,21 +4600,21 @@ class TestExternalJobsPreemption:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-        # triggering pod recreation
-        await kube_client.delete_pod(job.namespace, pod_name, force=True)
-        await kube_orchestrator.get_job_status(job)
+            # triggering pod recreation
+            await delete_pod(kube_client, pod_name, force=True)
+            await kube_orchestrator.get_job_status(job)
 
-        await kube_client.wait_pod_is_running(
-            job.namespace, pod_name=pod_name, timeout_s=60.0
-        )
+            await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
     async def test_job_lost_node_lost_pod(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_node_preemptible: str,
@@ -4419,15 +4638,19 @@ class TestExternalJobsPreemption:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_scheduled(job.namespace, pod_name, node_name)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_scheduled(kube_client, pod_name, node_name)
 
-        await kube_client.delete_node(node_name)
-        # deleting node initiates it's pods deletion
-        await kube_client.wait_pod_non_existent(job.namespace, pod_name, timeout_s=60.0)
+            await kube_client_selector.host_client.core_v1.node.delete(node_name)
+            # deleting node initiates it's pods deletion
+            await wait_pod_non_existent(kube_client, pod_name, timeout_s=60.0)
 
-        # triggering pod recreation
-        await kube_orchestrator.get_job_status(job)
-        await kube_client.get_pod(job.namespace, pod_name)  # check pod was recreated
+            # triggering pod recreation
+            await kube_orchestrator.get_job_status(job)
+            await kube_client.core_v1.pod.get(pod_name)  # check pod was recreated
 
     async def test_job_pending_pod_node_not_ready(
         self,
@@ -4474,7 +4697,7 @@ class TestExternalJobsPreemption:
 
     async def test_job_pod_recreation_failed(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_node_preemptible: str,
@@ -4498,9 +4721,12 @@ class TestExternalJobsPreemption:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_scheduled(job.namespace, pod_name, node_name)
-
-        await kube_client.delete_pod(job.namespace, pod_name, force=True)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_scheduled(kube_client, pod_name, node_name)
+            await delete_pod(kube_client, pod_name, force=True)
 
         # changing the job details to trigger pod creation failure
         container = Container(
@@ -4522,3 +4748,77 @@ class TestExternalJobsPreemption:
         # this will fail because of the negative memory value (raises 422)
         with pytest.raises(JobError):
             await kube_orchestrator.get_job_status(job)
+
+
+async def wait_pod_non_existent(
+    client_proxy: KubeClientProxy,
+    pod_name: str,
+    timeout_s: float = 5.0,
+    interval_s: float = 1.0,
+) -> None:
+    try:
+        async with timeout(timeout_s):
+            while True:
+                try:
+                    await get_pod(client_proxy, pod_name)
+                except JobNotFoundException:
+                    return
+                await asyncio.sleep(interval_s)
+    except TimeoutError:
+        pytest.fail("Pod still exists")
+
+
+async def wait_pod_scheduled(
+    client_proxy: KubeClientProxy,
+    pod_name: str,
+    node_name: str = "",
+    timeout_s: float = 5.0,
+    interval_s: float = 1.0,
+) -> None:
+    raw_pod: V1Pod | None = None
+    try:
+        async with timeout(timeout_s):
+            while True:
+                raw_pod = await client_proxy.core_v1.pod.get(pod_name)
+                if node_name:
+                    pod_at_node = raw_pod.spec.node_name
+                    if pod_at_node == node_name:
+                        pod_has_node = True
+                    else:
+                        pod_has_node = False
+                        print(
+                            f"Pod was scheudled to wrong node: {pod_at_node}, "
+                            f"expected: {node_name}"
+                        )
+                else:
+                    pod_has_node = bool(raw_pod.spec.node_name)
+                pod_is_scheduled = "PodScheduled" in [
+                    cond.type
+                    for cond in (raw_pod.status.conditions or [])
+                    if cond.status == "True"
+                ]
+                if pod_has_node and pod_is_scheduled:
+                    return
+                await asyncio.sleep(interval_s)
+    except TimeoutError:
+        if raw_pod:
+            print("Node:", raw_pod["spec"].get("nodeName"))
+            print("Phase:", raw_pod["status"]["phase"])
+            print("Status conditions:", raw_pod["status"].get("conditions", []))
+            print("Pods:")
+            pod_list = await client_proxy.core_v1.pod.get_list()
+            pods = sorted(pod_list.items, key=lambda p: p.spec.node_name)
+            print(f"  {'Name':40s} {'CPU':5s} {'Memory':10s} {'Phase':9s} Node")
+            for pod in pods:
+                container = pod.spec.containers[0]
+                resource_requests = container.resources.requests
+                cpu = resource_requests.cpu
+                memory = resource_requests.memory
+                print(
+                    f"  {pod.metadata.name:40s}",
+                    f"{str(cpu):5s}",
+                    f"{str(memory):10s}",
+                    f"{pod.status.phase:9s}",
+                    f"{str(pod.spec.node_name)}",
+                )
+        pytest.fail("Pod unscheduled")

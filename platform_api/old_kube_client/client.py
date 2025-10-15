@@ -1,15 +1,14 @@
 import asyncio
 import logging
 import ssl
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager, suppress
+from contextlib import suppress
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlsplit
 
 import aiohttp
 
-from platform_api.old_kube_client.config import KubeClientAuthType, KubeConfig
+from platform_api.old_kube_client.config import KubeClientAuthType
 from platform_api.old_kube_client.errors import (
     KubeClientException,
     KubeClientUnauthorized,
@@ -126,10 +125,6 @@ class KubeClient:
     def generate_namespace_url(self, namespace_name: str | None = None) -> str:
         namespace_name = namespace_name or self._namespace
         return f"{self.namespaces_url}/{namespace_name}"
-
-    @property
-    def namespace_url(self) -> str:
-        return self.generate_namespace_url()
 
     def generate_network_policy_url(self, namespace: str) -> str:
         return (
@@ -249,33 +244,3 @@ class KubeClient:
             return
         self._token = token
         logger.info("%s: kube token was refreshed", self)
-
-
-@asynccontextmanager
-async def kube_client_from_config(
-    config: KubeConfig, trace_configs: list[aiohttp.TraceConfig] | None = None
-) -> AsyncIterator[KubeClient]:
-    client = KubeClient(
-        base_url=config.endpoint_url,
-        namespace=config.namespace,
-        cert_authority_path=config.cert_authority_path,
-        cert_authority_data_pem=config.cert_authority_data_pem,
-        auth_type=config.auth_type,
-        auth_cert_path=config.auth_cert_path,
-        auth_cert_key_path=config.auth_cert_key_path,
-        token=config.token,
-        token_path=config.token_path,
-        conn_timeout_s=config.client_conn_timeout_s,
-        read_timeout_s=config.client_read_timeout_s,
-        watch_timeout_s=config.client_watch_timeout_s,
-        conn_pool_size=config.client_conn_pool_size,
-        trace_configs=trace_configs,
-    )
-    try:
-        await client.init()
-        yield client
-    except Exception as e:
-        logger.exception("%s: unhandled error happened", client)
-        raise e
-    finally:
-        await client.close()
