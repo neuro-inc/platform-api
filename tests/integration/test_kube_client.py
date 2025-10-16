@@ -2,14 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import shlex
-import tempfile
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
-from pathlib import Path
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
-import aiohttp
-import aiohttp.web
 import pytest
 
 from platform_api.config import KubeConfig
@@ -23,114 +19,14 @@ from platform_api.orchestrator.job_request import (
 from platform_api.orchestrator.kube_client import (
     DockerRegistrySecret,
     EventHandler,
-    Ingress,
     KubeClient,
     NodeWatcher,
     PodDescriptor,
     PodWatcher,
-    Service,
     WatchEvent,
 )
-from platform_api.orchestrator.kube_config import KubeClientAuthType
-
-from .api import ApiRunner
 
 PodFactory = Callable[..., Awaitable[PodDescriptor]]
-
-
-@pytest.fixture
-async def delete_ingress_later(
-    kube_client: KubeClient,
-) -> AsyncIterator[Callable[[Ingress], Awaitable[None]]]:
-    ingresses = []
-
-    async def _add(ingress: Ingress) -> None:
-        ingresses.append(ingress)
-
-    yield _add
-
-    for ingress in ingresses:
-        try:
-            await kube_client.delete_ingress(kube_client.namespace, ingress.name)
-        except Exception:
-            pass
-
-
-@pytest.fixture
-async def delete_service_later(
-    kube_client: KubeClient,
-) -> AsyncIterator[Callable[[Service], Awaitable[None]]]:
-    services = []
-
-    async def _add(service: Service) -> None:
-        services.append(service)
-
-    yield _add
-
-    for service in services:
-        try:
-            await kube_client.delete_service(kube_client.namespace, service.name)
-        except Exception:
-            pass
-
-
-class TestKubeClientTokenUpdater:
-    @pytest.fixture
-    async def kube_app(self) -> aiohttp.web.Application:
-        async def _get_nodes(request: aiohttp.web.Request) -> aiohttp.web.Response:
-            auth = request.headers["Authorization"]
-            token = auth.split()[-1]
-            app["token"]["value"] = token
-            return aiohttp.web.json_response({"kind": "NodeList", "items": []})
-
-        app = aiohttp.web.Application()
-        app["token"] = {"value": ""}
-        app.router.add_routes([aiohttp.web.get("/api/v1/nodes", _get_nodes)])
-        return app
-
-    @pytest.fixture
-    async def kube_server(
-        self, kube_app: aiohttp.web.Application, unused_tcp_port_factory: Any
-    ) -> AsyncIterator[str]:
-        runner = ApiRunner(kube_app, port=unused_tcp_port_factory())
-        api_address = await runner.run()
-        yield f"http://{api_address.host}:{api_address.port}"
-        await runner.close()
-
-    @pytest.fixture
-    def kube_token_path(self) -> Iterator[str]:
-        _, path = tempfile.mkstemp()
-        Path(path).write_text("token-1")
-        yield path
-        Path(path).unlink()
-
-    @pytest.fixture
-    async def kube_client(
-        self, kube_server: str, kube_token_path: str
-    ) -> AsyncIterator[KubeClient]:
-        async with KubeClient(
-            base_url=kube_server,
-            namespace="default",
-            auth_type=KubeClientAuthType.TOKEN,
-            token_path=kube_token_path,
-            token_update_interval_s=1,
-        ) as client:
-            yield client
-
-    async def test_token_periodically_updated(
-        self,
-        kube_app: aiohttp.web.Application,
-        kube_client: KubeClient,
-        kube_token_path: str,
-    ) -> None:
-        await kube_client.get_nodes()
-        assert kube_app["token"]["value"] == "token-1"
-
-        Path(kube_token_path).write_text("token-2")
-        await asyncio.sleep(2)
-
-        await kube_client.get_nodes()
-        assert kube_app["token"]["value"] == "token-2"
 
 
 class TestKubeClient:
@@ -308,35 +204,6 @@ class TestKubeClient:
         await kube_client.update_docker_secret(docker_secret, create_non_existent=True)
         await kube_client.update_docker_secret(docker_secret)
 
-    async def test_get_raw_secret(
-        self, kube_config: KubeConfig, kube_client: KubeClient
-    ) -> None:
-        name = str(uuid.uuid4())
-        docker_secret = DockerRegistrySecret(
-            name=name,
-            namespace=kube_config.namespace,
-            username="testuser",
-            password="testpassword",
-            email="testuser@example.com",
-            registry_server="registry.example.com",
-        )
-        with pytest.raises(KubeClientException, match="NotFound"):
-            await kube_client.get_raw_secret(name, kube_config.namespace)
-
-        await kube_client.update_docker_secret(docker_secret, create_non_existent=True)
-        raw = await kube_client.get_raw_secret(name, kube_config.namespace)
-        assert raw["metadata"]["name"] == name
-        assert raw["metadata"]["namespace"] == kube_config.namespace
-        assert raw["data"] == docker_secret.to_primitive()["data"]
-
-    async def test_get_pod_events_empty(
-        self, kube_config: KubeConfig, kube_client: KubeClient
-    ) -> None:
-        pod_name = str(uuid.uuid4())
-        events = await kube_client.get_pod_events(pod_name, kube_config.namespace)
-
-        assert not events
-
     async def test_service_account_not_available(
         self,
         kube_client: KubeClient,
@@ -413,44 +280,6 @@ class TestKubeClient:
             )
 
         return _create
-
-    @pytest.fixture
-    async def create_ingress(
-        self,
-        kube_client: KubeClient,
-        delete_ingress_later: Callable[[Ingress], Awaitable[None]],
-    ) -> Callable[[str], Awaitable[Ingress]]:
-        async def _f(job_id: str) -> Ingress:
-            ingress_name = f"ingress-{uuid.uuid4().hex[:6]}"
-            labels = {"platform.neuromation.io/job": job_id}
-            ingress = await kube_client.create_ingress(
-                ingress_name, kube_client.namespace, labels=labels
-            )
-            await delete_ingress_later(ingress)
-            return ingress
-
-        return _f
-
-    @pytest.fixture
-    async def create_service(
-        self,
-        kube_client: KubeClient,
-        delete_service_later: Callable[[Service], Awaitable[None]],
-    ) -> Callable[[str], Awaitable[Service]]:
-        async def _f(job_id: str) -> Service:
-            service_name = f"service-{uuid.uuid4().hex[:6]}"
-            labels = {"platform.neuromation.io/job": job_id}
-            service = Service(
-                namespace=kube_client.namespace,
-                name=service_name,
-                target_port=8080,
-                labels=labels,
-            )
-            service = await kube_client.create_service(kube_client.namespace, service)
-            await delete_service_later(service)
-            return service
-
-        return _f
 
 
 class MyNodeEventHandler(EventHandler):
