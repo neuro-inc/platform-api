@@ -640,6 +640,7 @@ def jobs_service(
         admin_auth_client=mock_admin_auth_client,
         admin_client=mock_admin_client,
         api_base_url=mock_api_base,
+        platform_admin_enabled=False,
     )
 
 

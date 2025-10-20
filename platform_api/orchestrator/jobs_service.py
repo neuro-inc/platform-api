@@ -112,6 +112,7 @@ class JobsService:
         admin_client: AdminClient,
         admin_auth_client: AdminAuthClient,
         api_base_url: URL,
+        platform_admin_enabled: bool = False,
     ) -> None:
         self._cluster_registry = cluster_config_registry
         self._jobs_storage = jobs_storage
@@ -130,6 +131,7 @@ class JobsService:
         self._admin_auth_client = admin_auth_client
         self._admin_client = admin_client
         self._api_base_url = api_base_url
+        self._platform_admin_enabled = platform_admin_enabled
 
     def _make_job(
         self, record: JobRecord, cluster_config: Cluster | None = None
@@ -181,9 +183,11 @@ class JobsService:
         await self._auth_client.grant_user_permissions(
             username, [Permission(uri=token_uri, action="read")]
         )
-        return await self._admin_auth_client.get_user_token(
-            username, new_token_uri=token_uri, job_id=job_id
-        )
+        if self._platform_admin_enabled:
+            return await self._admin_auth_client.get_user_token(
+                username, new_token_uri=token_uri, job_id=job_id
+            )
+        return await self._auth_client.get_user_token(username, new_token_uri=token_uri)
 
     async def _setup_pass_config(
         self,

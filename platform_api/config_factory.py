@@ -61,6 +61,7 @@ class EnvironConfigFactory:
             admin_public_url=admin_public_url,
             api_base_url=api_base_url,
             events=self.create_events(),
+            platform_admin_enabled=self._get_bool("PLATFORM_ADMIN_ENABLED", False),
         )
 
     def create_poller(self) -> PollerConfig:

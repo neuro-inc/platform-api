@@ -482,6 +482,7 @@ async def create_app(
                 admin_auth_client=admin_auth_client,
                 admin_client=admin_client,
                 api_base_url=config.api_base_url,
+                platform_admin_enabled=config.platform_admin_enabled,
             )
 
             logger.info("Initializing ClusterUpdater")
