@@ -274,7 +274,6 @@ class TestEnvironConfigFactory:
             jobs_ingress_error_page_middleware="custom-error-page@kubernetescrd",
             jobs_pod_job_toleration_key="job",
             jobs_pod_preemptible_toleration_key="preemptible",
-            jobs_pod_priority_class_name="job-priority",
             node_label_job="job-label",
             node_label_preemptible="preemptible-label",
             node_label_node_pool="node-pool-label",
