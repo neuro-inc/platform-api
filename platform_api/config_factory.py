@@ -270,9 +270,6 @@ class EnvironConfigFactory:
             jobs_pod_preemptible_toleration_key=self._environ.get(
                 "NP_KUBE_POD_PREEMPTIBLE_TOLERATION_KEY"
             ),
-            jobs_pod_priority_class_name=self._environ.get(
-                "NP_KUBE_POD_PRIORITY_CLASS_NAME"
-            ),
             node_label_preemptible=self._environ.get("NP_KUBE_NODE_LABEL_PREEMPTIBLE"),
             node_label_job=self._environ.get("NP_KUBE_NODE_LABEL_JOB"),
             node_label_node_pool=self._environ.get("NP_KUBE_NODE_LABEL_NODE_POOL"),

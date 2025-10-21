@@ -300,7 +300,6 @@ class TestPodDescriptor:
             pod_affinity=pod_affinity,
             labels={"testlabel": "testvalue"},
             annotations={"testa": "testv"},
-            priority_class_name="testpriority",
             working_dir="/working/dir",
         )
         assert pod.name == "testname"
@@ -379,7 +378,6 @@ class TestPodDescriptor:
                         ],
                     },
                 },
-                "priorityClassName": "testpriority",
             },
         }
 
@@ -554,7 +552,7 @@ class TestPodDescriptor:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            job_request, priority_class_name="testpriority"
+            job_request,
         )
         assert pod.name == job_request.job_id
         assert pod.image == "testimage"
@@ -564,7 +562,6 @@ class TestPodDescriptor:
         assert pod.resources == Resources(
             cpu=1, memory=128 * 10**6, nvidia_gpu=1, amd_gpu=2
         )
-        assert pod.priority_class_name == "testpriority"
         assert pod.working_dir == "/working/dir"
         assert not pod.node_affinity
         assert not pod.pod_affinity
@@ -634,7 +631,6 @@ class TestPodDescriptor:
                     {"operator": "Exists"},
                     {"key": "key3"},
                 ],
-                "priorityClassName": "testpriority",
                 "imagePullSecrets": [{"name": "secret"}],
             },
             "status": {"phase": "Running"},
@@ -652,7 +648,6 @@ class TestPodDescriptor:
             Toleration(key="", operator="Exists", value="", effect=""),
             Toleration(key="key3", operator="Equal", value="", effect=""),
         ]
-        assert pod.priority_class_name == "testpriority"
         assert pod.image_pull_secrets == [SecretRef("secret")]
         assert pod.node_name is None
         assert pod.command is None
