@@ -1342,7 +1342,6 @@ class PodDescriptor:
         node_affinity: NodeAffinity | None = None,
         pod_affinity: PodAffinity | None = None,
         labels: dict[str, str] | None = None,
-        priority_class_name: str | None = None,
         restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER,
         meta_env: dict[str, str] | None = None,
         privileged: bool = False,
@@ -1572,8 +1571,6 @@ class PodDescriptor:
             payload["spec"]["affinity"]["podAffinity"] \
                 = self.pod_affinity.to_primitive()
             # fmt: on
-        if self.priority_class_name:
-            payload["spec"]["priorityClassName"] = self.priority_class_name
         return payload
 
     def _to_primitive_ports(self) -> list[dict[str, int]]:
@@ -1655,7 +1652,6 @@ class PodDescriptor:
             tty=container_payload.get("tty", False),
             tolerations=tolerations,
             labels=metadata.get("labels", {}),
-            priority_class_name=payload["spec"].get("priorityClassName"),
             restart_policy=PodRestartPolicy(
                 payload["spec"].get("restartPolicy", str(cls.restart_policy))
             ),

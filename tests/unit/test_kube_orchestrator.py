@@ -379,7 +379,6 @@ class TestPodDescriptor:
                         ],
                     },
                 },
-                "priorityClassName": "testpriority",
             },
         }
 
@@ -554,7 +553,7 @@ class TestPodDescriptor:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(
-            job_request, priority_class_name="testpriority"
+            job_request,
         )
         assert pod.name == job_request.job_id
         assert pod.image == "testimage"
@@ -634,7 +633,6 @@ class TestPodDescriptor:
                     {"operator": "Exists"},
                     {"key": "key3"},
                 ],
-                "priorityClassName": "testpriority",
                 "imagePullSecrets": [{"name": "secret"}],
             },
             "status": {"phase": "Running"},
