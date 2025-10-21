@@ -1413,7 +1413,6 @@ class PodDescriptor:
             pod_affinity=pod_affinity,
             labels=labels or {},
             annotations=annotations,
-            priority_class_name=priority_class_name,
             restart_policy=restart_policy,
             privileged=privileged,
         )
