@@ -300,7 +300,6 @@ class TestPodDescriptor:
             pod_affinity=pod_affinity,
             labels={"testlabel": "testvalue"},
             annotations={"testa": "testv"},
-            priority_class_name="testpriority",
             working_dir="/working/dir",
         )
         assert pod.name == "testname"
@@ -563,7 +562,6 @@ class TestPodDescriptor:
         assert pod.resources == Resources(
             cpu=1, memory=128 * 10**6, nvidia_gpu=1, amd_gpu=2
         )
-        assert pod.priority_class_name == "testpriority"
         assert pod.working_dir == "/working/dir"
         assert not pod.node_affinity
         assert not pod.pod_affinity
@@ -650,7 +648,6 @@ class TestPodDescriptor:
             Toleration(key="", operator="Exists", value="", effect=""),
             Toleration(key="key3", operator="Equal", value="", effect=""),
         ]
-        assert pod.priority_class_name == "testpriority"
         assert pod.image_pull_secrets == [SecretRef("secret")]
         assert pod.node_name is None
         assert pod.command is None
