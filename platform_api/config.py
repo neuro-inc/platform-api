@@ -165,6 +165,8 @@ class Config:
 
     events: EventsClientConfig | None = None
 
+    platform_admin_enabled: bool = False
+
 
 @dataclass(frozen=True)
 class PollerConfig:
