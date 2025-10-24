@@ -22,13 +22,11 @@ from typing import Any, ClassVar, NoReturn, Optional, Self
 import aiohttp
 import iso8601
 from apolo_kube_client import (
+    CoreV1Event,
     KubeClientProxy,
     ResourceExists as ApoloResourceExists,
     ResourceInvalid,
     ResourceNotFound as ApoloResourceNotFound,
-)
-from kubernetes.client import CoreV1Event, V1Taint
-from kubernetes.client.models import (
     V1Affinity,
     V1Container,
     V1ContainerPort,
@@ -70,6 +68,7 @@ from kubernetes.client.models import (
     V1ServiceBackendPort,
     V1ServicePort,
     V1ServiceSpec,
+    V1Taint,
     V1Toleration,
     V1Volume,
     V1VolumeMount,
@@ -409,21 +408,21 @@ class Resources:
             limits={"cpu": f"{self.cpu_mcores}m", "memory": self.memory_str},
         )
         if self.nvidia_gpu:
-            ret.requests[self.nvidia_gpu_key] = self.nvidia_gpu
-            ret.limits[self.nvidia_gpu_key] = self.nvidia_gpu
+            ret.requests[self.nvidia_gpu_key] = str(self.nvidia_gpu)
+            ret.limits[self.nvidia_gpu_key] = str(self.nvidia_gpu)
         if self.nvidia_migs:
             for key, value in self.nvidia_migs.items():
-                ret.requests[self.nvidia_mig_key_prefix + key] = value
-                ret.limits[self.nvidia_mig_key_prefix + key] = value
+                ret.requests[self.nvidia_mig_key_prefix + key] = str(value)
+                ret.limits[self.nvidia_mig_key_prefix + key] = str(value)
         if self.amd_gpu:
-            ret.requests[self.amd_gpu_key] = self.amd_gpu
-            ret.limits[self.amd_gpu_key] = self.amd_gpu
+            ret.requests[self.amd_gpu_key] = str(self.amd_gpu)
+            ret.limits[self.amd_gpu_key] = str(self.amd_gpu)
         if self.intel_gpu:
-            ret.requests[self.intel_gpu_key] = self.intel_gpu
-            ret.limits[self.intel_gpu_key] = self.intel_gpu
+            ret.requests[self.intel_gpu_key] = str(self.intel_gpu)
+            ret.limits[self.intel_gpu_key] = str(self.intel_gpu)
         if self.tpu_version:
-            ret.requests[self.tpu_key] = self.tpu_cores
-            ret.limits[self.tpu_key] = self.tpu_cores
+            ret.requests[self.tpu_key] = str(self.tpu_cores)
+            ret.limits[self.tpu_key] = str(self.tpu_cores)
         if self.memory_request:
             ret.requests["memory"] = self.memory_request_str
         return ret
@@ -602,8 +601,8 @@ class Service:
             )
         spec = V1ServiceSpec(
             type=self.service_type.value,
-            selector=self.selector or None,
-            ports=ports or None,
+            selector=self.selector or {},
+            ports=ports or [],
         )
         if self.cluster_ip is not None:
             spec.cluster_ip = self.cluster_ip
@@ -676,9 +675,11 @@ class Service:
             if isinstance(tp, int):
                 target_port = tp
         return cls(
-            namespace=(model.metadata.namespace if model.metadata else "default"),
-            name=(model.metadata.name if model.metadata else ""),
-            uid=(model.metadata.uid if model.metadata else None),
+            namespace=(
+                model.metadata.namespace if model.metadata.namespace else "default"
+            ),
+            name=(model.metadata.name if model.metadata.name else ""),
+            uid=model.metadata.uid,
             selector=(spec.selector or {}),
             target_port=target_port,
             port=(http_port.port if http_port and http_port.port else Service.port),
@@ -826,7 +827,7 @@ class Ingress:
         metadata = V1ObjectMeta(name=self.name, annotations=annotations)
         if self.labels:
             metadata.labels = self.labels.copy()
-        spec.rules = [rule.to_model() for rule in self.rules] or None
+        spec.rules = [rule.to_model() for rule in self.rules]
         return V1Ingress(metadata=metadata, spec=spec)
 
     @classmethod
@@ -971,6 +972,7 @@ class SecretRef:
 
     @classmethod
     def from_model(cls, model: V1LocalObjectReference) -> "SecretRef":
+        assert model.name is not None
         return cls(name=model.name)
 
 
@@ -1436,7 +1438,9 @@ class PodDescriptor:
     def to_model(self) -> V1Pod:
         volume_mounts = [mount.to_model() for mount in self.volume_mounts]
         volumes = [volume.to_model() for volume in self.volumes]
-        env_list = self.env_list + [env.to_model() for env in self.secret_env_list]
+        env_list = [
+            V1EnvVar(name=k, value=v) for lst in self.env_list for k, v in lst.items()
+        ] + [env.to_model() for env in self.secret_env_list]
 
         container = V1Container(
             name=f"{self.name}",
@@ -1483,12 +1487,13 @@ class PodDescriptor:
                 tolerations=[toleration.to_model() for toleration in self.tolerations],
             ),
         )
+        assert model.spec is not None
         if self.labels:
             model.metadata.labels = self.labels
         if self.annotations:
             model.metadata.annotations = self.annotations.copy()
         if self.node_selector:
-            model.spec.nodeSelector = self.node_selector.copy()
+            model.spec.node_selector = self.node_selector.copy()
         if self.node_affinity or self.pod_affinity:
             model.spec.affinity = V1Affinity()
         if self.node_affinity:
@@ -1661,9 +1666,8 @@ class PodDescriptor:
     @classmethod
     def from_model(cls, model: V1Pod) -> "PodDescriptor":
         metadata = model.metadata
+        assert model.spec is not None
         container = model.spec.containers[0]
-        # TODO (R Zubairov 09/13/18): remove medium emptyDir
-        # TODO (A Danshyn 06/19/18): set rest of attributes
         status = None
         if model.status is not None:
             status = PodStatus.from_model(model.status)
@@ -1682,6 +1686,8 @@ class PodDescriptor:
             )
             for t in (model.spec.tolerations or ())
         ]
+        assert metadata.name is not None
+        assert container.image is not None
         return cls(
             name=metadata.name,
             created_at=metadata.creation_timestamp,
@@ -1699,7 +1705,7 @@ class PodDescriptor:
                 model.spec.restart_policy or str(cls.restart_policy)
             ),
             working_dir=container.working_dir,
-            resources=Resources.from_model(container.resources or {}),
+            resources=Resources.from_model(container.resources),
         )
 
 
@@ -1787,7 +1793,7 @@ class ContainerStatus:
 
     @classmethod
     def from_model(cls, model: V1ContainerStatus) -> Self:
-        return cls(model.to_dict())
+        return cls(model.model_dump())
 
 
 class PodConditionType(enum.Enum):
@@ -1862,6 +1868,7 @@ class PodCondition:
             type = PodConditionType(model.type)
         except (KeyError, ValueError):
             type = PodConditionType.UNKNOWN
+        assert model.last_transition_time is not None
         return cls(
             last_transition_time=model.last_transition_time,
             reason=model.reason or "",
@@ -1927,8 +1934,10 @@ class KubernetesEvent:
 
     @classmethod
     def from_model(cls, event: CoreV1Event) -> Self:
+        assert event.count
+        assert event.metadata.creation_timestamp
         return cls(
-            involved_object=event.involved_object,
+            involved_object=event.involved_object.model_dump(),
             count=event.count,
             reason=event.reason,
             message=event.message,
@@ -2051,11 +2060,12 @@ class PodStatus:
             )
         else:
             container_statuses = (ContainerStatus(),)
+        assert model.phase is not None
         return cls(
             phase=model.phase,
             container_statuses=container_statuses,
             reason=model.reason,
-            conditions=[PodCondition.from_model(c) for c in model.conditions or []],
+            conditions=[PodCondition.from_model(c) for c in model.conditions],
         )
 
 
@@ -2956,8 +2966,8 @@ async def get_ingress(client_proxy: KubeClientProxy, ingress_name: str) -> Ingre
 
 async def create_ingress(client_proxy: KubeClientProxy, ingress: Ingress) -> Ingress:
     model = ingress.to_model()
-    ingress = await client_proxy.networking_k8s_io_v1.ingress.create(model)
-    return Ingress.from_model(ingress)
+    ingress_out = await client_proxy.networking_k8s_io_v1.ingress.create(model)
+    return Ingress.from_model(ingress_out)
 
 
 async def delete_ingress(client_proxy: KubeClientProxy, name: str) -> None:
@@ -2972,6 +2982,7 @@ async def delete_all_ingresses(
         label_selector=label_selector
     )
     for item in lst.items or []:
+        assert item.metadata.name is not None
         await client_proxy.networking_k8s_io_v1.ingress.delete(item.metadata.name)
 
 
@@ -2986,7 +2997,7 @@ async def get_raw_secret(
     client_proxy: KubeClientProxy, secret_name: str
 ) -> dict[str, Any]:
     secret = await client_proxy.core_v1.secret.get(secret_name)
-    return secret.to_dict()
+    return secret.model_dump()
 
 
 async def get_pod_events(
