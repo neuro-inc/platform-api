@@ -1,7 +1,0 @@
-apiVersion: scheduling.k8s.io/v1
-kind: PriorityClass
-metadata:
-  name: {{ include "platformApiPoller.fullname" . }}-job
-  labels: {{ include "platformApiPoller.labels.standard" . | nindent 4 }}
-value: 100
-globalDefault: false
