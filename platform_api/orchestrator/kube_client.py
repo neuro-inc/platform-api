@@ -1438,9 +1438,9 @@ class PodDescriptor:
     def to_model(self) -> V1Pod:
         volume_mounts = [mount.to_model() for mount in self.volume_mounts]
         volumes = [volume.to_model() for volume in self.volumes]
-        env_list = [
-            V1EnvVar(name=k, value=v) for lst in self.env_list for k, v in lst.items()
-        ] + [env.to_model() for env in self.secret_env_list]
+        env_list = [V1EnvVar(name=k, value=v) for k, v in self.env.items()] + [
+            env.to_model() for env in self.secret_env_list
+        ]
 
         container = V1Container(
             name=f"{self.name}",
