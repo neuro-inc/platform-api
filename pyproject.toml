@@ -206,10 +206,6 @@ module = "notifications_client.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = "pytest"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
 module = "setuptools"
 ignore_missing_imports = true
 
