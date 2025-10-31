@@ -140,7 +140,7 @@ jobs:
     - name: Checkout commit
       uses: actions/checkout@v5
     - name: Download All Coverages
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v6
       with:
         path: coverage
         pattern: coverage-*
