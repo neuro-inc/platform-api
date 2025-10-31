@@ -3511,7 +3511,7 @@ class TestPreemption:
         kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         delete_node_later: Callable[[str], Awaitable[None]],
-        default_node_capacity: dict[str, Any],
+        default_node_capacity: dict[str, str],
     ) -> AsyncIterator[str]:
         node_name = str(uuid.uuid4())
         kube_config = kube_orchestrator.kube_config
@@ -4574,7 +4574,7 @@ class TestExternalJobsPreemption:
         kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         delete_node_later: Callable[[str], Awaitable[None]],
-        default_node_capacity: dict[str, Any],
+        default_node_capacity: dict[str, str],
     ) -> AsyncIterator[str]:
         node_name = str(uuid.uuid4())
         kube_config = kube_orchestrator.kube_config
