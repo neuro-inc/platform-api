@@ -33,7 +33,7 @@ typing-extensions = "4.15.0"
 neuro-admin-client = "25.9.2"
 yarl = "^1.22.0"
 python-jose = ">=3.4.0"
-apolo-kube-client = "^25.10.8"
+apolo-kube-client = "^25.10.17"
 apolo-events-client = "25.10.0"
 neuro-config-client = "25.10.0"
 
@@ -206,10 +206,6 @@ module = "notifications_client.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = "pytest"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
 module = "setuptools"
 ignore_missing_imports = true
 
@@ -243,8 +239,4 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "sqlalchemy.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "kubernetes.client.*"
 ignore_missing_imports = true

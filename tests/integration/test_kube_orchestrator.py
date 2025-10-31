@@ -14,6 +14,7 @@ from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontext
 from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import Decimal
+from operator import attrgetter
 from pathlib import PurePath
 from typing import Any, cast
 from unittest import mock
@@ -23,20 +24,24 @@ import aiohttp
 import pytest
 from aiohttp import web
 from apolo_kube_client import (
+    CoreV1Event,
     KubeClientException,
     KubeClientProxy,
     KubeClientSelector,
     ResourceNotFound,
-)
-from kubernetes.client import (
+    V1EventSource,
     V1Node,
+    V1NodeCondition,
+    V1NodeSpec,
+    V1NodeStatus,
     V1ObjectMeta,
+    V1ObjectReference,
     V1PersistentVolumeClaim,
     V1PersistentVolumeClaimSpec,
     V1Pod,
     V1Secret,
+    V1VolumeResourceRequirements,
 )
-from kubernetes.client.models.core_v1_event import CoreV1Event
 from neuro_config_client import (
     NvidiaGPU,
     OrchestratorConfig,
@@ -482,6 +487,7 @@ class TestKubeOrchestrator:
             await wait_pod_scheduled(kube_client, job.id)
             job_pod = await kube_client.core_v1.pod.get(job.id)
 
+            assert job_pod.spec is not None
             assert job_pod.spec.containers
             resources = job_pod.spec.containers[0].resources
             # 0.8 of total request
@@ -789,6 +795,7 @@ class TestKubeOrchestrator:
 
             pod = await kube_client.core_v1.pod.get(pod_name)
 
+        assert pod.spec is not None
         container_model = pod.spec.containers[0]
 
         expected_values = {
@@ -2107,16 +2114,18 @@ class TestKubeOrchestrator:
             pod_name = job.id
             await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-            raw = await kube_client.core_v1.pod.get(pod_name)
+            pod = await kube_client.core_v1.pod.get(pod_name)
+            assert pod.spec is not None
 
             disk_volumes_raw = [
                 v
-                for v in raw.spec.volumes
-                if v.persistent_volume_claim.claim_name == disk_id
+                for v in pod.spec.volumes
+                if v.persistent_volume_claim is not None
+                and v.persistent_volume_claim.claim_name == disk_id
             ]
             assert len(disk_volumes_raw) == 1
 
-            container_raw = raw.spec.containers[0]
+            container_raw = pod.spec.containers[0]
             volume_mount = container_raw.volume_mounts[0]
             assert volume_mount.name == disk_volumes_raw[0].name
             assert volume_mount.mount_path == str(mount_path)
@@ -2220,14 +2229,19 @@ class TestKubeOrchestrator:
             pod_name = job.id
             await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-            raw = await kube_client.core_v1.pod.get(pod_name)
+            pod = await kube_client.core_v1.pod.get(pod_name)
+            assert pod.spec is not None
 
-            container_raw = raw.spec.containers[0]
-            env_by_name = {e.name: e for e in container_raw.env}
+            pod_container = pod.spec.containers[0]
+            env_by_name = {e.name: e for e in pod_container.env}
             assert "SECRET_VAR" in env_by_name
-            secret_env = env_by_name["SECRET_VAR"]
-            assert secret_env.value_from.secret_key_ref.key == secret_name
-            assert secret_env.value_from.secret_key_ref.name == secret.k8s_secret_name
+            secret_env_model = env_by_name["SECRET_VAR"]
+            assert secret_env_model.value_from.secret_key_ref is not None
+            assert secret_env_model.value_from.secret_key_ref.key == secret_name
+            assert (
+                secret_env_model.value_from.secret_key_ref.name
+                == secret.k8s_secret_name
+            )
 
     async def test_job_pod_with_secret_env_same_secret_ok(
         self,
@@ -2281,18 +2295,21 @@ class TestKubeOrchestrator:
             pod_name = job.id
             await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-            raw = await kube_client.core_v1.pod.get(pod_name)
+            pod = await kube_client.core_v1.pod.get(pod_name)
+            assert pod.spec is not None
 
-            container_raw = raw.spec.containers[0]
-            env_by_name = {e.name: e for e in container_raw.env}
+            container_pod = pod.spec.containers[0]
+            env_by_name = {e.name: e for e in container_pod.env}
             assert "SECRET_VAR_1" in env_by_name
             assert "SECRET_VAR_2" in env_by_name
 
             secret_env_1 = env_by_name["SECRET_VAR_1"]
+            assert secret_env_1.value_from.secret_key_ref is not None
             assert secret_env_1.value_from.secret_key_ref.key == secret_name_1
             assert secret_env_1.value_from.secret_key_ref.name == k8s_secret_name
 
             secret_env_2 = env_by_name["SECRET_VAR_2"]
+            assert secret_env_2.value_from.secret_key_ref is not None
             assert secret_env_2.value_from.secret_key_ref.key == secret_name_2
             assert secret_env_2.value_from.secret_key_ref.name == k8s_secret_name
 
@@ -2348,16 +2365,17 @@ class TestKubeOrchestrator:
             pod_name = job.id
             await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-            raw = await kube_client.core_v1.pod.get(pod_name)
+            pod = await kube_client.core_v1.pod.get(pod_name)
+            assert pod.spec is not None
 
             sec_volumes_raw = [
-                v for v in raw.spec.volumes if v.name == secret.k8s_secret_name
+                v for v in pod.spec.volumes if v.name == secret.k8s_secret_name
             ]
             assert sec_volumes_raw[0].name == secret.k8s_secret_name
             assert sec_volumes_raw[0].secret.secret_name == secret.k8s_secret_name
             assert sec_volumes_raw[0].secret.default_mode == 0o400
 
-            container_raw = raw.spec.containers[0]
+            container_raw = pod.spec.containers[0]
             volume_mount = container_raw.volume_mounts[0]
             assert volume_mount.name == secret.k8s_secret_name
             assert volume_mount.read_only is True
@@ -2491,29 +2509,30 @@ class TestKubeOrchestrator:
             pod_name = job.id
             await wait_pod_is_running(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-            raw = await kube_client.core_v1.pod.get(pod_name)
-            sec_volumes_raw = [v for v in raw.spec.volumes if v.name == k8s_sec_name]
+            pod = await kube_client.core_v1.pod.get(pod_name)
+            assert pod.spec is not None
+            sec_volumes_raw = [v for v in pod.spec.volumes if v.name == k8s_sec_name]
             assert sec_volumes_raw[0].name == k8s_sec_name
             assert sec_volumes_raw[0].secret.secret_name == k8s_sec_name
             assert sec_volumes_raw[0].secret.default_mode == 0o400
 
-            container_raw = raw.spec.containers[0]
+            container_pod = pod.spec.containers[0]
 
-            for volume_mount in container_raw.volume_mounts:
+            for volume_mount in container_pod.volume_mounts:
                 assert volume_mount.name == k8s_sec_name
                 assert volume_mount.read_only is True
 
-            assert container_raw.volume_mounts[0].mount_path == str(path_a / file_a)
-            assert container_raw.volume_mounts[0].sub_path == secret_a.secret_key
+            assert container_pod.volume_mounts[0].mount_path == str(path_a / file_a)
+            assert container_pod.volume_mounts[0].sub_path == secret_a.secret_key
 
-            assert container_raw.volume_mounts[1].mount_path == str(path_b / file_b1)
-            assert container_raw.volume_mounts[1].sub_path == secret_b1.secret_key
+            assert container_pod.volume_mounts[1].mount_path == str(path_b / file_b1)
+            assert container_pod.volume_mounts[1].sub_path == secret_b1.secret_key
 
-            assert container_raw.volume_mounts[2].mount_path == str(path_b / file_b2)
-            assert container_raw.volume_mounts[2].sub_path == secret_b2.secret_key
+            assert container_pod.volume_mounts[2].mount_path == str(path_b / file_b2)
+            assert container_pod.volume_mounts[2].sub_path == secret_b2.secret_key
 
-            assert container_raw.volume_mounts[3].mount_path == str(path_bc / file_bc)
-            assert container_raw.volume_mounts[3].sub_path == secret_bc.secret_key
+            assert container_pod.volume_mounts[3].mount_path == str(path_bc / file_bc)
+            assert container_pod.volume_mounts[3].sub_path == secret_bc.secret_key
 
     async def test_cleanup_old_named_ingresses(
         self,
@@ -2711,7 +2730,9 @@ class TestKubeOrchestrator:
                 spec=V1PersistentVolumeClaimSpec(
                     access_modes=["ReadWriteOnce"],
                     volume_mode="Filesystem",
-                    resources={"requests": {"storage": 1024 * 1024}},
+                    resources=V1VolumeResourceRequirements(
+                        requests={"storage": str(1024 * 1024)}
+                    ),
                     storage_class_name="test-storage-class",
                 ),
             )
@@ -2729,14 +2750,14 @@ class TestKubeOrchestrator:
                 api_version="v1",
                 count=1,
                 first_timestamp=now,
-                involved_object={
-                    "apiVersion": "v1",
-                    "kind": "Pod",
-                    "name": pod_id,
-                    "namespace": namespace,
-                    "resourceVersion": "48102193",
-                    "uid": "eddfe678-86e9-11e9-9d65-42010a800018",
-                },
+                involved_object=V1ObjectReference(
+                    api_version="v1",
+                    kind="Pod",
+                    name=pod_id,
+                    namespace=namespace,
+                    resource_version="48102193",
+                    uid="eddfe678-86e9-11e9-9d65-42010a800018",
+                ),
                 kind="Event",
                 last_timestamp=now,
                 message="FailedAttachVolume",
@@ -2752,7 +2773,7 @@ class TestKubeOrchestrator:
                 reason="FailedAttachVolume",
                 reporting_component="",
                 reporting_instance="",
-                source={"component": "attachdetach-controller"},
+                source=V1EventSource(component="attachdetach-controller"),
                 type="Warning",
             )
         )
@@ -2769,14 +2790,14 @@ class TestKubeOrchestrator:
                 api_version="v1",
                 count=1,
                 first_timestamp=now,
-                involved_object={
-                    "apiVersion": "v1",
-                    "kind": "Pod",
-                    "name": pod_id,
-                    "namespace": namespace,
-                    "resourceVersion": "48102193",
-                    "uid": "eddfe678-86e9-11e9-9d65-42010a800018",
-                },
+                involved_object=V1ObjectReference(
+                    api_version="v1",
+                    kind="Pod",
+                    name=pod_id,
+                    namespace=namespace,
+                    resource_version="48102193",
+                    uid="eddfe678-86e9-11e9-9d65-42010a800018",
+                ),
                 kind="Event",
                 last_timestamp=now,
                 message="TriggeredScaleUp",
@@ -2792,7 +2813,7 @@ class TestKubeOrchestrator:
                 reason="TriggeredScaleUp",
                 reporting_component="",
                 reporting_instance="",
-                source={"component": "cluster-autoscaler"},
+                source=V1EventSource(component="cluster-autoscaler"),
                 type="Normal",
             )
         )
@@ -3016,6 +3037,11 @@ class TestNodeAffinity(TestAffinityFixtures):
                 await wait_pod_scheduled(kube_client, job.id)
 
                 job_pod = await kube_client.core_v1.pod.get(job.id)
+                assert job_pod.spec is not None
+                assert (
+                    job_pod.spec.affinity.node_affinity.required_during_scheduling_ignored_during_execution
+                    is not None
+                )
                 node_selector_term = job_pod.spec.affinity.node_affinity.required_during_scheduling_ignored_during_execution.node_selector_terms[  # noqa: E501
                     0
                 ]
@@ -3046,9 +3072,13 @@ class TestNodeAffinity(TestAffinityFixtures):
                 await wait_pod_scheduled(kube_client, job.id)
                 job_pod = await kube_client.core_v1.pod.get(job.id)
 
+            assert job_pod.spec is not None
+            assert job_pod.spec.affinity is not None
             node_aff = job_pod.spec.affinity.node_affinity
             assert node_aff
-            assert node_aff.required_during_scheduling_ignored_during_execution
+            assert (
+                node_aff.required_during_scheduling_ignored_during_execution is not None
+            )
             terms = (
                 node_aff.required_during_scheduling_ignored_during_execution.node_selector_terms
                 or []
@@ -3073,6 +3103,7 @@ class TestNodeAffinity(TestAffinityFixtures):
                 await wait_pod_scheduled(kube_client, job.id, "nvidia-gpu")
                 job_pod = await kube_client.core_v1.pod.get(job.id)
 
+            assert job_pod.spec is not None
             node_aff = job_pod.spec.affinity.node_affinity
             assert node_aff
             assert node_aff.required_during_scheduling_ignored_during_execution
@@ -3105,6 +3136,7 @@ class TestNodeAffinity(TestAffinityFixtures):
                 await wait_pod_scheduled(kube_client, job.id, "nvidia-gpu")
                 job_pod = await kube_client.core_v1.pod.get(job.id)
 
+            assert job_pod.spec is not None
             node_aff = job_pod.spec.affinity.node_affinity
             assert node_aff
             assert node_aff.required_during_scheduling_ignored_during_execution
@@ -3138,6 +3170,7 @@ class TestNodeAffinity(TestAffinityFixtures):
                 await wait_pod_scheduled(kube_client, job.id, "nvidia-gpu")
                 job_pod = await kube_client.core_v1.pod.get(job.id)
 
+            assert job_pod.spec is not None
             node_aff = job_pod.spec.affinity.node_affinity
             assert node_aff
             assert node_aff.required_during_scheduling_ignored_during_execution
@@ -3174,6 +3207,7 @@ class TestNodeAffinity(TestAffinityFixtures):
                 await wait_pod_scheduled(kube_client, job.id, "cpu-small-p")
                 job_pod = await kube_client.core_v1.pod.get(job.id)
 
+            assert job_pod.spec is not None
             node_aff = job_pod.spec.affinity.node_affinity
             assert node_aff
             assert node_aff.required_during_scheduling_ignored_during_execution
@@ -3202,6 +3236,8 @@ class TestPodAffinity(TestAffinityFixtures):
             ) as kube_client:
                 await wait_pod_scheduled(kube_client, job.id)
                 job_pod = await kube_client.core_v1.pod.get(job.id)
+
+            assert job_pod.spec is not None
             affinity = job_pod.spec.affinity
             assert affinity
             assert affinity.pod_affinity
@@ -3475,7 +3511,7 @@ class TestPreemption:
         kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         delete_node_later: Callable[[str], Awaitable[None]],
-        default_node_capacity: dict[str, Any],
+        default_node_capacity: dict[str, str],
     ) -> AsyncIterator[str]:
         node_name = str(uuid.uuid4())
         kube_config = kube_orchestrator.kube_config
@@ -3503,11 +3539,11 @@ class TestPreemption:
                     name=node_name,
                     labels=labels,
                 ),
-                spec={"taints": [taint.to_model() for taint in taints]},
-                status={
-                    "capacity": default_node_capacity,
-                    "conditions": [{"status": "True", "type": "Ready"}],
-                },
+                spec=V1NodeSpec(taints=[taint.to_model() for taint in taints]),
+                status=V1NodeStatus(
+                    capacity=default_node_capacity,
+                    conditions=[V1NodeCondition(status="True", type="Ready")],
+                ),
             )
         )
         yield node_name
@@ -4538,7 +4574,7 @@ class TestExternalJobsPreemption:
         kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         delete_node_later: Callable[[str], Awaitable[None]],
-        default_node_capacity: dict[str, Any],
+        default_node_capacity: dict[str, str],
     ) -> AsyncIterator[str]:
         node_name = str(uuid.uuid4())
         kube_config = kube_orchestrator.kube_config
@@ -4566,11 +4602,11 @@ class TestExternalJobsPreemption:
                     name=node_name,
                     labels=labels,
                 ),
-                spec={"taints": [taint.to_model() for taint in taints]},
-                status={
-                    "capacity": default_node_capacity,
-                    "conditions": [{"status": "True", "type": "Ready"}],
-                },
+                spec=V1NodeSpec(taints=[taint.to_model() for taint in taints]),
+                status=V1NodeStatus(
+                    capacity=default_node_capacity,
+                    conditions=[V1NodeCondition(status="True", type="Ready")],
+                ),
             )
         )
         yield node_name
@@ -4780,6 +4816,7 @@ async def wait_pod_scheduled(
         async with timeout(timeout_s):
             while True:
                 raw_pod = await client_proxy.core_v1.pod.get(pod_name)
+                assert raw_pod.spec is not None
                 if node_name:
                     pod_at_node = raw_pod.spec.node_name
                     if pod_at_node == node_name:
@@ -4802,18 +4839,20 @@ async def wait_pod_scheduled(
                 await asyncio.sleep(interval_s)
     except TimeoutError:
         if raw_pod:
-            print("Node:", raw_pod["spec"].get("nodeName"))
-            print("Phase:", raw_pod["status"]["phase"])
-            print("Status conditions:", raw_pod["status"].get("conditions", []))
+            assert raw_pod.spec is not None
+            print("Node:", raw_pod.spec.node_name)
+            print("Phase:", raw_pod.status.phase)
+            print("Status conditions:", raw_pod.status.conditions)
             print("Pods:")
             pod_list = await client_proxy.core_v1.pod.get_list()
-            pods = sorted(pod_list.items, key=lambda p: p.spec.node_name)
+            pods = sorted(pod_list.items, key=attrgetter("spec", "node_name"))
             print(f"  {'Name':40s} {'CPU':5s} {'Memory':10s} {'Phase':9s} Node")
             for pod in pods:
+                assert pod.spec is not None
                 container = pod.spec.containers[0]
                 resource_requests = container.resources.requests
-                cpu = resource_requests.cpu
-                memory = resource_requests.memory
+                cpu = resource_requests["cpu"]
+                memory = resource_requests["memory"]
                 print(
                     f"  {pod.metadata.name:40s}",
                     f"{str(cpu):5s}",
