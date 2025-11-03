@@ -550,7 +550,6 @@ class Resources:
 
 @dataclass(frozen=True)
 class Service:
-    namespace: str
     name: str
     target_port: int | None
     uid: str | None = None
@@ -573,7 +572,6 @@ class Service:
     def to_primitive(self) -> dict[str, Any]:
         service_descriptor: dict[str, Any] = {
             "metadata": {
-                "namespace": self.namespace,
                 "name": self.name,
             },
             "spec": {
@@ -606,15 +604,14 @@ class Service:
         )
         if self.cluster_ip is not None:
             spec.cluster_ip = self.cluster_ip
-        metadata = V1ObjectMeta(name=self.name, namespace=self.namespace)
+        metadata = V1ObjectMeta(name=self.name)
         if self.labels:
             metadata.labels = self.labels.copy()
         return V1Service(metadata=metadata, spec=spec)
 
     @classmethod
-    def create_for_pod(cls, namespace: str, pod: "PodDescriptor") -> "Service":
+    def create_for_pod(cls, pod: "PodDescriptor") -> "Service":
         return cls(
-            namespace=namespace,
             name=pod.name,
             selector=pod.labels,
             target_port=pod.port,
@@ -622,10 +619,9 @@ class Service:
         )
 
     @classmethod
-    def create_headless_for_pod(cls, namespace: str, pod: "PodDescriptor") -> "Service":
+    def create_headless_for_pod(cls, pod: "PodDescriptor") -> "Service":
         http_port = pod.port or cls.port
         return cls(
-            namespace=namespace,
             name=pod.name,
             selector=pod.labels,
             cluster_ip="None",
@@ -650,7 +646,6 @@ class Service:
         http_payload = cls._find_port_by_name("http", payload["spec"]["ports"])
         service_type = payload["spec"].get("type", Service.service_type.value)
         return cls(
-            namespace=payload["metadata"]["namespace"],
             name=payload["metadata"]["name"],
             uid=payload["metadata"]["uid"],
             selector=payload["spec"].get("selector", {}),
@@ -675,9 +670,6 @@ class Service:
             if isinstance(tp, int):
                 target_port = tp
         return cls(
-            namespace=(
-                model.metadata.namespace if model.metadata.namespace else "default"
-            ),
             name=(model.metadata.name if model.metadata.name else ""),
             uid=model.metadata.uid,
             selector=(spec.selector or {}),
@@ -911,7 +903,6 @@ class DockerRegistrySecret:
     # TODO (A Danshyn 11/16/18): these two attributes along with `type` and
     # `data` should be extracted into a parent class.
     name: str
-    namespace: str
 
     username: str
     password: str
@@ -943,13 +934,13 @@ class DockerRegistrySecret:
         return {
             "apiVersion": "v1",
             "kind": "Secret",
-            "metadata": {"name": self.name, "namespace": self.namespace},
+            "metadata": {"name": self.name},
             "data": {".dockerconfigjson": self._build_json()},
             "type": self.type,
         }
 
     def to_model(self) -> V1Secret:
-        metadata = V1ObjectMeta(name=self.name, namespace=self.namespace)
+        metadata = V1ObjectMeta(name=self.name)
         secret = V1Secret(metadata=metadata, type=self.type)
         # The client library expects .data as dict[str, str] base64 values
         secret.data = {".dockerconfigjson": self._build_json()}
@@ -2586,19 +2577,26 @@ class KubeClient(ApoloKubeClient):
         pod = PodDescriptor.from_primitive(payload)
         return pod.status  # type: ignore
 
-    async def create_docker_secret(self, secret: DockerRegistrySecret) -> None:
-        url = self._generate_all_secrets_url(secret.namespace)
+    async def create_docker_secret(
+        self,
+        secret: DockerRegistrySecret,
+        namespace: str,
+    ) -> None:
+        url = self._generate_all_secrets_url(namespace)
         await self.post(url=url, json=secret.to_primitive())
 
     async def update_docker_secret(
-        self, secret: DockerRegistrySecret, create_non_existent: bool = False
+        self,
+        secret: DockerRegistrySecret,
+        namespace: str,
+        create_non_existent: bool = False,
     ) -> None:
         try:
-            url = self._generate_secret_url(secret.name, secret.namespace)
+            url = self._generate_secret_url(secret.name, namespace)
             await self.put(url=url, json=secret.to_primitive())
         except KubeClientException as e:
             if isinstance(e, ResourceNotFound) and create_non_existent:
-                await self.create_docker_secret(secret)
+                await self.create_docker_secret(secret, namespace)
             else:
                 raise e
 

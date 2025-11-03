@@ -234,18 +234,16 @@ class KubeOrchestrator(Orchestrator):
         return (self._project_prefix + job.org_project_hash.hex()).lower()
 
     async def _create_docker_secret(self, job: Job) -> DockerRegistrySecret:
-        secret = DockerRegistrySecret(
-            name=self._get_docker_secret_name(job),
-            namespace=job.namespace,
-            username=self._registry_config.username,
-            password=self._registry_config.password,
-            email=self._registry_config.email,
-            registry_server=self._registry_config.host,
-        )
-        # Use selector to create or update the docker registry secret
         async with self._selector.get_client(
             org_name=job.org_name, project_name=job.project_name
         ) as client_proxy:
+            secret = DockerRegistrySecret(
+                name=self._get_docker_secret_name(job),
+                username=self._registry_config.username,
+                password=self._registry_config.password,
+                email=self._registry_config.email,
+                registry_server=self._registry_config.host,
+            )
             await selector_update_docker_secret(client_proxy, secret)
         return secret
 
@@ -840,7 +838,7 @@ class KubeOrchestrator(Orchestrator):
         async with self._selector.get_client(
             org_name=org_name, project_name=project_name
         ) as client_proxy:
-            service = Service.create_headless_for_pod(client_proxy._namespace, pod)
+            service = Service.create_headless_for_pod(pod)
             if name is not None:
                 service = service.make_named(name)
             return await selector_create_service(client_proxy, service)
