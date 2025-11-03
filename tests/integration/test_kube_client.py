@@ -122,7 +122,6 @@ class TestKubeClient:
         name = str(uuid.uuid4())
         docker_secret = DockerRegistrySecret(
             name=name,
-            namespace=name,
             username="testuser",
             password="testpassword",
             email="testuser@example.com",
@@ -130,7 +129,7 @@ class TestKubeClient:
         )
 
         with pytest.raises(KubeClientException, match="NotFound"):
-            await kube_client.create_docker_secret(docker_secret)
+            await kube_client.create_docker_secret(docker_secret, namespace=name)
 
     async def test_create_docker_secret_already_exists(
         self, kube_config: KubeConfig, kube_client: KubeClient
@@ -138,7 +137,6 @@ class TestKubeClient:
         name = str(uuid.uuid4())
         docker_secret = DockerRegistrySecret(
             name=name,
-            namespace=kube_config.namespace,
             username="testuser",
             password="testpassword",
             email="testuser@example.com",
@@ -146,10 +144,12 @@ class TestKubeClient:
         )
 
         try:
-            await kube_client.create_docker_secret(docker_secret)
+            await kube_client.create_docker_secret(docker_secret, kube_config.namespace)
 
             with pytest.raises(KubeClientException, match="AlreadyExists"):
-                await kube_client.create_docker_secret(docker_secret)
+                await kube_client.create_docker_secret(
+                    docker_secret, kube_config.namespace
+                )
         finally:
             await kube_client.delete_secret(name, kube_config.namespace)
 
@@ -159,7 +159,6 @@ class TestKubeClient:
         name = str(uuid.uuid4())
         docker_secret = DockerRegistrySecret(
             name=name,
-            namespace=kube_config.namespace,
             username="testuser",
             password="testpassword",
             email="testuser@example.com",
@@ -167,8 +166,8 @@ class TestKubeClient:
         )
 
         try:
-            await kube_client.create_docker_secret(docker_secret)
-            await kube_client.update_docker_secret(docker_secret)
+            await kube_client.create_docker_secret(docker_secret, kube_config.namespace)
+            await kube_client.update_docker_secret(docker_secret, kube_config.namespace)
         finally:
             await kube_client.delete_secret(name, kube_config.namespace)
 
@@ -178,7 +177,6 @@ class TestKubeClient:
         name = str(uuid.uuid4())
         docker_secret = DockerRegistrySecret(
             name=name,
-            namespace=kube_config.namespace,
             username="testuser",
             password="testpassword",
             email="testuser@example.com",
@@ -186,7 +184,7 @@ class TestKubeClient:
         )
 
         with pytest.raises(KubeClientException, match="NotFound"):
-            await kube_client.update_docker_secret(docker_secret)
+            await kube_client.update_docker_secret(docker_secret, kube_config.namespace)
 
     async def test_update_docker_secret_create_non_existent(
         self, kube_config: KubeConfig, kube_client: KubeClient
@@ -194,15 +192,16 @@ class TestKubeClient:
         name = str(uuid.uuid4())
         docker_secret = DockerRegistrySecret(
             name=name,
-            namespace=kube_config.namespace,
             username="testuser",
             password="testpassword",
             email="testuser@example.com",
             registry_server="registry.example.com",
         )
 
-        await kube_client.update_docker_secret(docker_secret, create_non_existent=True)
-        await kube_client.update_docker_secret(docker_secret)
+        await kube_client.update_docker_secret(
+            docker_secret, kube_config.namespace, create_non_existent=True
+        )
+        await kube_client.update_docker_secret(docker_secret, kube_config.namespace)
 
     async def test_service_account_not_available(
         self,
@@ -225,16 +224,6 @@ class TestKubeClient:
 
         assert pod_status.container_status
         assert pod_status.container_status.exit_code != 0
-
-    async def test_get_node(self, kube_client: KubeClient, kube_node: str) -> None:
-        node = await kube_client.get_node(kube_node)
-
-        assert node
-
-    async def test_get_nodes(self, kube_client: KubeClient, kube_node: str) -> None:
-        nodes = await kube_client.get_nodes()
-
-        assert kube_node in [n.name for n in nodes]
 
     async def test_get_raw_nodes(self, kube_client: KubeClient, kube_node: str) -> None:
         result = await kube_client.get_raw_nodes()

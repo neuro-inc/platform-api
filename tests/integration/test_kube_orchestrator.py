@@ -902,7 +902,6 @@ class TestKubeOrchestrator:
         service_name = f"job-{uuid.uuid4()}"
         labels = {"label1": f"value-{uuid.uuid4()}", "label2": f"value-{uuid.uuid4()}"}
         service = Service(
-            namespace=job_nginx.namespace,
             name=service_name,
             target_port=8080,
             labels=labels,
@@ -938,7 +937,6 @@ class TestKubeOrchestrator:
         def _gen_for_labels(labels: dict[str, str]) -> list[Service]:
             return [
                 Service(
-                    namespace=job_nginx.namespace,
                     name=f"job-{uuid.uuid4()}",
                     target_port=8080,
                     labels=labels,
@@ -982,9 +980,7 @@ class TestKubeOrchestrator:
             org_name=job_nginx.org_name,
             project_name=job_nginx.project_name,
         ) as kube_client:
-            service = Service(
-                namespace=kube_client._namespace, name=service_name, target_port=8080
-            )
+            service = Service(name=service_name, target_port=8080)
             try:
                 service_initial = await create_service(kube_client, service)
                 await delete_service(kube_client, service_name)
