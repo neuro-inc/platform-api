@@ -1026,7 +1026,7 @@ class TestIngressV1Beta1Rule:
         }
 
     def test_from_service(self) -> None:
-        service = Service(namespace="default", name="testname", target_port=1234)
+        service = Service(name="testname", target_port=1234)
         rule = IngressRule.from_service(host="testname.testdomain", service=service)
         assert rule == IngressRule(
             host="testname.testdomain", service_name="testname", service_port=80
@@ -1461,7 +1461,7 @@ class TestService:
     @pytest.fixture
     def service_payload(self) -> dict[str, Any]:
         return {
-            "metadata": {"namespace": "default", "name": "testservice"},
+            "metadata": {"name": "testservice"},
             "spec": {
                 "type": "ClusterIP",
                 "ports": [{"port": 80, "targetPort": 8080, "name": "http"}],
@@ -1483,7 +1483,6 @@ class TestService:
 
     def test_to_primitive(self, service_payload: dict[str, dict[str, Any]]) -> None:
         service = Service(
-            namespace="default",
             name="testservice",
             selector=service_payload["spec"]["selector"],
             target_port=8080,
@@ -1497,7 +1496,6 @@ class TestService:
         expected_payload = service_payload.copy()
         expected_payload["metadata"]["labels"] = labels
         service = Service(
-            namespace="default",
             name="testservice",
             selector=expected_payload["spec"]["selector"],
             target_port=8080,
@@ -1509,7 +1507,6 @@ class TestService:
         self, service_payload: dict[str, dict[str, Any]]
     ) -> None:
         service = Service(
-            namespace="default",
             name="testservice",
             selector=service_payload["spec"]["selector"],
             target_port=8080,
@@ -1522,7 +1519,6 @@ class TestService:
         self, service_payload: dict[str, dict[str, Any]]
     ) -> None:
         service = Service(
-            namespace="default",
             name="testservice",
             selector=service_payload["spec"]["selector"],
             target_port=8080,
@@ -1536,7 +1532,6 @@ class TestService:
     ) -> None:
         service = Service.from_primitive(service_payload_with_uid)
         assert service == Service(
-            namespace="default",
             name="testservice",
             uid="test-uid",
             selector=service_payload_with_uid["spec"]["selector"],
@@ -1551,7 +1546,6 @@ class TestService:
         input_payload["metadata"]["labels"] = labels
         service = Service.from_primitive(input_payload)
         assert service == Service(
-            namespace="default",
             name="testservice",
             uid="test-uid",
             selector=service_payload_with_uid["spec"]["selector"],
@@ -1565,7 +1559,6 @@ class TestService:
         service_payload_with_uid["spec"]["type"] = "NodePort"
         service = Service.from_primitive(service_payload_with_uid)
         assert service == Service(
-            namespace="default",
             name="testservice",
             uid="test-uid",
             selector=service_payload_with_uid["spec"]["selector"],
@@ -1579,7 +1572,6 @@ class TestService:
         service_payload_with_uid["spec"]["clusterIP"] = "None"
         service = Service.from_primitive(service_payload_with_uid)
         assert service == Service(
-            namespace="default",
             name="testservice",
             uid="test-uid",
             selector=service_payload_with_uid["spec"]["selector"],
@@ -1589,15 +1581,13 @@ class TestService:
 
     def test_create_for_pod(self) -> None:
         pod = PodDescriptor(name="testpod", image="testimage", port=1234)
-        service = Service.create_for_pod(namespace="default", pod=pod)
-        assert service == Service(namespace="default", name="testpod", target_port=1234)
+        service = Service.create_for_pod(pod=pod)
+        assert service == Service(name="testpod", target_port=1234)
 
     def test_create_headless_for_pod(self) -> None:
         pod = PodDescriptor(name="testpod", image="testimage", port=1234)
-        service = Service.create_headless_for_pod(namespace="default", pod=pod)
-        assert service == Service(
-            namespace="default", name="testpod", cluster_ip="None", target_port=1234
-        )
+        service = Service.create_headless_for_pod(pod=pod)
+        assert service == Service(name="testpod", cluster_ip="None", target_port=1234)
 
 
 class TestContainerStatus:

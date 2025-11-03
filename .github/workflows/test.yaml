@@ -127,7 +127,7 @@ jobs:
         GROUP: ${{ steps.group.outputs.group }}
         COVERAGE_FILE: ${{ strategy.job-index }}.coverage
     - name: Upload coverage part
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: coverage-${{ strategy.job-index }}
         path: ${{ strategy.job-index }}.coverage
@@ -140,7 +140,7 @@ jobs:
     - name: Checkout commit
       uses: actions/checkout@v5
     - name: Download All Coverages
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v6
       with:
         path: coverage
         pattern: coverage-*
