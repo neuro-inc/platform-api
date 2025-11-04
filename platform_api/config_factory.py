@@ -204,6 +204,16 @@ class EnvironConfigFactory:
                 "NP_DB_POSTGRES_CONNECT_TIMEOUT", PostgresConfig.connect_timeout_s
             )
         )
+        pool_pre_ping = bool(
+            self._environ.get(
+                "NP_DB_POSTGRES_POOL_PRE_PING", PostgresConfig.pool_pre_ping
+            )
+        )
+        pool_recycle_s = int(
+            self._environ.get(
+                "NP_DB_POSTGRES_POOL_RECYCLE_S", PostgresConfig.pool_recycle_s
+            )
+        )
         command_timeout_s = PostgresConfig.command_timeout_s
         if self._environ.get("NP_DB_POSTGRES_COMMAND_TIMEOUT"):
             command_timeout_s = float(self._environ["NP_DB_POSTGRES_COMMAND_TIMEOUT"])
@@ -214,6 +224,8 @@ class EnvironConfigFactory:
             pool_max_size=pool_max_size,
             connect_timeout_s=connect_timeout_s,
             command_timeout_s=command_timeout_s,
+            pool_pre_ping=pool_pre_ping,
+            pool_recycle_s=pool_recycle_s,
         )
 
     def create_alembic(self, postgres_dsn: str) -> AlembicConfig:
