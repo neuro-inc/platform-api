@@ -81,6 +81,9 @@ class PostgresConfig:
     connect_timeout_s: float = 60.0
     command_timeout_s: float | None = 60.0
 
+    pool_pre_ping: bool = True
+    pool_recycle_s: int = 3_600  # 1 hour
+
 
 @dataclass(frozen=True)
 class DatabaseConfig:
@@ -164,6 +167,8 @@ class Config:
     scheduler: JobsSchedulerConfig = JobsSchedulerConfig()
 
     events: EventsClientConfig | None = None
+
+    platform_admin_enabled: bool = False
 
 
 @dataclass(frozen=True)

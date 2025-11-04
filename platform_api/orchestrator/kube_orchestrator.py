@@ -234,18 +234,16 @@ class KubeOrchestrator(Orchestrator):
         return (self._project_prefix + job.org_project_hash.hex()).lower()
 
     async def _create_docker_secret(self, job: Job) -> DockerRegistrySecret:
-        secret = DockerRegistrySecret(
-            name=self._get_docker_secret_name(job),
-            namespace=job.namespace,
-            username=self._registry_config.username,
-            password=self._registry_config.password,
-            email=self._registry_config.email,
-            registry_server=self._registry_config.host,
-        )
-        # Use selector to create or update the docker registry secret
         async with self._selector.get_client(
             org_name=job.org_name, project_name=job.project_name
         ) as client_proxy:
+            secret = DockerRegistrySecret(
+                name=self._get_docker_secret_name(job),
+                username=self._registry_config.username,
+                password=self._registry_config.password,
+                email=self._registry_config.email,
+                registry_server=self._registry_config.host,
+            )
             await selector_update_docker_secret(client_proxy, secret)
         return secret
 
@@ -303,7 +301,6 @@ class KubeOrchestrator(Orchestrator):
             node_affinity=node_affinity,
             pod_affinity=pod_affinity,
             labels=labels,
-            priority_class_name=self._kube_config.jobs_pod_priority_class_name,
             restart_policy=self._get_pod_restart_policy(job),
             meta_env=meta_env,
             privileged=job.privileged,
@@ -774,10 +771,14 @@ class KubeOrchestrator(Orchestrator):
 
         scaleup_events = [e for e in pod_events if e.reason == "TriggeredScaleUp"]
         scaleup_events.sort(key=operator.attrgetter("last_timestamp"))
-        if scaleup_events and (
-            (now - scaleup_events[-1].timestamp).total_seconds()
-            < self._orchestrator_config.job_schedule_scale_up_timeout_s
-            + schedule_timeout
+        if (
+            scaleup_events
+            and scaleup_events[-1].timestamp
+            and (
+                (now - scaleup_events[-1].timestamp).total_seconds()
+                < self._orchestrator_config.job_schedule_scale_up_timeout_s
+                + schedule_timeout
+            )
         ):
             # waiting for cluster scaleup
             return JobStatusItem.create(
@@ -841,7 +842,7 @@ class KubeOrchestrator(Orchestrator):
         async with self._selector.get_client(
             org_name=org_name, project_name=project_name
         ) as client_proxy:
-            service = Service.create_headless_for_pod(client_proxy._namespace, pod)
+            service = Service.create_headless_for_pod(pod)
             if name is not None:
                 service = service.make_named(name)
             return await selector_create_service(client_proxy, service)

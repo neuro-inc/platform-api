@@ -615,15 +615,15 @@ async def kube_node(kube_client: KubeClient) -> str:
 
 
 @pytest.fixture
-def default_node_capacity() -> dict[str, Any]:
-    return {"pods": "110", "memory": "1Gi", "cpu": 2, "nvidia.com/gpu": 1}
+def default_node_capacity() -> dict[str, str]:
+    return {"pods": "110", "memory": "1Gi", "cpu": "2", "nvidia.com/gpu": "1"}
 
 
 @pytest.fixture
 async def kube_node_gpu(
     kube_client: MyKubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
-    default_node_capacity: dict[str, Any],
+    default_node_capacity: dict[str, str],
 ) -> AsyncIterator[str]:
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)
@@ -672,7 +672,7 @@ async def kube_node_preemptible(
     kube_config_node_preemptible: KubeConfig,
     kube_client: MyKubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
-    default_node_capacity: dict[str, Any],
+    default_node_capacity: dict[str, str],
 ) -> AsyncIterator[str]:
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)

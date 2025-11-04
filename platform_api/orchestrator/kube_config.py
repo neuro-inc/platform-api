@@ -33,7 +33,6 @@ class KubeConfig:
     jobs_ingress_error_page_middleware: str = "error-page@kubernetescrd"
     jobs_pod_job_toleration_key: str = "platform.neuromation.io/job"
     jobs_pod_preemptible_toleration_key: str | None = None
-    jobs_pod_priority_class_name: str | None = None
 
     node_label_preemptible: str | None = None
     node_label_job: str | None = None

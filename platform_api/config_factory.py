@@ -61,6 +61,7 @@ class EnvironConfigFactory:
             admin_public_url=admin_public_url,
             api_base_url=api_base_url,
             events=self.create_events(),
+            platform_admin_enabled=self._get_bool("PLATFORM_ADMIN_ENABLED", False),
         )
 
     def create_poller(self) -> PollerConfig:
@@ -203,6 +204,16 @@ class EnvironConfigFactory:
                 "NP_DB_POSTGRES_CONNECT_TIMEOUT", PostgresConfig.connect_timeout_s
             )
         )
+        pool_pre_ping = bool(
+            self._environ.get(
+                "NP_DB_POSTGRES_POOL_PRE_PING", PostgresConfig.pool_pre_ping
+            )
+        )
+        pool_recycle_s = int(
+            self._environ.get(
+                "NP_DB_POSTGRES_POOL_RECYCLE_S", PostgresConfig.pool_recycle_s
+            )
+        )
         command_timeout_s = PostgresConfig.command_timeout_s
         if self._environ.get("NP_DB_POSTGRES_COMMAND_TIMEOUT"):
             command_timeout_s = float(self._environ["NP_DB_POSTGRES_COMMAND_TIMEOUT"])
@@ -213,6 +224,8 @@ class EnvironConfigFactory:
             pool_max_size=pool_max_size,
             connect_timeout_s=connect_timeout_s,
             command_timeout_s=command_timeout_s,
+            pool_pre_ping=pool_pre_ping,
+            pool_recycle_s=pool_recycle_s,
         )
 
     def create_alembic(self, postgres_dsn: str) -> AlembicConfig:
@@ -269,9 +282,6 @@ class EnvironConfigFactory:
             ),
             jobs_pod_preemptible_toleration_key=self._environ.get(
                 "NP_KUBE_POD_PREEMPTIBLE_TOLERATION_KEY"
-            ),
-            jobs_pod_priority_class_name=self._environ.get(
-                "NP_KUBE_POD_PRIORITY_CLASS_NAME"
             ),
             node_label_preemptible=self._environ.get("NP_KUBE_NODE_LABEL_PREEMPTIBLE"),
             node_label_job=self._environ.get("NP_KUBE_NODE_LABEL_JOB"),
