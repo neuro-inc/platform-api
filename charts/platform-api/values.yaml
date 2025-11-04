@@ -15,7 +15,7 @@ strategy:
 enforcerRetentionDelayDays:
 
 securityContext:
-  enabled: true
+  enabled: false
   runAsUser: 1001
   runAsGroup: 1001
   runAsNonRoot: true
