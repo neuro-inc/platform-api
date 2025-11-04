@@ -33,7 +33,7 @@ typing-extensions = "4.15.0"
 neuro-admin-client = "25.9.2"
 yarl = "^1.22.0"
 python-jose = ">=3.4.0"
-apolo-kube-client = "^25.10.17"
+apolo-kube-client = "^25.11.0"
 apolo-events-client = "25.10.0"
 neuro-config-client = "25.10.0"
 
