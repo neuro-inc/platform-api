@@ -1873,10 +1873,10 @@ class KubernetesEvent:
     def __init__(
         self,
         involved_object: dict[str, str],
-        count: int,
+        count: int | None,
         reason: str | None,
         message: str | None,
-        creation_timestamp: datetime,
+        creation_timestamp: datetime | None,
         first_timestamp: datetime | None,
         event_time: datetime | None,
         last_timestamp: datetime | None,
@@ -1925,8 +1925,6 @@ class KubernetesEvent:
 
     @classmethod
     def from_model(cls, event: CoreV1Event) -> Self:
-        assert event.count
-        assert event.metadata.creation_timestamp
         return cls(
             involved_object=event.involved_object.model_dump(),
             count=event.count,
@@ -1939,7 +1937,7 @@ class KubernetesEvent:
         )
 
     @property
-    def timestamp(self) -> datetime:
+    def timestamp(self) -> datetime | None:
         return (
             self.last_timestamp
             or self.event_time
