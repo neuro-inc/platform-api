@@ -771,10 +771,14 @@ class KubeOrchestrator(Orchestrator):
 
         scaleup_events = [e for e in pod_events if e.reason == "TriggeredScaleUp"]
         scaleup_events.sort(key=operator.attrgetter("last_timestamp"))
-        if scaleup_events and (
-            (now - scaleup_events[-1].timestamp).total_seconds()
-            < self._orchestrator_config.job_schedule_scale_up_timeout_s
-            + schedule_timeout
+        if (
+            scaleup_events
+            and scaleup_events[-1].timestamp
+            and (
+                (now - scaleup_events[-1].timestamp).total_seconds()
+                < self._orchestrator_config.job_schedule_scale_up_timeout_s
+                + schedule_timeout
+            )
         ):
             # waiting for cluster scaleup
             return JobStatusItem.create(
