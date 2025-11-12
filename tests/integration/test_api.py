@@ -2237,7 +2237,7 @@ class TestJobs:
             assert resp.status == HTTPForbidden.status_code, await resp.text()
             result = await resp.json()
             perm = {
-                "uri": str(disk.to_permission_uri()),
+                "uri": str(disk.to_uri()),
                 "action": "read" if read_only else "write",
             }
             assert perm in result["missing"]

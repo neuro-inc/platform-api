@@ -574,7 +574,7 @@ def infer_permissions_from_container(
         permissions.append(permission)
     for disk_volume in container.disk_volumes:
         action = "read" if disk_volume.read_only else "write"
-        permission = Permission(uri=disk_volume.disk.to_permission_uri(), action=action)
+        permission = Permission(uri=str(disk_volume.disk.to_uri()), action=action)
         permissions.append(permission)
     return permissions
 

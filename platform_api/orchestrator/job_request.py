@@ -80,11 +80,6 @@ class Disk:
             URL.build(scheme="disk", host=self.cluster_name) / self.path / self.disk_id
         )
 
-    def to_permission_uri(self) -> str:
-        return str(
-            URL.build(scheme="disk", host=self.cluster_name) / self.path / self.disk_id
-        )
-
     @classmethod
     def create(cls, disk_uri: str | URL) -> "Disk":
         # Note: format of `disk_uri` is enforced by validators
