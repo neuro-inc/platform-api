@@ -309,14 +309,14 @@ pytest = ["pytest (>=8.4.1)", "pytest-aiohttp (>=1.1.0)", "pytest-asyncio (>=1.0
 
 [[package]]
 name = "apolo-kube-client"
-version = "25.11.4"
+version = "25.11.5"
 description = "Apolo internal client for kubernetes API"
 optional = false
 python-versions = "<4.0,>=3.13"
 groups = ["main"]
 files = [
-    {file = "apolo_kube_client-25.11.4-py3-none-any.whl", hash = "sha256:336ccb76574140a951ed69b86e8624efa1683f630dd87093e15af0de3156bcad"},
-    {file = "apolo_kube_client-25.11.4.tar.gz", hash = "sha256:53e82498248ded108b2757497a502a87c605744b6964eca5c6dfe35588f1d962"},
+    {file = "apolo_kube_client-25.11.5-py3-none-any.whl", hash = "sha256:4b46c4dfe83c76051daf30eeacc893c01913d5e1046aa0c91cec677e637e6726"},
+    {file = "apolo_kube_client-25.11.5.tar.gz", hash = "sha256:dfc4934a6b84d4a0da12533beb0cbbaa2efac0c281dfc1845e0498cf77cc505d"},
 ]
 
 [package.dependencies]
@@ -3295,4 +3295,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<4.0"
-content-hash = "d70b91838c2fe15667b8369aa715202b16224f5477eeb890557008ced82e8d6b"
+content-hash = "a96cae59ae2f4be8040044797dd230b53c6f4c008d461ba22651ebbe60bb526d"
