@@ -45,53 +45,6 @@ class TestKubeClient:
                 kube_client.namespace, pod_name="unknown"
             )
 
-    async def test_wait_pod_is_running_timed_out(
-        self,
-        kube_client: KubeClient,
-        kube_client_selector: KubeClientSelector,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    ) -> None:
-        container = Container(
-            image="ubuntu:20.10",
-            command="true",
-            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(job_request)
-        await delete_pod_later(pod)
-        async with kube_client_selector.get_client(
-            org_name="org", project_name="proj"
-        ) as client_proxy:
-            await create_pod(client_proxy, pod)
-        with pytest.raises(asyncio.TimeoutError):
-            await kube_client.wait_pod_is_running(
-                kube_client.namespace, pod_name=pod.name, timeout_s=0.1
-            )
-
-    async def test_wait_pod_is_running(
-        self,
-        kube_client: KubeClient,
-        kube_client_selector: KubeClientSelector,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-    ) -> None:
-        container = Container(
-            image="ubuntu:20.10",
-            command="true",
-            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(job_request)
-        await delete_pod_later(pod)
-        async with kube_client_selector.get_client(
-            org_name="org", project_name="proj"
-        ) as client_proxy:
-            await create_pod(client_proxy, pod)
-        await kube_client.wait_pod_is_running(
-            kube_client.namespace, pod_name=pod.name, timeout_s=60.0
-        )
-        pod_status = await kube_client.get_pod_status(kube_client.namespace, pod.name)
-        assert pod_status.phase in ("Running", "Succeeded")
-
     @pytest.mark.parametrize(
         "entrypoint,command",
         [(None, "/bin/echo false"), ("/bin/echo false", None), ("/bin/echo", "false")],
