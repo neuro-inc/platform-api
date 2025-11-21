@@ -2516,10 +2516,6 @@ class KubeClient(ApoloKubeClient):
         )
         return PodDescriptor.from_primitive(payload)
 
-    async def get_raw_pod(self, namespace: str, name: str) -> dict[str, Any]:
-        url = self._generate_pod_url(namespace, name)
-        return await self.get(url=url)
-
     async def get_raw_pods(self, all_namespaces: bool = False) -> ListResult:
         url = self._generate_pods_url(all_namespaces=all_namespaces)
         payload = await self.get(url=url)
