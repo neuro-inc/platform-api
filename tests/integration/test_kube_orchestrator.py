@@ -3721,7 +3721,7 @@ class TestPreemption:
     async def test_preemptible_job_pending_pod_node_not_ready(
         self,
         kube_config: KubeConfig,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_regular_labels: str,
@@ -3747,24 +3747,28 @@ class TestPreemption:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_scheduled(job.namespace, pod_name, node_name)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_scheduled(kube_client, pod_name, node_name)
 
-        raw_pod = await kube_client.get_raw_pod(job.namespace, pod_name)
+            raw_pod = await kube_client.core_v1.pod.get(pod_name)
 
-        raw_pod["status"]["reason"] = "NodeLost"
-        await kube_client.set_raw_pod_status(job.namespace, pod_name, raw_pod)
+            raw_pod.status.reason = "NodeLost"
+            await kube_client.core_v1.pod[pod_name].status.update(raw_pod)
 
-        raw_pod = await kube_client.get_raw_pod(job.namespace, pod_name)
-        assert raw_pod["status"]["reason"] == "NodeLost"
+            raw_pod = await kube_client.core_v1.pod.get(pod_name)
+            assert raw_pod.status.reason == "NodeLost"
 
-        # triggering pod recreation
-        job_status = await kube_orchestrator.get_job_status(job)
-        assert job_status.is_pending
+            # triggering pod recreation
+            job_status = await kube_orchestrator.get_job_status(job)
+            assert job_status.is_pending
 
-        await kube_client.wait_pod_scheduled(job.namespace, pod_name, node_name)
+            await wait_pod_scheduled(kube_client, pod_name, node_name)
 
-        raw_pod = await kube_client.get_raw_pod(job.namespace, pod_name)
-        assert not raw_pod["status"].get("reason")
+            raw_pod = await kube_client.core_v1.pod.get(pod_name)
+            assert not raw_pod.status.reason
 
     async def test_preemptible_job_recreation_failed(
         self,
@@ -4686,9 +4690,9 @@ class TestExternalJobsPreemption:
 
     async def test_job_pending_pod_node_not_ready(
         self,
-        kube_client: MyKubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        kube_client_selector: KubeClientSelector,
         kube_node_preemptible: str,
     ) -> None:
         node_name = kube_node_preemptible
@@ -4710,7 +4714,7 @@ class TestExternalJobsPreemption:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        async with kube_orchestrator._selector.get_client(
+        async with kube_client_selector.get_client(
             org_name=job.org_name, project_name=job.project_name
         ) as client_proxy:
             await wait_pod_scheduled(client_proxy, pod_name, node_name)
