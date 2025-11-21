@@ -2521,35 +2521,6 @@ class KubeClient(ApoloKubeClient):
         async for event in self._watch(url, resource_version=resource_version):
             yield event
 
-    async def create_docker_secret(
-        self,
-        secret: DockerRegistrySecret,
-        namespace: str,
-    ) -> None:
-        url = self._generate_all_secrets_url(namespace)
-        await self.post(url=url, json=secret.to_primitive())
-
-    async def update_docker_secret(
-        self,
-        secret: DockerRegistrySecret,
-        namespace: str,
-        create_non_existent: bool = False,
-    ) -> None:
-        try:
-            url = self._generate_secret_url(secret.name, namespace)
-            await self.put(url=url, json=secret.to_primitive())
-        except KubeClientException as e:
-            if isinstance(e, ResourceNotFound) and create_non_existent:
-                await self.create_docker_secret(secret, namespace)
-            else:
-                raise e
-
-    async def delete_secret(
-        self, secret_name: str, namespace_name: str | None = None
-    ) -> None:
-        url = self._generate_secret_url(secret_name, namespace_name)
-        await self._delete_resource_url(url)
-
 
 class EventHandler:
     @abc.abstractmethod

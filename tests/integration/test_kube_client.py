@@ -15,15 +15,12 @@ from apolo_kube_client import (
     V1ObjectMeta,
 )
 
-from platform_api.config import KubeConfig
-from platform_api.old_kube_client.errors import KubeClientException
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
     JobRequest,
 )
 from platform_api.orchestrator.kube_client import (
-    DockerRegistrySecret,
     EventHandler,
     KubeClient,
     NodeWatcher,
@@ -38,93 +35,6 @@ PodFactory = Callable[..., Awaitable[PodDescriptor]]
 
 
 class TestKubeClient:
-    async def test_create_docker_secret_non_existent_namespace(
-        self, kube_config: KubeConfig, kube_client: KubeClient
-    ) -> None:
-        name = str(uuid.uuid4())
-        docker_secret = DockerRegistrySecret(
-            name=name,
-            username="testuser",
-            password="testpassword",
-            email="testuser@example.com",
-            registry_server="registry.example.com",
-        )
-
-        with pytest.raises(KubeClientException, match="NotFound"):
-            await kube_client.create_docker_secret(docker_secret, namespace=name)
-
-    async def test_create_docker_secret_already_exists(
-        self, kube_config: KubeConfig, kube_client: KubeClient
-    ) -> None:
-        name = str(uuid.uuid4())
-        docker_secret = DockerRegistrySecret(
-            name=name,
-            username="testuser",
-            password="testpassword",
-            email="testuser@example.com",
-            registry_server="registry.example.com",
-        )
-
-        try:
-            await kube_client.create_docker_secret(docker_secret, kube_config.namespace)
-
-            with pytest.raises(KubeClientException, match="AlreadyExists"):
-                await kube_client.create_docker_secret(
-                    docker_secret, kube_config.namespace
-                )
-        finally:
-            await kube_client.delete_secret(name, kube_config.namespace)
-
-    async def test_update_docker_secret_already_exists(
-        self, kube_config: KubeConfig, kube_client: KubeClient
-    ) -> None:
-        name = str(uuid.uuid4())
-        docker_secret = DockerRegistrySecret(
-            name=name,
-            username="testuser",
-            password="testpassword",
-            email="testuser@example.com",
-            registry_server="registry.example.com",
-        )
-
-        try:
-            await kube_client.create_docker_secret(docker_secret, kube_config.namespace)
-            await kube_client.update_docker_secret(docker_secret, kube_config.namespace)
-        finally:
-            await kube_client.delete_secret(name, kube_config.namespace)
-
-    async def test_update_docker_secret_non_existent(
-        self, kube_config: KubeConfig, kube_client: KubeClient
-    ) -> None:
-        name = str(uuid.uuid4())
-        docker_secret = DockerRegistrySecret(
-            name=name,
-            username="testuser",
-            password="testpassword",
-            email="testuser@example.com",
-            registry_server="registry.example.com",
-        )
-
-        with pytest.raises(KubeClientException, match="NotFound"):
-            await kube_client.update_docker_secret(docker_secret, kube_config.namespace)
-
-    async def test_update_docker_secret_create_non_existent(
-        self, kube_config: KubeConfig, kube_client: KubeClient
-    ) -> None:
-        name = str(uuid.uuid4())
-        docker_secret = DockerRegistrySecret(
-            name=name,
-            username="testuser",
-            password="testpassword",
-            email="testuser@example.com",
-            registry_server="registry.example.com",
-        )
-
-        await kube_client.update_docker_secret(
-            docker_secret, kube_config.namespace, create_non_existent=True
-        )
-        await kube_client.update_docker_secret(docker_secret, kube_config.namespace)
-
     async def test_service_account_not_available(
         self,
         kube_client_selector: KubeClientSelector,
