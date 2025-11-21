@@ -20,6 +20,7 @@ from apolo_kube_client import (
     KubeClientAuthType as ApoloKubeClientAuthType,
     KubeClientSelector,
     KubeConfig as ApoloKubeConfig,
+    ResourceExists,
     V1Node,
     V1NodeCondition,
     V1NodeSpec,
@@ -66,7 +67,6 @@ from platform_api.config import (
     RegistryConfig,
     ServerConfig,
 )
-from platform_api.old_kube_client.errors import ResourceExists
 from platform_api.orchestrator.kube_client import (
     KubeClient,
     NodeTaint,
@@ -542,7 +542,7 @@ def default_node_capacity() -> dict[str, str]:
 
 @pytest.fixture
 async def kube_node_gpu(
-    kube_client: KubeClient,
+    kube_client_selector: KubeClientSelector,
     delete_node_later: Callable[[str], Awaitable[None]],
     default_node_capacity: dict[str, str],
 ) -> AsyncIterator[str]:
@@ -550,30 +550,41 @@ async def kube_node_gpu(
     await delete_node_later(node_name)
 
     taints = [NodeTaint(key=Resources.nvidia_gpu_key, value="present")]
-    await kube_client.create_node(
-        node_name, capacity=default_node_capacity, taints=taints
+    model = V1Node(
+        metadata=V1ObjectMeta(name=node_name),
+        spec=V1NodeSpec(taints=[taint.to_model() for taint in taints]),
+        status=V1NodeStatus(
+            capacity=default_node_capacity,
+            conditions=[V1NodeCondition(status="True", type="Ready")],
+        ),
     )
-
+    await kube_client_selector.host_client.core_v1.node.create(model)
     yield node_name
 
 
 @pytest.fixture
 async def kube_node_tpu(
-    kube_client: KubeClient,
+    kube_client_selector: KubeClientSelector,
     delete_node_later: Callable[[str], Awaitable[None]],
 ) -> AsyncIterator[str]:
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)
 
-    await kube_client.create_node(
-        node_name,
-        capacity={
-            "pods": "110",
-            "memory": "1Gi",
-            "cpu": 2,
-            "cloud-tpus.google.com/v2": 8,
-        },
+    capacity = {
+        "pods": "110",
+        "memory": "1Gi",
+        "cpu": "2",
+        "cloud-tpus.google.com/v2": "8",
+    }
+    model = V1Node(
+        metadata=V1ObjectMeta(name=node_name),
+        spec=V1NodeSpec(),
+        status=V1NodeStatus(
+            capacity=capacity,
+            conditions=[V1NodeCondition(status="True", type="Ready")],
+        ),
     )
+    await kube_client_selector.host_client.core_v1.node.create(model)
 
     yield node_name
 
@@ -591,7 +602,7 @@ def kube_config_node_preemptible(
 @pytest.fixture
 async def kube_node_preemptible(
     kube_config_node_preemptible: KubeConfig,
-    kube_client: KubeClient,
+    kube_client_selector: KubeClientSelector,
     delete_node_later: Callable[[str], Awaitable[None]],
     default_node_capacity: dict[str, str],
 ) -> AsyncIterator[str]:
@@ -605,9 +616,15 @@ async def kube_node_preemptible(
     taints = [
         NodeTaint(key=kube_config.jobs_pod_preemptible_toleration_key, value="present")
     ]
-    await kube_client.create_node(
-        node_name, capacity=default_node_capacity, labels=labels, taints=taints
+    model = V1Node(
+        metadata=V1ObjectMeta(name=node_name, labels=labels),
+        spec=V1NodeSpec(taints=[taint.to_model() for taint in taints]),
+        status=V1NodeStatus(
+            capacity=default_node_capacity,
+            conditions=[V1NodeCondition(status="True", type="Ready")],
+        ),
     )
+    await kube_client_selector.host_client.core_v1.node.create(model)
 
     yield node_name
 
