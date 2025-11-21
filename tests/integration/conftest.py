@@ -72,6 +72,7 @@ from platform_api.orchestrator.kube_client import (
     NodeTaint,
     PodDescriptor,
     Resources,
+    create_pod,
 )
 from platform_api.orchestrator.kube_config import KubeClientAuthType, KubeConfig
 from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
@@ -649,7 +650,7 @@ async def delete_pod_later(
 
 @pytest.fixture
 async def pod_factory(
-    kube_client: KubeClient,
+    kube_client_selector: KubeClientSelector,
     delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
 ) -> Callable[..., Awaitable[PodDescriptor]]:
     name_prefix = f"pod-{uuid.uuid4()}"
@@ -678,13 +679,16 @@ async def pod_factory(
             command=command or [],
             resources=Resources(cpu=cpu, memory=memory),
         )
-        pod = await kube_client.create_pod(kube_client.namespace, pod)
-        await delete_pod_later(pod)
-        if wait:
-            await kube_client.wait_pod_is_running(
-                kube_client.namespace, pod.name, timeout_s=wait_timeout_s
-            )
-        return pod
+        async with kube_client_selector.get_client(
+            org_name="org", project_name="proj"
+        ) as kube_client:
+            pod = await create_pod(kube_client, pod)
+            await delete_pod_later(pod)
+            if wait:
+                await kube_client.core_v1.pod[pod.name].apolo_waiter.wait_running(
+                    timeout_s=wait_timeout_s
+                )
+            return pod
 
     return _create
 

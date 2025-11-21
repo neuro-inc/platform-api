@@ -2486,14 +2486,6 @@ class KubeClient(ApoloKubeClient):
             # different UID, see https://github.com/neuro-inc/platform-api/pull/1525
             raise ResourceNotFound(str(e))
 
-    async def delete_node(self, name: str) -> None:
-        url = self._generate_node_url(name)
-        await self._delete_resource_url(url)
-
-    async def get_node(self, name: str) -> Node:
-        payload = await self.get(url=self._generate_node_url(name))
-        return Node.from_primitive(payload)
-
     async def get_raw_nodes(self, labels: dict[str, str] | None = None) -> ListResult:
         params: dict[str, str] = {}
         if labels:
@@ -2515,17 +2507,6 @@ class KubeClient(ApoloKubeClient):
             )
         async for event in self._watch(self._nodes_url, params, resource_version):
             yield event
-
-    async def create_pod(
-        self, namespace: str, descriptor: PodDescriptor
-    ) -> PodDescriptor:
-        url = self._generate_pods_url(namespace)
-        payload = await self.post(
-            url=url,
-            json=descriptor.to_primitive(),
-            raise_for_status=False,
-        )
-        return PodDescriptor.from_primitive(payload)
 
     async def get_pod(self, namespace: str, pod_name: str) -> PodDescriptor:
         url = self._generate_pod_url(namespace, pod_name)

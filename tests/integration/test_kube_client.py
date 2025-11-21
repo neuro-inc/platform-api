@@ -32,6 +32,7 @@ from platform_api.orchestrator.kube_client import (
     PodDescriptor,
     PodWatcher,
     WatchEvent,
+    create_pod,
 )
 
 PodFactory = Callable[..., Awaitable[PodDescriptor]]
@@ -47,6 +48,7 @@ class TestKubeClient:
     async def test_wait_pod_is_running_timed_out(
         self,
         kube_client: KubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -57,7 +59,10 @@ class TestKubeClient:
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)
         await delete_pod_later(pod)
-        await kube_client.create_pod(kube_client.namespace, pod)
+        async with kube_client_selector.get_client(
+            org_name="org", project_name="proj"
+        ) as client_proxy:
+            await create_pod(client_proxy, pod)
         with pytest.raises(asyncio.TimeoutError):
             await kube_client.wait_pod_is_running(
                 kube_client.namespace, pod_name=pod.name, timeout_s=0.1
@@ -66,6 +71,7 @@ class TestKubeClient:
     async def test_wait_pod_is_running(
         self,
         kube_client: KubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -76,7 +82,10 @@ class TestKubeClient:
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)
         await delete_pod_later(pod)
-        await kube_client.create_pod(kube_client.namespace, pod)
+        async with kube_client_selector.get_client(
+            org_name="org", project_name="proj"
+        ) as client_proxy:
+            await create_pod(client_proxy, pod)
         await kube_client.wait_pod_is_running(
             kube_client.namespace, pod_name=pod.name, timeout_s=60.0
         )
@@ -90,6 +99,7 @@ class TestKubeClient:
     async def test_run_check_entrypoint_and_command(
         self,
         kube_client: KubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
         entrypoint: str,
         command: str,
@@ -103,7 +113,10 @@ class TestKubeClient:
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)
         await delete_pod_later(pod)
-        await kube_client.create_pod(kube_client.namespace, pod)
+        async with kube_client_selector.get_client(
+            org_name="org", project_name="proj"
+        ) as client_proxy:
+            await create_pod(client_proxy, pod)
         await kube_client.wait_pod_is_terminated(
             kube_client.namespace, pod_name=pod.name, timeout_s=60.0
         )
@@ -214,6 +227,7 @@ class TestKubeClient:
     async def test_service_account_not_available(
         self,
         kube_client: KubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
         container = Container(
@@ -224,7 +238,10 @@ class TestKubeClient:
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)
         await delete_pod_later(pod)
-        await kube_client.create_pod(kube_client.namespace, pod)
+        async with kube_client_selector.get_client(
+            org_name="org", project_name="proj"
+        ) as client_proxy:
+            await create_pod(client_proxy, pod)
         await kube_client.wait_pod_is_terminated(
             kube_client.namespace, pod_name=pod.name, timeout_s=60.0
         )
