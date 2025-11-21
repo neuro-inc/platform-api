@@ -17,7 +17,7 @@ from platform_api.postgres import MigrationRunner, make_async_engine
 async def admin_postgres_dsn(
     docker: aiodocker.Docker, reuse_docker: bool
 ) -> AsyncIterator[str]:
-    image_name = "postgres:12.11"
+    image_name = "postgres:16.11"
     container_name = "postgres-admin"
     container_config: JSONObject = {
         "Image": image_name,
@@ -62,7 +62,7 @@ async def admin_postgres_dsn(
 async def postgres_dsn(
     docker: aiodocker.Docker, reuse_docker: bool
 ) -> AsyncIterator[str]:
-    image_name = "postgres:12.11"
+    image_name = "postgres:16.11"
     container_name = "postgres"
     container_config: JSONObject = {
         "Image": image_name,
