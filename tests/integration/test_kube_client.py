@@ -29,7 +29,6 @@ from platform_api.orchestrator.kube_client import (
     KubeClient,
     NodeWatcher,
     PodDescriptor,
-    PodWatcher,
     WatchEvent,
     create_pod,
 )
@@ -233,62 +232,3 @@ class TestNodeWatcher:
             Exception, match="Subscription is not possible after watcher start"
         ):
             node_watcher.subscribe(handler)
-
-
-class MyPodEventHandler(EventHandler):
-    def __init__(self) -> None:
-        self.pod_names: list[str] = []
-        self._events: dict[str, asyncio.Event] = {}
-
-    async def init(self, raw_pods: list[dict[str, Any]]) -> None:
-        self.pod_names.extend([p["metadata"]["name"] for p in raw_pods])
-
-    async def handle(self, event: WatchEvent) -> None:
-        pod_name = event.resource["metadata"]["name"]
-        self.pod_names.append(pod_name)
-        waiter = self._events.get(pod_name)
-        if waiter:
-            del self._events[pod_name]
-            waiter.set()
-
-    async def wait_for_pod(self, name: str) -> None:
-        if name in self.pod_names:
-            return
-        event = asyncio.Event()
-        self._events[name] = event
-        await event.wait()
-
-
-class TestPodWatcher:
-    @pytest.fixture
-    def handler(self) -> MyPodEventHandler:
-        return MyPodEventHandler()
-
-    @pytest.fixture
-    async def pod_watcher(
-        self, kube_client: KubeClient, handler: MyPodEventHandler
-    ) -> AsyncIterator[PodWatcher]:
-        watcher = PodWatcher(kube_client)
-        watcher.subscribe(handler)
-        async with watcher:
-            yield watcher
-
-    @pytest.mark.usefixtures("pod_watcher")
-    async def test_handle(
-        self, handler: MyPodEventHandler, pod_factory: PodFactory
-    ) -> None:
-        assert len(handler.pod_names) > 0
-
-        pod = await pod_factory(image="gcr.io/google_containers/pause:3.1")
-
-        await asyncio.wait_for(handler.wait_for_pod(pod.name), 5)
-
-        assert pod.name in handler.pod_names
-
-    async def test_subscribe_after_start(
-        self, pod_watcher: PodWatcher, handler: MyPodEventHandler
-    ) -> None:
-        with pytest.raises(
-            Exception, match="Subscription is not possible after watcher start"
-        ):
-            pod_watcher.subscribe(handler)
