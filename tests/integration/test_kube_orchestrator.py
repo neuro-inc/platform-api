@@ -3545,8 +3545,6 @@ class TestPreemption:
         ]
         await kube_client_selector.host_client.core_v1.node.create(
             V1Node(
-                api_version="v1",
-                kind="Node",
                 metadata=V1ObjectMeta(
                     name=node_name,
                     labels=labels,
@@ -4637,8 +4635,6 @@ class TestExternalJobsPreemption:
         ]
         await kube_client_selector.host_client.core_v1.node.create(
             V1Node(
-                api_version="v1",
-                kind="Node",
                 metadata=V1ObjectMeta(
                     name=node_name,
                     labels=labels,

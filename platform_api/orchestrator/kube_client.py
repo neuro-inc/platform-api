@@ -2486,28 +2486,6 @@ class KubeClient(ApoloKubeClient):
             # different UID, see https://github.com/neuro-inc/platform-api/pull/1525
             raise ResourceNotFound(str(e))
 
-    async def create_node(
-        self,
-        name: str,
-        capacity: dict[str, Any],
-        labels: dict[str, str] | None = None,
-        taints: Sequence[NodeTaint] | None = None,
-    ) -> None:
-        taints = taints or []
-        payload = {
-            "apiVersion": "v1",
-            "kind": "Node",
-            "metadata": {"name": name, "labels": labels or {}},
-            "spec": {"taints": [taint.to_primitive() for taint in taints]},
-            "status": {
-                # TODO (ajuszkowski, 29-0-2019) add enum for capacity
-                "capacity": capacity,
-                "conditions": [{"status": "True", "type": "Ready"}],
-            },
-        }
-        url = self._nodes_url
-        await self.post(url=url, json=payload)
-
     async def delete_node(self, name: str) -> None:
         url = self._generate_node_url(name)
         await self._delete_resource_url(url)
