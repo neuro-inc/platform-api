@@ -309,14 +309,14 @@ pytest = ["pytest (>=8.4.1)", "pytest-aiohttp (>=1.1.0)", "pytest-asyncio (>=1.0
 
 [[package]]
 name = "apolo-kube-client"
-version = "25.11.4"
+version = "25.11.6"
 description = "Apolo internal client for kubernetes API"
 optional = false
 python-versions = "<4.0,>=3.13"
 groups = ["main"]
 files = [
-    {file = "apolo_kube_client-25.11.4-py3-none-any.whl", hash = "sha256:336ccb76574140a951ed69b86e8624efa1683f630dd87093e15af0de3156bcad"},
-    {file = "apolo_kube_client-25.11.4.tar.gz", hash = "sha256:53e82498248ded108b2757497a502a87c605744b6964eca5c6dfe35588f1d962"},
+    {file = "apolo_kube_client-25.11.6-py3-none-any.whl", hash = "sha256:b07eb3c7e0603550d243f997a81a96e07aaecd54eb455695cf441891343d814c"},
+    {file = "apolo_kube_client-25.11.6.tar.gz", hash = "sha256:a0cba49d5aea8da9089c45907927fee08a23f4f2b415d9ff1b8fd37dc2dbc023"},
 ]
 
 [package.dependencies]
@@ -1804,22 +1804,23 @@ files = [
 
 [[package]]
 name = "neuro-admin-client"
-version = "25.9.2"
+version = "25.11.2"
 description = "Internal client for Neu.ro admin service"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "neuro_admin_client-25.9.2-py3-none-any.whl", hash = "sha256:863c2fb5cdec1168fbf7be26f892d231f97af1b3b1f57ebc3ac51ab16be6d603"},
-    {file = "neuro_admin_client-25.9.2.tar.gz", hash = "sha256:9b4ee1c3a970e60bf595aeda1e7fc0afcc1c83b8ccdc105da898df12923a91e3"},
+    {file = "neuro_admin_client-25.11.2-py3-none-any.whl", hash = "sha256:4522cd114ca604e1f788b2e531955b5002c0feca2ed1a3eb087c46031743aa4a"},
+    {file = "neuro_admin_client-25.11.2.tar.gz", hash = "sha256:66c1b16d32d3b6acc39877af51ccbad2390dddcd527a67f7f0b9fb4eb1c79eee"},
 ]
 
 [package.dependencies]
-aiohttp = ">=3.8.1"
+aiohttp = {version = ">=3.11.3", extras = ["speedups"]}
 aiohttp-security = ">=0.4.0"
 multidict = ">=6"
 python-jose = ">=3.0.1"
-yarl = ">=1.10"
+typing-extensions = ">=4.15.0"
+yarl = ">=1.22"
 
 [[package]]
 name = "neuro-auth-client"
@@ -3295,4 +3296,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<4.0"
-content-hash = "dcc610ea674cf3af7d8bdd37e4973b281c17fde13439c050a1757a33f03d2fd2"
+content-hash = "3df6aba6bac03a21c27845f3ec073b5c28358610bc69e1896b0522175b00f08b"
