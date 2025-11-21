@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout commit
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
     - name: Install python
       uses: actions/setup-python@v6
       with:
@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 15
     steps:
     - name: Checkout commit
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
     - name: Install python
       uses: actions/setup-python@v6
       with:
@@ -78,7 +78,7 @@ jobs:
       MINIKUBE_DRIVER: none
     steps:
     - name: Checkout commit
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
     - name: Install python
       uses: actions/setup-python@v6
       with:
@@ -138,7 +138,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout commit
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
     - name: Download All Coverages
       uses: actions/download-artifact@v6
       with:
@@ -163,7 +163,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout commit
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
     - name: Install python
       uses: actions/setup-python@v6
       with:
