@@ -31,6 +31,8 @@ from platform_api.orchestrator.kube_client import (
     PodDescriptor,
     WatchEvent,
     create_pod,
+    get_pod_status,
+    wait_pod_is_terminated,
 )
 
 PodFactory = Callable[..., Awaitable[PodDescriptor]]
@@ -132,7 +134,6 @@ class TestKubeClient:
 
     async def test_service_account_not_available(
         self,
-        kube_client: KubeClient,
         kube_client_selector: KubeClientSelector,
         delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
     ) -> None:
@@ -148,13 +149,13 @@ class TestKubeClient:
             org_name="org", project_name="proj"
         ) as client_proxy:
             await create_pod(client_proxy, pod)
-        await kube_client.wait_pod_is_terminated(
-            kube_client.namespace, pod_name=pod.name, timeout_s=60.0
-        )
-        pod_status = await kube_client.get_pod_status(kube_client.namespace, pod.name)
+            await wait_pod_is_terminated(
+                client_proxy, pod_name=pod.name, timeout_s=60.0
+            )
+            pod_status = await get_pod_status(client_proxy, pod.name)
 
-        assert pod_status.container_status
-        assert pod_status.container_status.exit_code != 0
+            assert pod_status.container_status
+            assert pod_status.container_status.exit_code != 0
 
     async def test_get_raw_nodes(self, kube_client: KubeClient, kube_node: str) -> None:
         result = await kube_client.get_raw_nodes()
