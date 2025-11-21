@@ -2549,15 +2549,6 @@ class KubeClient(ApoloKubeClient):
         )
         return PodDescriptor.from_primitive(payload)
 
-    async def set_raw_pod_status(
-        self,
-        namespace: str,
-        name: str,
-        payload: dict[str, Any],
-    ) -> dict[str, Any]:
-        url = self._generate_pod_url(namespace, name) + "/status"
-        return await self.put(url=url, json=payload)
-
     async def get_pod(self, namespace: str, pod_name: str) -> PodDescriptor:
         url = self._generate_pod_url(namespace, pod_name)
         payload = await self.get(
@@ -2945,16 +2936,6 @@ async def delete_pod(
     )
     pod = PodDescriptor.from_model(model)
     return pod.status  # type: ignore
-
-
-async def set_raw_pod_status(
-    namespace: str,
-    name: str,
-    payload: dict[str, Any],
-) -> dict[str, Any]:
-    return {}
-    # url = self._generate_pod_url(namespace, name) + "/status"
-    # return await self.put(url=url, json=payload)
 
 
 async def create_service(client_proxy: KubeClientProxy, service: Service) -> Service:
