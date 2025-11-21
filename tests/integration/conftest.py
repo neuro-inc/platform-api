@@ -516,7 +516,7 @@ async def delete_node_later(
 
 @pytest.fixture
 async def kube_node(kube_client_selector: KubeClientSelector) -> str:
-    nodes = await kube_client.core_v1.node.get_list()
+    nodes = await kube_client_selector.host_client.core_v1.node.get_list()
     return nodes[0].metadata.name
 
 
