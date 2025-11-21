@@ -3758,8 +3758,16 @@ class TestPreemption:
             raw_pod.status.reason = "NodeLost"
             await kube_client.core_v1.pod[pod_name].status.update(raw_pod)
 
-            raw_pod = await kube_client.core_v1.pod.get(pod_name)
-            assert raw_pod.status.reason == "NodeLost"
+            # re-fetch
+            for _attempt in range(100):
+                pod = await kube_client.core_v1.pod.get(name=pod_name)
+                if pod.status.reason is None:
+                    await asyncio.sleep(0.01)
+                    continue
+                assert pod.status.reason == "NodeLost"
+                break
+            else:
+                raise AssertionError("Waiting for status update has failed")
 
             # triggering pod recreation
             job_status = await kube_orchestrator.get_job_status(job)
@@ -4722,10 +4730,18 @@ class TestExternalJobsPreemption:
             raw_pod = await client_proxy.core_v1.pod.get(pod_name)
 
             raw_pod.status.reason = "NodeLost"
-            await client_proxy.core_v1.pod[pod_name].update(raw_pod)
+            await client_proxy.core_v1.pod[pod_name].status.update(raw_pod)
 
-            raw_pod = await client_proxy.core_v1.pod.get(pod_name)
-            assert raw_pod.status.reason == "NodeLost"
+            # re-fetch
+            for _attempt in range(100):
+                pod = await client_proxy.core_v1.pod.get(name=pod_name)
+                if pod.status.reason is None:
+                    await asyncio.sleep(0.01)
+                    continue
+                assert pod.status.reason == "NodeLost"
+                break
+            else:
+                raise AssertionError("Waiting for status update has failed")
 
             # triggering pod recreation
             await kube_orchestrator.get_job_status(job)
