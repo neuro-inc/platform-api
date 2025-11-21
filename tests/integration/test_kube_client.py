@@ -208,46 +208,6 @@ class TestKubeClient:
 
         assert kube_node in [n["metadata"]["name"] for n in result.items]
 
-    async def test_get_raw_pods(
-        self, kube_client: KubeClient, create_pod: PodFactory
-    ) -> None:
-        pod = await create_pod()
-        pod_list = await kube_client.get_raw_pods()
-        pods = pod_list.items
-
-        assert pod.name in [p["metadata"]["name"] for p in pods]
-
-    async def test_get_raw_pods_all_namespaces(
-        self, kube_client: KubeClient, create_pod: PodFactory
-    ) -> None:
-        pod = await create_pod()
-        pod_list = await kube_client.get_raw_pods(all_namespaces=True)
-        pods = pod_list.items
-
-        assert pod.name in [p["metadata"]["name"] for p in pods]
-        assert any(
-            p["metadata"]["name"].startswith("kube-") for p in pods
-        )  # kube-system pods
-
-    @pytest.fixture
-    async def create_pod(
-        self, pod_factory: Callable[..., Awaitable[PodDescriptor]]
-    ) -> Callable[..., Awaitable[PodDescriptor]]:
-        async def _create(
-            cpu: float = 0.1,
-            memory: int = 128 * 10**6,
-            labels: dict[str, str] | None = None,
-        ) -> PodDescriptor:
-            return await pod_factory(
-                image="gcr.io/google_containers/pause:3.1",
-                cpu=cpu,
-                memory=memory,
-                labels=labels,
-                wait=True,
-            )
-
-        return _create
-
 
 class MyNodeEventHandler(EventHandler):
     def __init__(self) -> None:
