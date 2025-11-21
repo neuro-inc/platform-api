@@ -3486,7 +3486,7 @@ class TestPreemption:
     @pytest.fixture
     async def kube_main_node_cpu_preemptible_labels(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
     ) -> AsyncIterator[None]:
         assert kube_orchestrator.kube_config.node_label_node_pool
@@ -3497,16 +3497,24 @@ class TestPreemption:
             kube_orchestrator.kube_config.node_label_preemptible: "true",
         }
         # driver=docker or driver=none
+        kube_client = kube_client_selector.host_client
         try:
             node_name = "minikube"
-            await kube_client.get_node(node_name)
-        except LegacyResourceNotFound:
+            node = await kube_client.core_v1.node.get(node_name)
+        except ResourceNotFound:
             node_name = os.uname()[1]
-        await kube_client.add_node_labels(node_name, labels=labels)
+            node = await kube_client.core_v1.node.get(node_name)
+
+        node.metadata.labels |= labels
+        await kube_client.core_v1.node.update(node)
 
         yield
 
-        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
+        node = await kube_client.core_v1.node.get(node_name)
+        node.metadata.labels = {
+            k: v for k, v in node.metadata.labels.items() if k not in labels
+        }
+        await kube_client.core_v1.node.update(node)
 
     @pytest.fixture
     async def kube_node_preemptible(
@@ -4541,27 +4549,35 @@ class TestExternalJobsPreemption:
     @pytest.fixture
     async def kube_main_node_cpu_regular_labels(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
     ) -> AsyncIterator[None]:
         assert kube_orchestrator.kube_config.node_label_node_pool
         labels = {kube_orchestrator.kube_config.node_label_node_pool: "cpu-small"}
         # driver=docker or driver=none
+        kube_client = kube_client_selector.host_client
         try:
             node_name = "minikube"
-            await kube_client.get_node(node_name)
-        except LegacyResourceNotFound:
+            node = await kube_client.core_v1.node.get(node_name)
+        except ResourceNotFound:
             node_name = os.uname()[1]
-        await kube_client.add_node_labels(node_name, labels=labels)
+            node = await kube_client.core_v1.node.get(node_name)
+
+        node.metadata.labels |= labels
+        await kube_client.core_v1.node.update(node)
 
         yield
 
-        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
+        node = await kube_client.core_v1.node.get(node_name)
+        node.metadata.labels = {
+            k: v for k, v in node.metadata.labels.items() if k not in labels
+        }
+        await kube_client.core_v1.node.update(node)
 
     @pytest.fixture
     async def kube_main_node_cpu_preemptible_labels(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
     ) -> AsyncIterator[None]:
         assert kube_orchestrator.kube_config.node_label_node_pool
@@ -4572,16 +4588,24 @@ class TestExternalJobsPreemption:
             kube_orchestrator.kube_config.node_label_preemptible: "true",
         }
         # driver=docker or driver=none
+        kube_client = kube_client_selector.host_client
         try:
             node_name = "minikube"
-            await kube_client.get_node(node_name)
+            node = await kube_client.core_v1.node.get(node_name)
         except LegacyResourceNotFound:
             node_name = os.uname()[1]
-        await kube_client.add_node_labels(node_name, labels=labels)
+            node = await kube_client.core_v1.node.get(node_name)
+
+        node.metadata.labels |= labels
+        await kube_client.core_v1.node.update(node)
 
         yield
 
-        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
+        node = await kube_client.core_v1.node.get(node_name)
+        node.metadata.labels = {
+            k: v for k, v in node.metadata.labels.items() if k not in labels
+        }
+        await kube_client.core_v1.node.update(node)
 
     @pytest.fixture
     async def kube_node_preemptible(
