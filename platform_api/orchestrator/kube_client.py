@@ -2533,25 +2533,6 @@ class KubeClient(ApoloKubeClient):
         async for event in self._watch(url, resource_version=resource_version):
             yield event
 
-    async def delete_pod(
-        self, namespace: str, pod_name: str, *, force: bool = False
-    ) -> PodStatus:
-        url = self._generate_pod_url(namespace, pod_name)
-        request_payload = None
-        if force:
-            request_payload = {
-                "apiVersion": "v1",
-                "kind": "DeleteOptions",
-                "gracePeriodSeconds": 0,
-            }
-        payload = await self.delete(
-            url=url,
-            json=request_payload,
-            raise_for_status=False,
-        )
-        pod = PodDescriptor.from_primitive(payload)
-        return pod.status  # type: ignore
-
     async def create_docker_secret(
         self,
         secret: DockerRegistrySecret,

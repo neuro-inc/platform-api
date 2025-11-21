@@ -3305,7 +3305,7 @@ class TestPodContainerDevShmSettings:
     async def run_command_get_status(
         self,
         kube_orchestrator: KubeOrchestrator,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+        delete_pod_later: Callable[[PodDescriptor, str, str], Awaitable[None]],
     ) -> Callable[..., Awaitable[JobStatusItem]]:
         async def _f(
             kube_client: KubeClientProxy, resources: ContainerResources, command: str
@@ -3315,7 +3315,7 @@ class TestPodContainerDevShmSettings:
             )
             job_request = JobRequest.create(container)
             pod = PodDescriptor.from_job_request(job_request)
-            await delete_pod_later(pod)
+            await delete_pod_later(pod, "no-org", "no-proj")
             await create_pod(kube_client, pod)
             await wait_pod_is_terminated(kube_client, pod_name=pod.name, timeout_s=60.0)
             pod_status = await get_pod_status(kube_client, pod.name)

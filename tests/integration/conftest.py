@@ -632,18 +632,21 @@ async def kube_node_preemptible(
 
 @pytest.fixture
 async def delete_pod_later(
-    kube_client: KubeClient,
-) -> AsyncIterator[Callable[[PodDescriptor], Awaitable[None]]]:
+    kube_client_selector: KubeClientSelector,
+) -> AsyncIterator[Callable[[PodDescriptor, str, str], Awaitable[None]]]:
     pods = []
 
-    async def _add_pod(pod: PodDescriptor) -> None:
-        pods.append(pod)
+    async def _add_pod(pod: PodDescriptor, org: str, proj: str) -> None:
+        pods.append((pod, org, proj))
 
     yield _add_pod
 
-    for pod in pods:
+    for pod, org, proj in pods:
         try:
-            await kube_client.delete_pod(kube_client.namespace, pod.name)
+            async with kube_client_selector.get_client(
+                org_name=org, project_name=proj
+            ) as kube_client:
+                await kube_client.core_v1.pod.delete(pod.name)
         except Exception:
             pass
 
@@ -651,7 +654,7 @@ async def delete_pod_later(
 @pytest.fixture
 async def pod_factory(
     kube_client_selector: KubeClientSelector,
-    delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    delete_pod_later: Callable[[PodDescriptor, str, str], Awaitable[None]],
 ) -> Callable[..., Awaitable[PodDescriptor]]:
     name_prefix = f"pod-{uuid.uuid4()}"
     name_index = 1
@@ -683,7 +686,7 @@ async def pod_factory(
             org_name="org", project_name="proj"
         ) as kube_client:
             pod = await create_pod(kube_client, pod)
-            await delete_pod_later(pod)
+            await delete_pod_later(pod, "org", "proj")
             if wait:
                 await kube_client.core_v1.pod[pod.name].apolo_waiter.wait_running(
                     timeout_s=wait_timeout_s

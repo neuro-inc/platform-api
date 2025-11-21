@@ -128,7 +128,7 @@ class TestKubeClient:
     async def test_service_account_not_available(
         self,
         kube_client_selector: KubeClientSelector,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+        delete_pod_later: Callable[[PodDescriptor, str, str], Awaitable[None]],
     ) -> None:
         container = Container(
             image="lachlanevenson/k8s-kubectl:v1.10.3",
@@ -137,7 +137,7 @@ class TestKubeClient:
         )
         job_request = JobRequest.create(container)
         pod = PodDescriptor.from_job_request(job_request)
-        await delete_pod_later(pod)
+        await delete_pod_later(pod, "org", "proj")
         async with kube_client_selector.get_client(
             org_name="org", project_name="proj"
         ) as client_proxy:
