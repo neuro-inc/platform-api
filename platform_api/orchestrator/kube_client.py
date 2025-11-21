@@ -2508,14 +2508,6 @@ class KubeClient(ApoloKubeClient):
         async for event in self._watch(self._nodes_url, params, resource_version):
             yield event
 
-    async def get_pod(self, namespace: str, pod_name: str) -> PodDescriptor:
-        url = self._generate_pod_url(namespace, pod_name)
-        payload = await self.get(
-            url=url,
-            raise_for_status=False,
-        )
-        return PodDescriptor.from_primitive(payload)
-
     async def get_raw_pods(self, all_namespaces: bool = False) -> ListResult:
         url = self._generate_pods_url(all_namespaces=all_namespaces)
         payload = await self.get(url=url)
