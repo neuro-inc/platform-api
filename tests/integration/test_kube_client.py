@@ -20,7 +20,6 @@ from platform_api.old_kube_client.errors import KubeClientException
 from platform_api.orchestrator.job_request import (
     Container,
     ContainerResources,
-    JobNotFoundException,
     JobRequest,
 )
 from platform_api.orchestrator.kube_client import (
@@ -39,12 +38,6 @@ PodFactory = Callable[..., Awaitable[PodDescriptor]]
 
 
 class TestKubeClient:
-    async def test_wait_pod_is_running_not_found(self, kube_client: KubeClient) -> None:
-        with pytest.raises(JobNotFoundException):
-            await kube_client.wait_pod_is_running(
-                kube_client.namespace, pod_name="unknown"
-            )
-
     async def test_create_docker_secret_non_existent_namespace(
         self, kube_config: KubeConfig, kube_client: KubeClient
     ) -> None:

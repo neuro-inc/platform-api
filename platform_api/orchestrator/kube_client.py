@@ -2533,16 +2533,6 @@ class KubeClient(ApoloKubeClient):
         async for event in self._watch(url, resource_version=resource_version):
             yield event
 
-    async def get_pod_status(
-        self,
-        namespace: str,
-        pod_id: str,
-    ) -> PodStatus:
-        pod = await self.get_pod(namespace, pod_id)
-        if pod.status is None:
-            raise ValueError("Missing pod status")
-        return pod.status
-
     async def delete_pod(
         self, namespace: str, pod_name: str, *, force: bool = False
     ) -> PodStatus:
@@ -2590,44 +2580,6 @@ class KubeClient(ApoloKubeClient):
     ) -> None:
         url = self._generate_secret_url(secret_name, namespace_name)
         await self._delete_resource_url(url)
-
-    async def wait_pod_is_running(
-        self,
-        namespace: str,
-        pod_name: str,
-        timeout_s: float = 10.0 * 60,
-        interval_s: float = 1.0,
-    ) -> None:
-        """Wait until the pod transitions from the waiting state.
-
-        Raise JobError if there is no such pod.
-        Raise asyncio.TimeoutError if it takes too long for the pod.
-        """
-        async with timeout(timeout_s):
-            while True:
-                pod_status = await self.get_pod_status(namespace, pod_name)
-                if not pod_status.is_waiting:
-                    return
-                await asyncio.sleep(interval_s)
-
-    async def wait_pod_is_terminated(
-        self,
-        namespace: str,
-        pod_name: str,
-        timeout_s: float = 10.0 * 60,
-        interval_s: float = 1.0,
-    ) -> None:
-        """Wait until the pod transitions to the terminated state.
-
-        Raise JobError if there is no such pod.
-        Raise asyncio.TimeoutError if it takes too long for the pod.
-        """
-        async with timeout(timeout_s):
-            while True:
-                pod_status = await self.get_pod_status(namespace, pod_name)
-                if pod_status.is_terminated:
-                    return
-                await asyncio.sleep(interval_s)
 
 
 class EventHandler:
