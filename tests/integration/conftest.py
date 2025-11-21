@@ -2,7 +2,6 @@ import asyncio
 import base64
 import json
 import uuid
-from asyncio import timeout
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -425,66 +424,6 @@ class MyKubeClient(KubeClient):
     """
     Extended kube client that has methods used for tests only
     """
-
-    async def wait_pod_scheduled(
-        self,
-        namespace: str,
-        pod_name: str,
-        node_name: str = "",
-        timeout_s: float = 5.0,
-        interval_s: float = 1.0,
-    ) -> None:
-        raw_pod: dict[str, Any] | None = None
-        try:
-            async with timeout(timeout_s):
-                while True:
-                    raw_pod = await self.get_raw_pod(namespace, pod_name)
-                    if node_name:
-                        pod_at_node = raw_pod["spec"].get("nodeName")
-                        if pod_at_node == node_name:
-                            pod_has_node = True
-                        else:
-                            pod_has_node = False
-                            print(
-                                f"Pod was scheudled to wrong node: {pod_at_node}, "
-                                f"expected: {node_name}"
-                            )
-                    else:
-                        pod_has_node = bool(raw_pod["spec"].get("nodeName"))
-                    pod_is_scheduled = "PodScheduled" in [
-                        cond["type"]
-                        for cond in raw_pod["status"].get("conditions", [])
-                        if cond["status"] == "True"
-                    ]
-                    if pod_has_node and pod_is_scheduled:
-                        return
-                    await asyncio.sleep(interval_s)
-        except TimeoutError:
-            if raw_pod:
-                print("Node:", raw_pod["spec"].get("nodeName"))
-                print("Phase:", raw_pod["status"]["phase"])
-                print("Status conditions:", raw_pod["status"].get("conditions", []))
-                print("Pods:")
-                pod_list = await self.get_raw_pods()
-                pods = sorted(
-                    pod_list.items, key=lambda p: p["spec"].get("nodeName", "")
-                )
-                print(f"  {'Name':40s} {'CPU':5s} {'Memory':10s} {'Phase':9s} Node")
-                for pod in pods:
-                    container = pod["spec"]["containers"][0]
-                    resource_requests = container.get("resources", {}).get(
-                        "requests", {}
-                    )
-                    cpu = resource_requests.get("cpu")
-                    memory = resource_requests.get("memory")
-                    print(
-                        f"  {pod['metadata']['name']:40s}",
-                        f"{str(cpu):5s}",
-                        f"{str(memory):10s}",
-                        f"{pod['status']['phase']:9s}",
-                        f"{str(pod['spec'].get('nodeName'))}",
-                    )
-            pytest.fail("Pod unscheduled")
 
     async def add_node_labels(self, node_name: str, labels: dict[str, Any]) -> None:
         node = await self.get_node(node_name)
