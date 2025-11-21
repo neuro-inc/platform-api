@@ -45,10 +45,13 @@ from apolo_kube_client import (
     V1LabelSelector,
     V1LabelSelectorRequirement,
     V1LocalObjectReference,
+    V1Node,
     V1NodeAffinity,
+    V1NodeCondition,
     V1NodeSelector,
     V1NodeSelectorRequirement,
     V1NodeSelectorTerm,
+    V1NodeStatus,
     V1ObjectMeta,
     V1PersistentVolumeClaimVolumeSource,
     V1Pod,
@@ -2119,6 +2122,21 @@ class NodeResources:
             intel_gpu=int(payload.get(cls.intel_gpu_key, 0)),
         )
 
+    @classmethod
+    def from_model(cls, payload: dict[str, str]) -> Self:
+        return cls(
+            cpu=Resources.parse_cpu(payload.get("cpu", "0")),
+            memory=Resources.parse_memory(payload.get("memory", "0Mi")),
+            nvidia_gpu=int(payload.get(cls.nvidia_gpu_key, 0)),
+            nvidia_migs={
+                k[len(cls.nvidia_mig_key_prefix) :]: int(v)
+                for k, v in payload.items()
+                if k.startswith(cls.nvidia_mig_key_prefix)
+            },
+            amd_gpu=int(payload.get(cls.amd_gpu_key, 0)),
+            intel_gpu=int(payload.get(cls.intel_gpu_key, 0)),
+        )
+
     @property
     def any(self) -> bool:
         return (
@@ -2222,6 +2240,16 @@ class NodeCondition:
         )
 
     @classmethod
+    def from_model(cls, model: V1NodeCondition) -> Self:
+        return cls(
+            type=NodeConditionType.parse(model.type),
+            status=cls._parse_status(model.status),
+            message=model.message or "",
+            reason=model.reason or "",
+            transition_time=model.last_transition_time,
+        )
+
+    @classmethod
     def _parse_status(cls, value: str) -> bool | None:
         if value == "Unknown":
             return None
@@ -2246,6 +2274,13 @@ class NodeStatus:
             ],
         )
 
+    @classmethod
+    def from_model(cls, model: V1NodeStatus) -> Self:
+        return cls(
+            allocatable_resources=NodeResources.from_model(model.allocatable),
+            conditions=[NodeCondition.from_model(p) for p in model.conditions],
+        )
+
     @property
     def is_ready(self) -> bool:
         for cond in self.conditions:
@@ -2267,6 +2302,16 @@ class Node:
             name=metadata["name"],
             labels=metadata.get("labels", {}),
             status=NodeStatus.from_primitive(payload["status"]),
+        )
+
+    @classmethod
+    def from_model(cls, model: V1Node) -> Self:
+        metadata = model.metadata
+        assert metadata.name is not None
+        return cls(
+            name=metadata.name,
+            labels=metadata.labels,
+            status=NodeStatus.from_model(model.status),
         )
 
     def get_free_resources(self, resource_requests: NodeResources) -> NodeResources:
@@ -2441,44 +2486,6 @@ class KubeClient(ApoloKubeClient):
             # different UID, see https://github.com/neuro-inc/platform-api/pull/1525
             raise ResourceNotFound(str(e))
 
-    async def create_node(
-        self,
-        name: str,
-        capacity: dict[str, Any],
-        labels: dict[str, str] | None = None,
-        taints: Sequence[NodeTaint] | None = None,
-    ) -> None:
-        taints = taints or []
-        payload = {
-            "apiVersion": "v1",
-            "kind": "Node",
-            "metadata": {"name": name, "labels": labels or {}},
-            "spec": {"taints": [taint.to_primitive() for taint in taints]},
-            "status": {
-                # TODO (ajuszkowski, 29-0-2019) add enum for capacity
-                "capacity": capacity,
-                "conditions": [{"status": "True", "type": "Ready"}],
-            },
-        }
-        url = self._nodes_url
-        await self.post(url=url, json=payload)
-
-    async def delete_node(self, name: str) -> None:
-        url = self._generate_node_url(name)
-        await self._delete_resource_url(url)
-
-    async def get_nodes(self) -> Sequence[Node]:
-        payload = await self.get(url=self._nodes_url)
-        assert payload["kind"] == "NodeList"
-        nodes = []
-        for item in payload["items"]:
-            nodes.append(Node.from_primitive(item))
-        return nodes
-
-    async def get_node(self, name: str) -> Node:
-        payload = await self.get(url=self._generate_node_url(name))
-        return Node.from_primitive(payload)
-
     async def get_raw_nodes(self, labels: dict[str, str] | None = None) -> ListResult:
         params: dict[str, str] = {}
         if labels:
@@ -2501,38 +2508,6 @@ class KubeClient(ApoloKubeClient):
         async for event in self._watch(self._nodes_url, params, resource_version):
             yield event
 
-    async def create_pod(
-        self, namespace: str, descriptor: PodDescriptor
-    ) -> PodDescriptor:
-        url = self._generate_pods_url(namespace)
-        payload = await self.post(
-            url=url,
-            json=descriptor.to_primitive(),
-            raise_for_status=False,
-        )
-        return PodDescriptor.from_primitive(payload)
-
-    async def set_raw_pod_status(
-        self,
-        namespace: str,
-        name: str,
-        payload: dict[str, Any],
-    ) -> dict[str, Any]:
-        url = self._generate_pod_url(namespace, name) + "/status"
-        return await self.put(url=url, json=payload)
-
-    async def get_pod(self, namespace: str, pod_name: str) -> PodDescriptor:
-        url = self._generate_pod_url(namespace, pod_name)
-        payload = await self.get(
-            url=url,
-            raise_for_status=False,
-        )
-        return PodDescriptor.from_primitive(payload)
-
-    async def get_raw_pod(self, namespace: str, name: str) -> dict[str, Any]:
-        url = self._generate_pod_url(namespace, name)
-        return await self.get(url=url)
-
     async def get_raw_pods(self, all_namespaces: bool = False) -> ListResult:
         url = self._generate_pods_url(all_namespaces=all_namespaces)
         payload = await self.get(url=url)
@@ -2545,102 +2520,6 @@ class KubeClient(ApoloKubeClient):
         url = self._generate_pods_url(all_namespaces=all_namespaces)
         async for event in self._watch(url, resource_version=resource_version):
             yield event
-
-    async def get_pod_status(
-        self,
-        namespace: str,
-        pod_id: str,
-    ) -> PodStatus:
-        pod = await self.get_pod(namespace, pod_id)
-        if pod.status is None:
-            raise ValueError("Missing pod status")
-        return pod.status
-
-    async def delete_pod(
-        self, namespace: str, pod_name: str, *, force: bool = False
-    ) -> PodStatus:
-        url = self._generate_pod_url(namespace, pod_name)
-        request_payload = None
-        if force:
-            request_payload = {
-                "apiVersion": "v1",
-                "kind": "DeleteOptions",
-                "gracePeriodSeconds": 0,
-            }
-        payload = await self.delete(
-            url=url,
-            json=request_payload,
-            raise_for_status=False,
-        )
-        pod = PodDescriptor.from_primitive(payload)
-        return pod.status  # type: ignore
-
-    async def create_docker_secret(
-        self,
-        secret: DockerRegistrySecret,
-        namespace: str,
-    ) -> None:
-        url = self._generate_all_secrets_url(namespace)
-        await self.post(url=url, json=secret.to_primitive())
-
-    async def update_docker_secret(
-        self,
-        secret: DockerRegistrySecret,
-        namespace: str,
-        create_non_existent: bool = False,
-    ) -> None:
-        try:
-            url = self._generate_secret_url(secret.name, namespace)
-            await self.put(url=url, json=secret.to_primitive())
-        except KubeClientException as e:
-            if isinstance(e, ResourceNotFound) and create_non_existent:
-                await self.create_docker_secret(secret, namespace)
-            else:
-                raise e
-
-    async def delete_secret(
-        self, secret_name: str, namespace_name: str | None = None
-    ) -> None:
-        url = self._generate_secret_url(secret_name, namespace_name)
-        await self._delete_resource_url(url)
-
-    async def wait_pod_is_running(
-        self,
-        namespace: str,
-        pod_name: str,
-        timeout_s: float = 10.0 * 60,
-        interval_s: float = 1.0,
-    ) -> None:
-        """Wait until the pod transitions from the waiting state.
-
-        Raise JobError if there is no such pod.
-        Raise asyncio.TimeoutError if it takes too long for the pod.
-        """
-        async with timeout(timeout_s):
-            while True:
-                pod_status = await self.get_pod_status(namespace, pod_name)
-                if not pod_status.is_waiting:
-                    return
-                await asyncio.sleep(interval_s)
-
-    async def wait_pod_is_terminated(
-        self,
-        namespace: str,
-        pod_name: str,
-        timeout_s: float = 10.0 * 60,
-        interval_s: float = 1.0,
-    ) -> None:
-        """Wait until the pod transitions to the terminated state.
-
-        Raise JobError if there is no such pod.
-        Raise asyncio.TimeoutError if it takes too long for the pod.
-        """
-        async with timeout(timeout_s):
-            while True:
-                pod_status = await self.get_pod_status(namespace, pod_name)
-                if pod_status.is_terminated:
-                    return
-                await asyncio.sleep(interval_s)
 
 
 class EventHandler:
@@ -2908,16 +2787,6 @@ async def delete_pod(
     )
     pod = PodDescriptor.from_model(model)
     return pod.status  # type: ignore
-
-
-async def set_raw_pod_status(
-    namespace: str,
-    name: str,
-    payload: dict[str, Any],
-) -> dict[str, Any]:
-    return {}
-    # url = self._generate_pod_url(namespace, name) + "/status"
-    # return await self.put(url=url, json=payload)
 
 
 async def create_service(client_proxy: KubeClientProxy, service: Service) -> Service:

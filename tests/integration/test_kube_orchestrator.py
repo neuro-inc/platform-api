@@ -86,6 +86,7 @@ from platform_api.orchestrator.kube_client import (
     Ingress,
     IngressRule,
     KubeClient,
+    Node,
     NodeResources,
     NodeTaint,
     NodeWatcher,
@@ -120,7 +121,6 @@ from tests.conftest import random_str
 from tests.integration.conftest import (
     ApiAddress,
     ApiRunner,
-    MyKubeClient,
     create_local_app_server,
 )
 from tests.integration.test_api import ApiConfig
@@ -2606,14 +2606,15 @@ class TestKubeOrchestrator:
 
     @pytest.fixture
     async def node_resources(
-        self, kube_client: KubeClient, kube_node: str
+        self, kube_client_selector: KubeClientSelector, kube_node: str
     ) -> NodeResources:
-        node = await kube_client.get_node(kube_node)
+        raw_node = await kube_client_selector.host_client.core_v1.node.get(kube_node)
+        node = Node.from_model(raw_node)
         return node.status.allocatable_resources
 
     @pytest.fixture
     async def start_watchers(
-        self, kube_client: MyKubeClient, kube_orchestrator: KubeOrchestrator
+        self, kube_client: KubeClient, kube_orchestrator: KubeOrchestrator
     ) -> AsyncIterator[None]:
         node_watcher = NodeWatcher(kube_client)
         pod_watcher = PodWatcher(kube_client)
@@ -3304,7 +3305,7 @@ class TestPodContainerDevShmSettings:
     async def run_command_get_status(
         self,
         kube_orchestrator: KubeOrchestrator,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+        delete_pod_later: Callable[[PodDescriptor, str, str], Awaitable[None]],
     ) -> Callable[..., Awaitable[JobStatusItem]]:
         async def _f(
             kube_client: KubeClientProxy, resources: ContainerResources, command: str
@@ -3314,7 +3315,7 @@ class TestPodContainerDevShmSettings:
             )
             job_request = JobRequest.create(container)
             pod = PodDescriptor.from_job_request(job_request)
-            await delete_pod_later(pod)
+            await delete_pod_later(pod, "no-org", "no-proj")
             await create_pod(kube_client, pod)
             await wait_pod_is_terminated(kube_client, pod_name=pod.name, timeout_s=60.0)
             pod_status = await get_pod_status(kube_client, pod.name)
@@ -3409,7 +3410,7 @@ class TestPreemption:
         self,
         kube_config: KubeConfig,
     ) -> AsyncIterator[KubeClient]:
-        client = MyKubeClient(
+        client = KubeClient(
             base_url=kube_config.endpoint_url,
             auth_type=kube_config.auth_type,
             cert_authority_data_pem=kube_config.cert_authority_data_pem,
@@ -3458,28 +3459,35 @@ class TestPreemption:
     @pytest.fixture
     async def kube_main_node_cpu_regular_labels(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
     ) -> AsyncIterator[None]:
         assert kube_orchestrator.kube_config.node_label_node_pool
         labels = {kube_orchestrator.kube_config.node_label_node_pool: "cpu-small"}
         # driver=docker or driver=none
+        kube_client = kube_client_selector.host_client
         try:
             node_name = "minikube"
-            await kube_client.get_node(node_name)
-        except LegacyResourceNotFound:
+            node = await kube_client.core_v1.node.get(node_name)
+        except ResourceNotFound:
             node_name = os.uname()[1]
+            node = await kube_client.core_v1.node.get(node_name)
 
-        await kube_client.add_node_labels(node_name, labels=labels)
+        node.metadata.labels |= labels
+        await kube_client.core_v1.node.update(node)
 
         yield
 
-        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
+        node = await kube_client.core_v1.node.get(node_name)
+        node.metadata.labels = {
+            k: v for k, v in node.metadata.labels.items() if k not in labels
+        }
+        await kube_client.core_v1.node.update(node)
 
     @pytest.fixture
     async def kube_main_node_cpu_preemptible_labels(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
     ) -> AsyncIterator[None]:
         assert kube_orchestrator.kube_config.node_label_node_pool
@@ -3490,16 +3498,24 @@ class TestPreemption:
             kube_orchestrator.kube_config.node_label_preemptible: "true",
         }
         # driver=docker or driver=none
+        kube_client = kube_client_selector.host_client
         try:
             node_name = "minikube"
-            await kube_client.get_node(node_name)
-        except LegacyResourceNotFound:
+            node = await kube_client.core_v1.node.get(node_name)
+        except ResourceNotFound:
             node_name = os.uname()[1]
-        await kube_client.add_node_labels(node_name, labels=labels)
+            node = await kube_client.core_v1.node.get(node_name)
+
+        node.metadata.labels |= labels
+        await kube_client.core_v1.node.update(node)
 
         yield
 
-        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
+        node = await kube_client.core_v1.node.get(node_name)
+        node.metadata.labels = {
+            k: v for k, v in node.metadata.labels.items() if k not in labels
+        }
+        await kube_client.core_v1.node.update(node)
 
     @pytest.fixture
     async def kube_node_preemptible(
@@ -3529,8 +3545,6 @@ class TestPreemption:
         ]
         await kube_client_selector.host_client.core_v1.node.create(
             V1Node(
-                api_version="v1",
-                kind="Node",
                 metadata=V1ObjectMeta(
                     name=node_name,
                     labels=labels,
@@ -3721,7 +3735,7 @@ class TestPreemption:
     async def test_preemptible_job_pending_pod_node_not_ready(
         self,
         kube_config: KubeConfig,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_regular_labels: str,
@@ -3747,24 +3761,36 @@ class TestPreemption:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_scheduled(job.namespace, pod_name, node_name)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            await wait_pod_scheduled(kube_client, pod_name, node_name)
 
-        raw_pod = await kube_client.get_raw_pod(job.namespace, pod_name)
+            raw_pod = await kube_client.core_v1.pod.get(pod_name)
 
-        raw_pod["status"]["reason"] = "NodeLost"
-        await kube_client.set_raw_pod_status(job.namespace, pod_name, raw_pod)
+            raw_pod.status.reason = "NodeLost"
+            await kube_client.core_v1.pod[pod_name].status.update(raw_pod)
 
-        raw_pod = await kube_client.get_raw_pod(job.namespace, pod_name)
-        assert raw_pod["status"]["reason"] == "NodeLost"
+            # re-fetch
+            for _attempt in range(100):
+                pod = await kube_client.core_v1.pod.get(name=pod_name)
+                if pod.status.reason is None:
+                    await asyncio.sleep(0.01)
+                    continue
+                assert pod.status.reason == "NodeLost"
+                break
+            else:
+                raise AssertionError("Waiting for status update has failed")
 
-        # triggering pod recreation
-        job_status = await kube_orchestrator.get_job_status(job)
-        assert job_status.is_pending
+            # triggering pod recreation
+            job_status = await kube_orchestrator.get_job_status(job)
+            assert job_status.is_pending
 
-        await kube_client.wait_pod_scheduled(job.namespace, pod_name, node_name)
+            await wait_pod_scheduled(kube_client, pod_name, node_name)
 
-        raw_pod = await kube_client.get_raw_pod(job.namespace, pod_name)
-        assert not raw_pod["status"].get("reason")
+            raw_pod = await kube_client.core_v1.pod.get(pod_name)
+            assert not raw_pod.status.reason
 
     async def test_preemptible_job_recreation_failed(
         self,
@@ -3977,7 +4003,7 @@ class TestRestartPolicy:
 class TestJobsPreemption:
     @pytest.fixture(autouse=True)
     async def start_watchers(
-        self, kube_client: MyKubeClient, kube_orchestrator: KubeOrchestrator
+        self, kube_client: KubeClient, kube_orchestrator: KubeOrchestrator
     ) -> AsyncIterator[None]:
         node_watcher = NodeWatcher(kube_client)
         pod_watcher = PodWatcher(kube_client)
@@ -4030,9 +4056,10 @@ class TestJobsPreemption:
 
     @pytest.fixture
     async def node_resources(
-        self, kube_client: KubeClient, kube_node: str
+        self, kube_client_selector: KubeClientSelector, kube_node: str
     ) -> NodeResources:
-        node = await kube_client.get_node(kube_node)
+        raw_node = await kube_client_selector.host_client.core_v1.node.get(kube_node)
+        node = Node.from_model(raw_node)
         return node.status.allocatable_resources
 
     async def test_preempt_jobs(
@@ -4452,7 +4479,7 @@ class TestExternalJobsPreemption:
         self,
         kube_config: KubeConfig,
     ) -> AsyncIterator[KubeClient]:
-        client = MyKubeClient(
+        client = KubeClient(
             base_url=kube_config.endpoint_url,
             auth_type=kube_config.auth_type,
             cert_authority_data_pem=kube_config.cert_authority_data_pem,
@@ -4522,27 +4549,35 @@ class TestExternalJobsPreemption:
     @pytest.fixture
     async def kube_main_node_cpu_regular_labels(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
     ) -> AsyncIterator[None]:
         assert kube_orchestrator.kube_config.node_label_node_pool
         labels = {kube_orchestrator.kube_config.node_label_node_pool: "cpu-small"}
         # driver=docker or driver=none
+        kube_client = kube_client_selector.host_client
         try:
             node_name = "minikube"
-            await kube_client.get_node(node_name)
-        except LegacyResourceNotFound:
+            node = await kube_client.core_v1.node.get(node_name)
+        except ResourceNotFound:
             node_name = os.uname()[1]
-        await kube_client.add_node_labels(node_name, labels=labels)
+            node = await kube_client.core_v1.node.get(node_name)
+
+        node.metadata.labels |= labels
+        await kube_client.core_v1.node.update(node)
 
         yield
 
-        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
+        node = await kube_client.core_v1.node.get(node_name)
+        node.metadata.labels = {
+            k: v for k, v in node.metadata.labels.items() if k not in labels
+        }
+        await kube_client.core_v1.node.update(node)
 
     @pytest.fixture
     async def kube_main_node_cpu_preemptible_labels(
         self,
-        kube_client: MyKubeClient,
+        kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
     ) -> AsyncIterator[None]:
         assert kube_orchestrator.kube_config.node_label_node_pool
@@ -4553,16 +4588,24 @@ class TestExternalJobsPreemption:
             kube_orchestrator.kube_config.node_label_preemptible: "true",
         }
         # driver=docker or driver=none
+        kube_client = kube_client_selector.host_client
         try:
             node_name = "minikube"
-            await kube_client.get_node(node_name)
+            node = await kube_client.core_v1.node.get(node_name)
         except LegacyResourceNotFound:
             node_name = os.uname()[1]
-        await kube_client.add_node_labels(node_name, labels=labels)
+            node = await kube_client.core_v1.node.get(node_name)
+
+        node.metadata.labels |= labels
+        await kube_client.core_v1.node.update(node)
 
         yield
 
-        await kube_client.remove_node_labels(node_name, label_keys=list(labels.keys()))
+        node = await kube_client.core_v1.node.get(node_name)
+        node.metadata.labels = {
+            k: v for k, v in node.metadata.labels.items() if k not in labels
+        }
+        await kube_client.core_v1.node.update(node)
 
     @pytest.fixture
     async def kube_node_preemptible(
@@ -4592,8 +4635,6 @@ class TestExternalJobsPreemption:
         ]
         await kube_client_selector.host_client.core_v1.node.create(
             V1Node(
-                api_version="v1",
-                kind="Node",
                 metadata=V1ObjectMeta(
                     name=node_name,
                     labels=labels,
@@ -4686,9 +4727,9 @@ class TestExternalJobsPreemption:
 
     async def test_job_pending_pod_node_not_ready(
         self,
-        kube_client: MyKubeClient,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        kube_client_selector: KubeClientSelector,
         kube_node_preemptible: str,
     ) -> None:
         node_name = kube_node_preemptible
@@ -4710,22 +4751,33 @@ class TestExternalJobsPreemption:
         await kube_orchestrator.start_job(job)
         pod_name = job.id
 
-        await kube_client.wait_pod_scheduled(job.namespace, pod_name, node_name)
+        async with kube_client_selector.get_client(
+            org_name=job.org_name, project_name=job.project_name
+        ) as client_proxy:
+            await wait_pod_scheduled(client_proxy, pod_name, node_name)
 
-        raw_pod = await kube_client.get_raw_pod(job.namespace, pod_name)
+            raw_pod = await client_proxy.core_v1.pod.get(pod_name)
 
-        raw_pod["status"]["reason"] = "NodeLost"
-        await kube_client.set_raw_pod_status(job.namespace, pod_name, raw_pod)
+            raw_pod.status.reason = "NodeLost"
+            await client_proxy.core_v1.pod[pod_name].status.update(raw_pod)
 
-        raw_pod = await kube_client.get_raw_pod(job.namespace, pod_name)
-        assert raw_pod["status"]["reason"] == "NodeLost"
+            # re-fetch
+            for _attempt in range(100):
+                pod = await client_proxy.core_v1.pod.get(name=pod_name)
+                if pod.status.reason is None:
+                    await asyncio.sleep(0.01)
+                    continue
+                assert pod.status.reason == "NodeLost"
+                break
+            else:
+                raise AssertionError("Waiting for status update has failed")
 
-        # triggering pod recreation
-        await kube_orchestrator.get_job_status(job)
-        await kube_client.wait_pod_scheduled(job.namespace, pod_name, node_name)
+            # triggering pod recreation
+            await kube_orchestrator.get_job_status(job)
+            await wait_pod_scheduled(client_proxy, pod_name, node_name)
 
-        raw_pod = await kube_client.get_raw_pod(job.namespace, pod_name)
-        assert not raw_pod["status"].get("reason")
+            raw_pod = await client_proxy.core_v1.pod.get(pod_name)
+            assert not raw_pod.status.reason
 
     async def test_job_pod_recreation_failed(
         self,
