@@ -498,7 +498,7 @@ async def kube_orchestrator(
 
 @pytest.fixture
 async def delete_node_later(
-    kube_client: KubeClient,
+    kube_client_selector: KubeClientSelector,
 ) -> AsyncIterator[Callable[[str], Awaitable[None]]]:
     nodes = []
 
@@ -509,15 +509,15 @@ async def delete_node_later(
 
     for node in nodes:
         try:
-            await kube_client.delete_node(node)
+            await kube_client_selector.host_client.core_v1.node.delete(node)
         except Exception:
             pass
 
 
 @pytest.fixture
-async def kube_node(kube_client: KubeClient) -> str:
-    nodes = await kube_client.get_nodes()
-    return nodes[0].name
+async def kube_node(kube_client_selector: KubeClientSelector) -> str:
+    nodes = await kube_client.core_v1.node.get_list()
+    return nodes[0].metadata.name
 
 
 @pytest.fixture
