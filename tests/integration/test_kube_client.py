@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import shlex
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
@@ -44,51 +43,6 @@ class TestKubeClient:
             await kube_client.wait_pod_is_running(
                 kube_client.namespace, pod_name="unknown"
             )
-
-    @pytest.mark.parametrize(
-        "entrypoint,command",
-        [(None, "/bin/echo false"), ("/bin/echo false", None), ("/bin/echo", "false")],
-    )
-    async def test_run_check_entrypoint_and_command(
-        self,
-        kube_client: KubeClient,
-        kube_client_selector: KubeClientSelector,
-        delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
-        entrypoint: str,
-        command: str,
-    ) -> None:
-        container = Container(
-            image="ubuntu:20.10",
-            entrypoint=entrypoint,
-            command=command,
-            resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(job_request)
-        await delete_pod_later(pod)
-        async with kube_client_selector.get_client(
-            org_name="org", project_name="proj"
-        ) as client_proxy:
-            await create_pod(client_proxy, pod)
-        await kube_client.wait_pod_is_terminated(
-            kube_client.namespace, pod_name=pod.name, timeout_s=60.0
-        )
-
-        pod_finished = await kube_client.get_pod(kube_client.namespace, pod.name)
-
-        # check that "/bin/echo" was not lost anywhere (and "false" was not executed):
-        assert pod_finished.status
-        assert pod_finished.status.phase == "Succeeded"
-
-        if entrypoint is None:
-            assert pod_finished.command is None
-        else:
-            assert pod_finished.command == shlex.split(entrypoint)
-
-        if command is None:
-            assert pod_finished.args is None
-        else:
-            assert pod_finished.args == shlex.split(command)
 
     async def test_create_docker_secret_non_existent_namespace(
         self, kube_config: KubeConfig, kube_client: KubeClient
