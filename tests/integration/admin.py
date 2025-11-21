@@ -30,8 +30,62 @@ async def fake_config_app() -> AsyncIterator[URL]:
 
     async def add_cluster(request: aiohttp.web.Request) -> aiohttp.web.Response:
         payload = await request.json()
-        payload["status"] = "blank"
-        payload["created_at"] = datetime.now().isoformat()
+        if payload["name"] in clusters:
+            return aiohttp.web.json_response(
+                {"error": f"cluster '{payload['name']}' already exists"},
+                status=aiohttp.web.HTTPBadRequest.status_code,
+            )
+        cluster_dns_name = f"{payload['name']}.org.apolo.us"
+        payload = {
+            **payload,
+            "status": "deployed",
+            "orchestrator": {
+                "is_http_ingress_secure": True,
+                "job_hostname_template": f"{{job_id}}.jobs.{cluster_dns_name}",
+                "job_fallback_hostname": "default-jobs.apolo.us",
+                "job_schedule_timeout_s": 300,
+                "job_schedule_scale_up_timeout_s": 300,
+                "resource_pool_types": [
+                    {
+                        "name": "minikube",
+                        "min_size": 1,
+                        "max_size": 1,
+                        "cpu": 1.0,
+                        "available_cpu": 1.0,
+                        "memory": 1073741824,
+                        "available_memory": 1073741824,
+                    }
+                ],
+                "resource_presets": [
+                    {
+                        "name": "cpu-small",
+                        "credits_per_hour": "0.0",
+                        "cpu": 0.1,
+                        "memory": 104857600,
+                    }
+                ],
+            },
+            "storage": {"url": f"https://{cluster_dns_name}/api/v1/storage"},
+            "blob_storage": {"url": f"https://{cluster_dns_name}/api/v1/blob"},
+            "registry": {"url": f"https://registry.{cluster_dns_name}"},
+            "monitoring": {"url": f"https://{cluster_dns_name}/api/v1/jobs"},
+            "secrets": {"url": f"https://{cluster_dns_name}/api/v1/secrets"},
+            "metrics": {"url": f"https://{cluster_dns_name}/api/v1/metrics"},
+            "apps": {"app_proxy_url": f"https://apps-proxy.{cluster_dns_name}"},
+            "disks": {
+                "url": f"https://{cluster_dns_name}/api/v1/disk",
+                "storage_limit_per_user": 10**9,
+            },
+            "buckets": {
+                "url": f"http://{cluster_dns_name}/api/v1/buckets",
+                "disable_creation": False,
+            },
+            "dns": {"name": cluster_dns_name},
+            "ingress": {"acme_environment": "staging"},
+            "energy": {"co2_grams_eq_per_kwh": 0, "schedules": []},
+            "timezone": "UTC",
+            "created_at": datetime.now().isoformat(),
+        }
         clusters.append(payload)
         return aiohttp.web.json_response(payload)
 
