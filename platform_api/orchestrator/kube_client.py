@@ -2467,14 +2467,6 @@ class KubeClient(ApoloKubeClient):
         url = self._generate_node_url(name)
         await self._delete_resource_url(url)
 
-    async def get_nodes(self) -> Sequence[Node]:
-        payload = await self.get(url=self._nodes_url)
-        assert payload["kind"] == "NodeList"
-        nodes = []
-        for item in payload["items"]:
-            nodes.append(Node.from_primitive(item))
-        return nodes
-
     async def get_node(self, name: str) -> Node:
         payload = await self.get(url=self._generate_node_url(name))
         return Node.from_primitive(payload)

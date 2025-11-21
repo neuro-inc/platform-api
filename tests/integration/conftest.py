@@ -20,6 +20,11 @@ from apolo_kube_client import (
     KubeClientAuthType as ApoloKubeClientAuthType,
     KubeClientSelector,
     KubeConfig as ApoloKubeConfig,
+    V1Node,
+    V1NodeCondition,
+    V1NodeSpec,
+    V1NodeStatus,
+    V1ObjectMeta,
 )
 from neuro_config_client import (
     AMDGPU,
@@ -366,7 +371,8 @@ async def kube_config(kube_config_factory: Callable[..., KubeConfig]) -> KubeCon
 
 @pytest.fixture
 def kube_job_nodes_factory(
-    kube_client: KubeClient, delete_node_later: Callable[[str], Awaitable[None]]
+    kube_client_selector: KubeClientSelector,
+    delete_node_later: Callable[[str], Awaitable[None]],
 ) -> Callable[[OrchestratorConfig, KubeConfig], Awaitable[None]]:
     async def _create(
         orchestrator_config: OrchestratorConfig, kube_config: KubeConfig
@@ -387,9 +393,9 @@ def kube_job_nodes_factory(
                 labels[kube_config.node_label_preemptible] = "true"
             capacity = {
                 "pods": "110",
-                "cpu": int(pool_type.cpu or 0),
+                "cpu": str(pool_type.cpu or 0),
                 "memory": f"{pool_type.memory}",
-                "nvidia.com/gpu": (
+                "nvidia.com/gpu": str(
                     pool_type.nvidia_gpu.count if pool_type.nvidia_gpu else 0
                 ),
             }
@@ -402,10 +408,17 @@ def kube_job_nodes_factory(
                 taints.append(NodeTaint(key=Resources.amd_gpu_key, value="present"))
             if pool_type.intel_gpu:
                 taints.append(NodeTaint(key=Resources.intel_gpu_key, value="present"))
+
+            model = V1Node(
+                metadata=V1ObjectMeta(name=pool_type.name, labels=labels),
+                spec=V1NodeSpec(taints=[taint.to_model() for taint in taints]),
+                status=V1NodeStatus(
+                    capacity=capacity,
+                    conditions=[V1NodeCondition(status="True", type="Ready")],
+                ),
+            )
             try:
-                await kube_client.create_node(
-                    pool_type.name, capacity=capacity, labels=labels, taints=taints
-                )
+                await kube_client_selector.host_client.core_v1.node.create(model)
             except ResourceExists:
                 # there can be multiple kube_orchestrator created in tests (for tests
                 # and for tests cleanup)
