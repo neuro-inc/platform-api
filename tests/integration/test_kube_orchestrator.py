@@ -86,6 +86,7 @@ from platform_api.orchestrator.kube_client import (
     Ingress,
     IngressRule,
     KubeClient,
+    Node,
     NodeResources,
     NodeTaint,
     NodeWatcher,
@@ -2605,9 +2606,10 @@ class TestKubeOrchestrator:
 
     @pytest.fixture
     async def node_resources(
-        self, kube_client: KubeClient, kube_node: str
+        self, kube_client_selector: KubeClientSelector, kube_node: str
     ) -> NodeResources:
-        node = await kube_client.get_node(kube_node)
+        raw_node = await kube_client_selector.host_client.core_v1.node.get(kube_node)
+        node = Node.from_model(raw_node)
         return node.status.allocatable_resources
 
     @pytest.fixture
@@ -4056,9 +4058,10 @@ class TestJobsPreemption:
 
     @pytest.fixture
     async def node_resources(
-        self, kube_client: KubeClient, kube_node: str
+        self, kube_client_selector: KubeClientSelector, kube_node: str
     ) -> NodeResources:
-        node = await kube_client.get_node(kube_node)
+        raw_node = await kube_client_selector.host_client.core_v1.node.get(kube_node)
+        node = Node.from_model(raw_node)
         return node.status.allocatable_resources
 
     async def test_preempt_jobs(

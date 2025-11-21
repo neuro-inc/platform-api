@@ -45,10 +45,13 @@ from apolo_kube_client import (
     V1LabelSelector,
     V1LabelSelectorRequirement,
     V1LocalObjectReference,
+    V1Node,
     V1NodeAffinity,
+    V1NodeCondition,
     V1NodeSelector,
     V1NodeSelectorRequirement,
     V1NodeSelectorTerm,
+    V1NodeStatus,
     V1ObjectMeta,
     V1PersistentVolumeClaimVolumeSource,
     V1Pod,
@@ -2119,6 +2122,21 @@ class NodeResources:
             intel_gpu=int(payload.get(cls.intel_gpu_key, 0)),
         )
 
+    @classmethod
+    def from_model(cls, payload: dict[str, str]) -> Self:
+        return cls(
+            cpu=Resources.parse_cpu(payload.get("cpu", "0")),
+            memory=Resources.parse_memory(payload.get("memory", "0Mi")),
+            nvidia_gpu=int(payload.get(cls.nvidia_gpu_key, 0)),
+            nvidia_migs={
+                k[len(cls.nvidia_mig_key_prefix) :]: int(v)
+                for k, v in payload.items()
+                if k.startswith(cls.nvidia_mig_key_prefix)
+            },
+            amd_gpu=int(payload.get(cls.amd_gpu_key, 0)),
+            intel_gpu=int(payload.get(cls.intel_gpu_key, 0)),
+        )
+
     @property
     def any(self) -> bool:
         return (
@@ -2222,6 +2240,16 @@ class NodeCondition:
         )
 
     @classmethod
+    def from_model(cls, model: V1NodeCondition) -> Self:
+        return cls(
+            type=NodeConditionType.parse(model.type),
+            status=cls._parse_status(model.status),
+            message=model.message or "",
+            reason=model.reason or "",
+            transition_time=model.last_transition_time,
+        )
+
+    @classmethod
     def _parse_status(cls, value: str) -> bool | None:
         if value == "Unknown":
             return None
@@ -2246,6 +2274,13 @@ class NodeStatus:
             ],
         )
 
+    @classmethod
+    def from_model(cls, model: V1NodeStatus) -> Self:
+        return cls(
+            allocatable_resources=NodeResources.from_model(model.allocatable),
+            conditions=[NodeCondition.from_model(p) for p in model.conditions],
+        )
+
     @property
     def is_ready(self) -> bool:
         for cond in self.conditions:
@@ -2267,6 +2302,16 @@ class Node:
             name=metadata["name"],
             labels=metadata.get("labels", {}),
             status=NodeStatus.from_primitive(payload["status"]),
+        )
+
+    @classmethod
+    def from_model(cls, model: V1Node) -> Self:
+        metadata = model.metadata
+        assert metadata.name is not None
+        return cls(
+            name=metadata.name,
+            labels=metadata.labels,
+            status=NodeStatus.from_model(model.status),
         )
 
     def get_free_resources(self, resource_requests: NodeResources) -> NodeResources:
