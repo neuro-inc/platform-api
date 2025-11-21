@@ -420,44 +420,11 @@ async def kube_ingress_ip(kube_config_cluster_payload: dict[str, Any]) -> str:
     return urlsplit(cluster["server"]).hostname
 
 
-class MyKubeClient(KubeClient):
-    """
-    Extended kube client that has methods used for tests only
-    """
-
-    async def add_node_labels(self, node_name: str, labels: dict[str, Any]) -> None:
-        node = await self.get_node(node_name)
-
-        new_labels = node.labels.copy()
-        new_labels.update(labels)
-
-        await self.patch(
-            url=self._generate_node_url(node_name),
-            headers={"content-type": "application/merge-patch+json"},
-            json={"metadata": {"labels": new_labels}},
-        )
-
-    async def remove_node_labels(self, node_name: str, label_keys: list[str]) -> None:
-        node = await self.get_node(node_name)
-
-        new_labels = {
-            label: value
-            for label, value in node.labels.items()
-            if label not in label_keys
-        }
-
-        await self.patch(
-            url=self._generate_node_url(node_name),
-            headers={"content-type": "application/merge-patch+json"},
-            json={"metadata": {"labels": new_labels}},
-        )
-
-
 @pytest.fixture(scope="session")
-async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeClient]:
-    def _f(custom_kube_config: KubeConfig | None = None) -> MyKubeClient:
+async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., KubeClient]:
+    def _f(custom_kube_config: KubeConfig | None = None) -> KubeClient:
         config = custom_kube_config or kube_config
-        return MyKubeClient(
+        return KubeClient(
             base_url=config.endpoint_url,
             auth_type=config.auth_type,
             cert_authority_data_pem=config.cert_authority_data_pem,
@@ -475,7 +442,7 @@ async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeCl
 
 @pytest.fixture(scope="session")
 async def kube_client(
-    kube_client_factory: Callable[..., MyKubeClient],
+    kube_client_factory: Callable[..., KubeClient],
 ) -> AsyncIterator[KubeClient]:
     async with kube_client_factory() as kube_client:
         yield kube_client
@@ -531,7 +498,7 @@ async def kube_orchestrator(
 
 @pytest.fixture
 async def delete_node_later(
-    kube_client: MyKubeClient,
+    kube_client: KubeClient,
 ) -> AsyncIterator[Callable[[str], Awaitable[None]]]:
     nodes = []
 
@@ -560,7 +527,7 @@ def default_node_capacity() -> dict[str, str]:
 
 @pytest.fixture
 async def kube_node_gpu(
-    kube_client: MyKubeClient,
+    kube_client: KubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
     default_node_capacity: dict[str, str],
 ) -> AsyncIterator[str]:
@@ -577,7 +544,7 @@ async def kube_node_gpu(
 
 @pytest.fixture
 async def kube_node_tpu(
-    kube_client: MyKubeClient,
+    kube_client: KubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
 ) -> AsyncIterator[str]:
     node_name = str(uuid.uuid4())
@@ -609,7 +576,7 @@ def kube_config_node_preemptible(
 @pytest.fixture
 async def kube_node_preemptible(
     kube_config_node_preemptible: KubeConfig,
-    kube_client: MyKubeClient,
+    kube_client: KubeClient,
     delete_node_later: Callable[[str], Awaitable[None]],
     default_node_capacity: dict[str, str],
 ) -> AsyncIterator[str]:

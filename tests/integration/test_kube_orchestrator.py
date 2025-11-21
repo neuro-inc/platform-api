@@ -120,7 +120,6 @@ from tests.conftest import random_str
 from tests.integration.conftest import (
     ApiAddress,
     ApiRunner,
-    MyKubeClient,
     create_local_app_server,
 )
 from tests.integration.test_api import ApiConfig
@@ -2613,7 +2612,7 @@ class TestKubeOrchestrator:
 
     @pytest.fixture
     async def start_watchers(
-        self, kube_client: MyKubeClient, kube_orchestrator: KubeOrchestrator
+        self, kube_client: KubeClient, kube_orchestrator: KubeOrchestrator
     ) -> AsyncIterator[None]:
         node_watcher = NodeWatcher(kube_client)
         pod_watcher = PodWatcher(kube_client)
@@ -3409,7 +3408,7 @@ class TestPreemption:
         self,
         kube_config: KubeConfig,
     ) -> AsyncIterator[KubeClient]:
-        client = MyKubeClient(
+        client = KubeClient(
             base_url=kube_config.endpoint_url,
             auth_type=kube_config.auth_type,
             cert_authority_data_pem=kube_config.cert_authority_data_pem,
@@ -4004,7 +4003,7 @@ class TestRestartPolicy:
 class TestJobsPreemption:
     @pytest.fixture(autouse=True)
     async def start_watchers(
-        self, kube_client: MyKubeClient, kube_orchestrator: KubeOrchestrator
+        self, kube_client: KubeClient, kube_orchestrator: KubeOrchestrator
     ) -> AsyncIterator[None]:
         node_watcher = NodeWatcher(kube_client)
         pod_watcher = PodWatcher(kube_client)
@@ -4479,7 +4478,7 @@ class TestExternalJobsPreemption:
         self,
         kube_config: KubeConfig,
     ) -> AsyncIterator[KubeClient]:
-        client = MyKubeClient(
+        client = KubeClient(
             base_url=kube_config.endpoint_url,
             auth_type=kube_config.auth_type,
             cert_authority_data_pem=kube_config.cert_authority_data_pem,
