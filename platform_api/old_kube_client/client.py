@@ -8,7 +8,6 @@ from urllib.parse import urlsplit
 
 import aiohttp
 
-from platform_api.old_kube_client.config import KubeClientAuthType
 from platform_api.old_kube_client.errors import (
     KubeClientException,
     KubeClientUnauthorized,
@@ -18,6 +17,7 @@ from platform_api.old_kube_client.errors import (
     ResourceInvalid,
     ResourceNotFound,
 )
+from platform_api.orchestrator.kube_config import KubeClientAuthType
 
 logger = logging.getLogger(__name__)
 

@@ -112,6 +112,10 @@ class ServiceType(str, enum.Enum):
     LOAD_BALANCER = "LoadBalancer"
 
 
+class GroupVersion(str, Enum):
+    NETWORKING_V1 = "networking.k8s.io/v1"
+
+
 def _raise_status_job_exception(pod: dict[str, Any], job_id: str | None) -> NoReturn:
     if pod["code"] == 409:
         raise ResourceExists(pod.get("reason", "job already exists"))
@@ -120,42 +124,6 @@ def _raise_status_job_exception(pod: dict[str, Any], job_id: str | None) -> NoRe
     if pod["code"] == 422:
         raise JobError(f"cant create job with id {job_id}")
     raise JobError(f"unexpected payload: {pod}")
-
-
-class GroupVersion(str, Enum):
-    NETWORKING_V1 = "networking.k8s.io/v1"
-
-
-@dataclass(frozen=True)
-class APIResource:
-    group_version: str
-    resources: Sequence[str]
-
-    @property
-    def has_ingress(self) -> bool:
-        return self.has_resource("ingresses")
-
-    def has_resource(self, resource_name: str) -> bool:
-        return resource_name in self.resources
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "APIResource":
-        return cls(
-            group_version=payload["groupVersion"],
-            resources=[p["name"] for p in payload["resources"]],
-        )
-
-
-class APIResources(dict[str, APIResource]):
-    group_versions: list[str] = [GroupVersion.NETWORKING_V1.value]
-
-    @property
-    def networking_v1(self) -> APIResource | None:
-        return self.get(GroupVersion.NETWORKING_V1)
-
-    @property
-    def has_networking_v1_ingress(self) -> bool:
-        return self.networking_v1 is not None and self.networking_v1.has_ingress
 
 
 @dataclass(frozen=True)
@@ -2380,25 +2348,8 @@ class WatchEvent:
 
 
 class KubeClient(ApoloKubeClient):
-    def __init__(
-        self,
-        *args: Any,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(*args, **kwargs)
-        self._api_resources: APIResources = APIResources()
-
-    async def init_api_resources(self) -> None:
-        for gv in APIResources.group_versions:
-            try:
-                self._api_resources[gv] = await self.get_api_resource(gv)
-            except aiohttp.ClientResponseError as ex:
-                if ex.status != 404:
-                    raise
-
     async def __aenter__(self) -> "KubeClient":
         await self.init()
-        await self.init_api_resources()
         return self
 
     @property
@@ -2469,11 +2420,6 @@ class KubeClient(ApoloKubeClient):
                     yield WatchBookmarkEvent.from_primitive(payload)
                 else:
                     yield WatchEvent.from_primitive(payload)
-
-    async def get_api_resource(self, group_version: str) -> APIResource:
-        url = f"{self._base_url}/apis/{group_version}"
-        payload = await self.get(url=url, raise_for_status=True)
-        return APIResource.from_primitive(payload)
 
     async def _delete_resource_url(self, url: str, uid: str | None = None) -> None:
         request_payload = None
