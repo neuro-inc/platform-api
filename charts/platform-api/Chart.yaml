@@ -1,7 +1,7 @@
 apiVersion: v2
 name: platform-api
 description: A Helm chart for platform-api service
-version: 1.1.0
+version: 1.1.1
 appVersion: 1.0.0
 dependencies:
   - name: postgres-db-init
