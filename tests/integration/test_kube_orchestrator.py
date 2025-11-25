@@ -3468,21 +3468,31 @@ class TestPreemption:
         kube_client = kube_client_selector.host_client
         try:
             node_name = "minikube"
-            node = await kube_client.core_v1.node.get(node_name)
+            await kube_client.core_v1.node.get(node_name)
         except ResourceNotFound:
             node_name = os.uname()[1]
-            node = await kube_client.core_v1.node.get(node_name)
 
-        node.metadata.labels |= labels
-        await kube_client.core_v1.node.update(node)
+        js = [
+            {
+                "op": "add",
+                "path": f"/metadata/labels/{k}",
+                "value": v,
+            }
+            for k, v in labels.items()
+        ]
+
+        await kube_client.core_v1.node.patch_json(node_name, js)
 
         yield
 
-        node = await kube_client.core_v1.node.get(node_name)
-        node.metadata.labels = {
-            k: v for k, v in node.metadata.labels.items() if k not in labels
-        }
-        await kube_client.core_v1.node.update(node)
+        js = [
+            {
+                "op": "remove",
+                "path": f"/metadata/labels/{k}",
+            }
+            for k, v in labels.items()
+        ]
+        await kube_client.core_v1.node.patch_json(node_name, js)
 
     @pytest.fixture
     async def kube_main_node_cpu_preemptible_labels(
@@ -3501,21 +3511,31 @@ class TestPreemption:
         kube_client = kube_client_selector.host_client
         try:
             node_name = "minikube"
-            node = await kube_client.core_v1.node.get(node_name)
+            await kube_client.core_v1.node.get(node_name)
         except ResourceNotFound:
             node_name = os.uname()[1]
-            node = await kube_client.core_v1.node.get(node_name)
 
-        node.metadata.labels |= labels
-        await kube_client.core_v1.node.update(node)
+        js = [
+            {
+                "op": "add",
+                "path": f"/metadata/labels/{k}",
+                "value": v,
+            }
+            for k, v in labels.items()
+        ]
+
+        await kube_client.core_v1.node.patch_json(node_name, js)
 
         yield
 
-        node = await kube_client.core_v1.node.get(node_name)
-        node.metadata.labels = {
-            k: v for k, v in node.metadata.labels.items() if k not in labels
-        }
-        await kube_client.core_v1.node.update(node)
+        js = [
+            {
+                "op": "remove",
+                "path": f"/metadata/labels/{k}",
+            }
+            for k, v in labels.items()
+        ]
+        await kube_client.core_v1.node.patch_json(node_name, js)
 
     @pytest.fixture
     async def kube_node_preemptible(
@@ -4558,21 +4578,31 @@ class TestExternalJobsPreemption:
         kube_client = kube_client_selector.host_client
         try:
             node_name = "minikube"
-            node = await kube_client.core_v1.node.get(node_name)
+            await kube_client.core_v1.node.get(node_name)
         except ResourceNotFound:
             node_name = os.uname()[1]
-            node = await kube_client.core_v1.node.get(node_name)
 
-        node.metadata.labels |= labels
-        await kube_client.core_v1.node.update(node)
+        js = [
+            {
+                "op": "add",
+                "path": f"/metadata/labels/{k}",
+                "value": v,
+            }
+            for k, v in labels.items()
+        ]
+
+        await kube_client.core_v1.node.patch_json(node_name, js)
 
         yield
 
-        node = await kube_client.core_v1.node.get(node_name)
-        node.metadata.labels = {
-            k: v for k, v in node.metadata.labels.items() if k not in labels
-        }
-        await kube_client.core_v1.node.update(node)
+        js = [
+            {
+                "op": "remove",
+                "path": f"/metadata/labels/{k}",
+            }
+            for k, v in labels.items()
+        ]
+        await kube_client.core_v1.node.patch_json(node_name, js)
 
     @pytest.fixture
     async def kube_main_node_cpu_preemptible_labels(
@@ -4591,21 +4621,31 @@ class TestExternalJobsPreemption:
         kube_client = kube_client_selector.host_client
         try:
             node_name = "minikube"
-            node = await kube_client.core_v1.node.get(node_name)
+            await kube_client.core_v1.node.get(node_name)
         except LegacyResourceNotFound:
             node_name = os.uname()[1]
-            node = await kube_client.core_v1.node.get(node_name)
 
-        node.metadata.labels |= labels
-        await kube_client.core_v1.node.update(node)
+        js = [
+            {
+                "op": "add",
+                "path": f"/metadata/labels/{k}",
+                "value": v,
+            }
+            for k, v in labels.items()
+        ]
+
+        await kube_client.core_v1.node.patch_json(node_name, js)
 
         yield
 
-        node = await kube_client.core_v1.node.get(node_name)
-        node.metadata.labels = {
-            k: v for k, v in node.metadata.labels.items() if k not in labels
-        }
-        await kube_client.core_v1.node.update(node)
+        js = [
+            {
+                "op": "remove",
+                "path": f"/metadata/labels/{k}",
+            }
+            for k, v in labels.items()
+        ]
+        await kube_client.core_v1.node.patch_json(node_name, js)
 
     @pytest.fixture
     async def kube_node_preemptible(
