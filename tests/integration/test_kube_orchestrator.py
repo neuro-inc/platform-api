@@ -28,6 +28,8 @@ from apolo_kube_client import (
     KubeClientException,
     KubeClientProxy,
     KubeClientSelector,
+    PatchAdd,
+    PatchRemove,
     ResourceNotFound,
     V1EventSource,
     V1Node,
@@ -3472,27 +3474,28 @@ class TestPreemption:
         except ResourceNotFound:
             node_name = os.uname()[1]
 
-        js = [
-            {
-                "op": "add",
-                "path": f"/metadata/labels/{k}",
-                "value": v,
-            }
-            for k, v in labels.items()
-        ]
-
-        await kube_client.core_v1.node.patch_json(node_name, js)
+        await kube_client.core_v1.node.patch_json(
+            node_name,
+            [
+                PatchAdd(
+                    path=f"/metadata/labels/{k}",
+                    value=v,
+                )
+                for k, v in labels.items()
+            ],
+        )
 
         yield
 
-        js = [
-            {
-                "op": "remove",
-                "path": f"/metadata/labels/{k}",
-            }
-            for k, v in labels.items()
-        ]
-        await kube_client.core_v1.node.patch_json(node_name, js)
+        await kube_client.core_v1.node.patch_json(
+            node_name,
+            [
+                PatchRemove(
+                    path=f"/metadata/labels/{k}",
+                )
+                for k, v in labels.items()
+            ],
+        )
 
     @pytest.fixture
     async def kube_main_node_cpu_preemptible_labels(
@@ -3515,27 +3518,28 @@ class TestPreemption:
         except ResourceNotFound:
             node_name = os.uname()[1]
 
-        js = [
-            {
-                "op": "add",
-                "path": f"/metadata/labels/{k}",
-                "value": v,
-            }
-            for k, v in labels.items()
-        ]
-
-        await kube_client.core_v1.node.patch_json(node_name, js)
+        await kube_client.core_v1.node.patch_json(
+            node_name,
+            [
+                PatchAdd(
+                    path=f"/metadata/labels/{k}",
+                    value=v,
+                )
+                for k, v in labels.items()
+            ],
+        )
 
         yield
 
-        js = [
-            {
-                "op": "remove",
-                "path": f"/metadata/labels/{k}",
-            }
-            for k, v in labels.items()
-        ]
-        await kube_client.core_v1.node.patch_json(node_name, js)
+        await kube_client.core_v1.node.patch_json(
+            node_name,
+            [
+                PatchRemove(
+                    path=f"/metadata/labels/{k}",
+                )
+                for k, v in labels.items()
+            ],
+        )
 
     @pytest.fixture
     async def kube_node_preemptible(
@@ -4582,27 +4586,28 @@ class TestExternalJobsPreemption:
         except ResourceNotFound:
             node_name = os.uname()[1]
 
-        js = [
-            {
-                "op": "add",
-                "path": f"/metadata/labels/{k}",
-                "value": v,
-            }
-            for k, v in labels.items()
-        ]
-
-        await kube_client.core_v1.node.patch_json(node_name, js)
+        await kube_client.core_v1.node.patch_json(
+            node_name,
+            [
+                PatchAdd(
+                    path=f"/metadata/labels/{k}",
+                    value=v,
+                )
+                for k, v in labels.items()
+            ],
+        )
 
         yield
 
-        js = [
-            {
-                "op": "remove",
-                "path": f"/metadata/labels/{k}",
-            }
-            for k, v in labels.items()
-        ]
-        await kube_client.core_v1.node.patch_json(node_name, js)
+        await kube_client.core_v1.node.patch_json(
+            node_name,
+            [
+                PatchRemove(
+                    path=f"/metadata/labels/{k}",
+                )
+                for k, v in labels.items()
+            ],
+        )
 
     @pytest.fixture
     async def kube_main_node_cpu_preemptible_labels(
@@ -4625,27 +4630,28 @@ class TestExternalJobsPreemption:
         except LegacyResourceNotFound:
             node_name = os.uname()[1]
 
-        js = [
-            {
-                "op": "add",
-                "path": f"/metadata/labels/{k}",
-                "value": v,
-            }
-            for k, v in labels.items()
-        ]
-
-        await kube_client.core_v1.node.patch_json(node_name, js)
+        await kube_client.core_v1.node.patch_json(
+            node_name,
+            [
+                PatchAdd(
+                    path=f"/metadata/labels/{k}",
+                    value=v,
+                )
+                for k, v in labels.items()
+            ],
+        )
 
         yield
 
-        js = [
-            {
-                "op": "remove",
-                "path": f"/metadata/labels/{k}",
-            }
-            for k, v in labels.items()
-        ]
-        await kube_client.core_v1.node.patch_json(node_name, js)
+        await kube_client.core_v1.node.patch_json(
+            node_name,
+            [
+                PatchRemove(
+                    path=f"/metadata/labels/{k}",
+                )
+                for k, v in labels.items()
+            ],
+        )
 
     @pytest.fixture
     async def kube_node_preemptible(
