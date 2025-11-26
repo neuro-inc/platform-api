@@ -309,14 +309,14 @@ pytest = ["pytest (>=8.4.1)", "pytest-aiohttp (>=1.1.0)", "pytest-asyncio (>=1.0
 
 [[package]]
 name = "apolo-kube-client"
-version = "25.11.8"
+version = "25.11.9"
 description = "Apolo internal client for kubernetes API"
 optional = false
 python-versions = "<4.0,>=3.13"
 groups = ["main"]
 files = [
-    {file = "apolo_kube_client-25.11.8-py3-none-any.whl", hash = "sha256:6079e5778ffa581e2497e2858fe57be899316853932eabfb52892491534f6064"},
-    {file = "apolo_kube_client-25.11.8.tar.gz", hash = "sha256:2a3eda6d5f09507b62fd77eb8c286e29e53e249266ecb5837b99a4025465e977"},
+    {file = "apolo_kube_client-25.11.9-py3-none-any.whl", hash = "sha256:8ee4065ac64ec6a94c9c1f3129dcea44a303e20c7df0de691f02023919d28123"},
+    {file = "apolo_kube_client-25.11.9.tar.gz", hash = "sha256:7772e7c03116b49dda6aed9a9a64522db739546154d0b4325286a5b5b9ac7aab"},
 ]
 
 [package.dependencies]
@@ -2386,14 +2386,14 @@ files = [
 
 [[package]]
 name = "pydantic"
-version = "2.12.4"
+version = "2.12.5"
 description = "Data validation using Python type hints"
 optional = false
 python-versions = ">=3.9"
 groups = ["main", "dev"]
 files = [
-    {file = "pydantic-2.12.4-py3-none-any.whl", hash = "sha256:92d3d202a745d46f9be6df459ac5a064fdaa3c1c4cd8adcfa332ccf3c05f871e"},
-    {file = "pydantic-2.12.4.tar.gz", hash = "sha256:0f8cb9555000a4b5b617f66bfd2566264c4984b27589d3b845685983e8ea85ac"},
+    {file = "pydantic-2.12.5-py3-none-any.whl", hash = "sha256:e561593fccf61e8a20fc46dfc2dfe075b8be7d0188df33f221ad1f0139180f9d"},
+    {file = "pydantic-2.12.5.tar.gz", hash = "sha256:4d351024c75c0f085a9febbb665ce8c0c6ec5d30e903bdb6394b7ede26aebb49"},
 ]
 
 [package.dependencies]
@@ -3265,4 +3265,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<4.0"
-content-hash = "4dbcc23e04b770c82210037962dd373f2db04bc37577b9dfe803223054d3c600"
+content-hash = "59b6258f043aa7f4f943b1cbcb62f31003c9b35498d8176d99fe8e4ee4a84050"
