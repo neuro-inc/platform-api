@@ -1793,14 +1793,14 @@ files = [
 
 [[package]]
 name = "neuro-admin-client"
-version = "25.11.2"
+version = "25.11.3"
 description = "Internal client for Neu.ro admin service"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "neuro_admin_client-25.11.2-py3-none-any.whl", hash = "sha256:4522cd114ca604e1f788b2e531955b5002c0feca2ed1a3eb087c46031743aa4a"},
-    {file = "neuro_admin_client-25.11.2.tar.gz", hash = "sha256:66c1b16d32d3b6acc39877af51ccbad2390dddcd527a67f7f0b9fb4eb1c79eee"},
+    {file = "neuro_admin_client-25.11.3-py3-none-any.whl", hash = "sha256:071d1f2d533ee6628d4b7f0fe788e9275a2d9407816fc97a9d66b0107c920e9c"},
+    {file = "neuro_admin_client-25.11.3.tar.gz", hash = "sha256:0b689bbc68be30d7f19b2fdcd2255268507c37870529f6aae558c09b7a49930a"},
 ]
 
 [package.dependencies]
@@ -3289,4 +3289,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<4.0"
-content-hash = "b1d4a23299b390de45d73ffd62acf58a42f45315c78909502130909cf4370e8d"
+content-hash = "9f7c52022a5a7f656e3b7e8b7600f39ce8bfac56b5ab762a8f3b70f6e2c9be4a"
