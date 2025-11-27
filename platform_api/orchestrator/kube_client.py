@@ -103,9 +103,6 @@ from .job_request import (
 
 logger = logging.getLogger(__name__)
 
-type PrimitiveType = int | float | str | bytes | bool | None
-type JsonType = PrimitiveType | list[JsonType] | dict[str, JsonType]
-
 
 class ServiceType(str, enum.Enum):
     CLUSTER_IP = "ClusterIP"
@@ -1629,21 +1626,6 @@ class NodeResources:
             raise ValueError(f"Invalid amd gpu:  {self.amd_gpu}")
         if self.intel_gpu < 0:
             raise ValueError(f"Invalid intel gpu:  {self.intel_gpu}")
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "NodeResources":
-        return cls(
-            cpu=Resources.parse_cpu(payload.get("cpu", "0")),
-            memory=Resources.parse_memory(payload.get("memory", "0Mi")),
-            nvidia_gpu=int(payload.get(cls.nvidia_gpu_key, 0)),
-            nvidia_migs={
-                k[len(cls.nvidia_mig_key_prefix) :]: int(v)
-                for k, v in payload.items()
-                if k.startswith(cls.nvidia_mig_key_prefix)
-            },
-            amd_gpu=int(payload.get(cls.amd_gpu_key, 0)),
-            intel_gpu=int(payload.get(cls.intel_gpu_key, 0)),
-        )
 
     @classmethod
     def from_model(cls, payload: dict[str, str]) -> Self:

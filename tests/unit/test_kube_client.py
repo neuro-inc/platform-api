@@ -656,54 +656,54 @@ class TestNodeStatus:
 
 
 class TestNodeResources:
-    def test_from_primitive(self) -> None:
-        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4096Mi"})
+    def test_from_model(self) -> None:
+        resources = NodeResources.from_model({"cpu": "1", "memory": "4096Mi"})
 
         assert resources == NodeResources(cpu=1, memory=4096 * 2**20)
 
-    def test_from_primitive_default(self) -> None:
-        resources = NodeResources.from_primitive({})
+    def test_from_model_default(self) -> None:
+        resources = NodeResources.from_model({})
 
         assert resources == NodeResources(cpu=0, memory=0)
 
-    def test_from_primitive_cpu(self) -> None:
-        resources = NodeResources.from_primitive({"cpu": "1000m", "memory": "4096Mi"})
+    def test_from_model_cpu(self) -> None:
+        resources = NodeResources.from_model({"cpu": "1000m", "memory": "4096Mi"})
 
         assert resources == NodeResources(cpu=1, memory=4096 * 2**20)
 
-    def test_from_primitive_memory(self) -> None:
-        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4294967296"})
+    def test_from_model_memory(self) -> None:
+        resources = NodeResources.from_model({"cpu": "1", "memory": "4294967296"})
         assert resources == NodeResources(cpu=1, memory=4294967296)
 
-        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4194304Ki"})
+        resources = NodeResources.from_model({"cpu": "1", "memory": "4194304Ki"})
         assert resources == NodeResources(cpu=1, memory=4194304 * 2**10)
 
-        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4096Mi"})
+        resources = NodeResources.from_model({"cpu": "1", "memory": "4096Mi"})
         assert resources == NodeResources(cpu=1, memory=4096 * 2**20)
 
-        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4Gi"})
+        resources = NodeResources.from_model({"cpu": "1", "memory": "4Gi"})
         assert resources == NodeResources(cpu=1, memory=4 * 2**30)
 
-        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4Ti"})
+        resources = NodeResources.from_model({"cpu": "1", "memory": "4Ti"})
         assert resources == NodeResources(cpu=1, memory=4 * 2**40)
 
-        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4000000k"})
+        resources = NodeResources.from_model({"cpu": "1", "memory": "4000000k"})
         assert resources == NodeResources(cpu=1, memory=4000000 * 10**3)
 
-        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4000M"})
+        resources = NodeResources.from_model({"cpu": "1", "memory": "4000M"})
         assert resources == NodeResources(cpu=1, memory=4000 * 10**6)
 
-        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4G"})
+        resources = NodeResources.from_model({"cpu": "1", "memory": "4G"})
         assert resources == NodeResources(cpu=1, memory=4 * 10**9)
 
-        resources = NodeResources.from_primitive({"cpu": "1", "memory": "4T"})
+        resources = NodeResources.from_model({"cpu": "1", "memory": "4T"})
         assert resources == NodeResources(cpu=1, memory=4 * 10**12)
 
         with pytest.raises(ValueError, match="'4Pi' memory format is not supported"):
-            NodeResources.from_primitive({"cpu": "1", "memory": "4Pi"})
+            NodeResources.from_model({"cpu": "1", "memory": "4Pi"})
 
     def test_from_primitive_with_gpu(self) -> None:
-        resources = NodeResources.from_primitive(
+        resources = NodeResources.from_model(
             {"cpu": "1", "memory": "4096Mi", "nvidia.com/gpu": "1"}
         )
 
