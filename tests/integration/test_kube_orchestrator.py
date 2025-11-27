@@ -4016,8 +4016,8 @@ class TestJobsPreemption:
     async def start_watchers(
         self, kube_orchestrator: KubeOrchestrator
     ) -> AsyncIterator[None]:
-        node_watcher = NodeWatcher(kube_orchestrator.host_client)
-        pod_watcher = PodWatcher(kube_orchestrator.host_client)
+        node_watcher = NodeWatcher(kube_orchestrator._selector.host_client)
+        pod_watcher = PodWatcher(kube_orchestrator._selector.host_client)
         kube_orchestrator.subscribe_to_kube_events(node_watcher, pod_watcher)
         exit_stack = AsyncExitStack()
         await exit_stack.enter_async_context(node_watcher)
