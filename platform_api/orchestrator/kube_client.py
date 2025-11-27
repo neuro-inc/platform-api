@@ -335,34 +335,6 @@ class Resources:
         return ret
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "Resources":
-        requests = payload.get("requests", {})
-        nvidia_gpu = None
-        if cls.nvidia_gpu_key in requests:
-            nvidia_gpu = int(requests[cls.nvidia_gpu_key])
-        nvidia_migs: dict[str, int] = {}
-        for key, value in requests.items():
-            if key.startswith(cls.nvidia_mig_key_prefix):
-                nvidia_migs[key[len(cls.nvidia_mig_key_prefix) :]] = int(value)
-        amd_gpu = None
-        if cls.amd_gpu_key in requests:
-            amd_gpu = int(requests[cls.amd_gpu_key])
-        intel_gpu = None
-        if cls.intel_gpu_key in requests:
-            intel_gpu = int(requests[cls.intel_gpu_key])
-        tpu_version, tpu_cores = cls._parse_tpu(requests)
-        return cls(
-            cpu=cls.parse_cpu(requests.get("cpu", "0")),
-            memory=cls.parse_memory(requests.get("memory", "0Mi")),
-            nvidia_gpu=nvidia_gpu,
-            nvidia_migs=nvidia_migs or None,
-            amd_gpu=amd_gpu,
-            intel_gpu=intel_gpu,
-            tpu_version=tpu_version,
-            tpu_cores=tpu_cores,
-        )
-
-    @classmethod
     def from_model(cls, model: V1ResourceRequirements) -> "Resources":
         requests = model.requests or {}
         nvidia_gpu = None
@@ -1213,52 +1185,6 @@ class PodDescriptor:
             raise ValueError(f"unknown kind: {kind}")
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "PodDescriptor":
-        cls._assert_resource_kind(expected_kind="Pod", payload=payload)
-
-        metadata = payload["metadata"]
-        container_payload = payload["spec"]["containers"][0]
-        # TODO (R Zubairov 09/13/18): remove medium emptyDir
-        # TODO (A Danshyn 06/19/18): set rest of attributes
-        status = None
-        if "status" in payload:
-            status = PodStatus.from_primitive(payload["status"])
-        if "imagePullSecrets" in payload["spec"]:
-            secrets = [
-                SecretRef.from_primitive(secret)
-                for secret in payload["spec"]["imagePullSecrets"]
-            ]
-        else:
-            secrets = []
-        tolerations = [
-            Toleration(
-                key=t.get("key", ""),
-                operator=t.get("operator", Toleration.operator),
-                value=t.get("value", Toleration.value),
-                effect=t.get("effect", Toleration.effect),
-            )
-            for t in payload["spec"].get("tolerations", ())
-        ]
-        return cls(
-            name=metadata["name"],
-            created_at=iso8601.parse_date(metadata["creationTimestamp"]),
-            image=container_payload["image"],
-            status=status,
-            image_pull_secrets=secrets,
-            node_name=payload["spec"].get("nodeName"),
-            command=container_payload.get("command"),
-            args=container_payload.get("args"),
-            tty=container_payload.get("tty", False),
-            tolerations=tolerations,
-            labels=metadata.get("labels", {}),
-            restart_policy=PodRestartPolicy(
-                payload["spec"].get("restartPolicy", str(cls.restart_policy))
-            ),
-            working_dir=container_payload.get("workingDir"),
-            resources=Resources.from_primitive(container_payload.get("resources", {})),
-        )
-
-    @classmethod
     def from_model(cls, model: V1Pod) -> "PodDescriptor":
         metadata = model.metadata
         assert model.spec is not None
@@ -1646,16 +1572,15 @@ class PodStatus:
         )
 
     @classmethod
-    def from_model(cls, model: V1PodStatus) -> "PodStatus":
+    def from_model(cls, model: V1PodStatus) -> Self:
         if model.container_statuses:
             container_statuses = tuple(
                 ContainerStatus.from_model(s) for s in model.container_statuses or []
             )
         else:
             container_statuses = (ContainerStatus(),)
-        assert model.phase is not None
         return cls(
-            phase=model.phase,
+            phase=model.phase or "",
             container_statuses=container_statuses,
             reason=model.reason,
             conditions=[PodCondition.from_model(c) for c in model.conditions],

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import PurePath
 from typing import Any
 
 import pytest
 from apolo_kube_client import (
-    ResourceExists,
     V1Affinity,
     V1Container,
     V1ContainerPort,
@@ -22,6 +22,7 @@ from apolo_kube_client import (
     V1IngressSpec,
     V1LabelSelector,
     V1LabelSelectorRequirement,
+    V1LocalObjectReference,
     V1NodeAffinity,
     V1NodeSelector,
     V1NodeSelectorRequirement,
@@ -31,6 +32,7 @@ from apolo_kube_client import (
     V1PodAffinity,
     V1PodAffinityTerm,
     V1PodSpec,
+    V1PodStatus,
     V1Probe,
     V1ResourceRequirements,
     V1SecretKeySelector,
@@ -623,62 +625,63 @@ class TestPodDescriptor:
         assert pod.annotations == {"tf-version.cloud-tpus.google.com": "1.14"}
         assert pod.priority_class_name is None
 
-    def test_from_primitive_defaults(self) -> None:
-        payload = {
-            "kind": "Pod",
-            "metadata": {
-                "name": "testname",
-                "creationTimestamp": "2019-06-20T11:03:32Z",
-            },
-            "spec": {"containers": [{"name": "testname", "image": "testimage"}]},
-        }
-        pod = PodDescriptor.from_primitive(payload)
+    def test_from_model_defaults(self) -> None:
+        model = V1Pod(
+            metadata=V1ObjectMeta(
+                name="testname",
+                creation_timestamp=datetime.fromisoformat("2019-06-20T11:03:32Z"),
+            ),
+            spec=V1PodSpec(
+                containers=[V1Container(name="testname", image="testimage")]
+            ),
+        )
+        pod = PodDescriptor.from_model(model)
         assert pod.name == "testname"
         assert pod.image == "testimage"
-        assert pod.status is None
+        assert pod.status is not None
+        assert pod.status.phase == ""
         assert pod.tolerations == []
         assert pod.priority_class_name is None
         assert pod.image_pull_secrets == []
         assert pod.node_name is None
-        assert pod.command is None
-        assert pod.args is None
+        assert pod.command == []
+        assert pod.args == []
         assert pod.tty is False
         assert pod.labels == {}
 
-    def test_from_primitive(self) -> None:
-        payload = {
-            "kind": "Pod",
-            "metadata": {
-                "name": "testname",
-                "creationTimestamp": "2019-06-20T11:03:32Z",
-                "labels": {"testlabel": "testvalue"},
-            },
-            "spec": {
-                "containers": [
-                    {
-                        "name": "testname",
-                        "image": "testimage",
-                        "tty": True,
-                        "stdin": True,
-                        "workingDir": "/working/dir",
-                    }
+    def test_from_model(self) -> None:
+        model = V1Pod(
+            metadata=V1ObjectMeta(
+                name="testname",
+                creation_timestamp=datetime.fromisoformat("2019-06-20T11:03:32Z"),
+                labels={"testlabel": "testvalue"},
+            ),
+            spec=V1PodSpec(
+                containers=[
+                    V1Container(
+                        name="testname",
+                        image="testimage",
+                        tty=True,
+                        stdin=True,
+                        working_dir="/working/dir",
+                    )
                 ],
-                "tolerations": [
-                    {
-                        "key": "key1",
-                        "value": "value1",
-                        "operator": "Equals",
-                        "effect": "NoSchedule",
-                    },
-                    {"key": "key2", "operator": "Exists"},
-                    {"operator": "Exists"},
-                    {"key": "key3"},
+                tolerations=[
+                    V1Toleration(
+                        key="key1",
+                        value="value1",
+                        operator="Equals",
+                        effect="NoSchedule",
+                    ),
+                    V1Toleration(key="key2", operator="Exists"),
+                    V1Toleration(operator="Exists"),
+                    V1Toleration(key="key3"),
                 ],
-                "imagePullSecrets": [{"name": "secret"}],
-            },
-            "status": {"phase": "Running"},
-        }
-        pod = PodDescriptor.from_primitive(payload)
+                image_pull_secrets=[V1LocalObjectReference(name="secret")],
+            ),
+            status=V1PodStatus(phase="Running"),
+        )
+        pod = PodDescriptor.from_model(model)
         assert pod.name == "testname"
         assert pod.image == "testimage"
         assert pod.status is not None
@@ -693,21 +696,11 @@ class TestPodDescriptor:
         ]
         assert pod.image_pull_secrets == [SecretRef("secret")]
         assert pod.node_name is None
-        assert pod.command is None
-        assert pod.args is None
+        assert pod.command == []
+        assert pod.args == []
         assert pod.tty is True
         assert pod.labels == {"testlabel": "testvalue"}
         assert pod.working_dir == "/working/dir"
-
-    def test_from_primitive_failure(self) -> None:
-        payload = {"kind": "Status", "code": 409}
-        with pytest.raises(ResourceExists, match="already exist"):
-            PodDescriptor.from_primitive(payload)
-
-    def test_from_primitive_unknown_kind(self) -> None:
-        payload = {"kind": "Unknown"}
-        with pytest.raises(ValueError, match="unknown kind: Unknown"):
-            PodDescriptor.from_primitive(payload)
 
 
 class TestJobStatusItemFactory:
@@ -935,84 +928,92 @@ class TestResources:
         with pytest.raises(ValueError, match=f"invalid TPU type format: '{type_}'"):
             Resources.from_container_resources(container_resources)
 
-    def test_from_primitive(self) -> None:
-        resources = Resources.from_primitive(
-            {"requests": {"cpu": "1", "memory": "4096Mi"}}
+    def test_from_model(self) -> None:
+        resources = Resources.from_model(
+            V1ResourceRequirements(requests={"cpu": "1", "memory": "4096Mi"})
         )
 
         assert resources == Resources(cpu=1, memory=4096 * 2**20)
 
-    def test_from_primitive_cpu(self) -> None:
-        resources = Resources.from_primitive(
-            {"requests": {"cpu": "1000m", "memory": "4096Mi"}}
+    def test_from_model_cpu(self) -> None:
+        resources = Resources.from_model(
+            V1ResourceRequirements(requests={"cpu": "1000m", "memory": "4096Mi"})
         )
 
         assert resources == Resources(cpu=1, memory=4096 * 2**20)
 
-    def test_from_primitive_memory(self) -> None:
-        resources = Resources.from_primitive(
-            {"requests": {"cpu": "1", "memory": "4194304Ki"}}
+    def test_from_model_memory(self) -> None:
+        resources = Resources.from_model(
+            V1ResourceRequirements(requests={"cpu": "1", "memory": "4194304Ki"})
         )
         assert resources == Resources(cpu=1, memory=4194304 * 2**10)
 
-        resources = Resources.from_primitive(
-            {"requests": {"cpu": "1", "memory": "4096Mi"}}
+        resources = Resources.from_model(
+            V1ResourceRequirements(requests={"cpu": "1", "memory": "4096Mi"})
         )
         assert resources == Resources(cpu=1, memory=4096 * 2**20)
 
-        resources = Resources.from_primitive(
-            {"requests": {"cpu": "1", "memory": "4Gi"}}
+        resources = Resources.from_model(
+            V1ResourceRequirements(requests={"cpu": "1", "memory": "4Gi"})
         )
         assert resources == Resources(cpu=1, memory=4 * 2**30)
 
-        resources = Resources.from_primitive(
-            {"requests": {"cpu": "1", "memory": "4Ti"}}
+        resources = Resources.from_model(
+            V1ResourceRequirements(requests={"cpu": "1", "memory": "4Ti"})
         )
         assert resources == Resources(cpu=1, memory=4 * 2**40)
 
-        resources = Resources.from_primitive(
-            {"requests": {"cpu": "1", "memory": "4000000k"}}
+        resources = Resources.from_model(
+            V1ResourceRequirements(requests={"cpu": "1", "memory": "4000000k"})
         )
         assert resources == Resources(cpu=1, memory=4000000 * 10**3)
 
-        resources = Resources.from_primitive(
-            {"requests": {"cpu": "1", "memory": "4000M"}}
+        resources = Resources.from_model(
+            V1ResourceRequirements(requests={"cpu": "1", "memory": "4000M"})
         )
         assert resources == Resources(cpu=1, memory=4000 * 10**6)
 
-        resources = Resources.from_primitive({"requests": {"cpu": "1", "memory": "4G"}})
+        resources = Resources.from_model(
+            V1ResourceRequirements(requests={"cpu": "1", "memory": "4G"})
+        )
         assert resources == Resources(cpu=1, memory=4 * 10**9)
 
-        resources = Resources.from_primitive({"requests": {"cpu": "1", "memory": "4T"}})
+        resources = Resources.from_model(
+            V1ResourceRequirements(requests={"cpu": "1", "memory": "4T"})
+        )
         assert resources == Resources(cpu=1, memory=4 * 10**12)
 
         with pytest.raises(ValueError, match="'4Pi' memory format is not supported"):
-            Resources.from_primitive({"requests": {"cpu": "1", "memory": "4Pi"}})
+            Resources.from_model(
+                V1ResourceRequirements(requests={"cpu": "1", "memory": "4Pi"})
+            )
 
-    def test_from_primitive_gpu(self) -> None:
-        resources = Resources.from_primitive(
-            {"requests": {"cpu": "1", "memory": "4096Mi", "nvidia.com/gpu": "1"}}
+    def test_from_model_gpu(self) -> None:
+        resources = Resources.from_model(
+            V1ResourceRequirements(
+                requests={"cpu": "1", "memory": "4096Mi", "nvidia.com/gpu": "1"}
+            )
         )
 
         assert resources == Resources(cpu=1, memory=4096 * 2**20, nvidia_gpu=1)
 
-    def test_from_primitive_tpu(self) -> None:
-        resources = Resources.from_primitive(
-            {
-                "requests": {
+    def test_from_model_tpu(self) -> None:
+        resources = Resources.from_model(
+            V1ResourceRequirements(
+                requests={
                     "cpu": "1",
                     "memory": "4096Mi",
-                    "cloud-tpus.google.com/v2": 8,
+                    "cloud-tpus.google.com/v2": "8",
                 }
-            }
+            )
         )
 
         assert resources == Resources(
             cpu=1, memory=4096 * 2**20, tpu_cores=8, tpu_version="v2"
         )
 
-    def test_from_primitive_default(self) -> None:
-        resources = Resources.from_primitive({})
+    def test_from_model_default(self) -> None:
+        resources = Resources.from_model(V1ResourceRequirements())
 
         assert resources == Resources(cpu=0, memory=0)
 
