@@ -6,7 +6,6 @@ import logging
 from asyncio import timeout
 from base64 import b64encode
 from collections.abc import (
-    AsyncIterator,
     Callable,
     Coroutine,
     Mapping,
@@ -22,10 +21,17 @@ from typing import Any, ClassVar, NoReturn, Optional, Self
 import aiohttp
 import iso8601
 from apolo_kube_client import (
+    CollectionModel,
     CoreV1Event,
+    KubeClient as KubeClient,
+    KubeClientException,
     KubeClientProxy,
+    KubeClientUnauthorized,
+    ResourceExists,
     ResourceExists as ApoloResourceExists,
+    ResourceGone,
     ResourceInvalid,
+    ResourceModel,
     ResourceNotFound as ApoloResourceNotFound,
     V1Affinity,
     V1Container,
@@ -76,17 +82,10 @@ from apolo_kube_client import (
     V1Volume,
     V1VolumeMount,
     V1WeightedPodAffinityTerm,
+    Watch,
+    WatchEvent,
 )
 from yarl import URL
-
-from platform_api.old_kube_client.client import KubeClient as ApoloKubeClient
-from platform_api.old_kube_client.errors import (
-    KubeClientException,
-    KubeClientUnauthorized,
-    ResourceExists,
-    ResourceGone,
-    ResourceNotFound,
-)
 
 from .job_request import (
     Container,
@@ -101,9 +100,11 @@ from .job_request import (
     Secret,
     SecretContainerVolume,
 )
-from .kube_config import KubeClientAuthType
 
 logger = logging.getLogger(__name__)
+
+type PrimitiveType = int | float | str | bytes | bool | None
+type JsonType = PrimitiveType | list[JsonType] | dict[str, JsonType]
 
 
 class ServiceType(str, enum.Enum):
@@ -2286,19 +2287,6 @@ class Node:
         return self.status.allocatable_resources - resource_requests
 
 
-@dataclass(frozen=True)
-class ListResult:
-    resource_version: str
-    items: list[dict[str, Any]]
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "ListResult":
-        return cls(
-            resource_version=payload["metadata"]["resourceVersion"],
-            items=payload["items"],
-        )
-
-
 class WatchEventType(str, Enum):
     ADDED = "ADDED"
     MODIFIED = "MODIFIED"
@@ -2306,192 +2294,30 @@ class WatchEventType(str, Enum):
     ERROR = "ERROR"
 
 
-@dataclass(frozen=True)
-class WatchBookmarkEvent:
-    resource_version: str
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "WatchBookmarkEvent":
-        return cls(
-            resource_version=payload["object"]["metadata"]["resourceVersion"],
-        )
-
-    @classmethod
-    def is_bookmark(cls, payload: dict[str, Any]) -> bool:
-        return "BOOKMARK" == payload["type"].upper()
-
-
-@dataclass(frozen=True)
-class WatchEvent:
-    type: WatchEventType
-    resource: dict[str, Any]
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "WatchEvent":
-        return cls(type=WatchEventType(payload["type"]), resource=payload["object"])
-
-    @classmethod
-    def is_error(cls, payload: dict[str, Any]) -> bool:
-        return WatchEventType.ERROR == payload["type"].upper()
-
-    @classmethod
-    def create_added(cls, resource: dict[str, Any]) -> "WatchEvent":
-        return cls(type=WatchEventType.ADDED, resource=resource)
-
-    @classmethod
-    def create_modified(cls, resource: dict[str, Any]) -> "WatchEvent":
-        return cls(type=WatchEventType.MODIFIED, resource=resource)
-
-    @classmethod
-    def create_deleted(cls, resource: dict[str, Any]) -> "WatchEvent":
-        return cls(type=WatchEventType.DELETED, resource=resource)
-
-
-class KubeClient(ApoloKubeClient):
-    async def __aenter__(self) -> "KubeClient":
-        await self.init()
-        return self
-
-    @property
-    def _all_pods_url(self) -> str:
-        return f"{self.api_v1_url}/pods"
-
-    def _generate_pod_url(self, namespace: str, pod_id: str) -> str:
-        pods_url = self._generate_pods_url(namespace)
-        return f"{pods_url}/{pod_id}"
-
-    def _generate_pods_url(
-        self, namespace: str | None = None, all_namespaces: bool = False
-    ) -> str:
-        if all_namespaces or not namespace:
-            return self._all_pods_url
-        namespace_url = self.generate_namespace_url(namespace)
-        return f"{namespace_url}/pods"
-
-    @property
-    def _nodes_url(self) -> str:
-        return f"{self.api_v1_url}/nodes"
-
-    def _generate_node_url(self, name: str) -> str:
-        return f"{self._nodes_url}/{name}"
-
-    def _generate_all_secrets_url(self, namespace_name: str | None = None) -> str:
-        namespace_name = namespace_name or self._namespace
-        namespace_url = self.generate_namespace_url(namespace_name)
-        return f"{namespace_url}/secrets"
-
-    def _generate_secret_url(
-        self, secret_name: str, namespace_name: str | None = None
-    ) -> str:
-        all_secrets_url = self._generate_all_secrets_url(namespace_name)
-        return f"{all_secrets_url}/{secret_name}"
-
-    def _create_headers(self, headers: dict[str, Any] | None = None) -> dict[str, Any]:
-        headers = dict(headers) if headers else {}
-        if self._auth_type == KubeClientAuthType.TOKEN and self._token:
-            headers["Authorization"] = "Bearer " + self._token
-        return headers
-
-    async def _watch(
-        self,
-        url: str,
-        params: dict[str, str] | None = None,
-        resource_version: str | None = None,
-    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
-        params = params or {}
-        params.update(watch="true", allowWatchBookmarks="true")
-        if resource_version:
-            params["resourceVersion"] = resource_version
-        assert self._client
-        async with self._client.get(
-            url,
-            params=params,
-            headers=self._create_headers(),
-            timeout=aiohttp.ClientTimeout(),
-        ) as response:
-            if response.status == 410:
-                raise ResourceGone
-            async for line in response.content:
-                payload = json.loads(line)
-                self._raise_for_status(payload)
-                if WatchEvent.is_error(payload):
-                    self._raise_for_status(payload["object"])
-                if WatchBookmarkEvent.is_bookmark(payload):
-                    yield WatchBookmarkEvent.from_primitive(payload)
-                else:
-                    yield WatchEvent.from_primitive(payload)
-
-    async def _delete_resource_url(self, url: str, uid: str | None = None) -> None:
-        request_payload = None
-        if uid:
-            request_payload = {"preconditions": {"uid": uid}}
-        try:
-            await self.delete(url=url, json=request_payload)
-        except ResourceExists as e:
-            # This might happen if we try to remove resource by it's name, but
-            # different UID, see https://github.com/neuro-inc/platform-api/pull/1525
-            raise ResourceNotFound(str(e))
-
-    async def get_raw_nodes(self, labels: dict[str, str] | None = None) -> ListResult:
-        params: dict[str, str] = {}
-        if labels:
-            params["labelSelector"] = ",".join(
-                "=".join(item) for item in labels.items()
-            )
-        payload = await self.get(url=self._nodes_url, params=params)
-        return ListResult.from_primitive(payload)
-
-    async def watch_nodes(
-        self,
-        labels: dict[str, str] | None = None,
-        resource_version: str | None = None,
-    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
-        params: dict[str, str] = {}
-        if labels:
-            params["labelSelector"] = ",".join(
-                "=".join(item) for item in labels.items()
-            )
-        async for event in self._watch(self._nodes_url, params, resource_version):
-            yield event
-
-    async def get_raw_pods(self, all_namespaces: bool = False) -> ListResult:
-        url = self._generate_pods_url(all_namespaces=all_namespaces)
-        payload = await self.get(url=url)
-        assert payload["kind"] == "PodList"
-        return ListResult.from_primitive(payload)
-
-    async def watch_pods(
-        self, all_namespaces: bool = False, resource_version: str | None = None
-    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
-        url = self._generate_pods_url(all_namespaces=all_namespaces)
-        async for event in self._watch(url, resource_version=resource_version):
-            yield event
-
-
-class EventHandler:
+class EventHandler[ModelT: ResourceModel]:
     @abc.abstractmethod
-    async def init(self, resources: list[dict[str, Any]]) -> None:
+    async def init(self, resources: list[ModelT]) -> None:
         pass
 
     @abc.abstractmethod
-    async def handle(self, event: WatchEvent) -> None:
+    async def handle(self, event: WatchEvent[ModelT]) -> None:
         pass
 
 
-class Watcher(abc.ABC):
+class Watcher[ModelT: ResourceModel](abc.ABC):
     resource_version: str
 
     def __init__(self, kube_client: KubeClient) -> None:
         self._kube_client = kube_client
-        self._handlers: list[EventHandler] = []
+        self._handlers: list[EventHandler[ModelT]] = []
         self._watcher_task: asyncio.Task[None] | None = None
 
-    def subscribe(self, handler: EventHandler) -> None:
+    def subscribe(self, handler: EventHandler[ModelT]) -> None:
         if self._watcher_task is not None:
             raise Exception("Subscription is not possible after watcher start")
         self._handlers.append(handler)
 
-    async def __aenter__(self) -> "Watcher":
+    async def __aenter__(self) -> Self:
         await self.start()
         return self
 
@@ -2516,15 +2342,14 @@ class Watcher(abc.ABC):
         for handler in self._handlers:
             await handler.init(result.items)
 
-        self.resource_version = result.resource_version
+        assert result.metadata.resource_version is not None
+        self.resource_version = result.metadata.resource_version
 
     async def _watch(self) -> None:
+        watcher = await self.watch(self.resource_version)
         while True:
             try:
-                async for event in self.watch(self.resource_version):
-                    if isinstance(event, WatchBookmarkEvent):
-                        self.resource_version = event.resource_version
-                        continue
+                async for event in watcher.stream():
                     for handler in self._handlers:
                         await handler.handle(event)
             except ResourceGone:
@@ -2540,52 +2365,57 @@ class Watcher(abc.ABC):
                 logger.warning(
                     "%s: unhandled error", self.__class__.__name__, exc_info=exc
                 )
+            finally:
+                assert watcher.resource_version
+                self.resource_version = watcher.resource_version
 
     @abc.abstractmethod
-    async def list(self) -> ListResult:
+    async def list(self) -> CollectionModel[ModelT]:
         pass
 
     @abc.abstractmethod
-    async def watch(
-        self, resource_version: str
-    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
-        yield  # type: ignore
+    async def watch(self, resource_version: str) -> Watch[ModelT]:
+        pass
 
 
-class NodeWatcher(Watcher):
+class NodeWatcher(Watcher[V1Node]):
     def __init__(
         self, kube_client: KubeClient, labels: dict[str, str] | None = None
     ) -> None:
         super().__init__(kube_client)
-        self._kwargs = {"labels": labels}
+        self._labels = (
+            ",".join(f"{k}={v}" for k, v in labels.items()) if labels else None
+        )
 
-    async def list(self) -> ListResult:
-        return await self._kube_client.get_raw_nodes(**self._kwargs)
+    async def list(self) -> CollectionModel[V1Node]:
+        return await self._kube_client.core_v1.node.get_list(
+            label_selector=self._labels,
+        )
 
-    async def watch(
-        self, resource_version: str
-    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
-        async for event in self._kube_client.watch_nodes(
-            resource_version=resource_version, **self._kwargs
-        ):
-            yield event
+    async def watch(self, resource_version: str) -> Watch[V1Node]:
+        return self._kube_client.core_v1.node.watch(
+            resource_version=resource_version,
+            label_selector=self._labels,
+            allow_watch_bookmarks=True,
+        )
 
 
-class PodWatcher(Watcher):
+class PodWatcher(Watcher[V1Pod]):
     def __init__(self, kube_client: KubeClient, all_namespaces: bool = True) -> None:
         super().__init__(kube_client)
-        self._kwargs = {"all_namespaces": all_namespaces}
+        self._all_namespaces = all_namespaces
 
-    async def list(self) -> ListResult:
-        return await self._kube_client.get_raw_pods(**self._kwargs)
+    async def list(self) -> CollectionModel[V1Pod]:
+        return await self._kube_client.core_v1.pod.get_list(
+            all_namespaces=self._all_namespaces,
+        )
 
-    async def watch(
-        self, resource_version: str
-    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
-        async for event in self._kube_client.watch_pods(
-            resource_version=resource_version, **self._kwargs
-        ):
-            yield event
+    async def watch(self, resource_version: str) -> Watch[V1Pod]:
+        return self._kube_client.core_v1.pod.watch(
+            resource_version=resource_version,
+            all_namespaces=self._all_namespaces,
+            allow_watch_bookmarks=True,
+        )
 
 
 # https://github.com/kubernetes/kubernetes/blob/c285e781331a3785a7f436042c65c5641ce8a9e9/pkg/kubelet/preemption/preemption.go

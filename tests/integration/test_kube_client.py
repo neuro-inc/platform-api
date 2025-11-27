@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Any
+from collections.abc import AsyncIterator
 
 import pytest
 from apolo_kube_client import (
@@ -15,67 +14,24 @@ from apolo_kube_client import (
     V1ObjectMeta,
 )
 
-from platform_api.orchestrator.job_request import (
-    Container,
-    ContainerResources,
-    JobRequest,
-)
 from platform_api.orchestrator.kube_client import (
     EventHandler,
-    KubeClient,
     NodeWatcher,
-    PodDescriptor,
     WatchEvent,
-    create_pod,
-    get_pod_status,
-    wait_pod_is_terminated,
 )
 
-PodFactory = Callable[..., Awaitable[PodDescriptor]]
 
-
-class TestKubeClient:
-    async def test_service_account_not_available(
-        self,
-        kube_client_selector: KubeClientSelector,
-        delete_pod_later: Callable[[PodDescriptor, str, str], Awaitable[None]],
-    ) -> None:
-        container = Container(
-            image="lachlanevenson/k8s-kubectl:v1.10.3",
-            command="get pods",
-            resources=ContainerResources(cpu=0.2, memory=128 * 10**6),
-        )
-        job_request = JobRequest.create(container)
-        pod = PodDescriptor.from_job_request(job_request)
-        await delete_pod_later(pod, "org", "proj")
-        async with kube_client_selector.get_client(
-            org_name="org", project_name="proj"
-        ) as client_proxy:
-            await create_pod(client_proxy, pod)
-            await wait_pod_is_terminated(
-                client_proxy, pod_name=pod.name, timeout_s=60.0
-            )
-            pod_status = await get_pod_status(client_proxy, pod.name)
-
-            assert pod_status.container_status
-            assert pod_status.container_status.exit_code != 0
-
-    async def test_get_raw_nodes(self, kube_client: KubeClient, kube_node: str) -> None:
-        result = await kube_client.get_raw_nodes()
-
-        assert kube_node in [n["metadata"]["name"] for n in result.items]
-
-
-class MyNodeEventHandler(EventHandler):
+class MyNodeEventHandler(EventHandler[V1Node]):
     def __init__(self) -> None:
         self.node_names: list[str] = []
         self._events: dict[str, asyncio.Event] = {}
 
-    async def init(self, raw_nodes: list[dict[str, Any]]) -> None:
-        self.node_names.extend([p["metadata"]["name"] for p in raw_nodes])
+    async def init(self, nodes: list[V1Node]) -> None:
+        self.node_names.extend([p.metadata.name for p in nodes if p.metadata.name])
 
-    async def handle(self, event: WatchEvent) -> None:
-        pod_name = event.resource["metadata"]["name"]
+    async def handle(self, event: WatchEvent[V1Node]) -> None:
+        pod_name = event.object.metadata.name
+        assert pod_name is not None
         self.node_names.append(pod_name)
         waiter = self._events.get(pod_name)
         if waiter:
@@ -97,9 +53,9 @@ class TestNodeWatcher:
 
     @pytest.fixture
     async def node_watcher(
-        self, kube_client: KubeClient, handler: MyNodeEventHandler
+        self, kube_client_selector: KubeClientSelector, handler: MyNodeEventHandler
     ) -> AsyncIterator[NodeWatcher]:
-        watcher = NodeWatcher(kube_client)
+        watcher = NodeWatcher(kube_client_selector.host_client)
         watcher.subscribe(handler)
         async with watcher:
             yield watcher

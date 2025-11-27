@@ -68,7 +68,6 @@ from platform_api.config import (
     ServerConfig,
 )
 from platform_api.orchestrator.kube_client import (
-    KubeClient,
     NodeTaint,
     PodDescriptor,
     Resources,
@@ -432,34 +431,6 @@ def kube_job_nodes_factory(
 async def kube_ingress_ip(kube_config_cluster_payload: dict[str, Any]) -> str:
     cluster = kube_config_cluster_payload
     return urlsplit(cluster["server"]).hostname
-
-
-@pytest.fixture(scope="session")
-async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., KubeClient]:
-    def _f(custom_kube_config: KubeConfig | None = None) -> KubeClient:
-        config = custom_kube_config or kube_config
-        return KubeClient(
-            base_url=config.endpoint_url,
-            auth_type=config.auth_type,
-            cert_authority_data_pem=config.cert_authority_data_pem,
-            cert_authority_path=config.cert_authority_path,
-            auth_cert_path=config.auth_cert_path,
-            auth_cert_key_path=config.auth_cert_key_path,
-            namespace=config.namespace,
-            conn_timeout_s=config.client_conn_timeout_s,
-            read_timeout_s=config.client_read_timeout_s,
-            conn_pool_size=config.client_conn_pool_size,
-        )
-
-    return _f
-
-
-@pytest.fixture(scope="session")
-async def kube_client(
-    kube_client_factory: Callable[..., KubeClient],
-) -> AsyncIterator[KubeClient]:
-    async with kube_client_factory() as kube_client:
-        yield kube_client
 
 
 @pytest.fixture(scope="session")

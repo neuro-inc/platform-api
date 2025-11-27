@@ -11,7 +11,7 @@ import uuid
 from asyncio import timeout
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from decimal import Decimal
 from operator import attrgetter
@@ -28,6 +28,7 @@ from apolo_kube_client import (
     KubeClientException,
     KubeClientProxy,
     KubeClientSelector,
+    KubeConfig as ApoloKubeConfig,
     PatchAdd,
     PatchRemove,
     ResourceNotFound,
@@ -56,9 +57,6 @@ from yarl import URL
 from platform_api.config import (
     STORAGE_URI_SCHEME,
     RegistryConfig,
-)
-from platform_api.old_kube_client.errors import (
-    ResourceNotFound as LegacyResourceNotFound,
 )
 from platform_api.orchestrator.job import (
     DEFAULT_ORPHANED_JOB_OWNER,
@@ -3408,22 +3406,11 @@ class TestPreemption:
         )
 
     @pytest.fixture
-    async def kube_client(
+    async def kube_client_selector(
         self,
         kube_config: KubeConfig,
-    ) -> AsyncIterator[KubeClient]:
-        client = KubeClient(
-            base_url=kube_config.endpoint_url,
-            auth_type=kube_config.auth_type,
-            cert_authority_data_pem=kube_config.cert_authority_data_pem,
-            cert_authority_path=kube_config.cert_authority_path,
-            auth_cert_path=kube_config.auth_cert_path,
-            auth_cert_key_path=kube_config.auth_cert_key_path,
-            namespace=kube_config.namespace,
-            conn_timeout_s=kube_config.client_conn_timeout_s,
-            read_timeout_s=kube_config.client_read_timeout_s,
-            conn_pool_size=kube_config.client_conn_pool_size,
-        )
+    ) -> AsyncIterator[KubeClientSelector]:
+        client = KubeClientSelector(config=ApoloKubeConfig(**asdict(kube_config)))
         async with client as cl:
             yield cl
 
@@ -4499,22 +4486,11 @@ class TestExternalJobsPreemption:
         )
 
     @pytest.fixture
-    async def kube_client(
+    async def kube_client_selector(
         self,
         kube_config: KubeConfig,
-    ) -> AsyncIterator[KubeClient]:
-        client = KubeClient(
-            base_url=kube_config.endpoint_url,
-            auth_type=kube_config.auth_type,
-            cert_authority_data_pem=kube_config.cert_authority_data_pem,
-            cert_authority_path=kube_config.cert_authority_path,
-            auth_cert_path=kube_config.auth_cert_path,
-            auth_cert_key_path=kube_config.auth_cert_key_path,
-            namespace=kube_config.namespace,
-            conn_timeout_s=kube_config.client_conn_timeout_s,
-            read_timeout_s=kube_config.client_read_timeout_s,
-            conn_pool_size=kube_config.client_conn_pool_size,
-        )
+    ) -> AsyncIterator[KubeClientSelector]:
+        client = KubeClientSelector(config=ApoloKubeConfig(**asdict(kube_config)))
         async with client as cl:
             yield cl
 
@@ -4627,7 +4603,7 @@ class TestExternalJobsPreemption:
         try:
             node_name = "minikube"
             await kube_client.core_v1.node.get(node_name)
-        except LegacyResourceNotFound:
+        except ResourceNotFound:
             node_name = os.uname()[1]
 
         await kube_client.core_v1.node.patch_json(

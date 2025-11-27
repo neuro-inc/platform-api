@@ -35,7 +35,6 @@ from platform_api.orchestrator.jobs_service import NEURO_PASSED_CONFIG
 from tests.conftest import random_str
 from tests.integration.api import ApiConfig, AuthApiConfig, JobsClient
 from tests.integration.auth import AuthClient, ServiceAccountFactory, UserFactory, _User
-from tests.integration.conftest import KubeClient
 from tests.integration.diskapi import DiskAPIClient
 from tests.integration.secrets import SecretsClient
 
@@ -5833,7 +5832,6 @@ class TestJobs:
         regular_user: _User,
         test_org_name: str,
         kube_node_gpu: str,
-        kube_client: KubeClient,
     ) -> None:
         request_payload = {
             "container": {

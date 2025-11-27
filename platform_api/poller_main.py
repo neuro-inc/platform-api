@@ -23,7 +23,6 @@ from .kube_cluster import KubeCluster
 from .orchestrator.job_request import JobError
 from .orchestrator.jobs_poller import HttpJobsPollerApi, JobsPoller, JobsPollerService
 from .orchestrator.jobs_storage.base import JobStorageTransactionError
-from .orchestrator.kube_client import KubeClient
 from .orchestrator.poller_service import JobsScheduler
 
 logger = logging.getLogger(__name__)
@@ -41,18 +40,15 @@ class Handler:
 
 
 def create_cluster_factory(
-    config: PollerConfig, kube_client: KubeClient
+    config: PollerConfig,
+    kube_client_selector: KubeClientSelector,
 ) -> Callable[[neuro_config_client.Cluster], Cluster]:
     def _create_cluster(cluster_config: neuro_config_client.Cluster) -> Cluster:
-        selector = KubeClientSelector(
-            config=ApoloKubeConfig(**asdict(config.kube_config))
-        )
         return KubeCluster(
-            kube_client=kube_client,
             kube_config=config.kube_config,
             registry_config=config.registry_config,
             cluster_config=cluster_config,
-            kube_client_selector=selector,
+            kube_client_selector=kube_client_selector,
         )
 
     return _create_cluster
@@ -68,21 +64,8 @@ async def create_app(
         async with AsyncExitStack() as exit_stack:
             logger.info("Initializing KubeClient")
             kube_config = config.kube_config
-            kube_client = await exit_stack.enter_async_context(
-                KubeClient(
-                    base_url=kube_config.endpoint_url,
-                    cert_authority_data_pem=kube_config.cert_authority_data_pem,
-                    cert_authority_path=kube_config.cert_authority_path,
-                    auth_type=kube_config.auth_type,
-                    auth_cert_path=kube_config.auth_cert_path,
-                    auth_cert_key_path=kube_config.auth_cert_key_path,
-                    token=kube_config.token,
-                    token_path=kube_config.token_path,
-                    namespace=kube_config.namespace,
-                    conn_timeout_s=kube_config.client_conn_timeout_s,
-                    read_timeout_s=kube_config.client_read_timeout_s,
-                    conn_pool_size=kube_config.client_conn_pool_size,
-                )
+            kube_client_selector = KubeClientSelector(
+                config=ApoloKubeConfig(**asdict(kube_config))
             )
 
             logger.info("Initializing AuthClient")
@@ -105,7 +88,9 @@ async def create_app(
 
             logger.info("Initializing ClusterHolder")
             cluster_holder = await exit_stack.enter_async_context(
-                ClusterHolder(factory=create_cluster_factory(config, kube_client))
+                ClusterHolder(
+                    factory=create_cluster_factory(config, kube_client_selector)
+                )
             )
 
             logger.info("Initializing ConfigClient")

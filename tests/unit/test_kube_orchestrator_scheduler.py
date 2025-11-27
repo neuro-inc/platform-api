@@ -3,9 +3,22 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any
 
 import pytest
+from apolo_kube_client import (
+    V1ContainerState,
+    V1ContainerStateRunning,
+    V1ContainerStateTerminated,
+    V1ContainerStateWaiting,
+    V1ContainerStatus,
+    V1Node,
+    V1NodeCondition,
+    V1NodeStatus,
+    V1ObjectMeta,
+    V1Pod,
+    V1PodCondition,
+    V1PodStatus,
+)
 
 from platform_api.orchestrator.kube_client import (
     Node,
@@ -20,36 +33,36 @@ from platform_api.orchestrator.kube_orchestrator_scheduler import (
     NodesHandler,
 )
 
-NodeFactory = Callable[..., dict[str, Any]]
+NodeFactory = Callable[..., V1Node]
 
 
 @pytest.fixture
 def create_node() -> NodeFactory:
     def _create(
         cpu: float = 1, memory: int = 1024, gpu: int = 1, ready: bool = True
-    ) -> dict[str, Any]:
-        return {
-            "metadata": {"name": "minikube"},
-            "status": {
-                "allocatable": {
-                    "cpu": cpu,
+    ) -> V1Node:
+        return V1Node(
+            metadata=V1ObjectMeta(name="minikube"),
+            status=V1NodeStatus(
+                allocatable={
+                    "cpu": str(cpu),
                     "memory": f"{memory}Mi",
-                    "nvidia.com/gpu": gpu,
+                    "nvidia.com/gpu": str(gpu),
                 },
-                "conditions": [
-                    {
-                        "type": "Ready",
-                        "status": str(ready),
-                        "lastTransitionTime": datetime.now().isoformat(),
-                    }
+                conditions=[
+                    V1NodeCondition(
+                        type="Ready",
+                        status=str(ready),
+                        last_transition_time=datetime.now(),
+                    )
                 ],
-            },
-        }
+            ),
+        )
 
     return _create
 
 
-PodFactory = Callable[..., dict[str, Any]]
+PodFactory = Callable[..., V1Pod]
 
 
 @pytest.fixture
@@ -66,48 +79,79 @@ def create_pod() -> PodFactory:
         is_running: bool = False,
         is_terminated: bool = False,
         is_failed: bool = False,
-    ) -> dict[str, Any]:
+    ) -> V1Pod:
         pod = PodDescriptor(
             name or f"pod-{uuid.uuid4()}",
             labels=labels or {},
             image="gcr.io/google_containers/pause:3.1",
             resources=Resources(cpu=cpu, memory=memory, nvidia_gpu=gpu),
         )
-        raw_pod = pod.to_primitive()
-        raw_pod["metadata"]["creationTimestamp"] = datetime.now().isoformat()
-        raw_pod["status"] = {"phase": "Pending"}
-        scheduled_condition = {
-            "lastProbeTime": None,
-            "lastTransitionTime": datetime.now().isoformat(),
-            "status": "True",
-            "type": "PodScheduled",
-        }
+        raw_pod = pod.to_model()
+        assert raw_pod.spec is not None
+        assert raw_pod.spec.containers[0].image is not None
+        raw_pod.metadata.creation_timestamp = datetime.now()
+        raw_pod.status = V1PodStatus(phase="Pending")
+        scheduled_condition = V1PodCondition(
+            last_probe_time=None,
+            last_transition_time=datetime.now(),
+            status="True",
+            type="PodScheduled",
+        )
         if is_scheduled:
-            raw_pod["status"] = {
-                "phase": "Pending",
-                "containerStatuses": [{"state": {"waiting": {}}}],
-                "conditions": [scheduled_condition],
-            }
-            raw_pod["spec"]["nodeName"] = node_name
+            raw_pod.status = V1PodStatus(
+                phase="Pending",
+                container_statuses=[
+                    V1ContainerStatus(
+                        image=raw_pod.spec.containers[0].image,
+                        image_id="test-image-id",
+                        name="test-name",
+                        ready=False,
+                        restart_count=0,
+                        state=V1ContainerState(waiting=V1ContainerStateWaiting()),
+                    )
+                ],
+                conditions=[scheduled_condition],
+            )
+            raw_pod.spec.node_name = node_name
         if is_running:
-            raw_pod["status"] = {
-                "phase": "Running",
-                "containerStatuses": [{"state": {"running": {}}}],
-                "conditions": [scheduled_condition],
-            }
-            raw_pod["spec"]["nodeName"] = node_name
+            raw_pod.status = V1PodStatus(
+                phase="Running",
+                container_statuses=[
+                    V1ContainerStatus(
+                        image=raw_pod.spec.containers[0].image,
+                        image_id="test-image-id",
+                        name="test-name",
+                        ready=False,
+                        restart_count=0,
+                        state=V1ContainerState(running=V1ContainerStateRunning()),
+                    )
+                ],
+                conditions=[scheduled_condition],
+            )
+            raw_pod.spec.node_name = node_name
         if is_terminated:
-            raw_pod["status"] = {
-                "phase": "Succeeded",
-                "containerStatuses": [{"state": {"terminated": {}}}],
-                "conditions": [scheduled_condition],
-            }
-            raw_pod["spec"]["nodeName"] = node_name
+            raw_pod.status = V1PodStatus(
+                phase="Succeeded",
+                container_statuses=[
+                    V1ContainerStatus(
+                        image=raw_pod.spec.containers[0].image,
+                        image_id="test-image-id",
+                        name="test-name",
+                        ready=False,
+                        restart_count=0,
+                        state=V1ContainerState(
+                            terminated=V1ContainerStateTerminated(exit_code=1)
+                        ),
+                    )
+                ],
+                conditions=[scheduled_condition],
+            )
+            raw_pod.spec.node_name = node_name
         if is_failed:
-            raw_pod["status"] = {
-                "phase": "Failed",
-                "reason": "OutOfcpu",
-            }
+            raw_pod.status = V1PodStatus(
+                phase="Failed",
+                reason="OutOfcpu",
+            )
         return raw_pod
 
     return _create
@@ -122,7 +166,7 @@ class TestNodesHandler:
         self, handler: NodesHandler, create_node: NodeFactory
     ) -> None:
         raw_node = create_node()
-        node = Node.from_primitive(raw_node)
+        node = Node.from_model(raw_node)
         await handler.init([raw_node])
 
         nodes = list(handler.get_ready_nodes())
@@ -141,8 +185,8 @@ class TestNodesHandler:
         self, handler: NodesHandler, create_node: NodeFactory
     ) -> None:
         raw_node = create_node()
-        node = Node.from_primitive(raw_node)
-        await handler.handle(WatchEvent.create_added(raw_node))
+        node = Node.from_model(raw_node)
+        await handler.handle(WatchEvent("ADDED", raw_node))
 
         nodes = list(handler.get_ready_nodes())
         assert nodes == [node]
@@ -151,13 +195,10 @@ class TestNodesHandler:
         self, handler: NodesHandler, create_node: NodeFactory
     ) -> None:
         raw_node = create_node(ready=False)
-        await handler.handle(WatchEvent.create_added(raw_node))
+        await handler.handle(WatchEvent("ADDED", raw_node))
 
         nodes = list(handler.get_ready_nodes())
         assert nodes == []
-
-
-PodWatchEvent = WatchEvent
 
 
 class TestNodeResourcesHandler:
@@ -228,7 +269,7 @@ class TestNodeResourcesHandler:
     async def test_handle_added_pending(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        await handler.handle(PodWatchEvent.create_added(create_pod("job")))
+        await handler.handle(WatchEvent("ADDED", create_pod("job")))
 
         assert handler.get_pod_node_name("job") is None
         resources = handler.get_resource_requests("minikube")
@@ -238,12 +279,13 @@ class TestNodeResourcesHandler:
         self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
         await handler.handle(
-            PodWatchEvent.create_added(
+            WatchEvent(
+                "ADDED",
                 create_pod(
                     "job",
                     labels={"platform.neuromation.io/idle": "true"},
                     is_running=True,
-                )
+                ),
             )
         )
 
@@ -254,9 +296,7 @@ class TestNodeResourcesHandler:
     async def test_handle_added_running(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        await handler.handle(
-            PodWatchEvent.create_added(create_pod("job", is_running=True))
-        )
+        await handler.handle(WatchEvent("ADDED", create_pod("job", is_running=True)))
 
         assert handler.get_pod_node_name("job") == "minikube"
         resources = handler.get_resource_requests("minikube")
@@ -265,12 +305,8 @@ class TestNodeResourcesHandler:
     async def test_handle_added_running_multiple_times(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        await handler.handle(
-            PodWatchEvent.create_added(create_pod("job", is_running=True))
-        )
-        await handler.handle(
-            PodWatchEvent.create_added(create_pod("job", is_running=True))
-        )
+        await handler.handle(WatchEvent("ADDED", create_pod("job", is_running=True)))
+        await handler.handle(WatchEvent("ADDED", create_pod("job", is_running=True)))
 
         assert handler.get_pod_node_name("job") == "minikube"
         resources = handler.get_resource_requests("minikube")
@@ -279,14 +315,10 @@ class TestNodeResourcesHandler:
     async def test_handle_modified_succeeded(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
+        await handler.handle(WatchEvent("ADDED", create_pod(gpu=0, is_running=True)))
+        await handler.handle(WatchEvent("ADDED", create_pod("job", is_running=True)))
         await handler.handle(
-            PodWatchEvent.create_added(create_pod(gpu=0, is_running=True))
-        )
-        await handler.handle(
-            PodWatchEvent.create_added(create_pod("job", is_running=True))
-        )
-        await handler.handle(
-            PodWatchEvent.create_modified(create_pod("job", is_terminated=True))
+            WatchEvent("MODIFIED", create_pod("job", is_terminated=True))
         )
 
         assert handler.get_pod_node_name("job") is None
@@ -296,14 +328,10 @@ class TestNodeResourcesHandler:
     async def test_handle_deleted(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
+        await handler.handle(WatchEvent("ADDED", create_pod(gpu=0, is_running=True)))
+        await handler.handle(WatchEvent("ADDED", create_pod("job", is_running=True)))
         await handler.handle(
-            PodWatchEvent.create_added(create_pod(gpu=0, is_running=True))
-        )
-        await handler.handle(
-            PodWatchEvent.create_added(create_pod("job", is_running=True))
-        )
-        await handler.handle(
-            PodWatchEvent.create_deleted(create_pod("job", is_terminated=True))
+            WatchEvent("DELETED", create_pod("job", is_terminated=True))
         )
 
         assert handler.get_pod_node_name("job") is None
@@ -313,17 +341,13 @@ class TestNodeResourcesHandler:
     async def test_handle_deleted_multiple_times(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
+        await handler.handle(WatchEvent("ADDED", create_pod(gpu=0, is_running=True)))
+        await handler.handle(WatchEvent("ADDED", create_pod("job", is_running=True)))
         await handler.handle(
-            PodWatchEvent.create_added(create_pod(gpu=0, is_running=True))
+            WatchEvent("DELETED", create_pod("job", is_terminated=True))
         )
         await handler.handle(
-            PodWatchEvent.create_added(create_pod("job", is_running=True))
-        )
-        await handler.handle(
-            PodWatchEvent.create_deleted(create_pod("job", is_terminated=True))
-        )
-        await handler.handle(
-            PodWatchEvent.create_deleted(create_pod("job", is_terminated=True))
+            WatchEvent("DELETED", create_pod("job", is_terminated=True))
         )
 
         assert handler.get_pod_node_name("job") is None
@@ -333,11 +357,9 @@ class TestNodeResourcesHandler:
     async def test_handle_deleted_last(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
+        await handler.handle(WatchEvent("ADDED", create_pod("job", is_running=True)))
         await handler.handle(
-            PodWatchEvent.create_added(create_pod("job", is_running=True))
-        )
-        await handler.handle(
-            PodWatchEvent.create_deleted(create_pod("job", is_terminated=True))
+            WatchEvent("DELETED", create_pod("job", is_terminated=True))
         )
 
         resources = handler.get_resource_requests("minikube")
@@ -346,9 +368,7 @@ class TestNodeResourcesHandler:
     async def test_handle_deleted_unknown(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        await handler.handle(
-            PodWatchEvent.create_deleted(create_pod(is_terminated=True))
-        )
+        await handler.handle(WatchEvent("DELETED", create_pod(is_terminated=True)))
 
         resources = handler.get_resource_requests("minikube")
         assert resources == NodeResources()
@@ -356,14 +376,10 @@ class TestNodeResourcesHandler:
     async def test_handle_failed(
         self, handler: NodeResourcesHandler, create_pod: PodFactory
     ) -> None:
-        await handler.handle(
-            PodWatchEvent.create_added(create_pod("job", is_scheduled=True))
-        )
+        await handler.handle(WatchEvent("ADDED", create_pod("job", is_scheduled=True)))
 
         await handler.handle(
-            PodWatchEvent.create_modified(
-                create_pod("job", is_scheduled=True, is_failed=True)
-            )
+            WatchEvent("MODIFIED", create_pod("job", is_scheduled=True, is_failed=True))
         )
 
         assert handler.get_pod_node_name("job") is None
@@ -400,18 +416,18 @@ class TestKubeOrchestratorScheduler:
         node_resources_handler: NodeResourcesHandler,
         create_pod: PodFactory,
     ) -> None:
-        await node_resources_handler.handle(WatchEvent.create_added(create_pod("job")))
+        await node_resources_handler.handle(WatchEvent("ADDED", create_pod("job")))
 
         assert scheduler.is_pod_scheduled("job") is False
 
         await node_resources_handler.handle(
-            WatchEvent.create_modified(create_pod("job", is_running=True))
+            WatchEvent("MODIFIED", create_pod("job", is_running=True))
         )
 
         assert scheduler.is_pod_scheduled("job") is True
 
         await node_resources_handler.handle(
-            WatchEvent.create_deleted(create_pod("job", is_running=True))
+            WatchEvent("DELETED", create_pod("job", is_running=True))
         )
 
         assert scheduler.is_pod_scheduled("job") is False
@@ -427,12 +443,12 @@ class TestKubeOrchestratorScheduler:
         node_resources_handler: NodeResourcesHandler,
         create_pod: PodFactory,
     ) -> None:
-        pod = PodDescriptor.from_primitive(create_pod())
+        pod = PodDescriptor.from_model(create_pod())
 
         assert scheduler.get_schedulable_pods([pod]) == [pod]
 
         await node_resources_handler.handle(
-            WatchEvent.create_added(create_pod(cpu=1, is_running=True))
+            WatchEvent("ADDED", create_pod(cpu=1, is_running=True))
         )
 
         assert scheduler.get_schedulable_pods([pod]) == []
@@ -443,12 +459,12 @@ class TestKubeOrchestratorScheduler:
         node_resources_handler: NodeResourcesHandler,
         create_pod: PodFactory,
     ) -> None:
-        pod1 = PodDescriptor.from_primitive(create_pod(name="job", cpu=0.1))
-        pod2 = PodDescriptor.from_primitive(create_pod(cpu=0.9, gpu=0))
-        pod3 = PodDescriptor.from_primitive(create_pod(cpu=0.1, gpu=0))
+        pod1 = PodDescriptor.from_model(create_pod(name="job", cpu=0.1))
+        pod2 = PodDescriptor.from_model(create_pod(cpu=0.9, gpu=0))
+        pod3 = PodDescriptor.from_model(create_pod(cpu=0.1, gpu=0))
 
         await node_resources_handler.handle(
-            WatchEvent.create_added(create_pod(name="job", cpu=0.1, is_running=True))
+            WatchEvent("ADDED", create_pod(name="job", cpu=0.1, is_running=True))
         )
 
         assert scheduler.get_schedulable_pods([pod1, pod2, pod3]) == [pod1, pod2]
@@ -460,7 +476,7 @@ class TestKubeOrchestratorScheduler:
         create_pod: PodFactory,
     ) -> None:
         await node_resources_handler.handle(
-            WatchEvent.create_added(create_pod(name="job", cpu=1, is_running=True))
+            WatchEvent("ADDED", create_pod(name="job", cpu=1, is_running=True))
         )
 
         pod = PodDescriptor(name="job", image="job")
@@ -481,9 +497,9 @@ class TestKubeOrchestratorScheduler:
         create_node: NodeFactory,
         create_pod: PodFactory,
     ) -> None:
-        pod = PodDescriptor.from_primitive(create_pod(is_running=True))
+        pod = PodDescriptor.from_model(create_pod(is_running=True))
         assert scheduler.get_schedulable_pods([pod]) == [pod]
 
-        await nodes_handler.handle(WatchEvent.create_modified(create_node(ready=False)))
+        await nodes_handler.handle(WatchEvent("MODIFIED", create_node(ready=False)))
 
         assert scheduler.get_schedulable_pods([pod]) == []
