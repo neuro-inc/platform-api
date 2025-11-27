@@ -562,63 +562,22 @@ class IngressRule:
     service_port: int | None = None
 
     @classmethod
-    def from_v1beta1_primitive(cls, payload: dict[str, Any]) -> "IngressRule":
-        http_paths = payload.get("http", {}).get("paths", [])
-        http_path = http_paths[0] if http_paths else {}
-        backend = http_path.get("backend", {})
-        service_name = backend.get("serviceName")
-        service_port = backend.get("servicePort")
+    def from_model(cls, model: V1IngressRule) -> Self:
+        host = model.host or ""
+        if model.http is None:
+            return cls(host=host, service_name=None, service_port=None)
+        http_paths = model.http.paths
+        if not http_paths:
+            return cls(host=host, service_name=None, service_port=None)
+        http_path = http_paths[0]
+        service = http_path.backend.service
+        if service is None:
+            return cls(host=host, service_name=None, service_port=None)
         return cls(
-            host=payload.get("host", ""),
-            service_name=service_name,
-            service_port=service_port,
+            host=model.host or "",
+            service_name=service.name,
+            service_port=service.port.number,
         )
-
-    @classmethod
-    def from_v1_primitive(cls, payload: dict[str, Any]) -> "IngressRule":
-        http_paths = payload.get("http", {}).get("paths", [])
-        http_path = http_paths[0] if http_paths else {}
-        service = http_path.get("backend", {}).get("service", {})
-        service_name = service.get("name")
-        service_port = service.get("port", {}).get("number")
-        return cls(
-            host=payload.get("host", ""),
-            service_name=service_name,
-            service_port=service_port,
-        )
-
-    def to_v1beta1_primitive(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {"host": self.host}
-        if self.service_name:
-            payload["http"] = {
-                "paths": [
-                    {
-                        "backend": {
-                            "serviceName": self.service_name,
-                            "servicePort": self.service_port,
-                        }
-                    }
-                ]
-            }
-        return payload
-
-    def to_v1_primitive(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {"host": self.host}
-        if self.service_name:
-            payload["http"] = {
-                "paths": [
-                    {
-                        "pathType": "ImplementationSpecific",
-                        "backend": {
-                            "service": {
-                                "name": self.service_name,
-                                "port": {"number": self.service_port},
-                            }
-                        },
-                    }
-                ]
-            }
-        return payload
 
     @classmethod
     def from_service(cls, host: str, service: Service) -> "IngressRule":
@@ -651,33 +610,6 @@ class Ingress:
     annotations: dict[str, str] = field(default_factory=dict)
     labels: dict[str, str] = field(default_factory=dict)
 
-    def to_v1beta1_primitive(self) -> dict[str, Any]:
-        rules: list[Any] = [rule.to_v1beta1_primitive() for rule in self.rules] or [
-            None
-        ]
-        annotations = self.annotations.copy()
-        if self.ingress_class:
-            annotations["kubernetes.io/ingress.class"] = self.ingress_class
-        metadata = {"name": self.name, "annotations": annotations}
-        if self.labels:
-            metadata["labels"] = self.labels.copy()
-        return {"metadata": metadata, "spec": {"rules": rules}}
-
-    def to_v1_primitive(self) -> dict[str, Any]:
-        rules: list[Any] = [rule.to_v1_primitive() for rule in self.rules] or [None]
-        annotations = self.annotations.copy()
-        metadata = {"name": self.name, "annotations": annotations}
-        spec: dict[str, Any] = {"rules": rules}
-        primitive: dict[str, Any] = {"metadata": metadata, "spec": spec}
-        if self.ingress_class:
-            annotations.pop(
-                "kubernetes.io/ingress.class", None
-            )  # deprecated and has conflict with ingressClassName
-            spec["ingressClassName"] = self.ingress_class
-        if self.labels:
-            metadata["labels"] = self.labels.copy()
-        return primitive
-
     def to_model(self) -> V1Ingress:
         spec = V1IngressSpec()
         annotations = self.annotations.copy()
@@ -691,43 +623,6 @@ class Ingress:
             metadata.labels = self.labels.copy()
         spec.rules = [rule.to_model() for rule in self.rules]
         return V1Ingress(metadata=metadata, spec=spec)
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "Ingress":
-        if payload["apiVersion"] == GroupVersion.NETWORKING_V1:
-            return cls._from_v1_primitive(payload)
-        return cls._from_v1beta1_primitive(payload)
-
-    @classmethod
-    def _from_v1beta1_primitive(cls, payload: dict[str, Any]) -> "Ingress":
-        metadata = payload["metadata"]
-        spec = payload["spec"]
-        annotations = metadata.get("annotations", {})
-        rules = [IngressRule.from_v1beta1_primitive(rule) for rule in spec["rules"]]
-        return cls(
-            name=metadata["name"],
-            ingress_class=annotations.get("kubernetes.io/ingress.class"),
-            rules=rules,
-            annotations=metadata.get("annotations", {}),
-            labels=metadata.get("labels", {}),
-        )
-
-    @classmethod
-    def _from_v1_primitive(cls, payload: dict[str, Any]) -> "Ingress":
-        metadata = payload["metadata"]
-        spec = payload["spec"]
-        annotations = metadata.get("annotations", {})
-        rules = [IngressRule.from_v1_primitive(rule) for rule in spec["rules"]]
-        return cls(
-            name=metadata["name"],
-            ingress_class=spec.get("ingressClassName")
-            or annotations.get(
-                "kubernetes.io/ingress.class"
-            ),  # for backward compatibility with old ingresses
-            rules=rules,
-            annotations=annotations,
-            labels=metadata.get("labels", {}),
-        )
 
     @classmethod
     def from_model(cls, model: V1Ingress) -> "Ingress":

@@ -13,6 +13,13 @@ from apolo_kube_client import (
     V1EnvVar,
     V1EnvVarSource,
     V1HTTPGetAction,
+    V1HTTPIngressPath,
+    V1HTTPIngressRuleValue,
+    V1Ingress,
+    V1IngressBackend,
+    V1IngressRule,
+    V1IngressServiceBackend,
+    V1IngressSpec,
     V1LabelSelector,
     V1LabelSelectorRequirement,
     V1NodeAffinity,
@@ -30,6 +37,7 @@ from apolo_kube_client import (
     V1SecretVolumeSource,
     V1SecurityContext,
     V1Service,
+    V1ServiceBackendPort,
     V1ServicePort,
     V1ServiceSpec,
     V1Toleration,
@@ -1009,322 +1017,95 @@ class TestResources:
         assert resources == Resources(cpu=0, memory=0)
 
 
-class TestIngressV1Beta1Rule:
-    def test_from_primitive_host(self) -> None:
-        rule = IngressRule.from_v1beta1_primitive({"host": "testhost"})
-        assert rule == IngressRule(host="testhost")
-
-    def test_from_primitive_no_paths(self) -> None:
-        rule = IngressRule.from_v1beta1_primitive(
-            {"host": "testhost", "http": {"paths": []}}
-        )
-        assert rule == IngressRule(host="testhost")
-
-    def test_from_primitive_no_backend(self) -> None:
-        rule = IngressRule.from_v1beta1_primitive(
-            {"host": "testhost", "http": {"paths": [{}]}}
-        )
-        assert rule == IngressRule(host="testhost")
-
-    def test_from_primitive_no_service(self) -> None:
-        rule = IngressRule.from_v1beta1_primitive(
-            {"host": "testhost", "http": {"paths": [{"backend": {}}]}}
-        )
-        assert rule == IngressRule(host="testhost")
-
-    def test_from_primitive(self) -> None:
-        rule = IngressRule.from_v1beta1_primitive(
-            {
-                "host": "testhost",
-                "http": {
-                    "paths": [
-                        {"backend": {"serviceName": "testname", "servicePort": 1234}}
-                    ]
-                },
-            }
-        )
-        assert rule == IngressRule(
-            host="testhost", service_name="testname", service_port=1234
-        )
-
-    def test_to_primitive_no_service(self) -> None:
-        rule = IngressRule(host="testhost")
-        assert rule.to_v1beta1_primitive() == {"host": "testhost"}
-
-    def test_to_primitive(self) -> None:
-        rule = IngressRule(host="testhost", service_name="testname", service_port=1234)
-        assert rule.to_v1beta1_primitive() == {
-            "host": "testhost",
-            "http": {
-                "paths": [{"backend": {"serviceName": "testname", "servicePort": 1234}}]
-            },
-        }
-
-    def test_from_service(self) -> None:
-        service = Service(name="testname", target_port=1234)
-        rule = IngressRule.from_service(host="testname.testdomain", service=service)
-        assert rule == IngressRule(
-            host="testname.testdomain", service_name="testname", service_port=80
-        )
-
-
 class TestIngressV1Rule:
-    def test_from_primitive_host(self) -> None:
-        rule = IngressRule.from_v1_primitive({"host": "testhost"})
+    def test_from_model_host(self) -> None:
+        rule = IngressRule.from_model(V1IngressRule(host="testhost"))
         assert rule == IngressRule(host="testhost")
 
-    def test_from_primitive_no_paths(self) -> None:
-        rule = IngressRule.from_v1_primitive(
-            {"host": "testhost", "http": {"paths": []}}
+    def test_from_model_no_paths(self) -> None:
+        rule = IngressRule.from_model(
+            V1IngressRule(host="testhost", http=V1HTTPIngressRuleValue(paths=[]))
         )
         assert rule == IngressRule(host="testhost")
 
-    def test_from_primitive_no_backend(self) -> None:
-        rule = IngressRule.from_v1_primitive(
-            {"host": "testhost", "http": {"paths": [{}]}}
-        )
-        assert rule == IngressRule(host="testhost")
-
-    def test_from_primitive_no_service(self) -> None:
-        rule = IngressRule.from_v1_primitive(
-            {"host": "testhost", "http": {"paths": [{"backend": {}}]}}
-        )
-        assert rule == IngressRule(host="testhost")
-
-    def test_from_primitive(self) -> None:
-        rule = IngressRule.from_v1_primitive(
-            {
-                "host": "testhost",
-                "http": {
-                    "paths": [
-                        {
-                            "backend": {
-                                "service": {
-                                    "name": "testname",
-                                    "port": {"number": 1234},
-                                }
-                            }
-                        }
+    def test_from_model_no_service(self) -> None:
+        rule = IngressRule.from_model(
+            V1IngressRule(
+                host="testhost",
+                http=V1HTTPIngressRuleValue(
+                    paths=[
+                        V1HTTPIngressPath(backend=V1IngressBackend(), path_type="Exact")
                     ]
-                },
-            }
+                ),
+            )
+        )
+        assert rule == IngressRule(host="testhost")
+
+    def test_from_model(self) -> None:
+        rule = IngressRule.from_model(
+            V1IngressRule(
+                host="testhost",
+                http=V1HTTPIngressRuleValue(
+                    paths=[
+                        V1HTTPIngressPath(
+                            backend=V1IngressBackend(
+                                service=V1IngressServiceBackend(
+                                    name="testname",
+                                    port=V1ServiceBackendPort(number=1234),
+                                ),
+                            ),
+                            path_type="Exact",
+                        )
+                    ]
+                ),
+            )
         )
         assert rule == IngressRule(
             host="testhost", service_name="testname", service_port=1234
         )
 
-    def test_to_primitive_no_service(self) -> None:
+    def test_to_model_no_service(self) -> None:
         rule = IngressRule(host="testhost")
-        assert rule.to_v1_primitive() == {"host": "testhost"}
+        assert rule.to_model() == V1IngressRule(host="testhost")
 
     def test_to_primitive(self) -> None:
         rule = IngressRule(host="testhost", service_name="testname", service_port=1234)
-        assert rule.to_v1_primitive() == {
-            "host": "testhost",
-            "http": {
-                "paths": [
-                    {
-                        "pathType": "ImplementationSpecific",
-                        "backend": {
-                            "service": {"name": "testname", "port": {"number": 1234}}
-                        },
-                    }
+        assert rule.to_model() == V1IngressRule(
+            host="testhost",
+            http=V1HTTPIngressRuleValue(
+                paths=[
+                    V1HTTPIngressPath(
+                        path_type="ImplementationSpecific",
+                        backend=V1IngressBackend(
+                            service=V1IngressServiceBackend(
+                                name="testname", port=V1ServiceBackendPort(number=1234)
+                            )
+                        ),
+                    )
                 ]
-            },
-        }
-
-
-class TestIngressV1Beta1:
-    def test_from_primitive_no_rules(self) -> None:
-        ingress = Ingress.from_primitive(
-            {
-                "apiVersion": "networking.k8s.io/v1beta1",
-                "kind": "Ingress",
-                "metadata": {"name": "testingress"},
-                "spec": {"rules": []},
-            }
+            ),
         )
-        assert ingress == Ingress(name="testingress", rules=[])
-
-    def test_from_primitive_with_ingress_class(self) -> None:
-        ingress = Ingress.from_primitive(
-            {
-                "apiVersion": "networking.k8s.io/v1beta1",
-                "kind": "Ingress",
-                "metadata": {
-                    "name": "testingress",
-                    "annotations": {"kubernetes.io/ingress.class": "traefik"},
-                },
-                "spec": {"rules": [{"host": "testhost"}]},
-            }
-        )
-        assert ingress == Ingress(
-            name="testingress",
-            ingress_class="traefik",
-            rules=[IngressRule(host="testhost")],
-            annotations={"kubernetes.io/ingress.class": "traefik"},
-        )
-
-    def test_from_primitive(self) -> None:
-        ingress = Ingress.from_primitive(
-            {
-                "apiVersion": "networking.k8s.io/v1beta1",
-                "kind": "Ingress",
-                "metadata": {"name": "testingress"},
-                "spec": {"rules": [{"host": "testhost"}]},
-            }
-        )
-        assert ingress == Ingress(
-            name="testingress", rules=[IngressRule(host="testhost")]
-        )
-
-    def test_find_rule_index_by_host(self) -> None:
-        ingress = Ingress(
-            name="testingress",
-            rules=[
-                IngressRule(host="host1"),
-                IngressRule(host="host2"),
-                IngressRule(host="host3"),
-            ],
-        )
-        assert ingress.find_rule_index_by_host("host1") == 0
-        assert ingress.find_rule_index_by_host("host2") == 1
-        assert ingress.find_rule_index_by_host("host4") == -1
-
-    def test_to_primitive_no_rules(self) -> None:
-        ingress = Ingress(name="testingress")
-        assert ingress.to_v1beta1_primitive() == {
-            "metadata": {"name": "testingress", "annotations": {}},
-            "spec": {"rules": [None]},
-        }
-
-    def test_to_primitive_with_ingress_class(self) -> None:
-        ingress = Ingress(name="testingress", ingress_class="traefik")
-        assert ingress.to_v1beta1_primitive() == {
-            "metadata": {
-                "name": "testingress",
-                "annotations": {"kubernetes.io/ingress.class": "traefik"},
-            },
-            "spec": {"rules": [None]},
-        }
-
-    def test_to_primitive(self) -> None:
-        ingress = Ingress(
-            name="testingress",
-            rules=[
-                IngressRule(host="host1", service_name="testservice", service_port=1234)
-            ],
-        )
-        assert ingress.to_v1beta1_primitive() == {
-            "metadata": {"name": "testingress", "annotations": {}},
-            "spec": {
-                "rules": [
-                    {
-                        "host": "host1",
-                        "http": {
-                            "paths": [
-                                {
-                                    "backend": {
-                                        "serviceName": "testservice",
-                                        "servicePort": 1234,
-                                    }
-                                }
-                            ]
-                        },
-                    }
-                ]
-            },
-        }
-
-    def test_to_primitive_with_annotations(self) -> None:
-        ingress = Ingress(
-            name="testingress",
-            rules=[
-                IngressRule(host="host1", service_name="testservice", service_port=1234)
-            ],
-            annotations={"key1": "value1"},
-        )
-        assert ingress.to_v1beta1_primitive() == {
-            "metadata": {"name": "testingress", "annotations": {"key1": "value1"}},
-            "spec": {
-                "rules": [
-                    {
-                        "host": "host1",
-                        "http": {
-                            "paths": [
-                                {
-                                    "backend": {
-                                        "serviceName": "testservice",
-                                        "servicePort": 1234,
-                                    }
-                                }
-                            ]
-                        },
-                    }
-                ]
-            },
-        }
-
-    def test_to_primitive_with_labels(self) -> None:
-        ingress = Ingress(
-            name="testingress",
-            rules=[
-                IngressRule(host="host1", service_name="testservice", service_port=1234)
-            ],
-            labels={"test-label-1": "test-value-1", "test-label-2": "test-value-2"},
-        )
-        assert ingress.to_v1beta1_primitive() == {
-            "metadata": {
-                "name": "testingress",
-                "annotations": {},
-                "labels": {
-                    "test-label-1": "test-value-1",
-                    "test-label-2": "test-value-2",
-                },
-            },
-            "spec": {
-                "rules": [
-                    {
-                        "host": "host1",
-                        "http": {
-                            "paths": [
-                                {
-                                    "backend": {
-                                        "serviceName": "testservice",
-                                        "servicePort": 1234,
-                                    }
-                                }
-                            ]
-                        },
-                    }
-                ]
-            },
-        }
 
 
 class TestIngressV1:
-    def test_from_primitive_no_rules(self) -> None:
-        ingress = Ingress.from_primitive(
-            {
-                "apiVersion": "networking.k8s.io/v1",
-                "kind": "Ingress",
-                "metadata": {"name": "testingress"},
-                "spec": {"rules": []},
-            }
+    def test_from_model_no_rules(self) -> None:
+        ingress = Ingress.from_model(
+            V1Ingress(
+                metadata=V1ObjectMeta(name="testingress"),
+                spec=V1IngressSpec(rules=[]),
+            )
         )
         assert ingress == Ingress(name="testingress", rules=[])
 
-    def test_from_primitive_with_ingress_class_annotation(self) -> None:
-        ingress = Ingress.from_primitive(
-            {
-                "apiVersion": "networking.k8s.io/v1",
-                "kind": "Ingress",
-                "metadata": {
-                    "name": "testingress",
-                    "annotations": {"kubernetes.io/ingress.class": "traefik"},
-                },
-                "spec": {"rules": [{"host": "testhost"}]},
-            }
+    def test_from_model_with_ingress_class_annotation(self) -> None:
+        ingress = Ingress.from_model(
+            V1Ingress(
+                metadata=V1ObjectMeta(
+                    name="testingress",
+                    annotations={"kubernetes.io/ingress.class": "traefik"},
+                ),
+                spec=V1IngressSpec(rules=[V1IngressRule(host="testhost")]),
+            )
         )
         assert ingress == Ingress(
             name="testingress",
@@ -1333,17 +1114,15 @@ class TestIngressV1:
             annotations={"kubernetes.io/ingress.class": "traefik"},
         )
 
-    def test_from_primitive_with_ingress_class(self) -> None:
-        ingress = Ingress.from_primitive(
-            {
-                "apiVersion": "networking.k8s.io/v1",
-                "kind": "Ingress",
-                "metadata": {"name": "testingress"},
-                "spec": {
-                    "ingressClassName": "traefik",
-                    "rules": [{"host": "testhost"}],
-                },
-            }
+    def test_from_model_with_ingress_class(self) -> None:
+        ingress = Ingress.from_model(
+            V1Ingress(
+                metadata=V1ObjectMeta(name="testingress"),
+                spec=V1IngressSpec(
+                    ingress_class_name="traefik",
+                    rules=[V1IngressRule(host="testhost")],
+                ),
+            )
         )
         assert ingress == Ingress(
             name="testingress",
@@ -1351,76 +1130,74 @@ class TestIngressV1:
             rules=[IngressRule(host="testhost")],
         )
 
-    def test_from_primitive(self) -> None:
-        ingress = Ingress.from_primitive(
-            {
-                "apiVersion": "networking.k8s.io/v1",
-                "kind": "Ingress",
-                "metadata": {"name": "testingress"},
-                "spec": {"rules": [{"host": "testhost"}]},
-            }
+    def test_from_model(self) -> None:
+        ingress = Ingress.from_model(
+            V1Ingress(
+                metadata=V1ObjectMeta(name="testingress"),
+                spec=V1IngressSpec(rules=[V1IngressRule(host="testhost")]),
+            )
         )
         assert ingress == Ingress(
             name="testingress", rules=[IngressRule(host="testhost")]
         )
 
-    def test_to_primitive_no_rules(self) -> None:
+    def test_to_model_no_rules(self) -> None:
         ingress = Ingress(name="testingress")
-        assert ingress.to_v1_primitive() == {
-            "metadata": {"name": "testingress", "annotations": {}},
-            "spec": {"rules": [None]},
-        }
+        assert ingress.to_model() == V1Ingress(
+            metadata=V1ObjectMeta(name="testingress", annotations={}),
+            spec=V1IngressSpec(rules=[]),
+        )
 
-    def test_to_primitive_with_ingress_class(self) -> None:
+    def test_to_model_with_ingress_class(self) -> None:
         ingress = Ingress(name="testingress", ingress_class="traefik")
-        assert ingress.to_v1_primitive() == {
-            "metadata": {"name": "testingress", "annotations": {}},
-            "spec": {"ingressClassName": "traefik", "rules": [None]},
-        }
+        assert ingress.to_model() == V1Ingress(
+            metadata=V1ObjectMeta(name="testingress", annotations={}),
+            spec=V1IngressSpec(ingress_class_name="traefik", rules=[]),
+        )
 
-    def test_to_primitive_with_ingress_class_annotation_removed(self) -> None:
+    def test_to_model_with_ingress_class_annotation_removed(self) -> None:
         ingress = Ingress(
             name="testingress",
             ingress_class="traefik",
             annotations={"kubernetes.io/ingress.class": "traefik"},
         )
-        assert ingress.to_v1_primitive() == {
-            "metadata": {"name": "testingress", "annotations": {}},
-            "spec": {"ingressClassName": "traefik", "rules": [None]},
-        }
+        assert ingress.to_model() == V1Ingress(
+            metadata=V1ObjectMeta(name="testingress", annotations={}),
+            spec=V1IngressSpec(ingress_class_name="traefik", rules=[]),
+        )
 
-    def test_to_primitive(self) -> None:
+    def test_to_model(self) -> None:
         ingress = Ingress(
             name="testingress",
             rules=[
                 IngressRule(host="host1", service_name="testservice", service_port=1234)
             ],
         )
-        assert ingress.to_v1_primitive() == {
-            "metadata": {"name": "testingress", "annotations": {}},
-            "spec": {
-                "rules": [
-                    {
-                        "host": "host1",
-                        "http": {
-                            "paths": [
-                                {
-                                    "pathType": "ImplementationSpecific",
-                                    "backend": {
-                                        "service": {
-                                            "name": "testservice",
-                                            "port": {"number": 1234},
-                                        }
-                                    },
-                                }
+        assert ingress.to_model() == V1Ingress(
+            metadata=V1ObjectMeta(name="testingress", annotations={}),
+            spec=V1IngressSpec(
+                rules=[
+                    V1IngressRule(
+                        host="host1",
+                        http=V1HTTPIngressRuleValue(
+                            paths=[
+                                V1HTTPIngressPath(
+                                    path_type="ImplementationSpecific",
+                                    backend=V1IngressBackend(
+                                        service=V1IngressServiceBackend(
+                                            name="testservice",
+                                            port=V1ServiceBackendPort(number=1234),
+                                        )
+                                    ),
+                                )
                             ]
-                        },
-                    }
+                        ),
+                    )
                 ]
-            },
-        }
+            ),
+        )
 
-    def test_to_primitive_with_annotations(self) -> None:
+    def test_to_model_with_annotations(self) -> None:
         ingress = Ingress(
             name="testingress",
             rules=[
@@ -1428,31 +1205,31 @@ class TestIngressV1:
             ],
             annotations={"key1": "value1"},
         )
-        assert ingress.to_v1_primitive() == {
-            "metadata": {"name": "testingress", "annotations": {"key1": "value1"}},
-            "spec": {
-                "rules": [
-                    {
-                        "host": "host1",
-                        "http": {
-                            "paths": [
-                                {
-                                    "pathType": "ImplementationSpecific",
-                                    "backend": {
-                                        "service": {
-                                            "name": "testservice",
-                                            "port": {"number": 1234},
-                                        }
-                                    },
-                                }
+        assert ingress.to_model() == V1Ingress(
+            metadata=V1ObjectMeta(name="testingress", annotations={"key1": "value1"}),
+            spec=V1IngressSpec(
+                rules=[
+                    V1IngressRule(
+                        host="host1",
+                        http=V1HTTPIngressRuleValue(
+                            paths=[
+                                V1HTTPIngressPath(
+                                    path_type="ImplementationSpecific",
+                                    backend=V1IngressBackend(
+                                        service=V1IngressServiceBackend(
+                                            name="testservice",
+                                            port=V1ServiceBackendPort(number=1234),
+                                        )
+                                    ),
+                                )
                             ]
-                        },
-                    }
+                        ),
+                    )
                 ]
-            },
-        }
+            ),
+        )
 
-    def test_to_primitive_with_labels(self) -> None:
+    def test_to_model_with_labels(self) -> None:
         ingress = Ingress(
             name="testingress",
             rules=[
@@ -1460,36 +1237,36 @@ class TestIngressV1:
             ],
             labels={"test-label-1": "test-value-1", "test-label-2": "test-value-2"},
         )
-        assert ingress.to_v1_primitive() == {
-            "metadata": {
-                "name": "testingress",
-                "annotations": {},
-                "labels": {
+        assert ingress.to_model() == V1Ingress(
+            metadata=V1ObjectMeta(
+                name="testingress",
+                annotations={},
+                labels={
                     "test-label-1": "test-value-1",
                     "test-label-2": "test-value-2",
                 },
-            },
-            "spec": {
-                "rules": [
-                    {
-                        "host": "host1",
-                        "http": {
-                            "paths": [
-                                {
-                                    "pathType": "ImplementationSpecific",
-                                    "backend": {
-                                        "service": {
-                                            "name": "testservice",
-                                            "port": {"number": 1234},
-                                        }
-                                    },
-                                }
+            ),
+            spec=V1IngressSpec(
+                rules=[
+                    V1IngressRule(
+                        host="host1",
+                        http=V1HTTPIngressRuleValue(
+                            paths=[
+                                V1HTTPIngressPath(
+                                    path_type="ImplementationSpecific",
+                                    backend=V1IngressBackend(
+                                        service=V1IngressServiceBackend(
+                                            name="testservice",
+                                            port=V1ServiceBackendPort(number=1234),
+                                        )
+                                    ),
+                                )
                             ]
-                        },
-                    }
+                        ),
+                    )
                 ]
-            },
-        }
+            ),
+        )
 
 
 class TestService:
