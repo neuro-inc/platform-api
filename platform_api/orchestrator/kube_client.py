@@ -1185,7 +1185,7 @@ class PodDescriptor:
             raise ValueError(f"unknown kind: {kind}")
 
     @classmethod
-    def from_model(cls, model: V1Pod) -> "PodDescriptor":
+    def from_model(cls, model: V1Pod) -> Self:
         metadata = model.metadata
         assert model.spec is not None
         container = model.spec.containers[0]
@@ -1749,20 +1749,6 @@ class NodeCondition:
     reason: str = ""
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "NodeCondition":
-        return cls(
-            type=NodeConditionType.parse(payload["type"]),
-            status=cls._parse_status(payload["status"]),
-            message=payload.get("message", ""),
-            reason=payload.get("reason", ""),
-            transition_time=(
-                iso8601.parse_date(t)
-                if (t := payload.get("lastTransitionTime"))
-                else None
-            ),
-        )
-
-    @classmethod
     def from_model(cls, model: V1NodeCondition) -> Self:
         return cls(
             type=NodeConditionType.parse(model.type),
@@ -1789,15 +1775,6 @@ class NodeStatus:
     conditions: list[NodeCondition] = field(default_factory=list)
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "NodeStatus":
-        return cls(
-            allocatable_resources=NodeResources.from_primitive(payload["allocatable"]),
-            conditions=[
-                NodeCondition.from_primitive(p) for p in payload.get("conditions", ())
-            ],
-        )
-
-    @classmethod
     def from_model(cls, model: V1NodeStatus) -> Self:
         return cls(
             allocatable_resources=NodeResources.from_model(model.allocatable),
@@ -1817,15 +1794,6 @@ class Node:
     name: str
     status: NodeStatus = field(compare=False)
     labels: dict[str, str] = field(default_factory=dict, compare=False)
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "Node":
-        metadata = payload["metadata"]
-        return cls(
-            name=metadata["name"],
-            labels=metadata.get("labels", {}),
-            status=NodeStatus.from_primitive(payload["status"]),
-        )
 
     @classmethod
     def from_model(cls, model: V1Node) -> Self:

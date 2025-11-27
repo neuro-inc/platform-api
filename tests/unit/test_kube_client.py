@@ -7,10 +7,14 @@ import pytest
 from apolo_kube_client import (
     V1LabelSelector,
     V1LabelSelectorRequirement,
+    V1Node,
     V1NodeAffinity,
+    V1NodeCondition,
     V1NodeSelector,
     V1NodeSelectorRequirement,
     V1NodeSelectorTerm,
+    V1NodeStatus,
+    V1ObjectMeta,
     V1PodAffinity,
     V1PodAffinityTerm,
     V1PreferredSchedulingTerm,
@@ -530,73 +534,73 @@ class TestKubernetesEvent:
 
 
 class TestNodeCondition:
-    def test_from_primitive_status_true(self) -> None:
+    def test_from_model_status_true(self) -> None:
         now = datetime.now(UTC)
-        condition = NodeCondition.from_primitive(
-            {
-                "type": "Ready",
-                "status": "True",
-                "lastTransitionTime": now.isoformat(),
-            }
+        condition = NodeCondition.from_model(
+            V1NodeCondition(
+                type="Ready",
+                status="True",
+                last_transition_time=now,
+            )
         )
 
         assert condition == NodeCondition(
             type=NodeConditionType.READY, status=True, transition_time=now
         )
 
-    def test_from_primitive_status_false(self) -> None:
+    def test_from_model_status_false(self) -> None:
         now = datetime.now(UTC)
-        condition = NodeCondition.from_primitive(
-            {
-                "type": "Ready",
-                "status": "False",
-                "lastTransitionTime": now.isoformat(),
-            }
+        condition = NodeCondition.from_model(
+            V1NodeCondition(
+                type="Ready",
+                status="False",
+                last_transition_time=now,
+            )
         )
 
         assert condition == NodeCondition(
             type=NodeConditionType.READY, status=False, transition_time=now
         )
 
-    def test_from_primitive_status_unknown(self) -> None:
+    def test_from_model_status_unknown(self) -> None:
         now = datetime.now(UTC)
-        condition = NodeCondition.from_primitive(
-            {
-                "type": "Ready",
-                "status": "Unknown",
-                "lastTransitionTime": now.isoformat(),
-            }
+        condition = NodeCondition.from_model(
+            V1NodeCondition(
+                type="Ready",
+                status="Unknown",
+                last_transition_time=now,
+            )
         )
 
         assert condition == NodeCondition(
             type=NodeConditionType.READY, status=None, transition_time=now
         )
 
-    def test_from_primitive_status_invalid(self) -> None:
+    def test_from_model_status_invalid(self) -> None:
         with pytest.raises(ValueError, match="Invalid status 'Invalid'"):
-            NodeCondition.from_primitive(
-                {
-                    "type": "Ready",
-                    "status": "Invalid",
-                    "lastTransitionTime": datetime.now().isoformat(),
-                }
+            NodeCondition.from_model(
+                V1NodeCondition(
+                    type="Ready",
+                    status="Invalid",
+                    last_transition_time=datetime.now(),
+                )
             )
 
 
 class TestNodeStatus:
-    def test_from_primitive(self) -> None:
+    def test_from_model(self) -> None:
         now = datetime.now(UTC)
-        status = NodeStatus.from_primitive(
-            {
-                "allocatable": {},
-                "conditions": [
-                    {
-                        "type": "Ready",
-                        "status": "True",
-                        "lastTransitionTime": now.isoformat(),
-                    }
+        status = NodeStatus.from_model(
+            V1NodeStatus(
+                allocatable={},
+                conditions=[
+                    V1NodeCondition(
+                        type="Ready",
+                        status="True",
+                        last_transition_time=now,
+                    )
                 ],
-            }
+            )
         )
 
         assert status == NodeStatus(
@@ -754,12 +758,12 @@ class TestNodeResources:
 
 
 class TestNode:
-    def test_from_primitive(self) -> None:
-        node = Node.from_primitive(
-            {
-                "metadata": {"name": "minikube"},
-                "status": {"allocatable": {"cpu": "1", "memory": "4096Mi"}},
-            }
+    def test_from_model(self) -> None:
+        node = Node.from_model(
+            V1Node(
+                metadata=V1ObjectMeta(name="minikube"),
+                status=V1NodeStatus(allocatable={"cpu": "1", "memory": "4096Mi"}),
+            )
         )
 
         assert node == Node(
@@ -767,12 +771,12 @@ class TestNode:
             status=NodeStatus(allocatable_resources=NodeResources(cpu=1, memory=4096)),
         )
 
-    def test_from_primitive_with_labels(self) -> None:
-        node = Node.from_primitive(
-            {
-                "metadata": {"name": "minikube", "labels": {"job": "true"}},
-                "status": {"allocatable": {"cpu": "1", "memory": "4096Mi"}},
-            }
+    def test_from_model_with_labels(self) -> None:
+        node = Node.from_model(
+            V1Node(
+                metadata=V1ObjectMeta(name="minikube", labels={"job": "true"}),
+                status=V1NodeStatus(allocatable={"cpu": "1", "memory": "4096Mi"}),
+            )
         )
 
         assert node == Node(
