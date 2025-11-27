@@ -138,9 +138,6 @@ class Volume(metaclass=abc.ABCMeta):
     ) -> "VolumeMount":
         raise NotImplementedError("Cannot create mount for abstract Volume type.")
 
-    def to_primitive(self) -> dict[str, Any]:
-        raise NotImplementedError
-
     def to_model(self) -> V1Volume:
         raise NotImplementedError
 
@@ -173,9 +170,6 @@ class PathVolume(Volume):
 
 @dataclass(frozen=True)
 class SharedMemoryVolume(Volume):
-    def to_primitive(self) -> dict[str, Any]:
-        return {"name": self.name, "emptyDir": {"medium": "Memory"}}
-
     def to_model(self) -> V1Volume:
         return V1Volume(
             name=self.name, empty_dir=V1EmptyDirVolumeSource(medium="Memory")
@@ -204,17 +198,6 @@ class SecretEnvVar:
     def create(cls, name: str, secret: Secret) -> "SecretEnvVar":
         return cls(name=name, secret=secret)
 
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "valueFrom": {
-                "secretKeyRef": {
-                    "name": self.secret.k8s_secret_name,
-                    "key": self.secret.secret_key,
-                }
-            },
-        }
-
     def to_model(self) -> V1EnvVar:
         return V1EnvVar(
             name=self.name,
@@ -232,17 +215,6 @@ class VolumeMount:
     mount_path: PurePath
     sub_path: PurePath = PurePath()
     read_only: bool = False
-
-    def to_primitive(self) -> dict[str, Any]:
-        sub_path = str(self.sub_path)
-        raw = {
-            "name": self.volume.name,
-            "mountPath": str(self.mount_path),
-            "readOnly": self.read_only,
-        }
-        if sub_path:
-            raw["subPath"] = sub_path
-        return raw
 
     def to_model(self) -> V1VolumeMount:
         ret = V1VolumeMount(
@@ -268,12 +240,6 @@ class SecretVolume(Volume):
             read_only=True,
         )
 
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "secret": {"secretName": self.k8s_secret_name, "defaultMode": 0o400},
-        }
-
     def to_model(self) -> V1Volume:
         return V1Volume(
             name=self.name,
@@ -293,12 +259,6 @@ class PVCDiskVolume(Volume):
             mount_path=disk_volume.dst_path,
             read_only=disk_volume.read_only,
         )
-
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "persistentVolumeClaim": {"claimName": self.claim_name},
-        }
 
     def to_model(self) -> V1Volume:
         return V1Volume(
@@ -348,31 +308,6 @@ class Resources:
     def tpu_key(self) -> str:
         assert self.tpu_version
         return self.tpu_key_prefix + self.tpu_version
-
-    def to_primitive(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "requests": {"cpu": f"{self.cpu_mcores}m", "memory": self.memory_str},
-            "limits": {"cpu": f"{self.cpu_mcores}m", "memory": self.memory_str},
-        }
-        if self.nvidia_gpu:
-            payload["requests"][self.nvidia_gpu_key] = self.nvidia_gpu
-            payload["limits"][self.nvidia_gpu_key] = self.nvidia_gpu
-        if self.nvidia_migs:
-            for key, value in self.nvidia_migs.items():
-                payload["requests"][self.nvidia_mig_key_prefix + key] = value
-                payload["limits"][self.nvidia_mig_key_prefix + key] = value
-        if self.amd_gpu:
-            payload["requests"][self.amd_gpu_key] = self.amd_gpu
-            payload["limits"][self.amd_gpu_key] = self.amd_gpu
-        if self.intel_gpu:
-            payload["requests"][self.intel_gpu_key] = self.intel_gpu
-            payload["limits"][self.intel_gpu_key] = self.intel_gpu
-        if self.tpu_version:
-            payload["requests"][self.tpu_key] = self.tpu_cores
-            payload["limits"][self.tpu_key] = self.tpu_cores
-        if self.memory_request:
-            payload["requests"]["memory"] = self.memory_request_str
-        return payload
 
     def to_model(self) -> V1ResourceRequirements:
         ret = V1ResourceRequirements(
@@ -541,28 +476,6 @@ class Service:
         if target_port:
             ports.append({"port": port, "targetPort": target_port, "name": port_name})
 
-    def to_primitive(self) -> dict[str, Any]:
-        service_descriptor: dict[str, Any] = {
-            "metadata": {
-                "name": self.name,
-            },
-            "spec": {
-                "type": self.service_type.value,
-                "ports": [],
-                "selector": self.selector,
-            },
-        }
-
-        if self.cluster_ip:
-            service_descriptor["spec"]["clusterIP"] = self.cluster_ip
-        if self.labels:
-            service_descriptor["metadata"]["labels"] = self.labels.copy()
-
-        self._add_port_map(
-            self.port, self.target_port, "http", service_descriptor["spec"]["ports"]
-        )
-        return service_descriptor
-
     def to_model(self) -> V1Service:
         ports: list[V1ServicePort] = []
         if self.target_port:
@@ -612,21 +525,6 @@ class Service:
             if port_mapping.get("name", None) == name:
                 return port_mapping
         return {}
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "Service":
-        http_payload = cls._find_port_by_name("http", payload["spec"]["ports"])
-        service_type = payload["spec"].get("type", Service.service_type.value)
-        return cls(
-            name=payload["metadata"]["name"],
-            uid=payload["metadata"]["uid"],
-            selector=payload["spec"].get("selector", {}),
-            target_port=http_payload.get("targetPort", None),
-            port=http_payload.get("port", Service.port),
-            service_type=ServiceType(service_type),
-            cluster_ip=payload["spec"].get("clusterIP"),
-            labels=payload["metadata"].get("labels", {}),
-        )
 
     @classmethod
     def from_model(cls, model: V1Service) -> "Service":
@@ -902,15 +800,6 @@ class DockerRegistrySecret:
             ).encode("utf-8")
         ).decode("ascii")
 
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "apiVersion": "v1",
-            "kind": "Secret",
-            "metadata": {"name": self.name},
-            "data": {".dockerconfigjson": self._build_json()},
-            "type": self.type,
-        }
-
     def to_model(self) -> V1Secret:
         metadata = V1ObjectMeta(name=self.name)
         secret = V1Secret(metadata=metadata, type=self.type)
@@ -922,9 +811,6 @@ class DockerRegistrySecret:
 @dataclass(frozen=True)
 class SecretRef:
     name: str
-
-    def to_primitive(self) -> dict[str, str]:
-        return {"name": self.name}
 
     def to_model(self) -> V1LocalObjectReference:
         return V1LocalObjectReference(name=self.name)
@@ -949,14 +835,6 @@ class Toleration:
     operator: str = "Equal"
     value: str = ""
     effect: str = ""
-
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "key": self.key,
-            "operator": self.operator,
-            "value": self.value,
-            "effect": self.effect,
-        }
 
     def to_model(self) -> V1Toleration:
         return V1Toleration(
@@ -1009,34 +887,28 @@ class LabelSelectorMatchExpression:
             raise ValueError("values must be empty")
 
     @classmethod
-    def create_in(cls, key: str, *values: str) -> "LabelSelectorMatchExpression":
+    def create_in(cls, key: str, *values: str) -> Self:
         return cls(key=key, operator=SelectorOperator.IN, values=[*values])
 
     @classmethod
-    def create_exists(cls, key: str) -> "LabelSelectorMatchExpression":
+    def create_exists(cls, key: str) -> Self:
         return cls(key=key, operator=SelectorOperator.EXISTS)
 
     @classmethod
-    def create_does_not_exist(cls, key: str) -> "LabelSelectorMatchExpression":
+    def create_does_not_exist(cls, key: str) -> Self:
         return cls(key=key, operator=SelectorOperator.DOES_NOT_EXIST)
 
     @classmethod
-    def create_gt(cls, key: str, value: int) -> "LabelSelectorMatchExpression":
+    def create_gt(cls, key: str, value: int) -> Self:
         return cls(key=key, operator=SelectorOperator.GT, values=[str(value)])
 
     @classmethod
-    def create_lt(cls, key: str, value: int) -> "LabelSelectorMatchExpression":
+    def create_lt(cls, key: str, value: int) -> Self:
         return cls(key=key, operator=SelectorOperator.LT, values=[str(value)])
 
     def is_satisfied(self, node_labels: dict[str, str]) -> bool:
         label_value = node_labels.get(self.key)
         return self.operator.apply(label_value, self.values)
-
-    def to_primitive(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {"key": self.key, "operator": self.operator.value}
-        if self.values:
-            payload["values"] = self.values.copy()
-        return payload
 
     def to_model(self) -> V1LabelSelectorRequirement:
         ret = V1LabelSelectorRequirement(key=self.key, operator=self.operator.value)
@@ -1062,11 +934,6 @@ class LabelSelectorTerm:
     def is_satisfied(self, node_labels: dict[str, str]) -> bool:
         return all(e.is_satisfied(node_labels) for e in self.match_expressions)
 
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "matchExpressions": [expr.to_primitive() for expr in self.match_expressions]
-        }
-
     def to_model(self) -> V1LabelSelector:
         return V1LabelSelector(
             match_expressions=[expr.to_model() for expr in self.match_expressions]
@@ -1085,9 +952,6 @@ class NodePreferredSchedulingTerm:
     preference: LabelSelectorTerm
     weight: int = 100
 
-    def to_primitive(self) -> dict[str, Any]:
-        return {"preference": self.preference.to_primitive(), "weight": self.weight}
-
     def to_model(self) -> V1PreferredSchedulingTerm:
         return V1PreferredSchedulingTerm(
             preference=self.preference.to_node_selector_term(), weight=self.weight
@@ -1105,18 +969,6 @@ class NodeAffinity:
 
     def is_satisfied(self, node_labels: dict[str, str]) -> bool:
         return any(t.is_satisfied(node_labels) for t in self.required)
-
-    def to_primitive(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {}
-        if self.required:
-            payload["requiredDuringSchedulingIgnoredDuringExecution"] = {
-                "nodeSelectorTerms": [term.to_primitive() for term in self.required]
-            }
-        if self.preferred:
-            payload["preferredDuringSchedulingIgnoredDuringExecution"] = [
-                term.to_primitive() for term in self.preferred
-            ]
-        return payload
 
     def to_model(self) -> V1NodeAffinity:
         ret = V1NodeAffinity()
@@ -1142,15 +994,6 @@ class PodAffinityTerm:
     def is_satisfied(self, pod_labels: dict[str, str]) -> bool:
         return self.label_selector.is_satisfied(pod_labels)
 
-    def to_primitive(self) -> dict[str, Any]:
-        result = {
-            "labelSelector": self.label_selector.to_primitive(),
-            "topologyKey": self.topologyKey,
-        }
-        if self.namespaces:
-            result["namespaces"] = self.namespaces.copy()
-        return result
-
     def to_model(self) -> V1PodAffinityTerm:
         result = V1PodAffinityTerm(
             label_selector=self.label_selector.to_model(),
@@ -1166,12 +1009,6 @@ class PodPreferredSchedulingTerm:
     pod_affinity_term: PodAffinityTerm
     weight: int = 100
 
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "podAffinityTerm": self.pod_affinity_term.to_primitive(),
-            "weight": self.weight,
-        }
-
     def to_model(self) -> V1WeightedPodAffinityTerm:
         return V1WeightedPodAffinityTerm(
             pod_affinity_term=self.pod_affinity_term.to_model(),
@@ -1182,14 +1019,6 @@ class PodPreferredSchedulingTerm:
 @dataclass(frozen=True)
 class PodAffinity:
     preferred: list[PodPreferredSchedulingTerm] = field(default_factory=list)
-
-    def to_primitive(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {}
-        if self.preferred:
-            payload["preferredDuringSchedulingIgnoredDuringExecution"] = [
-                term.to_primitive() for term in self.preferred
-            ]
-        return payload
 
     def to_model(self) -> V1PodAffinity:
         ret = V1PodAffinity()
@@ -1467,103 +1296,11 @@ class PodDescriptor:
             model.spec.priority_class_name = self.priority_class_name
         return model
 
-    def to_primitive(self) -> dict[str, Any]:
-        volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
-        volumes = [volume.to_primitive() for volume in self.volumes]
-        env_list = self.env_list + [env.to_primitive() for env in self.secret_env_list]
-
-        container_payload: dict[str, Any] = {
-            "name": f"{self.name}",
-            "image": f"{self.image}",
-            "imagePullPolicy": "Always",
-            "env": env_list,
-            "volumeMounts": volume_mounts,
-            "terminationMessagePolicy": "FallbackToLogsOnError",
-        }
-        if self.command:
-            container_payload["command"] = self.command
-        if self.args:
-            container_payload["args"] = self.args
-        if self.resources:
-            container_payload["resources"] = self.resources.to_primitive()
-        if self.tty:
-            container_payload["tty"] = True
-        container_payload["stdin"] = True
-        if self.working_dir is not None:
-            container_payload["workingDir"] = self.working_dir
-        if self.privileged:
-            container_payload["securityContext"] = {
-                "privileged": self.privileged,
-            }
-
-        ports = self._to_primitive_ports()
-        if ports:
-            container_payload["ports"] = ports
-        readiness_probe = self._to_primitive_readiness_probe()
-        if readiness_probe:
-            container_payload["readinessProbe"] = readiness_probe
-
-        payload: dict[str, Any] = {
-            "kind": "Pod",
-            "apiVersion": "v1",
-            "metadata": {"name": self.name},
-            "spec": {
-                "automountServiceAccountToken": False,
-                "containers": [container_payload],
-                "volumes": volumes,
-                "restartPolicy": str(self.restart_policy),
-                "imagePullSecrets": [
-                    secret.to_primitive() for secret in self.image_pull_secrets
-                ],
-                "tolerations": [
-                    toleration.to_primitive() for toleration in self.tolerations
-                ],
-            },
-        }
-        if self.labels:
-            payload["metadata"]["labels"] = self.labels
-        if self.annotations:
-            payload["metadata"]["annotations"] = self.annotations.copy()
-        if self.node_selector:
-            payload["spec"]["nodeSelector"] = self.node_selector.copy()
-        if self.node_affinity or self.pod_affinity:
-            payload["spec"]["affinity"] = {}
-        if self.node_affinity:
-            # fmt: off
-            payload["spec"]["affinity"]["nodeAffinity"] \
-                = self.node_affinity.to_primitive()
-            # fmt: on
-        if self.pod_affinity:
-            # fmt: off
-            payload["spec"]["affinity"]["podAffinity"] \
-                = self.pod_affinity.to_primitive()
-            # fmt: on
-        return payload
-
-    def _to_primitive_ports(self) -> list[dict[str, int]]:
-        ports = []
-        if self.port:
-            ports.append({"containerPort": self.port})
-        return ports
-
     def _to_model_ports(self) -> list[V1ContainerPort]:
         ports = []
         if self.port:
             ports.append(V1ContainerPort(container_port=self.port))
         return ports
-
-    def _to_primitive_readiness_probe(self) -> dict[str, Any]:
-        if not self.readiness_probe:
-            return {}
-
-        if self.port:
-            return {
-                "httpGet": {"port": self.port, "path": self.health_check_path},
-                "initialDelaySeconds": 1,
-                "periodSeconds": 1,
-            }
-
-        return {}
 
     def _to_model_readiness_probe(self) -> V1Probe:
         return V1Probe(
@@ -2035,9 +1772,6 @@ class NodeTaint:
     key: str
     value: str
     effect: str = "NoSchedule"
-
-    def to_primitive(self) -> dict[str, Any]:
-        return {"key": self.key, "value": self.value, "effect": self.effect}
 
     def to_model(self) -> V1Taint:
         return V1Taint(

@@ -2,10 +2,41 @@ from __future__ import annotations
 
 from pathlib import PurePath
 from typing import Any
-from unittest import mock
 
 import pytest
-from apolo_kube_client import ResourceExists
+from apolo_kube_client import (
+    ResourceExists,
+    V1Affinity,
+    V1Container,
+    V1ContainerPort,
+    V1EmptyDirVolumeSource,
+    V1EnvVar,
+    V1EnvVarSource,
+    V1HTTPGetAction,
+    V1LabelSelector,
+    V1LabelSelectorRequirement,
+    V1NodeAffinity,
+    V1NodeSelector,
+    V1NodeSelectorRequirement,
+    V1NodeSelectorTerm,
+    V1ObjectMeta,
+    V1Pod,
+    V1PodAffinity,
+    V1PodAffinityTerm,
+    V1PodSpec,
+    V1Probe,
+    V1ResourceRequirements,
+    V1SecretKeySelector,
+    V1SecretVolumeSource,
+    V1SecurityContext,
+    V1Service,
+    V1ServicePort,
+    V1ServiceSpec,
+    V1Toleration,
+    V1Volume,
+    V1VolumeMount,
+    V1WeightedPodAffinityTerm,
+)
 from neuro_config_client import OrchestratorConfig
 from yarl import URL
 
@@ -78,13 +109,13 @@ class TestAbstractVolume:
 
 
 class TestSecretVolume:
-    def test_to_primitive_no_items(self) -> None:
+    def test_to_model_no_items(self) -> None:
         secret_name = "project--alice--secrets"
         volume = SecretVolume("testvolume", k8s_secret_name=secret_name)
-        assert volume.to_primitive() == {
-            "name": "testvolume",
-            "secret": {"secretName": secret_name, "defaultMode": 0o400},
-        }
+        assert volume.to_model() == V1Volume(
+            name="testvolume",
+            secret=V1SecretVolumeSource(secret_name=secret_name, default_mode=0o400),
+        )
 
     def test_create_secret_mounts(self) -> None:
         secret_name = "project--alice--secrets"
@@ -116,22 +147,22 @@ class TestSecretVolume:
 
 
 class TestSecretEnvVar:
-    def test_to_primitive(self) -> None:
+    def test_to_model(self) -> None:
         sec = Secret.create("secret://test-cluster/test-user/sec1")
         sec_env_var = SecretEnvVar.create("sec-name", secret=sec)
-        assert sec_env_var.to_primitive() == {
-            "name": "sec-name",
-            "valueFrom": {
-                "secretKeyRef": {
-                    "name": "project--test-user--secrets",
-                    "key": "sec1",
-                }
-            },
-        }
+        assert sec_env_var.to_model() == V1EnvVar(
+            name="sec-name",
+            value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(
+                    name="project--test-user--secrets",
+                    key="sec1",
+                )
+            ),
+        )
 
 
 class TestVolumeMount:
-    def test_to_primitive(self) -> None:
+    def test_to_model(self) -> None:
         volume = SharedMemoryVolume(name="testvolume")
         mount = VolumeMount(
             volume=volume,
@@ -139,12 +170,12 @@ class TestVolumeMount:
             sub_path=PurePath("/src"),
             read_only=True,
         )
-        assert mount.to_primitive() == {
-            "name": "testvolume",
-            "mountPath": "/dst",
-            "subPath": "/src",
-            "readOnly": True,
-        }
+        assert mount.to_model() == V1VolumeMount(
+            name="testvolume",
+            mount_path="/dst",
+            sub_path="/src",
+            read_only=True,
+        )
 
 
 class TestPodDescriptor:
@@ -198,66 +229,62 @@ class TestPodDescriptor:
         assert pod.can_be_scheduled({"node-pool": "cpu"}) is False
         assert pod.can_be_scheduled({"job": "true"}) is False
 
-    def test_to_primitive_defaults(self) -> None:
+    def test_to_model_defaults(self) -> None:
         pod = PodDescriptor(name="testname", image="testimage")
         assert pod.name == "testname"
         assert pod.image == "testimage"
-        assert pod.to_primitive() == {
-            "kind": "Pod",
-            "apiVersion": "v1",
-            "metadata": {"name": "testname"},
-            "spec": {
-                "automountServiceAccountToken": False,
-                "containers": [
-                    {
-                        "name": "testname",
-                        "image": "testimage",
-                        "imagePullPolicy": "Always",
-                        "env": [],
-                        "volumeMounts": [],
-                        "terminationMessagePolicy": "FallbackToLogsOnError",
-                        "stdin": True,
-                    }
+        assert pod.to_model() == V1Pod(
+            metadata=V1ObjectMeta(name="testname"),
+            spec=V1PodSpec(
+                automount_service_account_token=False,
+                containers=[
+                    V1Container(
+                        name="testname",
+                        image="testimage",
+                        image_pull_policy="Always",
+                        env=[],
+                        volume_mounts=[],
+                        termination_message_policy="FallbackToLogsOnError",
+                        stdin=True,
+                    )
                 ],
-                "volumes": [],
-                "restartPolicy": "Never",
-                "imagePullSecrets": [],
-                "tolerations": [],
-            },
-        }
+                volumes=[],
+                restart_policy="Never",
+                image_pull_secrets=[],
+                tolerations=[],
+            ),
+        )
 
-    def test_to_primitive_privileged(self) -> None:
+    def test_to_model_privileged(self) -> None:
         pod = PodDescriptor(name="testname", image="testimage", privileged=True)
         assert pod.name == "testname"
         assert pod.image == "testimage"
-        assert pod.to_primitive() == {
-            "kind": "Pod",
-            "apiVersion": "v1",
-            "metadata": {"name": "testname"},
-            "spec": {
-                "automountServiceAccountToken": False,
-                "containers": [
-                    {
-                        "name": "testname",
-                        "image": "testimage",
-                        "imagePullPolicy": "Always",
-                        "env": [],
-                        "volumeMounts": [],
-                        "terminationMessagePolicy": "FallbackToLogsOnError",
-                        "stdin": True,
-                        "securityContext": {
-                            "privileged": True,
-                        },
-                    }
+        assert pod.to_model() == V1Pod(
+            metadata=V1ObjectMeta(name="testname"),
+            spec=V1PodSpec(
+                automount_service_account_token=False,
+                containers=[
+                    V1Container(
+                        name="testname",
+                        image="testimage",
+                        image_pull_policy="Always",
+                        env=[],
+                        volume_mounts=[],
+                        termination_message_policy="FallbackToLogsOnError",
+                        stdin=True,
+                        security_context=V1SecurityContext(
+                            privileged=True,
+                        ),
+                    )
                 ],
-                "volumes": [],
-                "restartPolicy": "Never",
-                "imagePullSecrets": [],
-                "tolerations": [],
-            },
-        }
+                volumes=[],
+                restart_policy="Never",
+                image_pull_secrets=[],
+                tolerations=[],
+            ),
+        )
 
-    def test_to_primitive(self) -> None:
+    def test_to_model(self) -> None:
         tolerations = [
             Toleration(key="testkey", value="testvalue", effect="NoSchedule")
         ]
@@ -304,84 +331,94 @@ class TestPodDescriptor:
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
-        assert pod.to_primitive() == {
-            "kind": "Pod",
-            "apiVersion": "v1",
-            "metadata": {
-                "name": "testname",
-                "labels": {"testlabel": "testvalue"},
-                "annotations": {"testa": "testv"},
-            },
-            "spec": {
-                "automountServiceAccountToken": False,
-                "containers": [
-                    {
-                        "name": "testname",
-                        "image": "testimage",
-                        "imagePullPolicy": "Always",
-                        "env": [{"name": "TESTVAR", "value": "testvalue"}],
-                        "volumeMounts": [],
-                        "resources": {
-                            "requests": {
+        assert pod.to_model() == V1Pod(
+            metadata=V1ObjectMeta(
+                name="testname",
+                labels={"testlabel": "testvalue"},
+                annotations={"testa": "testv"},
+            ),
+            spec=V1PodSpec(
+                automount_service_account_token=False,
+                containers=[
+                    V1Container(
+                        name="testname",
+                        image="testimage",
+                        image_pull_policy="Always",
+                        env=[V1EnvVar(name="TESTVAR", value="testvalue")],
+                        volume_mounts=[],
+                        resources=V1ResourceRequirements(
+                            requests={
                                 "cpu": "500m",
                                 "memory": "1024000000",
-                                "nvidia.com/gpu": 1,
+                                "nvidia.com/gpu": "1",
                             },
-                            "limits": {
+                            limits={
                                 "cpu": "500m",
                                 "memory": "1024000000",
-                                "nvidia.com/gpu": 1,
+                                "nvidia.com/gpu": "1",
                             },
-                        },
-                        "ports": [{"containerPort": 1234}],
-                        "terminationMessagePolicy": "FallbackToLogsOnError",
-                        "stdin": True,
-                        "tty": True,
-                        "workingDir": "/working/dir",
-                    }
+                        ),
+                        ports=[V1ContainerPort(container_port=1234)],
+                        termination_message_policy="FallbackToLogsOnError",
+                        stdin=True,
+                        tty=True,
+                        working_dir="/working/dir",
+                    )
                 ],
-                "volumes": [],
-                "restartPolicy": "Never",
-                "imagePullSecrets": [],
-                "nodeSelector": {"label": "value"},
-                "tolerations": [
-                    {
-                        "key": "testkey",
-                        "operator": "Equal",
-                        "value": "testvalue",
-                        "effect": "NoSchedule",
-                    },
+                volumes=[],
+                restart_policy="Never",
+                image_pull_secrets=[],
+                node_selector={"label": "value"},
+                tolerations=[
+                    V1Toleration(
+                        key="testkey",
+                        operator="Equal",
+                        value="testvalue",
+                        effect="NoSchedule",
+                    ),
                 ],
-                "affinity": {
-                    "nodeAffinity": {
-                        "requiredDuringSchedulingIgnoredDuringExecution": mock.ANY
-                    },
-                    "podAffinity": {
-                        "preferredDuringSchedulingIgnoredDuringExecution": [
-                            {
-                                "weight": 150,
-                                "podAffinityTerm": {
-                                    "topologyKey": "sometopologykey",
-                                    "namespaces": ["some", "namespace"],
-                                    "labelSelector": {
-                                        "matchExpressions": [
-                                            {"key": "keya", "operator": "Exists"},
-                                            {
-                                                "key": "keyb",
-                                                "operator": "In",
-                                                "values": ["v1", "v2"],
-                                            },
+                affinity=V1Affinity(
+                    node_affinity=V1NodeAffinity(
+                        required_during_scheduling_ignored_during_execution=V1NodeSelector(
+                            node_selector_terms=[
+                                V1NodeSelectorTerm(
+                                    match_expressions=[
+                                        V1NodeSelectorRequirement(
+                                            key="testkey", operator="Exists", values=[]
+                                        )
+                                    ]
+                                )
+                            ]
+                        )
+                    ),
+                    pod_affinity=V1PodAffinity(
+                        preferred_during_scheduling_ignored_during_execution=[
+                            V1WeightedPodAffinityTerm(
+                                weight=150,
+                                pod_affinity_term=V1PodAffinityTerm(
+                                    topology_key="sometopologykey",
+                                    namespaces=["some", "namespace"],
+                                    label_selector=V1LabelSelector(
+                                        match_expressions=[
+                                            V1LabelSelectorRequirement(
+                                                key="keya", operator="Exists"
+                                            ),
+                                            V1LabelSelectorRequirement(
+                                                key="keyb",
+                                                operator="In",
+                                                values=["v1", "v2"],
+                                            ),
                                         ]
-                                    },
-                                },
-                            }
+                                    ),
+                                ),
+                            )
                         ],
-                    },
-                },
-            },
-        }
+                    ),
+                ),
+            ),
+        )
 
-    def test_to_primitive_readiness_probe_http(self) -> None:
+    def test_to_model_readiness_probe_http(self) -> None:
         pod = PodDescriptor(
             name="testname",
             image="testimage",
@@ -392,49 +429,47 @@ class TestPodDescriptor:
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
-        assert pod.to_primitive() == {
-            "kind": "Pod",
-            "apiVersion": "v1",
-            "metadata": {"name": "testname"},
-            "spec": {
-                "automountServiceAccountToken": False,
-                "containers": [
-                    {
-                        "name": "testname",
-                        "image": "testimage",
-                        "imagePullPolicy": "Always",
-                        "env": [{"name": "TESTVAR", "value": "testvalue"}],
-                        "volumeMounts": [],
-                        "resources": {
-                            "requests": {
+        assert pod.to_model() == V1Pod(
+            metadata=V1ObjectMeta(name="testname"),
+            spec=V1PodSpec(
+                automount_service_account_token=False,
+                containers=[
+                    V1Container(
+                        name="testname",
+                        image="testimage",
+                        image_pull_policy="Always",
+                        env=[V1EnvVar(name="TESTVAR", value="testvalue")],
+                        volume_mounts=[],
+                        resources=V1ResourceRequirements(
+                            requests={
                                 "cpu": "500m",
                                 "memory": "1024000000",
-                                "nvidia.com/gpu": 1,
+                                "nvidia.com/gpu": "1",
                             },
-                            "limits": {
+                            limits={
                                 "cpu": "500m",
                                 "memory": "1024000000",
-                                "nvidia.com/gpu": 1,
+                                "nvidia.com/gpu": "1",
                             },
-                        },
-                        "ports": [{"containerPort": 1234}],
-                        "readinessProbe": {
-                            "httpGet": {"port": 1234, "path": "/"},
-                            "initialDelaySeconds": 1,
-                            "periodSeconds": 1,
-                        },
-                        "terminationMessagePolicy": "FallbackToLogsOnError",
-                        "stdin": True,
-                    }
+                        ),
+                        ports=[V1ContainerPort(container_port=1234)],
+                        readiness_probe=V1Probe(
+                            http_get=V1HTTPGetAction(port=1234, path="/"),
+                            initial_delay_seconds=1,
+                            period_seconds=1,
+                        ),
+                        termination_message_policy="FallbackToLogsOnError",
+                        stdin=True,
+                    )
                 ],
-                "volumes": [],
-                "restartPolicy": "Never",
-                "imagePullSecrets": [],
-                "tolerations": [],
-            },
-        }
+                volumes=[],
+                restart_policy="Never",
+                image_pull_secrets=[],
+                tolerations=[],
+            ),
+        )
 
-    def test_to_primitive_no_ports(self) -> None:
+    def test_to_model_no_ports(self) -> None:
         pod = PodDescriptor(
             name="testname",
             image="testimage",
@@ -443,43 +478,41 @@ class TestPodDescriptor:
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
-        assert pod.to_primitive() == {
-            "kind": "Pod",
-            "apiVersion": "v1",
-            "metadata": {"name": "testname"},
-            "spec": {
-                "automountServiceAccountToken": False,
-                "containers": [
-                    {
-                        "name": "testname",
-                        "image": "testimage",
-                        "imagePullPolicy": "Always",
-                        "env": [{"name": "TESTVAR", "value": "testvalue"}],
-                        "volumeMounts": [],
-                        "resources": {
-                            "requests": {
+        assert pod.to_model() == V1Pod(
+            metadata=V1ObjectMeta(name="testname"),
+            spec=V1PodSpec(
+                automount_service_account_token=False,
+                containers=[
+                    V1Container(
+                        name="testname",
+                        image="testimage",
+                        image_pull_policy="Always",
+                        env=[V1EnvVar(name="TESTVAR", value="testvalue")],
+                        volume_mounts=[],
+                        resources=V1ResourceRequirements(
+                            requests={
                                 "cpu": "500m",
                                 "memory": "1024000000",
-                                "nvidia.com/gpu": 1,
+                                "nvidia.com/gpu": "1",
                             },
-                            "limits": {
+                            limits={
                                 "cpu": "500m",
                                 "memory": "1024000000",
-                                "nvidia.com/gpu": 1,
+                                "nvidia.com/gpu": "1",
                             },
-                        },
-                        "terminationMessagePolicy": "FallbackToLogsOnError",
-                        "stdin": True,
-                    }
+                        ),
+                        termination_message_policy="FallbackToLogsOnError",
+                        stdin=True,
+                    )
                 ],
-                "volumes": [],
-                "restartPolicy": "Never",
-                "imagePullSecrets": [],
-                "tolerations": [],
-            },
-        }
+                volumes=[],
+                restart_policy="Never",
+                image_pull_secrets=[],
+                tolerations=[],
+            ),
+        )
 
-    def test_to_primitive_with_dev_shm(self) -> None:
+    def test_to_model_with_dev_shm(self) -> None:
         dev_shm = SharedMemoryVolume(name="dshm")
         container_volume = ContainerVolume(
             dst_path=PurePath("/dev/shm"),
@@ -496,49 +529,51 @@ class TestPodDescriptor:
         )
         assert pod.name == "testname"
         assert pod.image == "testimage"
-        assert pod.to_primitive() == {
-            "kind": "Pod",
-            "apiVersion": "v1",
-            "metadata": {"name": "testname"},
-            "spec": {
-                "automountServiceAccountToken": False,
-                "containers": [
-                    {
-                        "name": "testname",
-                        "image": "testimage",
-                        "imagePullPolicy": "Always",
-                        "env": [{"name": "TESTVAR", "value": "testvalue"}],
-                        "volumeMounts": [
-                            {
-                                "name": "dshm",
-                                "mountPath": "/dev/shm",
-                                "readOnly": False,
-                                "subPath": ".",
-                            }
+        assert pod.to_model() == V1Pod(
+            metadata=V1ObjectMeta(name="testname"),
+            spec=V1PodSpec(
+                automount_service_account_token=False,
+                containers=[
+                    V1Container(
+                        name="testname",
+                        image="testimage",
+                        image_pull_policy="Always",
+                        env=[V1EnvVar(name="TESTVAR", value="testvalue")],
+                        volume_mounts=[
+                            V1VolumeMount(
+                                name="dshm",
+                                mount_path="/dev/shm",
+                                read_only=False,
+                                sub_path=".",
+                            )
                         ],
-                        "resources": {
-                            "requests": {
+                        resources=V1ResourceRequirements(
+                            requests={
                                 "cpu": "500m",
                                 "memory": "1024000000",
-                                "nvidia.com/gpu": 1,
+                                "nvidia.com/gpu": "1",
                             },
-                            "limits": {
+                            limits={
                                 "cpu": "500m",
                                 "memory": "1024000000",
-                                "nvidia.com/gpu": 1,
+                                "nvidia.com/gpu": "1",
                             },
-                        },
-                        "ports": [{"containerPort": 1234}],
-                        "terminationMessagePolicy": "FallbackToLogsOnError",
-                        "stdin": True,
-                    }
+                        ),
+                        ports=[V1ContainerPort(container_port=1234)],
+                        termination_message_policy="FallbackToLogsOnError",
+                        stdin=True,
+                    )
                 ],
-                "volumes": [{"name": "dshm", "emptyDir": {"medium": "Memory"}}],
-                "restartPolicy": "Never",
-                "imagePullSecrets": [],
-                "tolerations": [],
-            },
-        }
+                volumes=[
+                    V1Volume(
+                        name="dshm", empty_dir=V1EmptyDirVolumeSource(medium="Memory")
+                    )
+                ],
+                restart_policy="Never",
+                image_pull_secrets=[],
+                tolerations=[],
+            ),
+        )
 
     def test_from_job_request(self) -> None:
         container = Container(
@@ -813,54 +848,54 @@ class TestResources:
         with pytest.raises(ValueError, match="invalid TPU configuration"):
             Resources(cpu=0.5, memory=1024 * 10**6, tpu_version="v2")
 
-    def test_to_primitive(self) -> None:
+    def test_to_model(self) -> None:
         resources = Resources(cpu=0.5, memory=1024000000)
-        assert resources.to_primitive() == {
-            "requests": {"cpu": "500m", "memory": "1024000000"},
-            "limits": {"cpu": "500m", "memory": "1024000000"},
-        }
+        assert resources.to_model() == V1ResourceRequirements(
+            requests={"cpu": "500m", "memory": "1024000000"},
+            limits={"cpu": "500m", "memory": "1024000000"},
+        )
 
-    def test_to_primitive_gpu(self) -> None:
+    def test_to_model_gpu(self) -> None:
         resources = Resources(cpu=0.5, memory=1024 * 10**6, nvidia_gpu=2)
-        assert resources.to_primitive() == {
-            "requests": {"cpu": "500m", "memory": "1024000000", "nvidia.com/gpu": 2},
-            "limits": {"cpu": "500m", "memory": "1024000000", "nvidia.com/gpu": 2},
-        }
+        assert resources.to_model() == V1ResourceRequirements(
+            requests={"cpu": "500m", "memory": "1024000000", "nvidia.com/gpu": "2"},
+            limits={"cpu": "500m", "memory": "1024000000", "nvidia.com/gpu": "2"},
+        )
 
-    def test_to_primitive_tpu(self) -> None:
+    def test_to_model_tpu(self) -> None:
         resources = Resources(
             cpu=0.5, memory=1024 * 10**6, tpu_version="v2", tpu_cores=8
         )
-        assert resources.to_primitive() == {
-            "requests": {
+        assert resources.to_model() == V1ResourceRequirements(
+            requests={
                 "cpu": "500m",
                 "memory": "1024000000",
-                "cloud-tpus.google.com/v2": 8,
+                "cloud-tpus.google.com/v2": "8",
             },
-            "limits": {
+            limits={
                 "cpu": "500m",
                 "memory": "1024000000",
-                "cloud-tpus.google.com/v2": 8,
+                "cloud-tpus.google.com/v2": "8",
             },
-        }
+        )
 
-    def test_to_primitive_with_memory_request(self) -> None:
+    def test_to_model_with_memory_request(self) -> None:
         resources = Resources(
             cpu=1,
             memory=1024 * 10**6,
             memory_request=128 * 10**6,
         )
 
-        assert resources.to_primitive() == {
-            "requests": {
+        assert resources.to_model() == V1ResourceRequirements(
+            requests={
                 "cpu": "1000m",
                 "memory": "128000000",
             },
-            "limits": {
+            limits={
                 "cpu": "1000m",
                 "memory": "1024000000",
             },
-        }
+        )
 
     def test_from_container_resources(self) -> None:
         container_resources = ContainerResources(
@@ -1459,122 +1494,102 @@ class TestIngressV1:
 
 class TestService:
     @pytest.fixture
-    def service_payload(self) -> dict[str, Any]:
-        return {
-            "metadata": {"name": "testservice"},
-            "spec": {
-                "type": "ClusterIP",
-                "ports": [{"port": 80, "targetPort": 8080, "name": "http"}],
-                "selector": {"job": "testservice"},
-            },
-        }
+    def service_model(self) -> V1Service:
+        return V1Service(
+            metadata=V1ObjectMeta(name="testservice"),
+            spec=V1ServiceSpec(
+                type="ClusterIP",
+                ports=[V1ServicePort(port=80, target_port=8080, name="http")],
+                selector={"job": "testservice"},
+            ),
+        )
 
     @pytest.fixture
-    def service_payload_with_uid(
-        self, service_payload: dict[str, Any]
-    ) -> dict[str, Any]:
-        return {
-            **service_payload,
-            "metadata": {
-                **service_payload["metadata"],
-                "uid": "test-uid",
-            },
-        }
+    def service_model_with_uid(self, service_model: V1Service) -> V1Service:
+        ret = service_model.copy(deep=True)
+        ret.metadata.uid = "test-uid"
+        return ret
 
-    def test_to_primitive(self, service_payload: dict[str, dict[str, Any]]) -> None:
+    def test_to_model(self, service_model: V1Service) -> None:
         service = Service(
             name="testservice",
-            selector=service_payload["spec"]["selector"],
+            selector=service_model.spec.selector,
             target_port=8080,
         )
-        assert service.to_primitive() == service_payload
+        assert service.to_model() == service_model
 
-    def test_to_primitive_with_labels(
-        self, service_payload: dict[str, dict[str, Any]]
-    ) -> None:
+    def test_to_model_with_labels(self, service_model: V1Service) -> None:
         labels = {"label-name": "label-value"}
-        expected_payload = service_payload.copy()
-        expected_payload["metadata"]["labels"] = labels
+        expected_model = service_model.copy(deep=True)
+        expected_model.metadata.labels = labels
         service = Service(
             name="testservice",
-            selector=expected_payload["spec"]["selector"],
+            selector=expected_model.spec.selector,
             target_port=8080,
             labels=labels,
         )
-        assert service.to_primitive() == expected_payload
+        assert service.to_model() == expected_model
 
-    def test_to_primitive_load_balancer(
-        self, service_payload: dict[str, dict[str, Any]]
-    ) -> None:
+    def test_to_model_load_balancer(self, service_model: V1Service) -> None:
         service = Service(
             name="testservice",
-            selector=service_payload["spec"]["selector"],
+            selector=service_model.spec.selector,
             target_port=8080,
             service_type=ServiceType.LOAD_BALANCER,
         )
-        service_payload["spec"]["type"] = "LoadBalancer"
-        assert service.to_primitive() == service_payload
+        service_model.spec.type = "LoadBalancer"
+        assert service.to_model() == service_model
 
-    def test_to_primitive_headless(
-        self, service_payload: dict[str, dict[str, Any]]
-    ) -> None:
+    def test_to_model_headless(self, service_model: V1Service) -> None:
         service = Service(
             name="testservice",
-            selector=service_payload["spec"]["selector"],
+            selector=service_model.spec.selector,
             target_port=8080,
             cluster_ip="None",
         )
-        service_payload["spec"]["clusterIP"] = "None"
-        assert service.to_primitive() == service_payload
+        service_model.spec.cluster_ip = "None"
+        assert service.to_model() == service_model
 
-    def test_from_primitive(
-        self, service_payload_with_uid: dict[str, dict[str, Any]]
-    ) -> None:
-        service = Service.from_primitive(service_payload_with_uid)
+    def test_from_model(self, service_model_with_uid: V1Service) -> None:
+        service = Service.from_model(service_model_with_uid)
         assert service == Service(
             name="testservice",
             uid="test-uid",
-            selector=service_payload_with_uid["spec"]["selector"],
+            selector=service_model_with_uid.spec.selector,
             target_port=8080,
         )
 
-    def test_from_primitive_with_labels(
-        self, service_payload_with_uid: dict[str, dict[str, Any]]
-    ) -> None:
+    def test_from_model_with_labels(self, service_model_with_uid: V1Service) -> None:
         labels = {"label-name": "label-value"}
-        input_payload = service_payload_with_uid.copy()
-        input_payload["metadata"]["labels"] = labels
-        service = Service.from_primitive(input_payload)
+        input_model = service_model_with_uid.copy(deep=True)
+        input_model.metadata.labels = labels
+        service = Service.from_model(input_model)
         assert service == Service(
             name="testservice",
             uid="test-uid",
-            selector=service_payload_with_uid["spec"]["selector"],
+            selector=service_model_with_uid.spec.selector,
             target_port=8080,
             labels=labels,
         )
 
-    def test_from_primitive_node_port(
-        self, service_payload_with_uid: dict[str, dict[str, Any]]
-    ) -> None:
-        service_payload_with_uid["spec"]["type"] = "NodePort"
-        service = Service.from_primitive(service_payload_with_uid)
+    def test_from_primitive_node_port(self, service_model_with_uid: V1Service) -> None:
+        service_model_with_uid.spec.type = "NodePort"
+        service = Service.from_model(service_model_with_uid)
         assert service == Service(
             name="testservice",
             uid="test-uid",
-            selector=service_payload_with_uid["spec"]["selector"],
+            selector=service_model_with_uid.spec.selector,
             target_port=8080,
             service_type=ServiceType.NODE_PORT,
         )
 
-    def test_from_primitive_headless(
-        self, service_payload_with_uid: dict[str, dict[str, Any]]
-    ) -> None:
-        service_payload_with_uid["spec"]["clusterIP"] = "None"
-        service = Service.from_primitive(service_payload_with_uid)
+    def test_from_primitive_headless(self, service_model_with_uid: V1Service) -> None:
+        service_model_with_uid.spec.cluster_ip = "None"
+        service = Service.from_model(service_model_with_uid)
         assert service == Service(
             name="testservice",
             uid="test-uid",
-            selector=service_payload_with_uid["spec"]["selector"],
+            selector=service_model_with_uid.spec.selector,
             cluster_ip="None",
             target_port=8080,
         )

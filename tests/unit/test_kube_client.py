@@ -4,6 +4,18 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from apolo_kube_client import (
+    V1LabelSelector,
+    V1LabelSelectorRequirement,
+    V1NodeAffinity,
+    V1NodeSelector,
+    V1NodeSelectorRequirement,
+    V1NodeSelectorTerm,
+    V1PodAffinity,
+    V1PodAffinityTerm,
+    V1PreferredSchedulingTerm,
+    V1WeightedPodAffinityTerm,
+)
 
 from platform_api.orchestrator.kube_client import (
     KubePreemption,
@@ -45,47 +57,51 @@ class TestLabelSelectorMatchExpression:
         assert req == LabelSelectorMatchExpression(
             key="testkey", operator=SelectorOperator.IN, values=["testvalue"]
         )
-        assert req.to_primitive() == {
-            "key": "testkey",
-            "operator": "In",
-            "values": ["testvalue"],
-        }
+        assert req.to_model() == V1LabelSelectorRequirement(
+            key="testkey",
+            operator="In",
+            values=["testvalue"],
+        )
 
     def test_create_exists(self) -> None:
         req = LabelSelectorMatchExpression.create_exists("testkey")
         assert req == LabelSelectorMatchExpression(
             key="testkey", operator=SelectorOperator.EXISTS
         )
-        assert req.to_primitive() == {"key": "testkey", "operator": "Exists"}
+        assert req.to_model() == V1LabelSelectorRequirement(
+            key="testkey", operator="Exists"
+        )
 
     def test_create_does_not_exist(self) -> None:
         req = LabelSelectorMatchExpression.create_does_not_exist("testkey")
         assert req == LabelSelectorMatchExpression(
             key="testkey", operator=SelectorOperator.DOES_NOT_EXIST
         )
-        assert req.to_primitive() == {"key": "testkey", "operator": "DoesNotExist"}
+        assert req.to_model() == V1LabelSelectorRequirement(
+            key="testkey", operator="DoesNotExist"
+        )
 
     def test_create_gt(self) -> None:
         req = LabelSelectorMatchExpression.create_gt("testkey", 1)
         assert req == LabelSelectorMatchExpression(
             key="testkey", operator=SelectorOperator.GT, values=["1"]
         )
-        assert req.to_primitive() == {
-            "key": "testkey",
-            "operator": "Gt",
-            "values": ["1"],
-        }
+        assert req.to_model() == V1LabelSelectorRequirement(
+            key="testkey",
+            operator="Gt",
+            values=["1"],
+        )
 
     def test_create_lt(self) -> None:
         req = LabelSelectorMatchExpression.create_lt("testkey", 1)
         assert req == LabelSelectorMatchExpression(
             key="testkey", operator=SelectorOperator.LT, values=["1"]
         )
-        assert req.to_primitive() == {
-            "key": "testkey",
-            "operator": "Lt",
-            "values": ["1"],
-        }
+        assert req.to_model() == V1LabelSelectorRequirement(
+            key="testkey",
+            operator="Lt",
+            values=["1"],
+        )
 
     def test_in_requirement_is_satisfied(self) -> None:
         req = LabelSelectorMatchExpression.create_in("testkey", "testvalue")
@@ -153,7 +169,7 @@ class TestNodeAffinity:
         assert node_affinity.is_satisfied({"zone": "us-east-1b"}) is True
         assert node_affinity.is_satisfied({"zone": "us-east-1c"}) is False
 
-    def test_to_primitive(self) -> None:
+    def test_to_model(self) -> None:
         node_affinity = NodeAffinity(
             required=[
                 LabelSelectorTerm(
@@ -172,27 +188,33 @@ class TestNodeAffinity:
                 )
             ],
         )
-        assert node_affinity.to_primitive() == {
-            "requiredDuringSchedulingIgnoredDuringExecution": {
-                "nodeSelectorTerms": [
-                    {"matchExpressions": [{"key": "testkey", "operator": "Exists"}]}
-                ]
-            },
-            "preferredDuringSchedulingIgnoredDuringExecution": [
-                {
-                    "preference": {
-                        "matchExpressions": [
-                            {"key": "anotherkey", "operator": "DoesNotExist"}
+        assert node_affinity.to_model() == V1NodeAffinity(
+            required_during_scheduling_ignored_during_execution=V1NodeSelector(
+                node_selector_terms=[
+                    V1NodeSelectorTerm(
+                        match_expressions=[
+                            V1NodeSelectorRequirement(key="testkey", operator="Exists")
                         ]
-                    },
-                    "weight": 100,
-                }
+                    )
+                ]
+            ),
+            preferred_during_scheduling_ignored_during_execution=[
+                V1PreferredSchedulingTerm(
+                    preference=V1NodeSelectorTerm(
+                        match_expressions=[
+                            V1NodeSelectorRequirement(
+                                key="anotherkey", operator="DoesNotExist"
+                            )
+                        ]
+                    ),
+                    weight=100,
+                )
             ],
-        }
+        )
 
 
 class TestPodAffinity:
-    def test_to_privimive(self) -> None:
+    def test_to_model(self) -> None:
         pod_affinity = PodAffinity(
             preferred=[
                 PodPreferredSchedulingTerm(
@@ -207,25 +229,27 @@ class TestPodAffinity:
             ]
         )
 
-        assert pod_affinity.to_primitive() == {
-            "preferredDuringSchedulingIgnoredDuringExecution": [
-                {
-                    "podAffinityTerm": {
-                        "labelSelector": {
-                            "matchExpressions": [
-                                {"key": "mylabel", "operator": "Exists"}
+        assert pod_affinity.to_model() == V1PodAffinity(
+            preferred_during_scheduling_ignored_during_execution=[
+                V1WeightedPodAffinityTerm(
+                    pod_affinity_term=V1PodAffinityTerm(
+                        label_selector=V1LabelSelector(
+                            match_expressions=[
+                                V1LabelSelectorRequirement(
+                                    key="mylabel", operator="Exists"
+                                )
                             ],
-                        },
-                        "topologyKey": "kubernetes.io/hostname",
-                    },
-                    "weight": 100,
-                }
+                        ),
+                        topology_key="kubernetes.io/hostname",
+                    ),
+                    weight=100,
+                )
             ]
-        }
+        )
 
-    def test_to_privimive_empty(self) -> None:
+    def test_to_model_empty(self) -> None:
         pod_affinity = PodAffinity()
-        assert pod_affinity.to_primitive() == {}
+        assert pod_affinity.to_model() == V1PodAffinity()
 
 
 class TestPodStatus:
