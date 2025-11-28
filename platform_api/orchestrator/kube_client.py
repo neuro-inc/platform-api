@@ -679,11 +679,7 @@ class SecretRef:
         return V1LocalObjectReference(name=self.name)
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, str]) -> "SecretRef":
-        return cls(**payload)
-
-    @classmethod
-    def from_model(cls, model: V1LocalObjectReference) -> "SecretRef":
+    def from_model(cls, model: V1LocalObjectReference) -> Self:
         assert model.name is not None
         return cls(name=model.name)
 
