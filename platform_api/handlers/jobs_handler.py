@@ -4,10 +4,10 @@ import logging
 from collections import defaultdict
 from collections.abc import AsyncIterator, Sequence, Set as AbstractSet
 from dataclasses import dataclass, replace
+from datetime import datetime
 from typing import Any
 
 import aiohttp.web
-import iso8601
 import trafaret as t
 import trafaret.keys
 from aiohttp_security import check_authorized
@@ -1150,8 +1150,8 @@ class JobFilterFactory:
                 projects=projects,
                 name=job_name,
                 tags=tags,
-                since=iso8601.parse_date(since) if since else JobFilter.since,
-                until=iso8601.parse_date(until) if until else JobFilter.until,
+                since=datetime.fromisoformat(since) if since else JobFilter.since,
+                until=datetime.fromisoformat(until) if until else JobFilter.until,
                 **bool_filters,  # type: ignore
             )
 
