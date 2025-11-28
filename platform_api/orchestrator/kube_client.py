@@ -19,7 +19,6 @@ from pathlib import PurePath
 from typing import Any, ClassVar, NoReturn, Optional, Self
 
 import aiohttp
-import iso8601
 from apolo_kube_client import (
     CollectionModel,
     CoreV1Event,
@@ -1344,38 +1343,6 @@ class PodCondition:
         self.message = message
         self.status = status
         self.type = type
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> Self:
-        if "lastTransitionTime" in payload:
-            last_transition_time = iso8601.parse_date(payload["lastTransitionTime"])
-        else:
-            last_transition_time = payload["last_transition_time"]
-
-        raw_status = payload["status"]
-
-        match raw_status:
-            case "Unknown":
-                status = None
-            case "True":
-                status = True
-            case "False":
-                status = False
-            case _:
-                raise ValueError(f"Invalid status {raw_status!r}")
-
-        try:
-            type = PodConditionType(payload["type"])
-        except (KeyError, ValueError):
-            type = PodConditionType.UNKNOWN
-
-        return cls(
-            last_transition_time=last_transition_time,
-            reason=payload.get("reason", ""),
-            message=payload.get("message", ""),
-            status=status,
-            type=type,
-        )
 
     @classmethod
     def from_model(cls, model: V1PodCondition) -> Self:

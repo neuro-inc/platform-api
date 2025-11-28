@@ -532,56 +532,57 @@ class TestPodStatus:
 
 class TestPodCondition:
     @pytest.fixture
-    def pod_condition_payload(self) -> dict[str, str]:
-        return {
-            "lastTransitionTime": "2019-06-20T11:03:32Z",
-            "type": "Invalid",
-            "status": "True",
-            "reason": "reason",
-            "message": "message",
-        }
+    def pod_condition_model(self) -> V1PodCondition:
+        return V1PodCondition(
+            last_transition_time=datetime.fromisoformat("2019-06-20T11:03:32Z"),
+            type="Invalid",
+            status="True",
+            reason="reason",
+            message="message",
+        )
 
     def test_unknown_type(
         self,
-        pod_condition_payload: dict[str, str],
+        pod_condition_model: V1PodCondition,
     ) -> None:
-        pod_condition_payload.update(
-            {"lastTransitionTime": "2019-06-20T11:03:32Z", "type": "Invalid"}
+        pod_condition_model.last_transition_time = datetime.fromisoformat(
+            "2019-06-20T11:03:32Z"
         )
-        cond = PodCondition.from_primitive(pod_condition_payload)
+        pod_condition_model.type = "Invalid"
+        cond = PodCondition.from_model(pod_condition_model)
         assert cond.type == PodConditionType.UNKNOWN
 
     def test_status_unknown(
         self,
-        pod_condition_payload: dict[str, str],
+        pod_condition_model: V1PodCondition,
     ) -> None:
-        pod_condition_payload["status"] = "Unknown"
-        cond = PodCondition.from_primitive(pod_condition_payload)
+        pod_condition_model.status = "Unknown"
+        cond = PodCondition.from_model(pod_condition_model)
         assert cond.status is None
 
     def test_status_true(
         self,
-        pod_condition_payload: dict[str, str],
+        pod_condition_model: V1PodCondition,
     ) -> None:
-        pod_condition_payload["status"] = "True"
-        cond = PodCondition.from_primitive(pod_condition_payload)
+        pod_condition_model.status = "True"
+        cond = PodCondition.from_model(pod_condition_model)
         assert cond.status is True
 
     def test_status_false(
         self,
-        pod_condition_payload: dict[str, str],
+        pod_condition_model: V1PodCondition,
     ) -> None:
-        pod_condition_payload["status"] = "False"
-        cond = PodCondition.from_primitive(pod_condition_payload)
+        pod_condition_model.status = "False"
+        cond = PodCondition.from_model(pod_condition_model)
         assert cond.status is False
 
     def test_status_invalid(
         self,
-        pod_condition_payload: dict[str, str],
+        pod_condition_model: V1PodCondition,
     ) -> None:
-        pod_condition_payload["status"] = "123"
+        pod_condition_model.status = "123"
         with pytest.raises(ValueError):
-            PodCondition.from_primitive(pod_condition_payload)
+            PodCondition.from_model(pod_condition_model)
 
 
 class TestKubernetesEvent:
