@@ -2,13 +2,12 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack
-from dataclasses import asdict
 
 import aiohttp.web
 import neuro_config_client
 from aiohttp.web_urldispatcher import AbstractRoute
 from apolo_events_client import from_config as create_events_client_from_config
-from apolo_kube_client import KubeClientSelector, KubeConfig as ApoloKubeConfig
+from apolo_kube_client import KubeClientSelector
 from neuro_admin_client import AdminClient
 from neuro_auth_client import AuthClient
 from neuro_auth_client.security import AuthScheme, setup_security
@@ -64,9 +63,7 @@ async def create_app(
         async with AsyncExitStack() as exit_stack:
             logger.info("Initializing KubeClient")
             kube_config = config.kube_config
-            kube_client_selector = KubeClientSelector(
-                config=ApoloKubeConfig(**asdict(kube_config))
-            )
+            kube_client_selector = KubeClientSelector(config=kube_config)
 
             logger.info("Initializing AuthClient")
             auth_client = await exit_stack.enter_async_context(

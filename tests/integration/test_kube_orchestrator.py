@@ -11,7 +11,7 @@ import uuid
 from asyncio import timeout
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
-from dataclasses import asdict, replace
+from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import Decimal
 from operator import attrgetter
@@ -28,7 +28,6 @@ from apolo_kube_client import (
     KubeClientException,
     KubeClientProxy,
     KubeClientSelector,
-    KubeConfig as ApoloKubeConfig,
     PatchAdd,
     PatchRemove,
     ResourceNotFound,
@@ -3409,7 +3408,7 @@ class TestPreemption:
         self,
         kube_config: KubeConfig,
     ) -> AsyncIterator[KubeClientSelector]:
-        client = KubeClientSelector(config=ApoloKubeConfig(**asdict(kube_config)))
+        client = KubeClientSelector(config=kube_config)
         async with client as cl:
             yield cl
 
@@ -4489,7 +4488,7 @@ class TestExternalJobsPreemption:
         self,
         kube_config: KubeConfig,
     ) -> AsyncIterator[KubeClientSelector]:
-        client = KubeClientSelector(config=ApoloKubeConfig(**asdict(kube_config)))
+        client = KubeClientSelector(config=kube_config)
         async with client as cl:
             yield cl
 

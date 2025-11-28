@@ -17,7 +17,7 @@ import neuro_config_client
 import pytest
 from apolo_events_client import EventsClientConfig
 from apolo_kube_client import (
-    KubeClientAuthType as ApoloKubeClientAuthType,
+    KubeClientAuthType,
     KubeClientSelector,
     KubeConfig as ApoloKubeConfig,
     ResourceExists,
@@ -73,7 +73,7 @@ from platform_api.orchestrator.kube_client import (
     Resources,
     create_pod,
 )
-from platform_api.orchestrator.kube_config import KubeClientAuthType, KubeConfig
+from platform_api.orchestrator.kube_config import KubeConfig
 from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
 
 
@@ -445,7 +445,7 @@ async def kube_client_selector(
         endpoint_url=cluster["server"],
         cert_authority_data_pem=cert_authority_data_pem,
         cert_authority_path=None,
-        auth_type=ApoloKubeClientAuthType.CERTIFICATE,
+        auth_type=KubeClientAuthType.CERTIFICATE,
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
     )
