@@ -1239,7 +1239,7 @@ class ContainerStatus:
     def is_running(self) -> bool:
         if self._model is None:
             return False
-        return "running" in self._model.state.__pydantic_fields_set__
+        return self._model.state.running is not None
 
     @property
     def is_terminated(self) -> bool:
