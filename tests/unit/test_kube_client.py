@@ -4,11 +4,13 @@ from datetime import UTC, datetime
 
 import pytest
 from apolo_kube_client import (
+    CoreV1Event,
     V1ContainerState,
     V1ContainerStateRunning,
     V1ContainerStateTerminated,
     V1ContainerStateWaiting,
     V1ContainerStatus,
+    V1EventSource,
     V1LabelSelector,
     V1LabelSelectorRequirement,
     V1Node,
@@ -19,6 +21,7 @@ from apolo_kube_client import (
     V1NodeSelectorTerm,
     V1NodeStatus,
     V1ObjectMeta,
+    V1ObjectReference,
     V1PodAffinity,
     V1PodAffinityTerm,
     V1PodCondition,
@@ -583,38 +586,36 @@ class TestPodCondition:
 
 class TestKubernetesEvent:
     def test_first_timestamp(self) -> None:
-        data = {
-            "apiVersion": "v1",
-            "count": 12,
-            "eventTime": None,
-            "firstTimestamp": "2019-06-20T11:03:32Z",
-            "involvedObject": {
-                "apiVersion": "v1",
-                "kind": "Pod",
-                "name": "job-cd109c3b-c36e-47d4-b3d6-8bb05a5e63ab",
-                "namespace": "namespace",
-                "resourceVersion": "48102193",
-                "uid": "eddfe678-86e9-11e9-9d65-42010a800018",
-            },
-            "kind": "Event",
-            "lastTimestamp": "2019-06-20T11:03:33Z",
-            "message": "TriggeredScaleUp",
-            "metadata": {
-                "creationTimestamp": "2019-06-20T11:03:32Z",
-                "name": "job-cd109c3b-c36e-47d4-b3d6-8bb05a5e63ab.15a870d7e2bb228b",
-                "namespace": "namespace",
-                "selfLink": (
+        data = CoreV1Event(
+            count=12,
+            event_time=None,
+            first_timestamp=datetime.fromisoformat("2019-06-20T11:03:32Z"),
+            involved_object=V1ObjectReference(
+                api_version="v1",
+                kind="Pod",
+                name="job-cd109c3b-c36e-47d4-b3d6-8bb05a5e63ab",
+                namespace="namespace",
+                resource_version="48102193",
+                uid="eddfe678-86e9-11e9-9d65-42010a800018",
+            ),
+            last_timestamp=datetime.fromisoformat("2019-06-20T11:03:33Z"),
+            message="TriggeredScaleUp",
+            metadata=V1ObjectMeta(
+                creation_timestamp=datetime.fromisoformat("2019-06-20T11:03:32Z"),
+                name="job-cd109c3b-c36e-47d4-b3d6-8bb05a5e63ab.15a870d7e2bb228b",
+                namespace="namespace",
+                self_link=(
                     "/api/v1/namespaces/namespace/events/{pod_id}.15a870d7e2bb228b"
                 ),
-                "uid": "cb886f64-8f96-11e9-9251-42010a800038",
-            },
-            "reason": "TriggeredScaleUp",
-            "reportingComponent": "",
-            "reportingInstance": "",
-            "source": {"component": "cluster-autoscaler"},
-            "type": "Normal",
-        }
-        event = KubernetesEvent.from_primitive(data)
+                uid="cb886f64-8f96-11e9-9251-42010a800038",
+            ),
+            reason="TriggeredScaleUp",
+            reporting_component="",
+            reporting_instance="",
+            source=V1EventSource(component="cluster-autoscaler"),
+            type="Normal",
+        )
+        event = KubernetesEvent.from_model(data)
         assert event.first_timestamp == datetime(2019, 6, 20, 11, 3, 32, tzinfo=UTC)
         assert event.last_timestamp == datetime(2019, 6, 20, 11, 3, 33, tzinfo=UTC)
         assert event.count == 12

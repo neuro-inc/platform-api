@@ -1424,39 +1424,6 @@ class KubernetesEvent:
         self.last_timestamp = last_timestamp
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> Self:
-        first_timestamp = last_timestamp = event_time = None
-
-        raw_first_timestamp = payload.get("firstTimestamp") or payload.get(
-            "deprecatedFirstTimestamp"
-        )
-        if raw_first_timestamp:
-            first_timestamp = iso8601.parse_date(raw_first_timestamp)
-
-        raw_last_timestamp = payload.get("lastTimestamp") or payload.get(
-            "deprecatedLastTimestamp"
-        )
-        if raw_last_timestamp:
-            last_timestamp = iso8601.parse_date(raw_last_timestamp)
-
-        raw_event_time = payload.get("eventTime")
-        if raw_event_time:
-            event_time = iso8601.parse_date(raw_event_time)
-
-        return cls(
-            involved_object=payload["involvedObject"],
-            count=payload["count"],
-            reason=payload.get("reason", None),
-            message=payload.get("message", None),
-            creation_timestamp=iso8601.parse_date(
-                payload["metadata"]["creationTimestamp"]
-            ),
-            first_timestamp=first_timestamp,
-            event_time=event_time,
-            last_timestamp=last_timestamp,
-        )
-
-    @classmethod
     def from_model(cls, event: CoreV1Event) -> Self:
         return cls(
             involved_object=event.involved_object.model_dump(),
