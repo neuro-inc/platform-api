@@ -1233,26 +1233,24 @@ class ContainerStateRunning:
 
 
 class ContainerStatus:
-    def __init__(self, payload: dict[str, Any] | None = None) -> None:
-        self._payload = payload or {}
-
-    @property
-    def _state(self) -> dict[str, Any]:
-        return self._payload.get("state", {})
+    def __init__(self, model: V1ContainerStatus | None) -> None:
+        self._model = model
 
     @property
     def is_waiting(self) -> bool:
-        return not self._state or (
-            "waiting" in self._state and self._state["waiting"] is not None
-        )
+        return not self.is_running and not self.is_terminated
+
+    @property
+    def is_running(self) -> bool:
+        if self._model is None:
+            return False
+        return "running" in self._model.state.__pydantic_fields_set__
 
     @property
     def is_terminated(self) -> bool:
-        return (
-            bool(self._state)
-            and "terminated" in self._state
-            and self._state["terminated"] is not None
-        )
+        if self._model is None:
+            return False
+        return self._model.state.terminated is not None
 
     @property
     def reason(self) -> str | None:
@@ -1275,28 +1273,40 @@ class ContainerStatus:
         see
         https://github.com/kubernetes/kubernetes/blob/c65f65cf6aea0f73115a2858a9d63fc2c21e5e3b/pkg/kubelet/dockershim/docker_container.go#L306-L409
         """
-        for state in self._state.values():
-            if not state:
-                continue
-            return state.get("reason")
+        if self.is_terminated:
+            assert self._model is not None
+            assert self._model.state.terminated is not None
+            return self._model.state.terminated.reason
+        if self.is_running:
+            return None
+        # waiting
+        if self._model is None:
+            return None
+        if self._model.state.waiting is not None:
+            return self._model.state.waiting.reason
         return None
 
     @property
     def message(self) -> str | None:
-        for state in self._state.values():
-            if not state:
-                continue
-            return state.get("message")
+        if self.is_terminated:
+            assert self._model is not None
+            assert self._model.state.terminated is not None
+            return self._model.state.terminated.message
+        if self.is_running:
+            return None
+        # waiting
+        if self._model is None:
+            return None
+        if self._model.state.waiting is not None:
+            return self._model.state.waiting.message
         return None
 
     @property
     def exit_code(self) -> int | None:
         assert self.is_terminated
-        termination_state = self._state["terminated"]
-        for key in ("exitCode", "exit_code"):
-            if key in termination_state:
-                return termination_state[key]
-        return None
+        assert self._model is not None
+        assert self._model.state.terminated is not None
+        return self._model.state.terminated.exit_code
 
     @property
     def is_creating(self) -> bool:
@@ -1306,12 +1316,8 @@ class ContainerStatus:
         return self.is_waiting and self.reason in (None, "ContainerCreating")
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> Self:
-        return cls(payload)
-
-    @classmethod
     def from_model(cls, model: V1ContainerStatus) -> Self:
-        return cls(model.model_dump())
+        return cls(model)
 
 
 class PodConditionType(enum.Enum):
@@ -1552,30 +1558,13 @@ class PodStatus:
         return list(self._conditions)
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "PodStatus":
-        if "containerStatuses" in payload and payload["containerStatuses"]:
-            container_statuses = tuple(
-                ContainerStatus.from_primitive(s) for s in payload["containerStatuses"]
-            )
-        else:
-            container_statuses = (ContainerStatus(),)
-        return cls(
-            phase=payload["phase"],
-            container_statuses=container_statuses,
-            reason=payload.get("reason"),
-            conditions=[
-                PodCondition.from_primitive(c) for c in payload.get("conditions", [])
-            ],
-        )
-
-    @classmethod
     def from_model(cls, model: V1PodStatus) -> Self:
         if model.container_statuses:
             container_statuses = tuple(
-                ContainerStatus.from_model(s) for s in model.container_statuses or []
+                ContainerStatus.from_model(s) for s in model.container_statuses
             )
         else:
-            container_statuses = (ContainerStatus(),)
+            container_statuses = (ContainerStatus(None),)
         return cls(
             phase=model.phase or "",
             container_statuses=container_statuses,

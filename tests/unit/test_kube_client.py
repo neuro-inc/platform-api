@@ -1,10 +1,14 @@
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any
 
 import pytest
 from apolo_kube_client import (
+    V1ContainerState,
+    V1ContainerStateRunning,
+    V1ContainerStateTerminated,
+    V1ContainerStateWaiting,
+    V1ContainerStatus,
     V1LabelSelector,
     V1LabelSelectorRequirement,
     V1Node,
@@ -17,6 +21,8 @@ from apolo_kube_client import (
     V1ObjectMeta,
     V1PodAffinity,
     V1PodAffinityTerm,
+    V1PodCondition,
+    V1PodStatus,
     V1PreferredSchedulingTerm,
     V1WeightedPodAffinityTerm,
 )
@@ -257,61 +263,72 @@ class TestPodAffinity:
 
 
 class TestPodStatus:
-    def test_from_primitive(self) -> None:
-        payload = {"phase": "Running", "containerStatuses": [{"ready": True}]}
-        status = PodStatus.from_primitive(payload)
+    def test_from_model(self) -> None:
+        model = V1PodStatus(
+            phase="Running",
+            container_statuses=[
+                V1ContainerStatus(
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    restart_count=0,
+                    ready=True,
+                )
+            ],
+        )
+        status = PodStatus.from_model(model)
         assert status.phase == "Running"
         assert len(status.conditions) == 0
 
-    def test_from_primitive_with_conditions(self) -> None:
-        payload = {
-            "conditions": [
-                {
-                    "lastProbeTime": None,
-                    "lastTransitionTime": "2019-06-20T11:03:32Z",
-                    "reason": "PodCompleted",
-                    "status": "True",
-                    "type": "Initialized",
-                },
-                {
-                    "lastProbeTime": None,
-                    "lastTransitionTime": "2019-06-20T11:13:37Z",
-                    "reason": "PodCompleted",
-                    "status": "False",
-                    "type": "Ready",
-                },
-                {
-                    "lastProbeTime": None,
-                    "lastTransitionTime": "2019-06-20T11:03:32Z",
-                    "status": "True",
-                    "type": "PodScheduled",
-                },
+    def test_from_model_with_conditions(self) -> None:
+        model = V1PodStatus(
+            conditions=[
+                V1PodCondition(
+                    last_probe_time=None,
+                    last_transition_time=datetime.fromisoformat("2019-06-20T11:03:32Z"),
+                    reason="PodCompleted",
+                    status="True",
+                    type="Initialized",
+                ),
+                V1PodCondition(
+                    last_probe_time=None,
+                    last_transition_time=datetime.fromisoformat("2019-06-20T11:13:37Z"),
+                    reason="PodCompleted",
+                    status="False",
+                    type="Ready",
+                ),
+                V1PodCondition(
+                    last_probe_time=None,
+                    last_transition_time=datetime.fromisoformat("2019-06-20T11:03:32Z"),
+                    status="True",
+                    type="PodScheduled",
+                ),
             ],
-            "containerStatuses": [
-                {
-                    "containerID": "docker://cf4061683a6d7",
-                    "image": "ubuntu:latest",
-                    "imageID": "docker-pullable://ubuntu@sha256:eb70667a8016",
-                    "lastState": {},
-                    "name": "job-fce70f73-4a6e-45f6-ba20-b338ea9a5609",
-                    "ready": False,
-                    "restartCount": 0,
-                    "state": {
-                        "terminated": {
-                            "containerID": "docker://cf4061683a6d7",
-                            "exitCode": 0,
-                            "finishedAt": "2019-06-20T11:13:36Z",
-                            "reason": "Completed",
-                            "startedAt": "2019-06-20T11:03:36Z",
-                        }
-                    },
-                }
+            container_statuses=[
+                V1ContainerStatus(
+                    container_id="docker://cf4061683a6d7",
+                    image="ubuntu:latest",
+                    image_id="docker-pullable://ubuntu@sha256:eb70667a8016",
+                    last_state=V1ContainerState(),
+                    name="job-fce70f73-4a6e-45f6-ba20-b338ea9a5609",
+                    ready=False,
+                    restart_count=0,
+                    state=V1ContainerState(
+                        terminated=V1ContainerStateTerminated(
+                            container_id="docker://cf4061683a6d7",
+                            exit_code=0,
+                            finished_at=datetime.fromisoformat("2019-06-20T11:13:36Z"),
+                            reason="Completed",
+                            started_at=datetime.fromisoformat("2019-06-20T11:03:36Z"),
+                        )
+                    ),
+                )
             ],
-            "phase": "Succeeded",
-            "startTime": "2019-06-20T11:03:32Z",
-        }
+            phase="Succeeded",
+            start_time=datetime.fromisoformat("2019-06-20T11:03:32Z"),
+        )
 
-        status = PodStatus.from_primitive(payload)
+        status = PodStatus.from_model(model)
         assert len(status.conditions) == 3
         cond = status.conditions[1]
         assert cond.transition_time == datetime(2019, 6, 20, 11, 13, 37, tzinfo=UTC)
@@ -321,122 +338,192 @@ class TestPodStatus:
         assert cond.type == PodConditionType.READY
 
     def test_is_sceduled_true_1(self) -> None:
-        payload = {
-            "conditions": [
-                {
-                    "lastProbeTime": None,
-                    "lastTransitionTime": "2019-06-20T11:13:37Z",
-                    "reason": "PodCompleted",
-                    "status": "False",
-                    "type": "Ready",
-                },
-                {
-                    "lastProbeTime": None,
-                    "lastTransitionTime": "2019-06-20T11:03:32Z",
-                    "status": "True",
-                    "type": "PodScheduled",
-                },
+        model = V1PodStatus(
+            conditions=[
+                V1PodCondition(
+                    last_probe_time=None,
+                    last_transition_time=datetime.fromisoformat("2019-06-20T11:13:37Z"),
+                    reason="PodCompleted",
+                    status="False",
+                    type="Ready",
+                ),
+                V1PodCondition(
+                    last_probe_time=None,
+                    last_transition_time=datetime.fromisoformat("2019-06-20T11:03:32Z"),
+                    status="True",
+                    type="PodScheduled",
+                ),
             ],
-            "phase": "Running",
-            "startTime": "2019-06-20T11:03:32Z",
-        }
+            phase="Running",
+            start_time=datetime.fromisoformat("2019-06-20T11:03:32Z"),
+        )
 
-        status = PodStatus.from_primitive(payload)
+        status = PodStatus.from_model(model)
         assert status.is_scheduled
 
     def test_is_sceduled_true_2(self) -> None:
-        payload = {
-            "conditions": [
-                {
-                    "lastProbeTime": None,
-                    "lastTransitionTime": "2019-06-20T11:13:37Z",
-                    "reason": "PodCompleted",
-                    "status": "False",
-                    "type": "Ready",
-                },
-                {
-                    "lastProbeTime": None,
-                    "lastTransitionTime": "2019-06-20T11:03:32Z",
-                    "status": "True",
-                    "type": "PodScheduled",
-                },
+        model = V1PodStatus(
+            conditions=[
+                V1PodCondition(
+                    last_probe_time=None,
+                    last_transition_time=datetime.fromisoformat("2019-06-20T11:13:37Z"),
+                    reason="PodCompleted",
+                    status="False",
+                    type="Ready",
+                ),
+                V1PodCondition(
+                    last_probe_time=None,
+                    last_transition_time=datetime.fromisoformat("2019-06-20T11:03:32Z"),
+                    status="True",
+                    type="PodScheduled",
+                ),
             ],
-            "phase": "Pending",
-            "startTime": "2019-06-20T11:03:32Z",
-        }
+            phase="Pending",
+            start_time=datetime.fromisoformat("2019-06-20T11:03:32Z"),
+        )
 
-        status = PodStatus.from_primitive(payload)
+        status = PodStatus.from_model(model)
         assert status.is_scheduled
 
     def test_is_sceduled_false_1(self) -> None:
-        payload = {"phase": "Pending", "startTime": "2019-06-20T11:03:32Z"}
+        model = V1PodStatus(
+            phase="Pending", start_time=datetime.fromisoformat("2019-06-20T11:03:32Z")
+        )
 
-        status = PodStatus.from_primitive(payload)
+        status = PodStatus.from_model(model)
         assert not status.is_scheduled
 
     def test_is_sceduled_false_2(self) -> None:
-        payload = {
-            "conditions": [
-                {
-                    "lastProbeTime": None,
-                    "lastTransitionTime": "2019-06-20T11:03:32Z",
-                    "status": "False",
-                    "type": "PodScheduled",
-                }
+        model = V1PodStatus(
+            conditions=[
+                V1PodCondition(
+                    last_probe_time=None,
+                    last_transition_time=datetime.fromisoformat("2019-06-20T11:03:32Z"),
+                    status="False",
+                    type="PodScheduled",
+                )
             ],
-            "phase": "Pending",
-            "startTime": "2019-06-20T11:03:32Z",
-        }
+            phase="Pending",
+            start_time=datetime.fromisoformat("2019-06-20T11:03:32Z"),
+        )
 
-        status = PodStatus.from_primitive(payload)
+        status = PodStatus.from_model(model)
         assert not status.is_scheduled
 
     def test_is_waiting_true(self) -> None:
-        payload: dict[str, Any] = {
-            "phase": "Pending",
-            "containerStatuses": [
-                {"state": {"waiting": {}}},
-                {"state": {"running": {}}},
+        model = V1PodStatus(
+            phase="Pending",
+            container_statuses=[
+                V1ContainerStatus(
+                    state=V1ContainerState(waiting=V1ContainerStateWaiting()),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    restart_count=0,
+                    ready=True,
+                ),
+                V1ContainerStatus(
+                    state=V1ContainerState(running=V1ContainerStateRunning()),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    restart_count=0,
+                    ready=True,
+                ),
             ],
-        }
+        )
 
-        status = PodStatus.from_primitive(payload)
+        status = PodStatus.from_model(model)
         assert status.is_waiting
 
     def test_is_waiting_false(self) -> None:
-        payload: dict[str, Any] = {
-            "phase": "Pending",
-            "containerStatuses": [
-                {"state": {"running": {}}},
-                {"state": {"running": {}}},
+        model = V1PodStatus(
+            phase="Pending",
+            container_statuses=[
+                V1ContainerStatus(
+                    state=V1ContainerState(running=V1ContainerStateRunning()),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    restart_count=0,
+                    ready=True,
+                ),
+                V1ContainerStatus(
+                    state=V1ContainerState(running=V1ContainerStateRunning()),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    restart_count=0,
+                    ready=True,
+                ),
             ],
-        }
+        )
 
-        status = PodStatus.from_primitive(payload)
+        status = PodStatus.from_model(model)
         assert status.is_waiting is False
 
     def test_is_terminated_true(self) -> None:
-        payload: dict[str, Any] = {
-            "phase": "Pending",
-            "containerStatuses": [
-                {"state": {"terminated": {}}},
-                {"state": {"terminated": {}}},
+        model = V1PodStatus(
+            phase="Pending",
+            container_statuses=[
+                V1ContainerStatus(
+                    state=V1ContainerState(
+                        terminated=V1ContainerStateTerminated(
+                            exit_code=1,
+                        )
+                    ),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    restart_count=0,
+                    ready=True,
+                ),
+                V1ContainerStatus(
+                    state=V1ContainerState(
+                        terminated=V1ContainerStateTerminated(
+                            exit_code=2,
+                        )
+                    ),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    restart_count=0,
+                    ready=True,
+                ),
             ],
-        }
+        )
 
-        status = PodStatus.from_primitive(payload)
+        status = PodStatus.from_model(model)
         assert status.is_terminated
 
     def test_is_terminated_false(self) -> None:
-        payload: dict[str, Any] = {
-            "phase": "Pending",
-            "containerStatuses": [
-                {"state": {"running": {}}},
-                {"state": {"terminated": {}}},
+        model = V1PodStatus(
+            phase="Pending",
+            container_statuses=[
+                V1ContainerStatus(
+                    state=V1ContainerState(running=V1ContainerStateRunning()),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    restart_count=0,
+                    ready=True,
+                ),
+                V1ContainerStatus(
+                    state=V1ContainerState(
+                        terminated=V1ContainerStateTerminated(
+                            exit_code=1,
+                        )
+                    ),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    restart_count=0,
+                    ready=True,
+                ),
             ],
-        }
+        )
 
-        status = PodStatus.from_primitive(payload)
+        status = PodStatus.from_model(model)
         assert status.is_terminated is False
 
 

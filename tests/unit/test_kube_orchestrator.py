@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import PurePath
-from typing import Any
 
 import pytest
 from apolo_kube_client import (
     V1Affinity,
     V1Container,
     V1ContainerPort,
+    V1ContainerState,
+    V1ContainerStateRunning,
+    V1ContainerStateTerminated,
+    V1ContainerStateWaiting,
+    V1ContainerStatus,
     V1EmptyDirVolumeSource,
     V1EnvVar,
     V1EnvVarSource,
@@ -710,95 +714,147 @@ class TestJobStatusItemFactory:
             ("Succeeded", [], JobStatus.SUCCEEDED),
             ("Failed", [], JobStatus.FAILED),
             ("Unknown", [], JobStatus.FAILED),
-            ("Running", [{"state": {"running": {}}}], JobStatus.RUNNING),
+            (
+                "Running",
+                [
+                    V1ContainerStatus(
+                        state=V1ContainerState(running=V1ContainerStateRunning()),
+                        image="image",
+                        image_id="image-id",
+                        name="name",
+                        ready=False,
+                        restart_count=0,
+                    )
+                ],
+                JobStatus.RUNNING,
+            ),
             ("NewPhase", [], JobStatus.PENDING),
         ),
     )
     def test_status(
         self,
         phase: str,
-        container_statuses: list[dict[str, Any]],
+        container_statuses: list[V1ContainerStatus],
         expected_status: JobStatus,
     ) -> None:
-        payload: dict[str, Any] = {"phase": phase}
+        model = V1PodStatus(phase=phase)
         if container_statuses:
-            payload["containerStatuses"] = container_statuses
-        pod_status = PodStatus.from_primitive(payload)
+            model.container_statuses = container_statuses
+        pod_status = PodStatus.from_model(model)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(expected_status)
 
     def test_status_pending(self) -> None:
-        payload = {"phase": "Pending"}
-        pod_status = PodStatus.from_primitive(payload)
+        model = V1PodStatus(phase="Pending")
+        pod_status = PodStatus.from_model(model)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(JobStatus.PENDING)
 
     def test_status_pending_creating(self) -> None:
-        payload = {
-            "phase": "Pending",
-            "containerStatuses": [
-                {"state": {"waiting": {"reason": "ContainerCreating"}}}
+        model = V1PodStatus(
+            phase="Pending",
+            container_statuses=[
+                V1ContainerStatus(
+                    state=V1ContainerState(
+                        waiting=V1ContainerStateWaiting(reason="ContainerCreating")
+                    ),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    ready=False,
+                    restart_count=0,
+                )
             ],
-        }
-        pod_status = PodStatus.from_primitive(payload)
+        )
+        pod_status = PodStatus.from_model(model)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
             JobStatus.PENDING, reason=JobStatusReason.CONTAINER_CREATING
         )
 
     def test_status_pending_running_no_reason(self) -> None:
-        payload = {
-            "phase": "Pending",
-            "containerStatuses": [{"state": {"waiting": {}}}],
-        }
-        pod_status = PodStatus.from_primitive(payload)
+        model = V1PodStatus(
+            phase="Pending",
+            container_statuses=[
+                V1ContainerStatus(
+                    state=V1ContainerState(waiting=V1ContainerStateWaiting()),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    ready=False,
+                    restart_count=0,
+                )
+            ],
+        )
+        pod_status = PodStatus.from_model(model)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(JobStatus.PENDING)
 
     def test_status_pending_failure(self) -> None:
-        payload = {
-            "phase": "Pending",
-            "containerStatuses": [
-                {"state": {"waiting": {"reason": "SomeWeirdReason"}}}
+        model = V1PodStatus(
+            phase="Pending",
+            container_statuses=[
+                V1ContainerStatus(
+                    state=V1ContainerState(
+                        waiting=V1ContainerStateWaiting(reason="SomeWeirdReason"),
+                    ),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    ready=False,
+                    restart_count=0,
+                )
             ],
-        }
-
-        pod_status = PodStatus.from_primitive(payload)
+        )
+        pod_status = PodStatus.from_model(model)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
             JobStatus.PENDING, reason="SomeWeirdReason"
         )
 
     def test_status_running_restarting(self) -> None:
-        payload = {
-            "phase": "Running",
-            "containerStatuses": [
-                {"state": {"waiting": {"reason": "SomeWeirdReason"}}}
+        model = V1PodStatus(
+            phase="Running",
+            container_statuses=[
+                V1ContainerStatus(
+                    state=V1ContainerState(
+                        waiting=V1ContainerStateWaiting(reason="SomeWeirdReason"),
+                    ),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    ready=False,
+                    restart_count=0,
+                )
             ],
-        }
-
-        pod_status = PodStatus.from_primitive(payload)
+        )
+        pod_status = PodStatus.from_model(model)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
             JobStatus.RUNNING, reason="Restarting"
         )
 
     def test_status_failure(self) -> None:
-        payload = {
-            "phase": "Failed",
-            "containerStatuses": [
-                {
-                    "state": {
-                        "terminated": {
-                            "reason": "Error",
-                            "message": "Failed!",
-                            "exitCode": 123,
-                        }
-                    }
-                }
+        model = V1PodStatus(
+            phase="Failed",
+            container_statuses=[
+                V1ContainerStatus(
+                    state=V1ContainerState(
+                        terminated=V1ContainerStateTerminated(
+                            reason="Error",
+                            message="Failed!",
+                            exit_code=123,
+                        ),
+                    ),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    ready=False,
+                    restart_count=0,
+                )
             ],
-        }
-        pod_status = PodStatus.from_primitive(payload)
+        )
+        pod_status = PodStatus.from_model(model)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
             JobStatus.FAILED,
@@ -808,14 +864,25 @@ class TestJobStatusItemFactory:
         )
 
     def test_status_failure_no_message(self) -> None:
-        payload = {
-            "phase": "Failed",
-            "containerStatuses": [
-                {"state": {"terminated": {"reason": "Error", "exitCode": 1}}}
+        model = V1PodStatus(
+            phase="Failed",
+            container_statuses=[
+                V1ContainerStatus(
+                    state=V1ContainerState(
+                        terminated=V1ContainerStateTerminated(
+                            reason="Error",
+                            exit_code=1,
+                        ),
+                    ),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    ready=False,
+                    restart_count=0,
+                )
             ],
-        }
-
-        pod_status = PodStatus.from_primitive(payload)
+        )
+        pod_status = PodStatus.from_model(model)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(
             JobStatus.FAILED,
@@ -825,21 +892,26 @@ class TestJobStatusItemFactory:
         )
 
     def test_status_success(self) -> None:
-        payload = {
-            "phase": "Succeeded",
-            "containerStatuses": [
-                {
-                    "state": {
-                        "terminated": {
-                            "reason": "Succeeded",
-                            "message": "Everything is ok!",
-                            "exitCode": 0,
-                        }
-                    }
-                }
+        model = V1PodStatus(
+            phase="Succeeded",
+            container_statuses=[
+                V1ContainerStatus(
+                    state=V1ContainerState(
+                        terminated=V1ContainerStateTerminated(
+                            reason="Succeeded",
+                            message="Everything is ok!",
+                            exit_code=0,
+                        ),
+                    ),
+                    image="image",
+                    image_id="image-id",
+                    name="name",
+                    ready=False,
+                    restart_count=0,
+                )
             ],
-        }
-        pod_status = PodStatus.from_primitive(payload)
+        )
+        pod_status = PodStatus.from_model(model)
         job_status_item = JobStatusItemFactory(pod_status).create()
         assert job_status_item == JobStatusItem.create(JobStatus.SUCCEEDED, exit_code=0)
 
@@ -1385,24 +1457,61 @@ class TestService:
 
 class TestContainerStatus:
     def test_no_state(self) -> None:
-        payload: dict[str, Any] = {"state": {}}
-        status = ContainerStatus(payload)
+        status = ContainerStatus(
+            V1ContainerStatus(
+                state=V1ContainerState(),
+                image="image",
+                image_id="image-id",
+                name="name",
+                ready=False,
+                restart_count=0,
+            )
+        )
         assert status.is_waiting
         assert status.reason is None
         assert status.message is None
 
     @pytest.mark.parametrize(
-        "payload",
+        "model",
         (
             None,
-            {},
-            {"state": {}},
-            {"state": {"waiting": {}}},
-            {"state": {"waiting": {"reason": "ContainerCreating"}}},
+            V1ContainerStatus(
+                image="image",
+                image_id="image-id",
+                name="name",
+                ready=False,
+                restart_count=0,
+            ),
+            V1ContainerStatus(
+                state=V1ContainerState(),
+                image="image",
+                image_id="image-id",
+                name="name",
+                ready=False,
+                restart_count=0,
+            ),
+            V1ContainerStatus(
+                state=V1ContainerState(waiting=V1ContainerStateWaiting()),
+                image="image",
+                image_id="image-id",
+                name="name",
+                ready=False,
+                restart_count=0,
+            ),
+            V1ContainerStatus(
+                state=V1ContainerState(
+                    waiting=V1ContainerStateWaiting(reason="ContainerCreating")
+                ),
+                image="image",
+                image_id="image-id",
+                name="name",
+                ready=False,
+                restart_count=0,
+            ),
         ),
     )
-    def test_is_waiting_creating(self, payload: Any) -> None:
-        status = ContainerStatus(payload)
+    def test_is_waiting_creating(self, model: V1ContainerStatus | None) -> None:
+        status = ContainerStatus(model)
         assert status.is_waiting
         assert status.is_creating
         assert not status.is_terminated
@@ -1411,10 +1520,22 @@ class TestContainerStatus:
             _ = status.exit_code
 
     @pytest.mark.parametrize(
-        "payload", ({"state": {"waiting": {"reason": "NOT CREATING"}}},)
+        "model",
+        (
+            V1ContainerStatus(
+                state=V1ContainerState(
+                    waiting=V1ContainerStateWaiting(reason="NOT CREATING")
+                ),
+                image="image",
+                image_id="image-id",
+                name="name",
+                ready=False,
+                restart_count=0,
+            ),
+        ),
     )
-    def test_is_waiting_not_creating(self, payload: Any) -> None:
-        status = ContainerStatus(payload)
+    def test_is_waiting_not_creating(self, model: V1ContainerStatus | None) -> None:
+        status = ContainerStatus(model)
         assert status.is_waiting
         assert not status.is_creating
         assert not status.is_terminated
@@ -1422,20 +1543,47 @@ class TestContainerStatus:
         assert status.message is None
 
     @pytest.mark.parametrize(
-        "payload", ({"state": {"running": {}}}, {"state": {"terminated": {}}})
+        "model",
+        (
+            V1ContainerStatus(
+                state=V1ContainerState(running=V1ContainerStateRunning()),
+                image="image",
+                image_id="image-id",
+                name="name",
+                ready=False,
+                restart_count=0,
+            ),
+            V1ContainerStatus(
+                state=V1ContainerState(
+                    terminated=V1ContainerStateTerminated(exit_code=1)
+                ),
+                image="image",
+                image_id="image-id",
+                name="name",
+                ready=False,
+                restart_count=0,
+            ),
+        ),
     )
-    def test_is_not_waiting(self, payload: Any) -> None:
-        status = ContainerStatus(payload)
+    def test_is_not_waiting(self, model: V1ContainerStatus | None) -> None:
+        status = ContainerStatus(model)
         assert not status.is_waiting
         assert not status.is_creating
 
     def test_is_terminated(self) -> None:
-        payload = {
-            "state": {
-                "terminated": {"reason": "Error", "message": "Failed!", "exitCode": 123}
-            }
-        }
-        status = ContainerStatus(payload)
+        model = V1ContainerStatus(
+            state=V1ContainerState(
+                terminated=V1ContainerStateTerminated(
+                    reason="Error", message="Failed!", exit_code=123
+                )
+            ),
+            image="image",
+            image_id="image-id",
+            name="name",
+            ready=False,
+            restart_count=0,
+        )
+        status = ContainerStatus(model)
         assert status.is_terminated
         assert status.reason == "Error"
         assert status.message == "Failed!"
