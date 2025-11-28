@@ -2,7 +2,6 @@ import asyncio
 import base64
 import json
 import uuid
-from asyncio import timeout
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -18,9 +17,15 @@ import neuro_config_client
 import pytest
 from apolo_events_client import EventsClientConfig
 from apolo_kube_client import (
-    KubeClientAuthType as ApoloKubeClientAuthType,
+    KubeClientAuthType,
     KubeClientSelector,
     KubeConfig as ApoloKubeConfig,
+    ResourceExists,
+    V1Node,
+    V1NodeCondition,
+    V1NodeSpec,
+    V1NodeStatus,
+    V1ObjectMeta,
 )
 from neuro_config_client import (
     AMDGPU,
@@ -62,14 +67,13 @@ from platform_api.config import (
     RegistryConfig,
     ServerConfig,
 )
-from platform_api.old_kube_client.errors import ResourceExists
 from platform_api.orchestrator.kube_client import (
-    KubeClient,
     NodeTaint,
     PodDescriptor,
     Resources,
+    create_pod,
 )
-from platform_api.orchestrator.kube_config import KubeClientAuthType, KubeConfig
+from platform_api.orchestrator.kube_config import KubeConfig
 from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
 
 
@@ -367,7 +371,8 @@ async def kube_config(kube_config_factory: Callable[..., KubeConfig]) -> KubeCon
 
 @pytest.fixture
 def kube_job_nodes_factory(
-    kube_client: KubeClient, delete_node_later: Callable[[str], Awaitable[None]]
+    kube_client_selector: KubeClientSelector,
+    delete_node_later: Callable[[str], Awaitable[None]],
 ) -> Callable[[OrchestratorConfig, KubeConfig], Awaitable[None]]:
     async def _create(
         orchestrator_config: OrchestratorConfig, kube_config: KubeConfig
@@ -388,9 +393,9 @@ def kube_job_nodes_factory(
                 labels[kube_config.node_label_preemptible] = "true"
             capacity = {
                 "pods": "110",
-                "cpu": int(pool_type.cpu or 0),
+                "cpu": str(pool_type.cpu or 0),
                 "memory": f"{pool_type.memory}",
-                "nvidia.com/gpu": (
+                "nvidia.com/gpu": str(
                     pool_type.nvidia_gpu.count if pool_type.nvidia_gpu else 0
                 ),
             }
@@ -403,10 +408,17 @@ def kube_job_nodes_factory(
                 taints.append(NodeTaint(key=Resources.amd_gpu_key, value="present"))
             if pool_type.intel_gpu:
                 taints.append(NodeTaint(key=Resources.intel_gpu_key, value="present"))
+
+            model = V1Node(
+                metadata=V1ObjectMeta(name=pool_type.name, labels=labels),
+                spec=V1NodeSpec(taints=[taint.to_model() for taint in taints]),
+                status=V1NodeStatus(
+                    capacity=capacity,
+                    conditions=[V1NodeCondition(status="True", type="Ready")],
+                ),
+            )
             try:
-                await kube_client.create_node(
-                    pool_type.name, capacity=capacity, labels=labels, taints=taints
-                )
+                await kube_client_selector.host_client.core_v1.node.create(model)
             except ResourceExists:
                 # there can be multiple kube_orchestrator created in tests (for tests
                 # and for tests cleanup)
@@ -421,127 +433,6 @@ async def kube_ingress_ip(kube_config_cluster_payload: dict[str, Any]) -> str:
     return urlsplit(cluster["server"]).hostname
 
 
-class MyKubeClient(KubeClient):
-    """
-    Extended kube client that has methods used for tests only
-    """
-
-    async def wait_pod_scheduled(
-        self,
-        namespace: str,
-        pod_name: str,
-        node_name: str = "",
-        timeout_s: float = 5.0,
-        interval_s: float = 1.0,
-    ) -> None:
-        raw_pod: dict[str, Any] | None = None
-        try:
-            async with timeout(timeout_s):
-                while True:
-                    raw_pod = await self.get_raw_pod(namespace, pod_name)
-                    if node_name:
-                        pod_at_node = raw_pod["spec"].get("nodeName")
-                        if pod_at_node == node_name:
-                            pod_has_node = True
-                        else:
-                            pod_has_node = False
-                            print(
-                                f"Pod was scheudled to wrong node: {pod_at_node}, "
-                                f"expected: {node_name}"
-                            )
-                    else:
-                        pod_has_node = bool(raw_pod["spec"].get("nodeName"))
-                    pod_is_scheduled = "PodScheduled" in [
-                        cond["type"]
-                        for cond in raw_pod["status"].get("conditions", [])
-                        if cond["status"] == "True"
-                    ]
-                    if pod_has_node and pod_is_scheduled:
-                        return
-                    await asyncio.sleep(interval_s)
-        except TimeoutError:
-            if raw_pod:
-                print("Node:", raw_pod["spec"].get("nodeName"))
-                print("Phase:", raw_pod["status"]["phase"])
-                print("Status conditions:", raw_pod["status"].get("conditions", []))
-                print("Pods:")
-                pod_list = await self.get_raw_pods()
-                pods = sorted(
-                    pod_list.items, key=lambda p: p["spec"].get("nodeName", "")
-                )
-                print(f"  {'Name':40s} {'CPU':5s} {'Memory':10s} {'Phase':9s} Node")
-                for pod in pods:
-                    container = pod["spec"]["containers"][0]
-                    resource_requests = container.get("resources", {}).get(
-                        "requests", {}
-                    )
-                    cpu = resource_requests.get("cpu")
-                    memory = resource_requests.get("memory")
-                    print(
-                        f"  {pod['metadata']['name']:40s}",
-                        f"{str(cpu):5s}",
-                        f"{str(memory):10s}",
-                        f"{pod['status']['phase']:9s}",
-                        f"{str(pod['spec'].get('nodeName'))}",
-                    )
-            pytest.fail("Pod unscheduled")
-
-    async def add_node_labels(self, node_name: str, labels: dict[str, Any]) -> None:
-        node = await self.get_node(node_name)
-
-        new_labels = node.labels.copy()
-        new_labels.update(labels)
-
-        await self.patch(
-            url=self._generate_node_url(node_name),
-            headers={"content-type": "application/merge-patch+json"},
-            json={"metadata": {"labels": new_labels}},
-        )
-
-    async def remove_node_labels(self, node_name: str, label_keys: list[str]) -> None:
-        node = await self.get_node(node_name)
-
-        new_labels = {
-            label: value
-            for label, value in node.labels.items()
-            if label not in label_keys
-        }
-
-        await self.patch(
-            url=self._generate_node_url(node_name),
-            headers={"content-type": "application/merge-patch+json"},
-            json={"metadata": {"labels": new_labels}},
-        )
-
-
-@pytest.fixture(scope="session")
-async def kube_client_factory(kube_config: KubeConfig) -> Callable[..., MyKubeClient]:
-    def _f(custom_kube_config: KubeConfig | None = None) -> MyKubeClient:
-        config = custom_kube_config or kube_config
-        return MyKubeClient(
-            base_url=config.endpoint_url,
-            auth_type=config.auth_type,
-            cert_authority_data_pem=config.cert_authority_data_pem,
-            cert_authority_path=config.cert_authority_path,
-            auth_cert_path=config.auth_cert_path,
-            auth_cert_key_path=config.auth_cert_key_path,
-            namespace=config.namespace,
-            conn_timeout_s=config.client_conn_timeout_s,
-            read_timeout_s=config.client_read_timeout_s,
-            conn_pool_size=config.client_conn_pool_size,
-        )
-
-    return _f
-
-
-@pytest.fixture(scope="session")
-async def kube_client(
-    kube_client_factory: Callable[..., MyKubeClient],
-) -> AsyncIterator[KubeClient]:
-    async with kube_client_factory() as kube_client:
-        yield kube_client
-
-
 @pytest.fixture(scope="session")
 async def kube_client_selector(
     kube_config_cluster_payload: dict[str, Any],
@@ -554,7 +445,7 @@ async def kube_client_selector(
         endpoint_url=cluster["server"],
         cert_authority_data_pem=cert_authority_data_pem,
         cert_authority_path=None,
-        auth_type=ApoloKubeClientAuthType.CERTIFICATE,
+        auth_type=KubeClientAuthType.CERTIFICATE,
         auth_cert_path=user["client-certificate"],
         auth_cert_key_path=user["client-key"],
     )
@@ -592,7 +483,7 @@ async def kube_orchestrator(
 
 @pytest.fixture
 async def delete_node_later(
-    kube_client: MyKubeClient,
+    kube_client_selector: KubeClientSelector,
 ) -> AsyncIterator[Callable[[str], Awaitable[None]]]:
     nodes = []
 
@@ -603,15 +494,17 @@ async def delete_node_later(
 
     for node in nodes:
         try:
-            await kube_client.delete_node(node)
+            await kube_client_selector.host_client.core_v1.node.delete(node)
         except Exception:
             pass
 
 
 @pytest.fixture
-async def kube_node(kube_client: KubeClient) -> str:
-    nodes = await kube_client.get_nodes()
-    return nodes[0].name
+async def kube_node(kube_client_selector: KubeClientSelector) -> str:
+    nodes = await kube_client_selector.host_client.core_v1.node.get_list()
+    name = nodes.items[0].metadata.name
+    assert name is not None
+    return name
 
 
 @pytest.fixture
@@ -621,7 +514,7 @@ def default_node_capacity() -> dict[str, str]:
 
 @pytest.fixture
 async def kube_node_gpu(
-    kube_client: MyKubeClient,
+    kube_client_selector: KubeClientSelector,
     delete_node_later: Callable[[str], Awaitable[None]],
     default_node_capacity: dict[str, str],
 ) -> AsyncIterator[str]:
@@ -629,30 +522,41 @@ async def kube_node_gpu(
     await delete_node_later(node_name)
 
     taints = [NodeTaint(key=Resources.nvidia_gpu_key, value="present")]
-    await kube_client.create_node(
-        node_name, capacity=default_node_capacity, taints=taints
+    model = V1Node(
+        metadata=V1ObjectMeta(name=node_name),
+        spec=V1NodeSpec(taints=[taint.to_model() for taint in taints]),
+        status=V1NodeStatus(
+            capacity=default_node_capacity,
+            conditions=[V1NodeCondition(status="True", type="Ready")],
+        ),
     )
-
+    await kube_client_selector.host_client.core_v1.node.create(model)
     yield node_name
 
 
 @pytest.fixture
 async def kube_node_tpu(
-    kube_client: MyKubeClient,
+    kube_client_selector: KubeClientSelector,
     delete_node_later: Callable[[str], Awaitable[None]],
 ) -> AsyncIterator[str]:
     node_name = str(uuid.uuid4())
     await delete_node_later(node_name)
 
-    await kube_client.create_node(
-        node_name,
-        capacity={
-            "pods": "110",
-            "memory": "1Gi",
-            "cpu": 2,
-            "cloud-tpus.google.com/v2": 8,
-        },
+    capacity = {
+        "pods": "110",
+        "memory": "1Gi",
+        "cpu": "2",
+        "cloud-tpus.google.com/v2": "8",
+    }
+    model = V1Node(
+        metadata=V1ObjectMeta(name=node_name),
+        spec=V1NodeSpec(),
+        status=V1NodeStatus(
+            capacity=capacity,
+            conditions=[V1NodeCondition(status="True", type="Ready")],
+        ),
     )
+    await kube_client_selector.host_client.core_v1.node.create(model)
 
     yield node_name
 
@@ -670,7 +574,7 @@ def kube_config_node_preemptible(
 @pytest.fixture
 async def kube_node_preemptible(
     kube_config_node_preemptible: KubeConfig,
-    kube_client: MyKubeClient,
+    kube_client_selector: KubeClientSelector,
     delete_node_later: Callable[[str], Awaitable[None]],
     default_node_capacity: dict[str, str],
 ) -> AsyncIterator[str]:
@@ -684,35 +588,44 @@ async def kube_node_preemptible(
     taints = [
         NodeTaint(key=kube_config.jobs_pod_preemptible_toleration_key, value="present")
     ]
-    await kube_client.create_node(
-        node_name, capacity=default_node_capacity, labels=labels, taints=taints
+    model = V1Node(
+        metadata=V1ObjectMeta(name=node_name, labels=labels),
+        spec=V1NodeSpec(taints=[taint.to_model() for taint in taints]),
+        status=V1NodeStatus(
+            capacity=default_node_capacity,
+            conditions=[V1NodeCondition(status="True", type="Ready")],
+        ),
     )
+    await kube_client_selector.host_client.core_v1.node.create(model)
 
     yield node_name
 
 
 @pytest.fixture
 async def delete_pod_later(
-    kube_client: KubeClient,
-) -> AsyncIterator[Callable[[PodDescriptor], Awaitable[None]]]:
+    kube_client_selector: KubeClientSelector,
+) -> AsyncIterator[Callable[[PodDescriptor, str, str], Awaitable[None]]]:
     pods = []
 
-    async def _add_pod(pod: PodDescriptor) -> None:
-        pods.append(pod)
+    async def _add_pod(pod: PodDescriptor, org: str, proj: str) -> None:
+        pods.append((pod, org, proj))
 
     yield _add_pod
 
-    for pod in pods:
+    for pod, org, proj in pods:
         try:
-            await kube_client.delete_pod(kube_client.namespace, pod.name)
+            async with kube_client_selector.get_client(
+                org_name=org, project_name=proj
+            ) as kube_client:
+                await kube_client.core_v1.pod.delete(pod.name)
         except Exception:
             pass
 
 
 @pytest.fixture
 async def pod_factory(
-    kube_client: KubeClient,
-    delete_pod_later: Callable[[PodDescriptor], Awaitable[None]],
+    kube_client_selector: KubeClientSelector,
+    delete_pod_later: Callable[[PodDescriptor, str, str], Awaitable[None]],
 ) -> Callable[..., Awaitable[PodDescriptor]]:
     name_prefix = f"pod-{uuid.uuid4()}"
     name_index = 1
@@ -740,13 +653,16 @@ async def pod_factory(
             command=command or [],
             resources=Resources(cpu=cpu, memory=memory),
         )
-        pod = await kube_client.create_pod(kube_client.namespace, pod)
-        await delete_pod_later(pod)
-        if wait:
-            await kube_client.wait_pod_is_running(
-                kube_client.namespace, pod.name, timeout_s=wait_timeout_s
-            )
-        return pod
+        async with kube_client_selector.get_client(
+            org_name="org", project_name="proj"
+        ) as kube_client:
+            pod = await create_pod(kube_client, pod)
+            await delete_pod_later(pod, "org", "proj")
+            if wait:
+                await kube_client.core_v1.pod[pod.name].apolo_waiter.wait_running(
+                    timeout_s=wait_timeout_s
+                )
+            return pod
 
     return _create
 

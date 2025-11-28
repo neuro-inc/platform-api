@@ -3,13 +3,14 @@ from decimal import Decimal
 from unittest import mock
 
 import pytest
+from apolo_kube_client import KubeClientAuthType
 from neuro_config_client import OrchestratorConfig, ResourcePoolType
 from yarl import URL
 
 from platform_api.config import RegistryConfig
 from platform_api.config_factory import EnvironConfigFactory
 from platform_api.orchestrator.kube_client import KubeClient, SecretVolume
-from platform_api.orchestrator.kube_config import KubeClientAuthType, KubeConfig
+from platform_api.orchestrator.kube_config import KubeConfig
 from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
 
 
@@ -265,7 +266,6 @@ class TestEnvironConfigFactory:
             auth_cert_path="cert-path",
             auth_cert_key_path="cert-key-path",
             token="token",
-            namespace="platform-jobs",
             client_conn_timeout_s=1,
             client_read_timeout_s=2,
             client_conn_pool_size=3,
@@ -310,19 +310,3 @@ class TestRegistryConfig:
             password="compute_token",
         )
         assert config.host == "registry.com:5000"
-
-
-class TestKubeConfig:
-    def test_missing_api_url(self) -> None:
-        with pytest.raises(ValueError, match="Missing required settings"):
-            KubeConfig(
-                endpoint_url="",
-                cert_authority_data_pem="value",
-                cert_authority_path="value",
-                auth_cert_path="value",
-                auth_cert_key_path="value",
-                token="value",
-                token_path="value",
-                namespace="value",
-                node_label_preemptible="value",
-            )

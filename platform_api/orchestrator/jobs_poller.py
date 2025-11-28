@@ -1,12 +1,11 @@
 import asyncio
 import logging
 from collections.abc import Mapping
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import PurePath
 from typing import Any
 
 import aiohttp
-from iso8601 import iso8601
 from multidict import MultiDict
 from neuro_logging import new_trace
 from yarl import URL
@@ -41,7 +40,7 @@ logger = logging.getLogger(__name__)
 def job_response_to_job_record(payload: Mapping[str, Any]) -> JobRecord:
     def _parse_status_item(item: Mapping[str, Any]) -> JobStatusItem:
         status = JobStatus(item["status"])
-        transition_time = iso8601.parse_date(item["transition_time"])
+        transition_time = datetime.fromisoformat(item["transition_time"])
         return JobStatusItem(
             status=status,
             transition_time=transition_time,

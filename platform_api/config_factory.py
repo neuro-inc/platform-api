@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from alembic.config import Config as AlembicConfig
 from apolo_events_client import EventsClientConfig
+from apolo_kube_client import KubeClientAuthType
 from yarl import URL
 
 from .config import (
@@ -21,7 +22,7 @@ from .config import (
     RegistryConfig,
     ServerConfig,
 )
-from .orchestrator.kube_config import KubeClientAuthType, KubeConfig
+from .orchestrator.kube_config import KubeConfig
 
 
 class EnvironConfigFactory:
@@ -239,6 +240,7 @@ class EnvironConfigFactory:
         return config
 
     def create_kube(self) -> KubeConfig:
+        fields = KubeConfig.model_fields
         return KubeConfig(
             endpoint_url=self._environ["NP_KUBE_URL"],
             auth_type=KubeClientAuthType(
@@ -250,35 +252,51 @@ class EnvironConfigFactory:
             auth_cert_key_path=self._environ.get("NP_KUBE_CERT_KEY_PATH"),
             token=self._environ.get("NP_KUBE_TOKEN"),
             token_path=self._environ.get("NP_KUBE_TOKEN_PATH"),
-            namespace=self._environ.get("NP_KUBE_NAMESPACE", KubeConfig.namespace),
             client_conn_timeout_s=int(
                 self._environ.get(
-                    "NP_KUBE_CONN_TIMEOUT", KubeConfig.client_conn_timeout_s
+                    "NP_KUBE_CONN_TIMEOUT",
+                    fields["client_conn_timeout_s"].get_default(
+                        call_default_factory=True
+                    ),
                 )
             ),
             client_read_timeout_s=int(
                 self._environ.get(
-                    "NP_KUBE_READ_TIMEOUT", KubeConfig.client_read_timeout_s
+                    "NP_KUBE_READ_TIMEOUT",
+                    fields["client_read_timeout_s"].get_default(
+                        call_default_factory=True
+                    ),
                 )
             ),
             client_conn_pool_size=int(
                 self._environ.get(
-                    "NP_KUBE_CONN_POOL_SIZE", KubeConfig.client_conn_pool_size
+                    "NP_KUBE_CONN_POOL_SIZE",
+                    fields["client_conn_pool_size"].get_default(
+                        call_default_factory=True
+                    ),
                 )
             ),
             jobs_ingress_class=self._environ.get(
-                "NP_KUBE_INGRESS_CLASS", KubeConfig.jobs_ingress_class
+                "NP_KUBE_INGRESS_CLASS",
+                fields["jobs_ingress_class"].get_default(call_default_factory=True),
             ),
             jobs_ingress_auth_middleware=self._environ.get(
                 "NP_KUBE_INGRESS_AUTH_MIDDLEWARE",
-                KubeConfig.jobs_ingress_auth_middleware,
+                fields["jobs_ingress_auth_middleware"].get_default(
+                    call_default_factory=True
+                ),
             ),
             jobs_ingress_error_page_middleware=self._environ.get(
                 "NP_KUBE_INGRESS_ERROR_PAGE_MIDDLEWARE",
-                KubeConfig.jobs_ingress_error_page_middleware,
+                fields["jobs_ingress_error_page_middleware"].get_default(
+                    call_default_factory=True
+                ),
             ),
             jobs_pod_job_toleration_key=self._environ.get(
-                "NP_KUBE_POD_JOB_TOLERATION_KEY", KubeConfig.jobs_pod_job_toleration_key
+                "NP_KUBE_POD_JOB_TOLERATION_KEY",
+                fields["jobs_pod_job_toleration_key"].get_default(
+                    call_default_factory=True
+                ),
             ),
             jobs_pod_preemptible_toleration_key=self._environ.get(
                 "NP_KUBE_POD_PREEMPTIBLE_TOLERATION_KEY"
@@ -289,7 +307,9 @@ class EnvironConfigFactory:
             image_pull_secret_name=self._environ.get("NP_KUBE_IMAGE_PULL_SECRET"),
             external_job_runner_image=self._environ.get(
                 "NP_KUBE_EXTERNAL_JOB_RUNNER_IMAGE",
-                KubeConfig.external_job_runner_image,
+                fields["external_job_runner_image"].get_default(
+                    call_default_factory=True
+                ),
             ),
         )
 

@@ -17,7 +17,6 @@ classifiers = [
 [tool.poetry.dependencies]
 python = ">=3.13,<4.0"
 aiohttp = {version = "^3.13.2", extras = ["speedups"]}
-iso8601 = ">=2.1.0"
 trafaret = "2.1.1"
 neuro-auth-client = "25.8.2"
 cryptography = "46.0.3"
@@ -179,10 +178,6 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "asyncssh.stream"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "iso8601"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

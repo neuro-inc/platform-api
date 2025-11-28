@@ -6,7 +6,7 @@ from apolo_kube_client import KubeClientSelector
 
 from .cluster import Cluster
 from .config import RegistryConfig
-from .orchestrator.kube_client import KubeClient, NodeWatcher, PodWatcher
+from .orchestrator.kube_client import NodeWatcher, PodWatcher
 from .orchestrator.kube_config import KubeConfig
 from .orchestrator.kube_orchestrator import KubeOrchestrator, Orchestrator
 
@@ -16,13 +16,11 @@ logger = logging.getLogger(__name__)
 class KubeCluster(Cluster):
     def __init__(
         self,
-        kube_client: KubeClient,
         kube_config: KubeConfig,
         registry_config: RegistryConfig,
         cluster_config: neuro_config_client.Cluster,
-        kube_client_selector: KubeClientSelector | None = None,
+        kube_client_selector: KubeClientSelector,
     ) -> None:
-        self._kube_client = kube_client
         self._kube_config = kube_config
         self._registry_config = registry_config
         self._cluster_config = cluster_config
@@ -44,9 +42,9 @@ class KubeCluster(Cluster):
     async def _init_orchestrator(self) -> None:
         logger.info("Cluster '%s': initializing Orchestrator", self.name)
         kube_node_watcher = NodeWatcher(
-            self._kube_client, labels=self._get_job_node_labels()
+            self._kube_client_selector.host_client, labels=self._get_job_node_labels()
         )
-        kube_pod_watcher = PodWatcher(self._kube_client)
+        kube_pod_watcher = PodWatcher(self._kube_client_selector.host_client)
         orchestrator = KubeOrchestrator(
             cluster_name=self.name,
             registry_config=self._registry_config,
