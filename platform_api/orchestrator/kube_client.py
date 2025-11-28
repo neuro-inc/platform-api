@@ -14,7 +14,6 @@ from collections.abc import (
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from enum import Enum
 from pathlib import PurePath
 from typing import Any, ClassVar, NoReturn, Optional, Self
 
@@ -103,13 +102,13 @@ from .job_request import (
 logger = logging.getLogger(__name__)
 
 
-class ServiceType(str, enum.Enum):
+class ServiceType(enum.StrEnum):
     CLUSTER_IP = "ClusterIP"
     NODE_PORT = "NodePort"
     LOAD_BALANCER = "LoadBalancer"
 
 
-class GroupVersion(str, Enum):
+class GroupVersion(enum.StrEnum):
     NETWORKING_V1 = "networking.k8s.io/v1"
 
 
@@ -704,7 +703,7 @@ class Toleration:
         )
 
 
-class SelectorOperator(str, Enum):
+class SelectorOperator(enum.StrEnum):
     DOES_NOT_EXIST = "DoesNotExist"
     EXISTS = "Exists"
     IN = "In"
@@ -889,16 +888,10 @@ class PodAffinity:
 
 
 @enum.unique
-class PodRestartPolicy(str, enum.Enum):
+class PodRestartPolicy(enum.StrEnum):
     ALWAYS = "Always"
     ON_FAILURE = "OnFailure"
     NEVER = "Never"
-
-    def __str__(self) -> str:
-        return self.value
-
-    def __repr__(self) -> str:
-        return self.__str__().__repr__()
 
 
 @dataclass(frozen=True)
@@ -1315,7 +1308,7 @@ class ContainerStatus:
         return cls(model)
 
 
-class PodConditionType(enum.Enum):
+class PodConditionType(enum.StrEnum):
     UNKNOWN = "Unknown"
     POD_SCHEDULED = "PodScheduled"
     READY = "Ready"
@@ -1625,7 +1618,7 @@ class NodeResources:
         return self.any
 
 
-class NodeConditionType(enum.Enum):
+class NodeConditionType(enum.StrEnum):
     UNKNOWN = "Unknown"
     DISK_PRESSURE = "DiskPressure"
     MEMORY_PRESSURE = "MemoryPressure"
@@ -1710,7 +1703,7 @@ class Node:
         return self.status.allocatable_resources - resource_requests
 
 
-class WatchEventType(str, Enum):
+class WatchEventType(enum.StrEnum):
     ADDED = "ADDED"
     MODIFIED = "MODIFIED"
     DELETED = "DELETED"
