@@ -4,7 +4,7 @@ import logging
 import operator
 import secrets
 from collections.abc import Sequence
-from dataclasses import asdict, replace
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import TracebackType
 from typing import Any
@@ -15,7 +15,6 @@ from apolo_kube_client import (
     KubeClientException,
     KubeClientProxy,
     KubeClientSelector,
-    KubeConfig,
     ResourceNotFound,
 )
 from apolo_kube_client.apolo import normalize_name
@@ -163,9 +162,7 @@ class KubeOrchestrator(Orchestrator):
         self._orchestrator_config = orchestrator_config
         self._kube_config = kube_config
         self._http = ClientSession()
-        self._selector = kube_client_selector or KubeClientSelector(
-            config=KubeConfig(**asdict(kube_config))
-        )
+        self._selector = kube_client_selector or KubeClientSelector(config=kube_config)
 
         self._nodes_handler = NodesHandler()
         self._node_resources_handler = NodeResourcesHandler()

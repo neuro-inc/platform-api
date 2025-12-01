@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable
-from typing import Any
+
+from apolo_kube_client import V1Node, V1Pod
 
 from .kube_client import (
     EventHandler,
@@ -20,21 +21,22 @@ logger = logging.getLogger(__name__)
 
 
 class _Pod:
-    def __init__(self, payload: dict[str, Any]) -> None:
-        self._payload = payload
-        self._status = PodStatus.from_primitive(payload["status"])
+    def __init__(self, model: V1Pod) -> None:
+        self._model = model
+        self._status = PodStatus.from_model(model.status)
 
     @property
-    def payload(self) -> dict[str, Any]:
-        return self._payload
+    def model(self) -> V1Pod:
+        return self._model
 
     @property
     def name(self) -> str:
-        return self._payload["metadata"]["name"]
+        assert self._model.metadata.name is not None
+        return self._model.metadata.name
 
     @property
     def labels(self) -> dict[str, str]:
-        return self._payload["metadata"].get("labels", {})
+        return self._model.metadata.labels
 
     @property
     def is_idle(self) -> bool:
@@ -46,38 +48,41 @@ class _Pod:
 
     @property
     def node_name(self) -> str:
-        return self._payload["spec"]["nodeName"]
+        assert self._model.spec is not None
+        assert self._model.spec.node_name is not None
+        return self._model.spec.node_name
 
     @property
     def resource_requests(self) -> NodeResources:
+        assert self._model.spec is not None
         pod_resources = NodeResources()
-        for container in self._payload["spec"]["containers"]:
-            resources = container.get("resources")
+        for container in self._model.spec.containers:
+            resources = container.resources
             if not resources:
                 continue
-            requests = resources.get("requests")
+            requests = resources.requests
             if not requests:
                 continue
-            pod_resources += NodeResources.from_primitive(requests)
+            pod_resources += NodeResources.from_model(requests)
         return pod_resources
 
 
-class NodesHandler(EventHandler):
+class NodesHandler(EventHandler[V1Node]):
     def __init__(self) -> None:
         self._nodes: dict[str, Node] = {}
 
-    async def init(self, raw_nodes: list[dict[str, Any]]) -> None:
+    async def init(self, nodes: list[V1Node]) -> None:
         self._clear()
-        for raw_node in raw_nodes:
-            node = Node.from_primitive(raw_node)
+        for raw_node in nodes:
+            node = Node.from_model(raw_node)
             if node.status.is_ready:
                 self._add_node(node)
 
     def _clear(self) -> None:
         self._nodes.clear()
 
-    async def handle(self, event: WatchEvent) -> None:
-        node = Node.from_primitive(event.resource)
+    async def handle(self, event: WatchEvent[V1Node]) -> None:
+        node = Node.from_model(event.object)
         if event.type == WatchEventType.DELETED or not node.status.is_ready:
             self._remove_node(node)
         else:
@@ -93,16 +98,16 @@ class NodesHandler(EventHandler):
         return self._nodes.values()
 
 
-class NodeResourcesHandler(EventHandler):
+class NodeResourcesHandler(EventHandler[V1Pod]):
     def __init__(self) -> None:
         self._resource_requests: dict[str, NodeResources] = defaultdict(NodeResources)
         self._pod_counts: Counter[str] = Counter()
         self._pod_node_names: dict[str, str] = {}
 
-    async def init(self, raw_pods: list[dict[str, Any]]) -> None:
+    async def init(self, pods: list[V1Pod]) -> None:
         self._clear()
 
-        for raw_pod in raw_pods:
+        for raw_pod in pods:
             pod = _Pod(raw_pod)
             if (
                 not pod.is_idle
@@ -117,8 +122,8 @@ class NodeResourcesHandler(EventHandler):
         self._pod_counts = Counter()
         self._pod_node_names.clear()
 
-    async def handle(self, event: WatchEvent) -> None:
-        pod = _Pod(event.resource)
+    async def handle(self, event: WatchEvent[V1Pod]) -> None:
+        pod = _Pod(event.object)
         if pod.is_idle or not pod.status.is_scheduled:
             return
         if (

@@ -10,7 +10,6 @@ from decimal import Decimal
 from functools import partial
 from typing import Any
 
-import iso8601
 from apolo_kube_client.apolo import generate_namespace_name
 from neuro_config_client import OrchestratorConfig, ResourcePreset
 from neuro_config_client.entities import DEFAULT_ENERGY_SCHEDULE_NAME
@@ -105,7 +104,7 @@ class JobStatusItem:
     @classmethod
     def from_primitive(cls, payload: dict[str, Any]) -> JobStatusItem:
         status = JobStatus(payload["status"])
-        transition_time = iso8601.parse_date(payload["transition_time"])
+        transition_time = datetime.fromisoformat(payload["transition_time"])
         return cls(
             status=status,
             transition_time=transition_time,
@@ -591,7 +590,7 @@ class JobRecord:
             if status.is_finished:
                 finished_at = payload.get("finished_at")
                 if finished_at:
-                    transition_time = iso8601.parse_date(finished_at)
+                    transition_time = datetime.fromisoformat(finished_at)
             items = [JobStatusItem.create(status, transition_time=transition_time)]
         return JobStatusHistory(items)
 

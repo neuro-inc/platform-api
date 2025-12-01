@@ -6,7 +6,6 @@ import logging
 from asyncio import timeout
 from base64 import b64encode
 from collections.abc import (
-    AsyncIterator,
     Callable,
     Coroutine,
     Mapping,
@@ -15,17 +14,22 @@ from collections.abc import (
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from enum import Enum
 from pathlib import PurePath
 from typing import Any, ClassVar, NoReturn, Optional, Self
 
 import aiohttp
-import iso8601
 from apolo_kube_client import (
+    CollectionModel,
     CoreV1Event,
+    KubeClient as KubeClient,
+    KubeClientException,
     KubeClientProxy,
+    KubeClientUnauthorized,
+    ResourceExists,
     ResourceExists as ApoloResourceExists,
+    ResourceGone,
     ResourceInvalid,
+    ResourceModel,
     ResourceNotFound as ApoloResourceNotFound,
     V1Affinity,
     V1Container,
@@ -45,10 +49,13 @@ from apolo_kube_client import (
     V1LabelSelector,
     V1LabelSelectorRequirement,
     V1LocalObjectReference,
+    V1Node,
     V1NodeAffinity,
+    V1NodeCondition,
     V1NodeSelector,
     V1NodeSelectorRequirement,
     V1NodeSelectorTerm,
+    V1NodeStatus,
     V1ObjectMeta,
     V1PersistentVolumeClaimVolumeSource,
     V1Pod,
@@ -73,17 +80,10 @@ from apolo_kube_client import (
     V1Volume,
     V1VolumeMount,
     V1WeightedPodAffinityTerm,
+    Watch,
+    WatchEvent,
 )
 from yarl import URL
-
-from platform_api.old_kube_client.client import KubeClient as ApoloKubeClient
-from platform_api.old_kube_client.errors import (
-    KubeClientException,
-    KubeClientUnauthorized,
-    ResourceExists,
-    ResourceGone,
-    ResourceNotFound,
-)
 
 from .job_request import (
     Container,
@@ -98,15 +98,18 @@ from .job_request import (
     Secret,
     SecretContainerVolume,
 )
-from .kube_config import KubeClientAuthType
 
 logger = logging.getLogger(__name__)
 
 
-class ServiceType(str, enum.Enum):
+class ServiceType(enum.StrEnum):
     CLUSTER_IP = "ClusterIP"
     NODE_PORT = "NodePort"
     LOAD_BALANCER = "LoadBalancer"
+
+
+class GroupVersion(enum.StrEnum):
+    NETWORKING_V1 = "networking.k8s.io/v1"
 
 
 def _raise_status_job_exception(pod: dict[str, Any], job_id: str | None) -> NoReturn:
@@ -119,42 +122,6 @@ def _raise_status_job_exception(pod: dict[str, Any], job_id: str | None) -> NoRe
     raise JobError(f"unexpected payload: {pod}")
 
 
-class GroupVersion(str, Enum):
-    NETWORKING_V1 = "networking.k8s.io/v1"
-
-
-@dataclass(frozen=True)
-class APIResource:
-    group_version: str
-    resources: Sequence[str]
-
-    @property
-    def has_ingress(self) -> bool:
-        return self.has_resource("ingresses")
-
-    def has_resource(self, resource_name: str) -> bool:
-        return resource_name in self.resources
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "APIResource":
-        return cls(
-            group_version=payload["groupVersion"],
-            resources=[p["name"] for p in payload["resources"]],
-        )
-
-
-class APIResources(dict[str, APIResource]):
-    group_versions: list[str] = [GroupVersion.NETWORKING_V1.value]
-
-    @property
-    def networking_v1(self) -> APIResource | None:
-        return self.get(GroupVersion.NETWORKING_V1)
-
-    @property
-    def has_networking_v1_ingress(self) -> bool:
-        return self.networking_v1 is not None and self.networking_v1.has_ingress
-
-
 @dataclass(frozen=True)
 class Volume(metaclass=abc.ABCMeta):
     name: str
@@ -165,9 +132,6 @@ class Volume(metaclass=abc.ABCMeta):
         mount_sub_path: PurePath | None = None,
     ) -> "VolumeMount":
         raise NotImplementedError("Cannot create mount for abstract Volume type.")
-
-    def to_primitive(self) -> dict[str, Any]:
-        raise NotImplementedError
 
     def to_model(self) -> V1Volume:
         raise NotImplementedError
@@ -201,9 +165,6 @@ class PathVolume(Volume):
 
 @dataclass(frozen=True)
 class SharedMemoryVolume(Volume):
-    def to_primitive(self) -> dict[str, Any]:
-        return {"name": self.name, "emptyDir": {"medium": "Memory"}}
-
     def to_model(self) -> V1Volume:
         return V1Volume(
             name=self.name, empty_dir=V1EmptyDirVolumeSource(medium="Memory")
@@ -232,17 +193,6 @@ class SecretEnvVar:
     def create(cls, name: str, secret: Secret) -> "SecretEnvVar":
         return cls(name=name, secret=secret)
 
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "valueFrom": {
-                "secretKeyRef": {
-                    "name": self.secret.k8s_secret_name,
-                    "key": self.secret.secret_key,
-                }
-            },
-        }
-
     def to_model(self) -> V1EnvVar:
         return V1EnvVar(
             name=self.name,
@@ -260,17 +210,6 @@ class VolumeMount:
     mount_path: PurePath
     sub_path: PurePath = PurePath()
     read_only: bool = False
-
-    def to_primitive(self) -> dict[str, Any]:
-        sub_path = str(self.sub_path)
-        raw = {
-            "name": self.volume.name,
-            "mountPath": str(self.mount_path),
-            "readOnly": self.read_only,
-        }
-        if sub_path:
-            raw["subPath"] = sub_path
-        return raw
 
     def to_model(self) -> V1VolumeMount:
         ret = V1VolumeMount(
@@ -296,12 +235,6 @@ class SecretVolume(Volume):
             read_only=True,
         )
 
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "secret": {"secretName": self.k8s_secret_name, "defaultMode": 0o400},
-        }
-
     def to_model(self) -> V1Volume:
         return V1Volume(
             name=self.name,
@@ -321,12 +254,6 @@ class PVCDiskVolume(Volume):
             mount_path=disk_volume.dst_path,
             read_only=disk_volume.read_only,
         )
-
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "persistentVolumeClaim": {"claimName": self.claim_name},
-        }
 
     def to_model(self) -> V1Volume:
         return V1Volume(
@@ -377,31 +304,6 @@ class Resources:
         assert self.tpu_version
         return self.tpu_key_prefix + self.tpu_version
 
-    def to_primitive(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "requests": {"cpu": f"{self.cpu_mcores}m", "memory": self.memory_str},
-            "limits": {"cpu": f"{self.cpu_mcores}m", "memory": self.memory_str},
-        }
-        if self.nvidia_gpu:
-            payload["requests"][self.nvidia_gpu_key] = self.nvidia_gpu
-            payload["limits"][self.nvidia_gpu_key] = self.nvidia_gpu
-        if self.nvidia_migs:
-            for key, value in self.nvidia_migs.items():
-                payload["requests"][self.nvidia_mig_key_prefix + key] = value
-                payload["limits"][self.nvidia_mig_key_prefix + key] = value
-        if self.amd_gpu:
-            payload["requests"][self.amd_gpu_key] = self.amd_gpu
-            payload["limits"][self.amd_gpu_key] = self.amd_gpu
-        if self.intel_gpu:
-            payload["requests"][self.intel_gpu_key] = self.intel_gpu
-            payload["limits"][self.intel_gpu_key] = self.intel_gpu
-        if self.tpu_version:
-            payload["requests"][self.tpu_key] = self.tpu_cores
-            payload["limits"][self.tpu_key] = self.tpu_cores
-        if self.memory_request:
-            payload["requests"]["memory"] = self.memory_request_str
-        return payload
-
     def to_model(self) -> V1ResourceRequirements:
         ret = V1ResourceRequirements(
             requests={"cpu": f"{self.cpu_mcores}m", "memory": self.memory_str},
@@ -426,34 +328,6 @@ class Resources:
         if self.memory_request:
             ret.requests["memory"] = self.memory_request_str
         return ret
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "Resources":
-        requests = payload.get("requests", {})
-        nvidia_gpu = None
-        if cls.nvidia_gpu_key in requests:
-            nvidia_gpu = int(requests[cls.nvidia_gpu_key])
-        nvidia_migs: dict[str, int] = {}
-        for key, value in requests.items():
-            if key.startswith(cls.nvidia_mig_key_prefix):
-                nvidia_migs[key[len(cls.nvidia_mig_key_prefix) :]] = int(value)
-        amd_gpu = None
-        if cls.amd_gpu_key in requests:
-            amd_gpu = int(requests[cls.amd_gpu_key])
-        intel_gpu = None
-        if cls.intel_gpu_key in requests:
-            intel_gpu = int(requests[cls.intel_gpu_key])
-        tpu_version, tpu_cores = cls._parse_tpu(requests)
-        return cls(
-            cpu=cls.parse_cpu(requests.get("cpu", "0")),
-            memory=cls.parse_memory(requests.get("memory", "0Mi")),
-            nvidia_gpu=nvidia_gpu,
-            nvidia_migs=nvidia_migs or None,
-            amd_gpu=amd_gpu,
-            intel_gpu=intel_gpu,
-            tpu_version=tpu_version,
-            tpu_cores=tpu_cores,
-        )
 
     @classmethod
     def from_model(cls, model: V1ResourceRequirements) -> "Resources":
@@ -569,28 +443,6 @@ class Service:
         if target_port:
             ports.append({"port": port, "targetPort": target_port, "name": port_name})
 
-    def to_primitive(self) -> dict[str, Any]:
-        service_descriptor: dict[str, Any] = {
-            "metadata": {
-                "name": self.name,
-            },
-            "spec": {
-                "type": self.service_type.value,
-                "ports": [],
-                "selector": self.selector,
-            },
-        }
-
-        if self.cluster_ip:
-            service_descriptor["spec"]["clusterIP"] = self.cluster_ip
-        if self.labels:
-            service_descriptor["metadata"]["labels"] = self.labels.copy()
-
-        self._add_port_map(
-            self.port, self.target_port, "http", service_descriptor["spec"]["ports"]
-        )
-        return service_descriptor
-
     def to_model(self) -> V1Service:
         ports: list[V1ServicePort] = []
         if self.target_port:
@@ -642,21 +494,6 @@ class Service:
         return {}
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "Service":
-        http_payload = cls._find_port_by_name("http", payload["spec"]["ports"])
-        service_type = payload["spec"].get("type", Service.service_type.value)
-        return cls(
-            name=payload["metadata"]["name"],
-            uid=payload["metadata"]["uid"],
-            selector=payload["spec"].get("selector", {}),
-            target_port=http_payload.get("targetPort", None),
-            port=http_payload.get("port", Service.port),
-            service_type=ServiceType(service_type),
-            cluster_ip=payload["spec"].get("clusterIP"),
-            labels=payload["metadata"].get("labels", {}),
-        )
-
-    @classmethod
     def from_model(cls, model: V1Service) -> "Service":
         spec = model.spec or V1ServiceSpec()
         http_port: V1ServicePort | None = None
@@ -692,63 +529,22 @@ class IngressRule:
     service_port: int | None = None
 
     @classmethod
-    def from_v1beta1_primitive(cls, payload: dict[str, Any]) -> "IngressRule":
-        http_paths = payload.get("http", {}).get("paths", [])
-        http_path = http_paths[0] if http_paths else {}
-        backend = http_path.get("backend", {})
-        service_name = backend.get("serviceName")
-        service_port = backend.get("servicePort")
+    def from_model(cls, model: V1IngressRule) -> Self:
+        host = model.host or ""
+        if model.http is None:
+            return cls(host=host, service_name=None, service_port=None)
+        http_paths = model.http.paths
+        if not http_paths:
+            return cls(host=host, service_name=None, service_port=None)
+        http_path = http_paths[0]
+        service = http_path.backend.service
+        if service is None:
+            return cls(host=host, service_name=None, service_port=None)
         return cls(
-            host=payload.get("host", ""),
-            service_name=service_name,
-            service_port=service_port,
+            host=model.host or "",
+            service_name=service.name,
+            service_port=service.port.number,
         )
-
-    @classmethod
-    def from_v1_primitive(cls, payload: dict[str, Any]) -> "IngressRule":
-        http_paths = payload.get("http", {}).get("paths", [])
-        http_path = http_paths[0] if http_paths else {}
-        service = http_path.get("backend", {}).get("service", {})
-        service_name = service.get("name")
-        service_port = service.get("port", {}).get("number")
-        return cls(
-            host=payload.get("host", ""),
-            service_name=service_name,
-            service_port=service_port,
-        )
-
-    def to_v1beta1_primitive(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {"host": self.host}
-        if self.service_name:
-            payload["http"] = {
-                "paths": [
-                    {
-                        "backend": {
-                            "serviceName": self.service_name,
-                            "servicePort": self.service_port,
-                        }
-                    }
-                ]
-            }
-        return payload
-
-    def to_v1_primitive(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {"host": self.host}
-        if self.service_name:
-            payload["http"] = {
-                "paths": [
-                    {
-                        "pathType": "ImplementationSpecific",
-                        "backend": {
-                            "service": {
-                                "name": self.service_name,
-                                "port": {"number": self.service_port},
-                            }
-                        },
-                    }
-                ]
-            }
-        return payload
 
     @classmethod
     def from_service(cls, host: str, service: Service) -> "IngressRule":
@@ -781,33 +577,6 @@ class Ingress:
     annotations: dict[str, str] = field(default_factory=dict)
     labels: dict[str, str] = field(default_factory=dict)
 
-    def to_v1beta1_primitive(self) -> dict[str, Any]:
-        rules: list[Any] = [rule.to_v1beta1_primitive() for rule in self.rules] or [
-            None
-        ]
-        annotations = self.annotations.copy()
-        if self.ingress_class:
-            annotations["kubernetes.io/ingress.class"] = self.ingress_class
-        metadata = {"name": self.name, "annotations": annotations}
-        if self.labels:
-            metadata["labels"] = self.labels.copy()
-        return {"metadata": metadata, "spec": {"rules": rules}}
-
-    def to_v1_primitive(self) -> dict[str, Any]:
-        rules: list[Any] = [rule.to_v1_primitive() for rule in self.rules] or [None]
-        annotations = self.annotations.copy()
-        metadata = {"name": self.name, "annotations": annotations}
-        spec: dict[str, Any] = {"rules": rules}
-        primitive: dict[str, Any] = {"metadata": metadata, "spec": spec}
-        if self.ingress_class:
-            annotations.pop(
-                "kubernetes.io/ingress.class", None
-            )  # deprecated and has conflict with ingressClassName
-            spec["ingressClassName"] = self.ingress_class
-        if self.labels:
-            metadata["labels"] = self.labels.copy()
-        return primitive
-
     def to_model(self) -> V1Ingress:
         spec = V1IngressSpec()
         annotations = self.annotations.copy()
@@ -821,43 +590,6 @@ class Ingress:
             metadata.labels = self.labels.copy()
         spec.rules = [rule.to_model() for rule in self.rules]
         return V1Ingress(metadata=metadata, spec=spec)
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "Ingress":
-        if payload["apiVersion"] == GroupVersion.NETWORKING_V1:
-            return cls._from_v1_primitive(payload)
-        return cls._from_v1beta1_primitive(payload)
-
-    @classmethod
-    def _from_v1beta1_primitive(cls, payload: dict[str, Any]) -> "Ingress":
-        metadata = payload["metadata"]
-        spec = payload["spec"]
-        annotations = metadata.get("annotations", {})
-        rules = [IngressRule.from_v1beta1_primitive(rule) for rule in spec["rules"]]
-        return cls(
-            name=metadata["name"],
-            ingress_class=annotations.get("kubernetes.io/ingress.class"),
-            rules=rules,
-            annotations=metadata.get("annotations", {}),
-            labels=metadata.get("labels", {}),
-        )
-
-    @classmethod
-    def _from_v1_primitive(cls, payload: dict[str, Any]) -> "Ingress":
-        metadata = payload["metadata"]
-        spec = payload["spec"]
-        annotations = metadata.get("annotations", {})
-        rules = [IngressRule.from_v1_primitive(rule) for rule in spec["rules"]]
-        return cls(
-            name=metadata["name"],
-            ingress_class=spec.get("ingressClassName")
-            or annotations.get(
-                "kubernetes.io/ingress.class"
-            ),  # for backward compatibility with old ingresses
-            rules=rules,
-            annotations=annotations,
-            labels=metadata.get("labels", {}),
-        )
 
     @classmethod
     def from_model(cls, model: V1Ingress) -> "Ingress":
@@ -930,15 +662,6 @@ class DockerRegistrySecret:
             ).encode("utf-8")
         ).decode("ascii")
 
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "apiVersion": "v1",
-            "kind": "Secret",
-            "metadata": {"name": self.name},
-            "data": {".dockerconfigjson": self._build_json()},
-            "type": self.type,
-        }
-
     def to_model(self) -> V1Secret:
         metadata = V1ObjectMeta(name=self.name)
         secret = V1Secret(metadata=metadata, type=self.type)
@@ -951,18 +674,11 @@ class DockerRegistrySecret:
 class SecretRef:
     name: str
 
-    def to_primitive(self) -> dict[str, str]:
-        return {"name": self.name}
-
     def to_model(self) -> V1LocalObjectReference:
         return V1LocalObjectReference(name=self.name)
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, str]) -> "SecretRef":
-        return cls(**payload)
-
-    @classmethod
-    def from_model(cls, model: V1LocalObjectReference) -> "SecretRef":
+    def from_model(cls, model: V1LocalObjectReference) -> Self:
         assert model.name is not None
         return cls(name=model.name)
 
@@ -978,14 +694,6 @@ class Toleration:
     value: str = ""
     effect: str = ""
 
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "key": self.key,
-            "operator": self.operator,
-            "value": self.value,
-            "effect": self.effect,
-        }
-
     def to_model(self) -> V1Toleration:
         return V1Toleration(
             key=self.key,
@@ -995,7 +703,7 @@ class Toleration:
         )
 
 
-class SelectorOperator(str, Enum):
+class SelectorOperator(enum.StrEnum):
     DOES_NOT_EXIST = "DoesNotExist"
     EXISTS = "Exists"
     IN = "In"
@@ -1037,34 +745,28 @@ class LabelSelectorMatchExpression:
             raise ValueError("values must be empty")
 
     @classmethod
-    def create_in(cls, key: str, *values: str) -> "LabelSelectorMatchExpression":
+    def create_in(cls, key: str, *values: str) -> Self:
         return cls(key=key, operator=SelectorOperator.IN, values=[*values])
 
     @classmethod
-    def create_exists(cls, key: str) -> "LabelSelectorMatchExpression":
+    def create_exists(cls, key: str) -> Self:
         return cls(key=key, operator=SelectorOperator.EXISTS)
 
     @classmethod
-    def create_does_not_exist(cls, key: str) -> "LabelSelectorMatchExpression":
+    def create_does_not_exist(cls, key: str) -> Self:
         return cls(key=key, operator=SelectorOperator.DOES_NOT_EXIST)
 
     @classmethod
-    def create_gt(cls, key: str, value: int) -> "LabelSelectorMatchExpression":
+    def create_gt(cls, key: str, value: int) -> Self:
         return cls(key=key, operator=SelectorOperator.GT, values=[str(value)])
 
     @classmethod
-    def create_lt(cls, key: str, value: int) -> "LabelSelectorMatchExpression":
+    def create_lt(cls, key: str, value: int) -> Self:
         return cls(key=key, operator=SelectorOperator.LT, values=[str(value)])
 
     def is_satisfied(self, node_labels: dict[str, str]) -> bool:
         label_value = node_labels.get(self.key)
         return self.operator.apply(label_value, self.values)
-
-    def to_primitive(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {"key": self.key, "operator": self.operator.value}
-        if self.values:
-            payload["values"] = self.values.copy()
-        return payload
 
     def to_model(self) -> V1LabelSelectorRequirement:
         ret = V1LabelSelectorRequirement(key=self.key, operator=self.operator.value)
@@ -1090,11 +792,6 @@ class LabelSelectorTerm:
     def is_satisfied(self, node_labels: dict[str, str]) -> bool:
         return all(e.is_satisfied(node_labels) for e in self.match_expressions)
 
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "matchExpressions": [expr.to_primitive() for expr in self.match_expressions]
-        }
-
     def to_model(self) -> V1LabelSelector:
         return V1LabelSelector(
             match_expressions=[expr.to_model() for expr in self.match_expressions]
@@ -1113,9 +810,6 @@ class NodePreferredSchedulingTerm:
     preference: LabelSelectorTerm
     weight: int = 100
 
-    def to_primitive(self) -> dict[str, Any]:
-        return {"preference": self.preference.to_primitive(), "weight": self.weight}
-
     def to_model(self) -> V1PreferredSchedulingTerm:
         return V1PreferredSchedulingTerm(
             preference=self.preference.to_node_selector_term(), weight=self.weight
@@ -1133,18 +827,6 @@ class NodeAffinity:
 
     def is_satisfied(self, node_labels: dict[str, str]) -> bool:
         return any(t.is_satisfied(node_labels) for t in self.required)
-
-    def to_primitive(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {}
-        if self.required:
-            payload["requiredDuringSchedulingIgnoredDuringExecution"] = {
-                "nodeSelectorTerms": [term.to_primitive() for term in self.required]
-            }
-        if self.preferred:
-            payload["preferredDuringSchedulingIgnoredDuringExecution"] = [
-                term.to_primitive() for term in self.preferred
-            ]
-        return payload
 
     def to_model(self) -> V1NodeAffinity:
         ret = V1NodeAffinity()
@@ -1170,15 +852,6 @@ class PodAffinityTerm:
     def is_satisfied(self, pod_labels: dict[str, str]) -> bool:
         return self.label_selector.is_satisfied(pod_labels)
 
-    def to_primitive(self) -> dict[str, Any]:
-        result = {
-            "labelSelector": self.label_selector.to_primitive(),
-            "topologyKey": self.topologyKey,
-        }
-        if self.namespaces:
-            result["namespaces"] = self.namespaces.copy()
-        return result
-
     def to_model(self) -> V1PodAffinityTerm:
         result = V1PodAffinityTerm(
             label_selector=self.label_selector.to_model(),
@@ -1194,12 +867,6 @@ class PodPreferredSchedulingTerm:
     pod_affinity_term: PodAffinityTerm
     weight: int = 100
 
-    def to_primitive(self) -> dict[str, Any]:
-        return {
-            "podAffinityTerm": self.pod_affinity_term.to_primitive(),
-            "weight": self.weight,
-        }
-
     def to_model(self) -> V1WeightedPodAffinityTerm:
         return V1WeightedPodAffinityTerm(
             pod_affinity_term=self.pod_affinity_term.to_model(),
@@ -1211,14 +878,6 @@ class PodPreferredSchedulingTerm:
 class PodAffinity:
     preferred: list[PodPreferredSchedulingTerm] = field(default_factory=list)
 
-    def to_primitive(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {}
-        if self.preferred:
-            payload["preferredDuringSchedulingIgnoredDuringExecution"] = [
-                term.to_primitive() for term in self.preferred
-            ]
-        return payload
-
     def to_model(self) -> V1PodAffinity:
         ret = V1PodAffinity()
         if self.preferred:
@@ -1229,16 +888,10 @@ class PodAffinity:
 
 
 @enum.unique
-class PodRestartPolicy(str, enum.Enum):
+class PodRestartPolicy(enum.StrEnum):
     ALWAYS = "Always"
     ON_FAILURE = "OnFailure"
     NEVER = "Never"
-
-    def __str__(self) -> str:
-        return self.value
-
-    def __repr__(self) -> str:
-        return self.__str__().__repr__()
 
 
 @dataclass(frozen=True)
@@ -1495,103 +1148,11 @@ class PodDescriptor:
             model.spec.priority_class_name = self.priority_class_name
         return model
 
-    def to_primitive(self) -> dict[str, Any]:
-        volume_mounts = [mount.to_primitive() for mount in self.volume_mounts]
-        volumes = [volume.to_primitive() for volume in self.volumes]
-        env_list = self.env_list + [env.to_primitive() for env in self.secret_env_list]
-
-        container_payload: dict[str, Any] = {
-            "name": f"{self.name}",
-            "image": f"{self.image}",
-            "imagePullPolicy": "Always",
-            "env": env_list,
-            "volumeMounts": volume_mounts,
-            "terminationMessagePolicy": "FallbackToLogsOnError",
-        }
-        if self.command:
-            container_payload["command"] = self.command
-        if self.args:
-            container_payload["args"] = self.args
-        if self.resources:
-            container_payload["resources"] = self.resources.to_primitive()
-        if self.tty:
-            container_payload["tty"] = True
-        container_payload["stdin"] = True
-        if self.working_dir is not None:
-            container_payload["workingDir"] = self.working_dir
-        if self.privileged:
-            container_payload["securityContext"] = {
-                "privileged": self.privileged,
-            }
-
-        ports = self._to_primitive_ports()
-        if ports:
-            container_payload["ports"] = ports
-        readiness_probe = self._to_primitive_readiness_probe()
-        if readiness_probe:
-            container_payload["readinessProbe"] = readiness_probe
-
-        payload: dict[str, Any] = {
-            "kind": "Pod",
-            "apiVersion": "v1",
-            "metadata": {"name": self.name},
-            "spec": {
-                "automountServiceAccountToken": False,
-                "containers": [container_payload],
-                "volumes": volumes,
-                "restartPolicy": str(self.restart_policy),
-                "imagePullSecrets": [
-                    secret.to_primitive() for secret in self.image_pull_secrets
-                ],
-                "tolerations": [
-                    toleration.to_primitive() for toleration in self.tolerations
-                ],
-            },
-        }
-        if self.labels:
-            payload["metadata"]["labels"] = self.labels
-        if self.annotations:
-            payload["metadata"]["annotations"] = self.annotations.copy()
-        if self.node_selector:
-            payload["spec"]["nodeSelector"] = self.node_selector.copy()
-        if self.node_affinity or self.pod_affinity:
-            payload["spec"]["affinity"] = {}
-        if self.node_affinity:
-            # fmt: off
-            payload["spec"]["affinity"]["nodeAffinity"] \
-                = self.node_affinity.to_primitive()
-            # fmt: on
-        if self.pod_affinity:
-            # fmt: off
-            payload["spec"]["affinity"]["podAffinity"] \
-                = self.pod_affinity.to_primitive()
-            # fmt: on
-        return payload
-
-    def _to_primitive_ports(self) -> list[dict[str, int]]:
-        ports = []
-        if self.port:
-            ports.append({"containerPort": self.port})
-        return ports
-
     def _to_model_ports(self) -> list[V1ContainerPort]:
         ports = []
         if self.port:
             ports.append(V1ContainerPort(container_port=self.port))
         return ports
-
-    def _to_primitive_readiness_probe(self) -> dict[str, Any]:
-        if not self.readiness_probe:
-            return {}
-
-        if self.port:
-            return {
-                "httpGet": {"port": self.port, "path": self.health_check_path},
-                "initialDelaySeconds": 1,
-                "periodSeconds": 1,
-            }
-
-        return {}
 
     def _to_model_readiness_probe(self) -> V1Probe:
         return V1Probe(
@@ -1609,53 +1170,7 @@ class PodDescriptor:
             raise ValueError(f"unknown kind: {kind}")
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "PodDescriptor":
-        cls._assert_resource_kind(expected_kind="Pod", payload=payload)
-
-        metadata = payload["metadata"]
-        container_payload = payload["spec"]["containers"][0]
-        # TODO (R Zubairov 09/13/18): remove medium emptyDir
-        # TODO (A Danshyn 06/19/18): set rest of attributes
-        status = None
-        if "status" in payload:
-            status = PodStatus.from_primitive(payload["status"])
-        if "imagePullSecrets" in payload["spec"]:
-            secrets = [
-                SecretRef.from_primitive(secret)
-                for secret in payload["spec"]["imagePullSecrets"]
-            ]
-        else:
-            secrets = []
-        tolerations = [
-            Toleration(
-                key=t.get("key", ""),
-                operator=t.get("operator", Toleration.operator),
-                value=t.get("value", Toleration.value),
-                effect=t.get("effect", Toleration.effect),
-            )
-            for t in payload["spec"].get("tolerations", ())
-        ]
-        return cls(
-            name=metadata["name"],
-            created_at=iso8601.parse_date(metadata["creationTimestamp"]),
-            image=container_payload["image"],
-            status=status,
-            image_pull_secrets=secrets,
-            node_name=payload["spec"].get("nodeName"),
-            command=container_payload.get("command"),
-            args=container_payload.get("args"),
-            tty=container_payload.get("tty", False),
-            tolerations=tolerations,
-            labels=metadata.get("labels", {}),
-            restart_policy=PodRestartPolicy(
-                payload["spec"].get("restartPolicy", str(cls.restart_policy))
-            ),
-            working_dir=container_payload.get("workingDir"),
-            resources=Resources.from_primitive(container_payload.get("resources", {})),
-        )
-
-    @classmethod
-    def from_model(cls, model: V1Pod) -> "PodDescriptor":
+    def from_model(cls, model: V1Pod) -> Self:
         metadata = model.metadata
         assert model.spec is not None
         container = model.spec.containers[0]
@@ -1706,26 +1221,24 @@ class ContainerStateRunning:
 
 
 class ContainerStatus:
-    def __init__(self, payload: dict[str, Any] | None = None) -> None:
-        self._payload = payload or {}
-
-    @property
-    def _state(self) -> dict[str, Any]:
-        return self._payload.get("state", {})
+    def __init__(self, model: V1ContainerStatus | None) -> None:
+        self._model = model
 
     @property
     def is_waiting(self) -> bool:
-        return not self._state or (
-            "waiting" in self._state and self._state["waiting"] is not None
-        )
+        return not self.is_running and not self.is_terminated
+
+    @property
+    def is_running(self) -> bool:
+        if self._model is None:
+            return False
+        return self._model.state.running is not None
 
     @property
     def is_terminated(self) -> bool:
-        return (
-            bool(self._state)
-            and "terminated" in self._state
-            and self._state["terminated"] is not None
-        )
+        if self._model is None:
+            return False
+        return self._model.state.terminated is not None
 
     @property
     def reason(self) -> str | None:
@@ -1748,28 +1261,40 @@ class ContainerStatus:
         see
         https://github.com/kubernetes/kubernetes/blob/c65f65cf6aea0f73115a2858a9d63fc2c21e5e3b/pkg/kubelet/dockershim/docker_container.go#L306-L409
         """
-        for state in self._state.values():
-            if not state:
-                continue
-            return state.get("reason")
+        if self.is_terminated:
+            assert self._model is not None
+            assert self._model.state.terminated is not None
+            return self._model.state.terminated.reason
+        if self.is_running:
+            return None
+        # waiting
+        if self._model is None:
+            return None
+        if self._model.state.waiting is not None:
+            return self._model.state.waiting.reason
         return None
 
     @property
     def message(self) -> str | None:
-        for state in self._state.values():
-            if not state:
-                continue
-            return state.get("message")
+        if self.is_terminated:
+            assert self._model is not None
+            assert self._model.state.terminated is not None
+            return self._model.state.terminated.message
+        if self.is_running:
+            return None
+        # waiting
+        if self._model is None:
+            return None
+        if self._model.state.waiting is not None:
+            return self._model.state.waiting.message
         return None
 
     @property
     def exit_code(self) -> int | None:
         assert self.is_terminated
-        termination_state = self._state["terminated"]
-        for key in ("exitCode", "exit_code"):
-            if key in termination_state:
-                return termination_state[key]
-        return None
+        assert self._model is not None
+        assert self._model.state.terminated is not None
+        return self._model.state.terminated.exit_code
 
     @property
     def is_creating(self) -> bool:
@@ -1779,15 +1304,11 @@ class ContainerStatus:
         return self.is_waiting and self.reason in (None, "ContainerCreating")
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> Self:
-        return cls(payload)
-
-    @classmethod
     def from_model(cls, model: V1ContainerStatus) -> Self:
-        return cls(model.model_dump())
+        return cls(model)
 
 
-class PodConditionType(enum.Enum):
+class PodConditionType(enum.StrEnum):
     UNKNOWN = "Unknown"
     POD_SCHEDULED = "PodScheduled"
     READY = "Ready"
@@ -1811,38 +1332,6 @@ class PodCondition:
         self.message = message
         self.status = status
         self.type = type
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> Self:
-        if "lastTransitionTime" in payload:
-            last_transition_time = iso8601.parse_date(payload["lastTransitionTime"])
-        else:
-            last_transition_time = payload["last_transition_time"]
-
-        raw_status = payload["status"]
-
-        match raw_status:
-            case "Unknown":
-                status = None
-            case "True":
-                status = True
-            case "False":
-                status = False
-            case _:
-                raise ValueError(f"Invalid status {raw_status!r}")
-
-        try:
-            type = PodConditionType(payload["type"])
-        except (KeyError, ValueError):
-            type = PodConditionType.UNKNOWN
-
-        return cls(
-            last_transition_time=last_transition_time,
-            reason=payload.get("reason", ""),
-            message=payload.get("message", ""),
-            status=status,
-            type=type,
-        )
 
     @classmethod
     def from_model(cls, model: V1PodCondition) -> Self:
@@ -1889,39 +1378,6 @@ class KubernetesEvent:
         self.first_timestamp = first_timestamp
         self.event_time = event_time
         self.last_timestamp = last_timestamp
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> Self:
-        first_timestamp = last_timestamp = event_time = None
-
-        raw_first_timestamp = payload.get("firstTimestamp") or payload.get(
-            "deprecatedFirstTimestamp"
-        )
-        if raw_first_timestamp:
-            first_timestamp = iso8601.parse_date(raw_first_timestamp)
-
-        raw_last_timestamp = payload.get("lastTimestamp") or payload.get(
-            "deprecatedLastTimestamp"
-        )
-        if raw_last_timestamp:
-            last_timestamp = iso8601.parse_date(raw_last_timestamp)
-
-        raw_event_time = payload.get("eventTime")
-        if raw_event_time:
-            event_time = iso8601.parse_date(raw_event_time)
-
-        return cls(
-            involved_object=payload["involvedObject"],
-            count=payload["count"],
-            reason=payload.get("reason", None),
-            message=payload.get("message", None),
-            creation_timestamp=iso8601.parse_date(
-                payload["metadata"]["creationTimestamp"]
-            ),
-            first_timestamp=first_timestamp,
-            event_time=event_time,
-            last_timestamp=last_timestamp,
-        )
 
     @classmethod
     def from_model(cls, event: CoreV1Event) -> Self:
@@ -2025,33 +1481,15 @@ class PodStatus:
         return list(self._conditions)
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "PodStatus":
-        if "containerStatuses" in payload and payload["containerStatuses"]:
-            container_statuses = tuple(
-                ContainerStatus.from_primitive(s) for s in payload["containerStatuses"]
-            )
-        else:
-            container_statuses = (ContainerStatus(),)
-        return cls(
-            phase=payload["phase"],
-            container_statuses=container_statuses,
-            reason=payload.get("reason"),
-            conditions=[
-                PodCondition.from_primitive(c) for c in payload.get("conditions", [])
-            ],
-        )
-
-    @classmethod
-    def from_model(cls, model: V1PodStatus) -> "PodStatus":
+    def from_model(cls, model: V1PodStatus) -> Self:
         if model.container_statuses:
             container_statuses = tuple(
-                ContainerStatus.from_model(s) for s in model.container_statuses or []
+                ContainerStatus.from_model(s) for s in model.container_statuses
             )
         else:
-            container_statuses = (ContainerStatus(),)
-        assert model.phase is not None
+            container_statuses = (ContainerStatus(None),)
         return cls(
-            phase=model.phase,
+            phase=model.phase or "",
             container_statuses=container_statuses,
             reason=model.reason,
             conditions=[PodCondition.from_model(c) for c in model.conditions],
@@ -2063,9 +1501,6 @@ class NodeTaint:
     key: str
     value: str
     effect: str = "NoSchedule"
-
-    def to_primitive(self) -> dict[str, Any]:
-        return {"key": self.key, "value": self.value, "effect": self.effect}
 
     def to_model(self) -> V1Taint:
         return V1Taint(
@@ -2105,7 +1540,7 @@ class NodeResources:
             raise ValueError(f"Invalid intel gpu:  {self.intel_gpu}")
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "NodeResources":
+    def from_model(cls, payload: dict[str, str]) -> Self:
         return cls(
             cpu=Resources.parse_cpu(payload.get("cpu", "0")),
             memory=Resources.parse_memory(payload.get("memory", "0Mi")),
@@ -2183,7 +1618,7 @@ class NodeResources:
         return self.any
 
 
-class NodeConditionType(enum.Enum):
+class NodeConditionType(enum.StrEnum):
     UNKNOWN = "Unknown"
     DISK_PRESSURE = "DiskPressure"
     MEMORY_PRESSURE = "MemoryPressure"
@@ -2208,17 +1643,13 @@ class NodeCondition:
     reason: str = ""
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "NodeCondition":
+    def from_model(cls, model: V1NodeCondition) -> Self:
         return cls(
-            type=NodeConditionType.parse(payload["type"]),
-            status=cls._parse_status(payload["status"]),
-            message=payload.get("message", ""),
-            reason=payload.get("reason", ""),
-            transition_time=(
-                iso8601.parse_date(t)
-                if (t := payload.get("lastTransitionTime"))
-                else None
-            ),
+            type=NodeConditionType.parse(model.type),
+            status=cls._parse_status(model.status),
+            message=model.message or "",
+            reason=model.reason or "",
+            transition_time=model.last_transition_time,
         )
 
     @classmethod
@@ -2238,12 +1669,10 @@ class NodeStatus:
     conditions: list[NodeCondition] = field(default_factory=list)
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "NodeStatus":
+    def from_model(cls, model: V1NodeStatus) -> Self:
         return cls(
-            allocatable_resources=NodeResources.from_primitive(payload["allocatable"]),
-            conditions=[
-                NodeCondition.from_primitive(p) for p in payload.get("conditions", ())
-            ],
+            allocatable_resources=NodeResources.from_model(model.allocatable),
+            conditions=[NodeCondition.from_model(p) for p in model.conditions],
         )
 
     @property
@@ -2261,412 +1690,50 @@ class Node:
     labels: dict[str, str] = field(default_factory=dict, compare=False)
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "Node":
-        metadata = payload["metadata"]
+    def from_model(cls, model: V1Node) -> Self:
+        metadata = model.metadata
+        assert metadata.name is not None
         return cls(
-            name=metadata["name"],
-            labels=metadata.get("labels", {}),
-            status=NodeStatus.from_primitive(payload["status"]),
+            name=metadata.name,
+            labels=metadata.labels,
+            status=NodeStatus.from_model(model.status),
         )
 
     def get_free_resources(self, resource_requests: NodeResources) -> NodeResources:
         return self.status.allocatable_resources - resource_requests
 
 
-@dataclass(frozen=True)
-class ListResult:
-    resource_version: str
-    items: list[dict[str, Any]]
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "ListResult":
-        return cls(
-            resource_version=payload["metadata"]["resourceVersion"],
-            items=payload["items"],
-        )
-
-
-class WatchEventType(str, Enum):
+class WatchEventType(enum.StrEnum):
     ADDED = "ADDED"
     MODIFIED = "MODIFIED"
     DELETED = "DELETED"
     ERROR = "ERROR"
 
 
-@dataclass(frozen=True)
-class WatchBookmarkEvent:
-    resource_version: str
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "WatchBookmarkEvent":
-        return cls(
-            resource_version=payload["object"]["metadata"]["resourceVersion"],
-        )
-
-    @classmethod
-    def is_bookmark(cls, payload: dict[str, Any]) -> bool:
-        return "BOOKMARK" == payload["type"].upper()
-
-
-@dataclass(frozen=True)
-class WatchEvent:
-    type: WatchEventType
-    resource: dict[str, Any]
-
-    @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "WatchEvent":
-        return cls(type=WatchEventType(payload["type"]), resource=payload["object"])
-
-    @classmethod
-    def is_error(cls, payload: dict[str, Any]) -> bool:
-        return WatchEventType.ERROR == payload["type"].upper()
-
-    @classmethod
-    def create_added(cls, resource: dict[str, Any]) -> "WatchEvent":
-        return cls(type=WatchEventType.ADDED, resource=resource)
-
-    @classmethod
-    def create_modified(cls, resource: dict[str, Any]) -> "WatchEvent":
-        return cls(type=WatchEventType.MODIFIED, resource=resource)
-
-    @classmethod
-    def create_deleted(cls, resource: dict[str, Any]) -> "WatchEvent":
-        return cls(type=WatchEventType.DELETED, resource=resource)
-
-
-class KubeClient(ApoloKubeClient):
-    def __init__(
-        self,
-        *args: Any,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(*args, **kwargs)
-        self._api_resources: APIResources = APIResources()
-
-    async def init_api_resources(self) -> None:
-        for gv in APIResources.group_versions:
-            try:
-                self._api_resources[gv] = await self.get_api_resource(gv)
-            except aiohttp.ClientResponseError as ex:
-                if ex.status != 404:
-                    raise
-
-    async def __aenter__(self) -> "KubeClient":
-        await self.init()
-        await self.init_api_resources()
-        return self
-
-    @property
-    def _all_pods_url(self) -> str:
-        return f"{self.api_v1_url}/pods"
-
-    def _generate_pod_url(self, namespace: str, pod_id: str) -> str:
-        pods_url = self._generate_pods_url(namespace)
-        return f"{pods_url}/{pod_id}"
-
-    def _generate_pods_url(
-        self, namespace: str | None = None, all_namespaces: bool = False
-    ) -> str:
-        if all_namespaces or not namespace:
-            return self._all_pods_url
-        namespace_url = self.generate_namespace_url(namespace)
-        return f"{namespace_url}/pods"
-
-    @property
-    def _nodes_url(self) -> str:
-        return f"{self.api_v1_url}/nodes"
-
-    def _generate_node_url(self, name: str) -> str:
-        return f"{self._nodes_url}/{name}"
-
-    def _generate_all_secrets_url(self, namespace_name: str | None = None) -> str:
-        namespace_name = namespace_name or self._namespace
-        namespace_url = self.generate_namespace_url(namespace_name)
-        return f"{namespace_url}/secrets"
-
-    def _generate_secret_url(
-        self, secret_name: str, namespace_name: str | None = None
-    ) -> str:
-        all_secrets_url = self._generate_all_secrets_url(namespace_name)
-        return f"{all_secrets_url}/{secret_name}"
-
-    def _create_headers(self, headers: dict[str, Any] | None = None) -> dict[str, Any]:
-        headers = dict(headers) if headers else {}
-        if self._auth_type == KubeClientAuthType.TOKEN and self._token:
-            headers["Authorization"] = "Bearer " + self._token
-        return headers
-
-    async def _watch(
-        self,
-        url: str,
-        params: dict[str, str] | None = None,
-        resource_version: str | None = None,
-    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
-        params = params or {}
-        params.update(watch="true", allowWatchBookmarks="true")
-        if resource_version:
-            params["resourceVersion"] = resource_version
-        assert self._client
-        async with self._client.get(
-            url,
-            params=params,
-            headers=self._create_headers(),
-            timeout=aiohttp.ClientTimeout(),
-        ) as response:
-            if response.status == 410:
-                raise ResourceGone
-            async for line in response.content:
-                payload = json.loads(line)
-                self._raise_for_status(payload)
-                if WatchEvent.is_error(payload):
-                    self._raise_for_status(payload["object"])
-                if WatchBookmarkEvent.is_bookmark(payload):
-                    yield WatchBookmarkEvent.from_primitive(payload)
-                else:
-                    yield WatchEvent.from_primitive(payload)
-
-    async def get_api_resource(self, group_version: str) -> APIResource:
-        url = f"{self._base_url}/apis/{group_version}"
-        payload = await self.get(url=url, raise_for_status=True)
-        return APIResource.from_primitive(payload)
-
-    async def _delete_resource_url(self, url: str, uid: str | None = None) -> None:
-        request_payload = None
-        if uid:
-            request_payload = {"preconditions": {"uid": uid}}
-        try:
-            await self.delete(url=url, json=request_payload)
-        except ResourceExists as e:
-            # This might happen if we try to remove resource by it's name, but
-            # different UID, see https://github.com/neuro-inc/platform-api/pull/1525
-            raise ResourceNotFound(str(e))
-
-    async def create_node(
-        self,
-        name: str,
-        capacity: dict[str, Any],
-        labels: dict[str, str] | None = None,
-        taints: Sequence[NodeTaint] | None = None,
-    ) -> None:
-        taints = taints or []
-        payload = {
-            "apiVersion": "v1",
-            "kind": "Node",
-            "metadata": {"name": name, "labels": labels or {}},
-            "spec": {"taints": [taint.to_primitive() for taint in taints]},
-            "status": {
-                # TODO (ajuszkowski, 29-0-2019) add enum for capacity
-                "capacity": capacity,
-                "conditions": [{"status": "True", "type": "Ready"}],
-            },
-        }
-        url = self._nodes_url
-        await self.post(url=url, json=payload)
-
-    async def delete_node(self, name: str) -> None:
-        url = self._generate_node_url(name)
-        await self._delete_resource_url(url)
-
-    async def get_nodes(self) -> Sequence[Node]:
-        payload = await self.get(url=self._nodes_url)
-        assert payload["kind"] == "NodeList"
-        nodes = []
-        for item in payload["items"]:
-            nodes.append(Node.from_primitive(item))
-        return nodes
-
-    async def get_node(self, name: str) -> Node:
-        payload = await self.get(url=self._generate_node_url(name))
-        return Node.from_primitive(payload)
-
-    async def get_raw_nodes(self, labels: dict[str, str] | None = None) -> ListResult:
-        params: dict[str, str] = {}
-        if labels:
-            params["labelSelector"] = ",".join(
-                "=".join(item) for item in labels.items()
-            )
-        payload = await self.get(url=self._nodes_url, params=params)
-        return ListResult.from_primitive(payload)
-
-    async def watch_nodes(
-        self,
-        labels: dict[str, str] | None = None,
-        resource_version: str | None = None,
-    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
-        params: dict[str, str] = {}
-        if labels:
-            params["labelSelector"] = ",".join(
-                "=".join(item) for item in labels.items()
-            )
-        async for event in self._watch(self._nodes_url, params, resource_version):
-            yield event
-
-    async def create_pod(
-        self, namespace: str, descriptor: PodDescriptor
-    ) -> PodDescriptor:
-        url = self._generate_pods_url(namespace)
-        payload = await self.post(
-            url=url,
-            json=descriptor.to_primitive(),
-            raise_for_status=False,
-        )
-        return PodDescriptor.from_primitive(payload)
-
-    async def set_raw_pod_status(
-        self,
-        namespace: str,
-        name: str,
-        payload: dict[str, Any],
-    ) -> dict[str, Any]:
-        url = self._generate_pod_url(namespace, name) + "/status"
-        return await self.put(url=url, json=payload)
-
-    async def get_pod(self, namespace: str, pod_name: str) -> PodDescriptor:
-        url = self._generate_pod_url(namespace, pod_name)
-        payload = await self.get(
-            url=url,
-            raise_for_status=False,
-        )
-        return PodDescriptor.from_primitive(payload)
-
-    async def get_raw_pod(self, namespace: str, name: str) -> dict[str, Any]:
-        url = self._generate_pod_url(namespace, name)
-        return await self.get(url=url)
-
-    async def get_raw_pods(self, all_namespaces: bool = False) -> ListResult:
-        url = self._generate_pods_url(all_namespaces=all_namespaces)
-        payload = await self.get(url=url)
-        assert payload["kind"] == "PodList"
-        return ListResult.from_primitive(payload)
-
-    async def watch_pods(
-        self, all_namespaces: bool = False, resource_version: str | None = None
-    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
-        url = self._generate_pods_url(all_namespaces=all_namespaces)
-        async for event in self._watch(url, resource_version=resource_version):
-            yield event
-
-    async def get_pod_status(
-        self,
-        namespace: str,
-        pod_id: str,
-    ) -> PodStatus:
-        pod = await self.get_pod(namespace, pod_id)
-        if pod.status is None:
-            raise ValueError("Missing pod status")
-        return pod.status
-
-    async def delete_pod(
-        self, namespace: str, pod_name: str, *, force: bool = False
-    ) -> PodStatus:
-        url = self._generate_pod_url(namespace, pod_name)
-        request_payload = None
-        if force:
-            request_payload = {
-                "apiVersion": "v1",
-                "kind": "DeleteOptions",
-                "gracePeriodSeconds": 0,
-            }
-        payload = await self.delete(
-            url=url,
-            json=request_payload,
-            raise_for_status=False,
-        )
-        pod = PodDescriptor.from_primitive(payload)
-        return pod.status  # type: ignore
-
-    async def create_docker_secret(
-        self,
-        secret: DockerRegistrySecret,
-        namespace: str,
-    ) -> None:
-        url = self._generate_all_secrets_url(namespace)
-        await self.post(url=url, json=secret.to_primitive())
-
-    async def update_docker_secret(
-        self,
-        secret: DockerRegistrySecret,
-        namespace: str,
-        create_non_existent: bool = False,
-    ) -> None:
-        try:
-            url = self._generate_secret_url(secret.name, namespace)
-            await self.put(url=url, json=secret.to_primitive())
-        except KubeClientException as e:
-            if isinstance(e, ResourceNotFound) and create_non_existent:
-                await self.create_docker_secret(secret, namespace)
-            else:
-                raise e
-
-    async def delete_secret(
-        self, secret_name: str, namespace_name: str | None = None
-    ) -> None:
-        url = self._generate_secret_url(secret_name, namespace_name)
-        await self._delete_resource_url(url)
-
-    async def wait_pod_is_running(
-        self,
-        namespace: str,
-        pod_name: str,
-        timeout_s: float = 10.0 * 60,
-        interval_s: float = 1.0,
-    ) -> None:
-        """Wait until the pod transitions from the waiting state.
-
-        Raise JobError if there is no such pod.
-        Raise asyncio.TimeoutError if it takes too long for the pod.
-        """
-        async with timeout(timeout_s):
-            while True:
-                pod_status = await self.get_pod_status(namespace, pod_name)
-                if not pod_status.is_waiting:
-                    return
-                await asyncio.sleep(interval_s)
-
-    async def wait_pod_is_terminated(
-        self,
-        namespace: str,
-        pod_name: str,
-        timeout_s: float = 10.0 * 60,
-        interval_s: float = 1.0,
-    ) -> None:
-        """Wait until the pod transitions to the terminated state.
-
-        Raise JobError if there is no such pod.
-        Raise asyncio.TimeoutError if it takes too long for the pod.
-        """
-        async with timeout(timeout_s):
-            while True:
-                pod_status = await self.get_pod_status(namespace, pod_name)
-                if pod_status.is_terminated:
-                    return
-                await asyncio.sleep(interval_s)
-
-
-class EventHandler:
+class EventHandler[ModelT: ResourceModel]:
     @abc.abstractmethod
-    async def init(self, resources: list[dict[str, Any]]) -> None:
+    async def init(self, resources: list[ModelT]) -> None:
         pass
 
     @abc.abstractmethod
-    async def handle(self, event: WatchEvent) -> None:
+    async def handle(self, event: WatchEvent[ModelT]) -> None:
         pass
 
 
-class Watcher(abc.ABC):
+class Watcher[ModelT: ResourceModel](abc.ABC):
     resource_version: str
 
     def __init__(self, kube_client: KubeClient) -> None:
         self._kube_client = kube_client
-        self._handlers: list[EventHandler] = []
+        self._handlers: list[EventHandler[ModelT]] = []
         self._watcher_task: asyncio.Task[None] | None = None
 
-    def subscribe(self, handler: EventHandler) -> None:
+    def subscribe(self, handler: EventHandler[ModelT]) -> None:
         if self._watcher_task is not None:
             raise Exception("Subscription is not possible after watcher start")
         self._handlers.append(handler)
 
-    async def __aenter__(self) -> "Watcher":
+    async def __aenter__(self) -> Self:
         await self.start()
         return self
 
@@ -2691,15 +1758,14 @@ class Watcher(abc.ABC):
         for handler in self._handlers:
             await handler.init(result.items)
 
-        self.resource_version = result.resource_version
+        assert result.metadata.resource_version is not None
+        self.resource_version = result.metadata.resource_version
 
     async def _watch(self) -> None:
+        watcher = await self.watch(self.resource_version)
         while True:
             try:
-                async for event in self.watch(self.resource_version):
-                    if isinstance(event, WatchBookmarkEvent):
-                        self.resource_version = event.resource_version
-                        continue
+                async for event in watcher.stream():
                     for handler in self._handlers:
                         await handler.handle(event)
             except ResourceGone:
@@ -2715,52 +1781,57 @@ class Watcher(abc.ABC):
                 logger.warning(
                     "%s: unhandled error", self.__class__.__name__, exc_info=exc
                 )
+            finally:
+                assert watcher.resource_version
+                self.resource_version = watcher.resource_version
 
     @abc.abstractmethod
-    async def list(self) -> ListResult:
+    async def list(self) -> CollectionModel[ModelT]:
         pass
 
     @abc.abstractmethod
-    async def watch(
-        self, resource_version: str
-    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
-        yield  # type: ignore
+    async def watch(self, resource_version: str) -> Watch[ModelT]:
+        pass
 
 
-class NodeWatcher(Watcher):
+class NodeWatcher(Watcher[V1Node]):
     def __init__(
         self, kube_client: KubeClient, labels: dict[str, str] | None = None
     ) -> None:
         super().__init__(kube_client)
-        self._kwargs = {"labels": labels}
+        self._labels = (
+            ",".join(f"{k}={v}" for k, v in labels.items()) if labels else None
+        )
 
-    async def list(self) -> ListResult:
-        return await self._kube_client.get_raw_nodes(**self._kwargs)
+    async def list(self) -> CollectionModel[V1Node]:
+        return await self._kube_client.core_v1.node.get_list(
+            label_selector=self._labels,
+        )
 
-    async def watch(
-        self, resource_version: str
-    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
-        async for event in self._kube_client.watch_nodes(
-            resource_version=resource_version, **self._kwargs
-        ):
-            yield event
+    async def watch(self, resource_version: str) -> Watch[V1Node]:
+        return self._kube_client.core_v1.node.watch(
+            resource_version=resource_version,
+            label_selector=self._labels,
+            allow_watch_bookmarks=True,
+        )
 
 
-class PodWatcher(Watcher):
+class PodWatcher(Watcher[V1Pod]):
     def __init__(self, kube_client: KubeClient, all_namespaces: bool = True) -> None:
         super().__init__(kube_client)
-        self._kwargs = {"all_namespaces": all_namespaces}
+        self._all_namespaces = all_namespaces
 
-    async def list(self) -> ListResult:
-        return await self._kube_client.get_raw_pods(**self._kwargs)
+    async def list(self) -> CollectionModel[V1Pod]:
+        return await self._kube_client.core_v1.pod.get_list(
+            all_namespaces=self._all_namespaces,
+        )
 
-    async def watch(
-        self, resource_version: str
-    ) -> AsyncIterator[WatchEvent | WatchBookmarkEvent]:
-        async for event in self._kube_client.watch_pods(
-            resource_version=resource_version, **self._kwargs
-        ):
-            yield event
+    async def watch(self, resource_version: str) -> Watch[V1Pod]:
+        return self._kube_client.core_v1.pod.watch(
+            resource_version=resource_version,
+            all_namespaces=self._all_namespaces,
+            allow_watch_bookmarks=True,
+        )
 
 
 # https://github.com/kubernetes/kubernetes/blob/c285e781331a3785a7f436042c65c5641ce8a9e9/pkg/kubelet/preemption/preemption.go
@@ -2908,16 +1979,6 @@ async def delete_pod(
     )
     pod = PodDescriptor.from_model(model)
     return pod.status  # type: ignore
-
-
-async def set_raw_pod_status(
-    namespace: str,
-    name: str,
-    payload: dict[str, Any],
-) -> dict[str, Any]:
-    return {}
-    # url = self._generate_pod_url(namespace, name) + "/status"
-    # return await self.put(url=url, json=payload)
 
 
 async def create_service(client_proxy: KubeClientProxy, service: Service) -> Service:
