@@ -11,7 +11,7 @@ import uuid
 from asyncio import timeout
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
-from dataclasses import replace
+from copy import replace
 from datetime import datetime, timezone
 from decimal import Decimal
 from operator import attrgetter
