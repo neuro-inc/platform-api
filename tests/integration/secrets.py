@@ -98,7 +98,6 @@ async def secrets_server_url(
             f"NP_SECRETS_PLATFORM_AUTH_URL=http://{auth_server_container_name}:8080",
             f"NP_SECRETS_PLATFORM_AUTH_TOKEN={auth_config.service_token}",
             f"NP_SECRETS_K8S_API_URL={kube_proxy_url}",
-            f"NP_SECRETS_K8S_NS={kube_config.namespace}",
             "NP_SECRETS_K8S_AUTH_TYPE=none",
             f"NP_CLUSTER_NAME={test_cluster_name}",
         ],
