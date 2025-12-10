@@ -162,6 +162,7 @@ class KubeOrchestrator(Orchestrator):
         self._orchestrator_config = orchestrator_config
         self._kube_config = kube_config
         self._http = ClientSession()
+        self._owns_selector = kube_client_selector is None
         self._selector = kube_client_selector or KubeClientSelector(config=kube_config)
 
         self._nodes_handler = NodesHandler()
@@ -192,7 +193,8 @@ class KubeOrchestrator(Orchestrator):
         return self._kube_config
 
     async def __aenter__(self) -> None:
-        await self._selector.__aenter__()
+        if self._owns_selector:
+            await self._selector.__aenter__()
 
     async def __aexit__(
         self,
@@ -200,7 +202,8 @@ class KubeOrchestrator(Orchestrator):
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
-        await self._selector.__aexit__(exc_typ, exc_val, exc_tb)
+        if self._owns_selector:
+            await self._selector.__aexit__(exc_typ, exc_val, exc_tb)
         await self._http.close()
 
     def subscribe_to_kube_events(

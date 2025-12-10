@@ -63,7 +63,9 @@ async def create_app(
         async with AsyncExitStack() as exit_stack:
             logger.info("Initializing KubeClient")
             kube_config = config.kube_config
-            kube_client_selector = KubeClientSelector(config=kube_config)
+            kube_client_selector = await exit_stack.enter_async_context(
+                KubeClientSelector(config=kube_config)
+            )
 
             logger.info("Initializing AuthClient")
             auth_client = await exit_stack.enter_async_context(
