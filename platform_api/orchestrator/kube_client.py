@@ -533,6 +533,10 @@ class Resources:
     @classmethod
     def from_container_resources(cls, resources: ContainerResources) -> "Resources":
         kwargs: dict[str, Any] = {}
+        if resources.nvidia_migs:
+            kwargs["nvidia_migs"] = {
+                key: value.count for key, value in resources.nvidia_migs.items()
+            }
         if resources.tpu:
             kwargs["tpu_version"], kwargs["tpu_cores"] = cls._parse_tpu_resource(
                 resources.tpu
