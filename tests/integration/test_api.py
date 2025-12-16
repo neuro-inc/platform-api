@@ -114,6 +114,7 @@ class TestApi:
             expected_payload: dict[str, Any] = {
                 "authorized": True,
                 "admin_url": f"{admin_url}",
+                "vcluster_url": "http://localhost:8080/apis/vcluster/v1",
                 "orgs": [],
                 "clusters": [],
                 "projects": [],
@@ -452,6 +453,7 @@ class TestApi:
             expected_payload: dict[str, Any] = {
                 "authorized": True,
                 "admin_url": f"{admin_url}",
+                "vcluster_url": "http://localhost:8080/apis/vcluster/v1",
                 "clusters": [
                     expected_cluster_payload,
                     {**expected_cluster_payload, "name": "testcluster2"},
@@ -720,6 +722,7 @@ class TestApi:
             expected_payload: dict[str, Any] = {
                 "authorized": True,
                 "admin_url": f"{admin_url}",
+                "vcluster_url": "http://localhost:8080/apis/vcluster/v1",
                 "clusters": [expected_cluster_payload],
                 "orgs": mock.ANY,
                 "projects": mock.ANY,
@@ -1015,6 +1018,7 @@ class TestApi:
                     "http://127.0.0.1:54542",
                 ],
                 "admin_url": f"{admin_url}",
+                "vcluster_url": "http://localhost:8080/apis/vcluster/v1",
                 "clusters": [expected_cluster_payload],
                 "orgs": [{"name": test_org_name, "role": "user"}],
                 "projects": [],

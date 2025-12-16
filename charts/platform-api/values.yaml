@@ -30,6 +30,7 @@ platform:
   adminUrl: http://platform-admin:8080/apis/admin/v1
   eventsUrl: http://platform-events:8080
   notificationsUrl: http://platform-notifications:8080
+  vclusterPublicUrl: https://staging.neu.ro/apis/vcluster/v1
   token: {}
 
 oauth:

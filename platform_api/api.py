@@ -101,6 +101,10 @@ class ConfigApiHandler:
 
             if self._config.admin_public_url:
                 data["admin_url"] = str(self._config.admin_public_url)
+
+            if self._config.vcluster_public_url:
+                data["vcluster_url"] = str(self._config.vcluster_public_url)
+
         except HTTPUnauthorized:
             data["authorized"] = False
 
