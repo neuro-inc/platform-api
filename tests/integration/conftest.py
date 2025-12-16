@@ -694,6 +694,7 @@ def config_factory(
         database_config = DatabaseConfig(postgres=postgres_config)
         config_url = URL("http://localhost:8082/api/v1")
         api_base_url = URL("http://localhost:8080/api/v1")
+        vcluster_public_url = URL("http://localhost:8080/apis/vcluster/v1")
         return Config(
             server=server_config,
             database=database_config,
@@ -706,6 +707,7 @@ def config_factory(
             admin_url=admin_url,
             admin_public_url=admin_url,
             api_base_url=api_base_url,
+            vcluster_public_url=vcluster_public_url,
             **kwargs,
         )
 

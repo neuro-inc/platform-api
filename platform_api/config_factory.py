@@ -47,6 +47,7 @@ class EnvironConfigFactory:
         api_base_url = URL(self._environ["NP_API_URL"])
         admin_url = self._get_url("NP_ADMIN_URL")
         admin_public_url = self._get_url("NP_ADMIN_PUBLIC_URL")
+        vcluster_public_url = self._get_url("NP_VCLUSTER_PUBLIC_URL")
         config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"]).with_path("")
         return Config(
             server=self.create_server(),
@@ -62,6 +63,7 @@ class EnvironConfigFactory:
             admin_public_url=admin_public_url,
             api_base_url=api_base_url,
             events=self.create_events(),
+            vcluster_public_url=vcluster_public_url,
             platform_admin_enabled=self._get_bool("PLATFORM_ADMIN_ENABLED", False),
         )
 

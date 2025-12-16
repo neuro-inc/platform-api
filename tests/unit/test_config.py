@@ -65,6 +65,7 @@ class TestEnvironConfigFactory:
             "NP_AUTH_PUBLIC_URL": "-",
             "NP_ADMIN_URL": "-",
             "NP_ADMIN_PUBLIC_URL": "-",
+            "NP_VCLUSTER_PUBLIC_URL": "-",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_ENFORCER_CREDIT_NOTIFICATION_THRESHOLD": "200.33",
             "NP_ENFORCER_RETENTION_DELAY_DAYS": "200",
@@ -118,6 +119,7 @@ class TestEnvironConfigFactory:
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_ADMIN_URL": "https://neu.ro/apis/admin/v1",
             "NP_ADMIN_PUBLIC_URL": "https://neu.ro/apis/admin/v1",
+            "NP_VCLUSTER_PUBLIC_URL": "https://neu.ro/apis/vcluster/v1",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_AUTH_PUBLIC_URL": "https://neu.ro/api/v1/users",
         }
@@ -138,6 +140,7 @@ class TestEnvironConfigFactory:
             "NP_API_URL": "https://neu.ro/api/v1",
             "NP_ADMIN_URL": "https://platform-admin:8080/apis/admin/v1",
             "NP_ADMIN_PUBLIC_URL": "https://neu.ro/apis/admin/v1",
+            "NP_VCLUSTER_PUBLIC_URL": "https://neu.ro/apis/vcluster/v1",
             "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
@@ -152,6 +155,8 @@ class TestEnvironConfigFactory:
 
         assert config.admin_url == URL("https://platform-admin:8080/apis/admin/v1")
         assert config.admin_public_url == URL("https://neu.ro/apis/admin/v1")
+
+        assert config.vcluster_public_url == URL("https://neu.ro/apis/vcluster/v1")
 
         assert config.jobs.deletion_delay_s == 3600
         assert config.jobs.deletion_delay == timedelta(seconds=3600)
