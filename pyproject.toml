@@ -48,7 +48,7 @@ vcs = "git"
 optional = true
 
 [tool.poetry.group.dev.dependencies]
-mypy= "1.19.0"
+mypy= "1.19.1"
 pre-commit="4.5.0"
 aiodocker="0.24.0"
 pytest="9.0.2"
