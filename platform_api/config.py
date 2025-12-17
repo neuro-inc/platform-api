@@ -157,12 +157,11 @@ class Config:
 
     api_base_url: URL
     config_url: URL
-    admin_url: URL | None
-    admin_public_url: URL | None
+    admin_url: URL
+    vcluster_public_url: URL
+    admin_public_url: URL
 
-    vcluster_public_url: URL | None
-
-    oauth: OAuthConfig | None = None
+    oauth: OAuthConfig
 
     jobs: JobsConfig = JobsConfig()
 
