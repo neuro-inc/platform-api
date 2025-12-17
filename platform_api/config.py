@@ -161,7 +161,7 @@ class Config:
     vcluster_public_url: URL
     admin_public_url: URL
 
-    oauth: OAuthConfig
+    oauth: OAuthConfig | None
 
     jobs: JobsConfig = JobsConfig()
 
