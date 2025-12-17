@@ -45,15 +45,15 @@ class EnvironConfigFactory:
         auth = self.create_auth()
         jobs = self.create_jobs(orphaned_job_owner=auth.service_name)
         api_base_url = URL(self._environ["NP_API_URL"])
-        admin_url = self._get_url("NP_ADMIN_URL")
-        admin_public_url = self._get_url("NP_ADMIN_PUBLIC_URL")
-        vcluster_public_url = self._get_url("NP_VCLUSTER_PUBLIC_URL")
+        admin_url = URL(self._environ["NP_ADMIN_URL"])
+        admin_public_url = URL(self._environ["NP_ADMIN_PUBLIC_URL"])
+        vcluster_public_url = URL(self._environ["NP_VCLUSTER_PUBLIC_URL"])
         config_url = URL(self._environ["NP_PLATFORM_CONFIG_URI"]).with_path("")
         return Config(
             server=self.create_server(),
             database=self.create_database(),
             auth=auth,
-            oauth=self.try_create_oauth(),
+            oauth=self.create_oauth(),
             jobs=jobs,
             job_policy_enforcer=self.create_job_policy_enforcer(),
             scheduler=self.create_job_scheduler(),
@@ -157,24 +157,14 @@ class EnvironConfigFactory:
             public_endpoint_url=public_endpoint_url,
         )
 
-    def try_create_oauth(self) -> OAuthConfig | None:
-        auth_url = self._environ.get("NP_OAUTH_AUTH_URL")
-        token_url = self._environ.get("NP_OAUTH_TOKEN_URL")
-        logout_url = self._environ.get("NP_OAUTH_LOGOUT_URL")
-        client_id = self._environ.get("NP_OAUTH_CLIENT_ID")
-        audience = self._environ.get("NP_OAUTH_AUDIENCE")
-        success_redirect_url = self._environ.get("NP_OAUTH_SUCCESS_REDIRECT_URL")
-        headless_callback_url = self._environ.get("NP_OAUTH_HEADLESS_CALLBACK_URL")
-        if not (
-            auth_url
-            and token_url
-            and logout_url
-            and client_id
-            and audience
-            and success_redirect_url
-            and headless_callback_url
-        ):
-            return None
+    def create_oauth(self) -> OAuthConfig:
+        auth_url = self._environ["NP_OAUTH_AUTH_URL"]
+        token_url = self._environ["NP_OAUTH_TOKEN_URL"]
+        logout_url = self._environ["NP_OAUTH_LOGOUT_URL"]
+        client_id = self._environ["NP_OAUTH_CLIENT_ID"]
+        audience = self._environ["NP_OAUTH_AUDIENCE"]
+        success_redirect_url = self._environ["NP_OAUTH_SUCCESS_REDIRECT_URL"]
+        headless_callback_url = self._environ["NP_OAUTH_HEADLESS_CALLBACK_URL"]
         return OAuthConfig(
             auth_url=URL(auth_url),
             token_url=URL(token_url),
