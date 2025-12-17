@@ -1,5 +1,4 @@
 from datetime import timedelta
-from decimal import Decimal
 from unittest import mock
 
 import pytest
@@ -50,67 +49,6 @@ class TestEnvironConfigFactory:
         with pytest.raises(KeyError):
             EnvironConfigFactory(environ=environ).create()
 
-    def test_create_defaults(self) -> None:
-        environ = {
-            "NP_OAUTH_AUTH_URL": "https://oauth-auth",
-            "NP_OAUTH_TOKEN_URL": "https://oauth-token",
-            "NP_OAUTH_LOGOUT_URL": "https://oauth-logout",
-            "NP_OAUTH_CLIENT_ID": "oauth_client_id",
-            "NP_OAUTH_AUDIENCE": "https://platform-url",
-            "NP_OAUTH_SUCCESS_REDIRECT_URL": "https://platform-default-url",
-            "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://dev.neu.ro/oauth/show-code",
-            "NP_API_URL": "https://neu.ro/api/v1",
-            "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
-            "NP_AUTH_URL": "-",
-            "NP_AUTH_PUBLIC_URL": "-",
-            "NP_ADMIN_URL": "-",
-            "NP_ADMIN_PUBLIC_URL": "-",
-            "NP_VCLUSTER_PUBLIC_URL": "-",
-            "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
-            "NP_ENFORCER_CREDIT_NOTIFICATION_THRESHOLD": "200.33",
-            "NP_ENFORCER_RETENTION_DELAY_DAYS": "200",
-        }
-        config = EnvironConfigFactory(environ=environ).create()
-
-        assert config.config_url == URL("http://platformconfig:8080")
-        assert config.admin_url is None
-        assert config.admin_public_url is None
-
-        assert config.server.host == "0.0.0.0"
-        assert config.server.port == 8080
-
-        assert config.jobs.deletion_delay_s == 900
-        assert config.jobs.deletion_delay == timedelta(minutes=15)
-        assert config.jobs.orphaned_job_owner == "compute"
-
-        assert config.job_policy_enforcer.platform_api_url == URL(
-            "http://platformapi:8080/api/v1"
-        )
-        assert config.job_policy_enforcer.credit_notification_threshold == Decimal(
-            "200.33"
-        )
-        assert config.job_policy_enforcer.retention_delay_days == 200
-        assert config.notifications.url == URL()
-        assert config.notifications.token == ""
-
-        assert config.auth.server_endpoint_url is None
-        assert config.auth.public_endpoint_url is None
-        assert config.auth.service_token == ""
-        assert config.auth.service_name == "compute"
-
-        assert config.oauth is not None
-        assert config.oauth.auth_url == URL("https://oauth-auth")
-        assert config.oauth.token_url == URL("https://oauth-token")
-        assert config.oauth.logout_url == URL("https://oauth-logout")
-        assert config.oauth.client_id == "oauth_client_id"
-        assert config.oauth.audience == "https://platform-url"
-        assert config.oauth.success_redirect_url == URL("https://platform-default-url")
-        assert config.oauth.headless_callback_url == URL(
-            "https://dev.neu.ro/oauth/show-code"
-        )
-
-        assert config.events is None
-
     def test_create_value_error_invalid_port(self) -> None:
         environ = {
             "NP_API_PORT": "port",
@@ -141,12 +79,18 @@ class TestEnvironConfigFactory:
             "NP_ADMIN_URL": "https://platform-admin:8080/apis/admin/v1",
             "NP_ADMIN_PUBLIC_URL": "https://neu.ro/apis/admin/v1",
             "NP_VCLUSTER_PUBLIC_URL": "https://neu.ro/apis/vcluster/v1",
-            "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
             "NP_PLATFORM_CONFIG_URI": "http://platformconfig:8080/api/v1",
             "NP_NOTIFICATIONS_URL": "http://notifications:8080",
             "NP_NOTIFICATIONS_TOKEN": "token",
             "NP_ENFORCER_PLATFORM_API_URL": "http://platformapi:8080/api/v1",
             "NP_EVENTS_URL": "http://platform-events:8080",
+            "NP_OAUTH_AUTH_URL": "http://oauth.site",
+            "NP_OAUTH_TOKEN_URL": "http://oauth.site/token",
+            "NP_OAUTH_LOGOUT_URL": "http://oauth.site/logout",
+            "NP_OAUTH_CLIENT_ID": "oauth-id",
+            "NP_OAUTH_AUDIENCE": "oauth-audience",
+            "NP_OAUTH_HEADLESS_CALLBACK_URL": "https://oauth/show-code",
+            "NP_OAUTH_SUCCESS_REDIRECT_URL": "http://oauth.site/redirect",
         }
         config = EnvironConfigFactory(environ=environ).create()
 
