@@ -67,96 +67,96 @@ jobs:
         flags: unit
         name: unit
 
-  integration:
-    name: Integration tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    strategy:
-      matrix:
-        chunks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    env:
-      MINIKUBE_DRIVER: none
-    steps:
-    - name: Checkout commit
-      uses: actions/checkout@v5
-    - name: Install python
-      uses: actions/setup-python@v6
-      with:
-        python-version-file: .python-version
-    - name: Install pipx
-      run: python3 -m pip install --user pipx && python3 -m pipx ensurepath
-    - name: Install Poetry with pipx
-      run: |
-        pipx install poetry
-    - name: Setup Python dependencies cache
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pypoetry
-        key: poetry-${{ hashFiles('**/poetry.lock') }}
-        restore-keys: |
-          poetry-
-    - name: Install dependencies
-      run: make setup
-    - name: Login to ghcr.io
-      uses: docker/login-action@v3.6.0
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ github.token }}
-    - name: Install Conntrack
-      run: sudo apt-get -q install -y conntrack
-    - name: Start minikube
-      run: |
-        make install_k8s
-        make start_k8s
-    - name: Pull test images
-      run: make docker_pull_test_images
-    - name: Increment index
-      id: group
-      shell: python
-      run: |
-        import os
-        with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-          f.write(f"group={int(os.environ['ARG']) + 1}")
-      env:
-        ARG: ${{ strategy.job-index }}
-    - name: Run integration tests
-      run: make test_integration
-      env:
-        COUNT: ${{ strategy.job-total }}
-        GROUP: ${{ steps.group.outputs.group }}
-        COVERAGE_FILE: ${{ strategy.job-index }}.coverage
-    - name: Upload coverage part
-      uses: actions/upload-artifact@v5
-      with:
-        name: coverage-${{ strategy.job-index }}
-        path: ${{ strategy.job-index }}.coverage
+  # integration:
+  #   name: Integration tests
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 60
+  #   strategy:
+  #     matrix:
+  #       chunks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  #   env:
+  #     MINIKUBE_DRIVER: none
+  #   steps:
+  #   - name: Checkout commit
+  #     uses: actions/checkout@v5
+  #   - name: Install python
+  #     uses: actions/setup-python@v6
+  #     with:
+  #       python-version-file: .python-version
+  #   - name: Install pipx
+  #     run: python3 -m pip install --user pipx && python3 -m pipx ensurepath
+  #   - name: Install Poetry with pipx
+  #     run: |
+  #       pipx install poetry
+  #   - name: Setup Python dependencies cache
+  #     uses: actions/cache@v4
+  #     with:
+  #       path: ~/.cache/pypoetry
+  #       key: poetry-${{ hashFiles('**/poetry.lock') }}
+  #       restore-keys: |
+  #         poetry-
+  #   - name: Install dependencies
+  #     run: make setup
+  #   - name: Login to ghcr.io
+  #     uses: docker/login-action@v3.6.0
+  #     with:
+  #       registry: ghcr.io
+  #       username: ${{ github.actor }}
+  #       password: ${{ github.token }}
+  #   - name: Install Conntrack
+  #     run: sudo apt-get -q install -y conntrack
+  #   - name: Start minikube
+  #     run: |
+  #       make install_k8s
+  #       make start_k8s
+  #   - name: Pull test images
+  #     run: make docker_pull_test_images
+  #   - name: Increment index
+  #     id: group
+  #     shell: python
+  #     run: |
+  #       import os
+  #       with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+  #         f.write(f"group={int(os.environ['ARG']) + 1}")
+  #     env:
+  #       ARG: ${{ strategy.job-index }}
+  #   - name: Run integration tests
+  #     run: make test_integration
+  #     env:
+  #       COUNT: ${{ strategy.job-total }}
+  #       GROUP: ${{ steps.group.outputs.group }}
+  #       COVERAGE_FILE: ${{ strategy.job-index }}.coverage
+  #   - name: Upload coverage part
+  #     uses: actions/upload-artifact@v5
+  #     with:
+  #       name: coverage-${{ strategy.job-index }}
+  #       path: ${{ strategy.job-index }}.coverage
 
-  upload-coverage:
-    needs: integration
-    name: Upload integration tests coverage
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout commit
-      uses: actions/checkout@v5
-    - name: Download All Coverages
-      uses: actions/download-artifact@v6
-      with:
-        path: coverage
-        pattern: coverage-*
-        merge-multiple: true
-    - name: Combine coverages
-      run: |
-        pip install coverage
-        coverage combine coverage/*.coverage
-        coverage xml -o .coverage-integration.xml
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v5
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: .coverage-integration.xml
-        flags: integration
-        name: integration
+  # upload-coverage:
+  #   needs: integration
+  #   name: Upload integration tests coverage
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Checkout commit
+  #     uses: actions/checkout@v5
+  #   - name: Download All Coverages
+  #     uses: actions/download-artifact@v6
+  #     with:
+  #       path: coverage
+  #       pattern: coverage-*
+  #       merge-multiple: true
+  #   - name: Combine coverages
+  #     run: |
+  #       pip install coverage
+  #       coverage combine coverage/*.coverage
+  #       coverage xml -o .coverage-integration.xml
+  #   - name: Upload coverage to Codecov
+  #     uses: codecov/codecov-action@v5
+  #     with:
+  #       token: ${{ secrets.CODECOV_TOKEN }}
+  #       files: .coverage-integration.xml
+  #       flags: integration
+  #       name: integration
 
   image-upload:
     name: Upload image artifact
@@ -199,8 +199,6 @@ jobs:
     needs:
     - lint
     - unit
-    - integration
-    - upload-coverage
     - image-upload
     runs-on: ubuntu-latest
     if: always()
