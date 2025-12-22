@@ -17,7 +17,7 @@ repos:
   - id: check-symlinks
     exclude: ^charts/
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.14.9
+  rev: v0.14.10
   hooks:
   - id: ruff-format
   - id: ruff-check
@@ -30,7 +30,7 @@ repos:
       docs/spelling_wordlist.txt|
       .gitignore
 - repo: https://github.com/sirosen/check-jsonschema
-  rev: 0.35.0
+  rev: 0.36.0
   hooks:
   - id: check-github-actions
   - id: check-github-workflows
