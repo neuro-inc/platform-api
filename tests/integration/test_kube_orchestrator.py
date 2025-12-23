@@ -3557,7 +3557,7 @@ class TestPodContainerDevShmSettings:
 
 
 class TestPreemption:
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     async def kube_config(
         self, kube_config_factory: Callable[..., KubeConfig]
     ) -> KubeConfig:
@@ -4687,7 +4687,7 @@ class TestExternalJobs:
 
 
 class TestExternalJobsPreemption:
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     async def kube_config(
         self, kube_config_factory: Callable[..., KubeConfig]
     ) -> KubeConfig:
