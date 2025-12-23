@@ -3,44 +3,36 @@
 # based on
 # https://github.com/kubernetes/minikube#linux-continuous-integration-without-vm-support
 
-function k8s::install_minikube {
-    curl -Lo minikube https://storage.googleapis.com/minikube/releases/v1.25.2/minikube-linux-amd64
+function k8s::install {
+    echo "installing minikube..."
+    local minikube_version="v1.34.0"
+    sudo apt-get update
+    sudo apt-get install -y conntrack
+    curl -Lo minikube https://storage.googleapis.com/minikube/releases/${minikube_version}/minikube-linux-amd64
     chmod +x minikube
     sudo mv minikube /usr/local/bin/
+    echo "minikube installed."
+
+    echo "installing vcluster..."
+    curl -L -o vcluster https://github.com/loft-sh/vcluster/releases/download/v0.30.0/vcluster-linux-amd64
+    sudo install -c -m 0755 vcluster /usr/local/bin
+    rm -f vcluster
+    echo "vcluster installed."
 }
 
 function k8s::start {
-    # ----- Kernel prerequisites for the none driver ----------------------------
-    echo "• Enabling br_netfilter and required sysctl flags …"
-    sudo modprobe br_netfilter
-    sudo sysctl -w \
-        net.bridge.bridge-nf-call-iptables=1 \
-        net.bridge.bridge-nf-call-ip6tables=1 \
-        net.ipv4.ip_forward=1
-
-    # ----- Disable swap (kubeadm requirement) -----------------------------------
-    echo "• Disabling swap …"
-    sudo swapoff -a
-
     export KUBECONFIG=$HOME/.kube/config
     mkdir -p $(dirname $KUBECONFIG)
     touch $KUBECONFIG
 
-    export MINIKUBE_WANTUPDATENOTIFICATION=false
-    export MINIKUBE_HOME=$HOME
-    export CHANGE_MINIKUBE_NONE_USER=true
-
-    sudo -E mkdir -p ~/.minikube/files/files
-    sudo -E minikube config set WantUpdateNotification false
-    sudo -E minikube config set WantNoneDriverWarning false
-
-    sudo -E minikube start \
-        --driver=none \
+    minikube start \
+        --driver=docker \
         --install-addons=true \
         --addons=ingress \
         --feature-gates=DevicePlugins=true \
         --wait=all \
         --wait-timeout=5m
+    kubectl config use-context minikube
 
     # Install nvidia device plugin
     kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v1.9/nvidia-device-plugin.yml
@@ -97,7 +89,7 @@ function k8s::test {
 
 case "${1:-}" in
     install)
-        k8s::install_minikube
+        k8s::install
         ;;
     up)
         k8s::start
