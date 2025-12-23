@@ -5,7 +5,10 @@
 
 function k8s::install {
     echo "installing minikube..."
-    curl -Lo minikube https://storage.googleapis.com/minikube/releases/v1.25.2/minikube-linux-amd64
+    local minikube_version="v1.34.0"
+    sudo apt-get update
+    sudo apt-get install -y conntrack
+    curl -Lo minikube https://storage.googleapis.com/minikube/releases/${minikube_version}/minikube-linux-amd64
     chmod +x minikube
     sudo mv minikube /usr/local/bin/
     echo "minikube installed."
@@ -18,15 +21,6 @@ function k8s::install {
 }
 
 function k8s::start {
-    # ----- Kernel prerequisites for the none driver ----------------------------
-    echo "• Enabling br_netfilter and required sysctl flags …"
-    sudo modprobe br_netfilter
-    sudo sysctl -w \
-        net.bridge.bridge-nf-call-iptables=1 \
-        net.bridge.bridge-nf-call-ip6tables=1 \
-        net.ipv4.ip_forward=1
-
-    # ----- Disable swap (kubeadm requirement) -----------------------------------
     echo "• Disabling swap …"
     sudo swapoff -a
 
@@ -43,12 +37,13 @@ function k8s::start {
     sudo -E minikube config set WantNoneDriverWarning false
 
     sudo -E minikube start \
-        --driver=none \
+        --vm-driver=docker \
         --install-addons=true \
         --addons=ingress \
         --feature-gates=DevicePlugins=true \
         --wait=all \
         --wait-timeout=5m
+    kubectl config use-context minikube
 
     # Install nvidia device plugin
     kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v1.9/nvidia-device-plugin.yml
