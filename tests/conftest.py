@@ -13,6 +13,7 @@ pytest_plugins = [
     "tests.integration.notifications",
     "tests.integration.admin",
     "tests.integration.postgres",
+    "tests.integration.clusters",
 ]
 
 
