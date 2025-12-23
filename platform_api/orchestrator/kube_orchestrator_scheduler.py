@@ -31,8 +31,10 @@ class _Pod:
 
     @property
     def name(self) -> str:
+        from .kube_orchestrator import APOLO_JOB_LABEL_KEY
+
         assert self._model.metadata.name is not None
-        return self._model.metadata.name
+        return self.labels.get(APOLO_JOB_LABEL_KEY) or self._model.metadata.name
 
     @property
     def labels(self) -> dict[str, str]:
@@ -166,7 +168,7 @@ class NodeResourcesHandler(EventHandler[V1Pod]):
 
     def get_pod_node_name(self, pod_name: str) -> str | None:
         """
-        Get name of the node which runs pod.
+        Get the name of the node which runs pod.
         Return None if pod is not scheduled.
         """
         return self._pod_node_names.get(pod_name)

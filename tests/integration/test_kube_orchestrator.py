@@ -58,7 +58,6 @@ from platform_api.config import (
     RegistryConfig,
 )
 from platform_api.orchestrator.job import (
-    DEFAULT_ORPHANED_JOB_OWNER,
     Job,
     JobRecord,
     JobRestartPolicy,
@@ -154,7 +153,23 @@ def cluster_name() -> str:
 
 
 @pytest.fixture
-async def job_nginx(kube_orchestrator: KubeOrchestrator) -> MyJob:
+def org_name(org_project: tuple[str, str]) -> str:
+    org, _ = org_project
+    return org
+
+
+@pytest.fixture
+def project_name(org_project: tuple[str, str]) -> str:
+    _, project = org_project
+    return project
+
+
+@pytest.fixture
+async def job_nginx(
+    kube_orchestrator: KubeOrchestrator,
+    org_project: tuple[str, str],
+) -> MyJob:
+    org, project = org_project
     container = Container(
         image="ubuntu:20.10",
         command="sleep 5",
@@ -166,7 +181,8 @@ async def job_nginx(kube_orchestrator: KubeOrchestrator) -> MyJob:
         record=JobRecord.create(
             request=job_request,
             cluster_name="test-cluster",
-            org_name="test-org",
+            org_name=org,
+            project_name=project,
         ),
     )
 
@@ -190,14 +206,6 @@ async def delete_job_later(
 
 
 class TestKubeOrchestrator:
-    @pytest.fixture
-    def org_name(self) -> str:
-        return "org"
-
-    @pytest.fixture
-    def project_name(self) -> str:
-        return "project"
-
     async def _wait_for(
         self,
         job: MyJob,
@@ -295,8 +303,11 @@ class TestKubeOrchestrator:
         assert status == JobStatus.SUCCEEDED
 
     async def test_start_job_broken_image(
-        self, kube_orchestrator: KubeOrchestrator
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        org_project: tuple[str, str],
     ) -> None:
+        org, project = org_project
         container = Container(
             image="notsuchdockerimage",
             resources=ContainerResources(cpu=0.1, memory=128 * 10**6),
@@ -307,7 +318,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=job_request,
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org,
+                project_name=project,
             ),
         )
         await job.start()
@@ -315,7 +327,10 @@ class TestKubeOrchestrator:
         assert status == JobStatus.PENDING
 
     async def test_start_job_bad_name(
-        self, kube_orchestrator: KubeOrchestrator
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        org_name: str,
+        project_name: str,
     ) -> None:
         job_id = str(uuid.uuid4())
         container = Container(
@@ -329,7 +344,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=job_request,
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 owner="invalid_name",
             ),
         )
@@ -339,8 +355,12 @@ class TestKubeOrchestrator:
         assert "invalid" in str(cm.value)
 
     async def test_start_job_with_not_unique_id(
-        self, kube_orchestrator: KubeOrchestrator, job_nginx: MyJob
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        job_nginx: MyJob,
+        org_project: tuple[str, str],
     ) -> None:
+        org, project = org_project
         await job_nginx.start()
         await self.wait_for_success(job_nginx)
 
@@ -353,7 +373,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=job_request_second,
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org,
+                project_name=project,
             ),
         )
         with pytest.raises(JobAlreadyExistsException):
@@ -370,7 +391,12 @@ class TestKubeOrchestrator:
         with pytest.raises(JobNotFoundException):
             await job_nginx.delete()
 
-    async def test_broken_job_id(self, kube_orchestrator: KubeOrchestrator) -> None:
+    async def test_broken_job_id(
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        org_project: tuple[str, str],
+    ) -> None:
+        org, project = org_project
         job_id = "some_BROCKEN_JOB-123@#$%^&*(______------ID"
         container = Container(
             image="python", resources=ContainerResources(cpu=0.1, memory=128 * 10**6)
@@ -381,14 +407,20 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=job_request,
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org,
+                project_name=project,
             ),
         )
 
         with pytest.raises(JobError):
             await job.start()
 
-    async def test_job_succeeded(self, kube_orchestrator: KubeOrchestrator) -> None:
+    async def test_job_succeeded(
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        org_project: tuple[str, str],
+    ) -> None:
+        org, project = org_project
         container = Container(
             image="ubuntu:20.10",
             command="true",
@@ -399,7 +431,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org,
+                project_name=project,
             ),
         )
         try:
@@ -408,7 +441,12 @@ class TestKubeOrchestrator:
         finally:
             await job.delete()
 
-    async def test_job_failed_error(self, kube_orchestrator: KubeOrchestrator) -> None:
+    async def test_job_failed_error(
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        org_project: tuple[str, str],
+    ) -> None:
+        org, project = org_project
         command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
         container = Container(
             image="ubuntu:20.10",
@@ -420,7 +458,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org,
+                project_name=project,
             ),
         )
         try:
@@ -444,7 +483,9 @@ class TestKubeOrchestrator:
         orchestrator_config_factory: Callable[..., OrchestratorConfig],
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
         delete_job_later: Callable[[Job], Awaitable[None]],
+        org_project: tuple[str, str],
     ) -> None:
+        org, project = org_project
         orchestrator_config = orchestrator_config_factory(
             resource_pool_types=[
                 ResourcePoolType(
@@ -471,7 +512,8 @@ class TestKubeOrchestrator:
                 owner="owner1",
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org,
+                project_name=project,
             ),
         )
 
@@ -492,7 +534,12 @@ class TestKubeOrchestrator:
             assert resources.requests == {"cpu": "100m", "memory": "820M"}
             assert resources.limits == {"cpu": "100m", "memory": "1025M"}
 
-    async def test_job_bunch_of_cpu(self, kube_orchestrator: KubeOrchestrator) -> None:
+    async def test_job_bunch_of_cpu(
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        org_project: tuple[str, str],
+    ) -> None:
+        org, project = org_project
         command = 'bash -c "for i in {100..1}; do echo $i; done; false"'
         container = Container(
             image="ubuntu:20.10",
@@ -504,7 +551,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org,
+                project_name=project,
             ),
         )
         try:
@@ -517,7 +565,12 @@ class TestKubeOrchestrator:
         finally:
             await job.delete()
 
-    async def test_job_no_memory(self, kube_orchestrator: KubeOrchestrator) -> None:
+    async def test_job_no_memory(
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        org_project: tuple[str, str],
+    ) -> None:
+        org, project = org_project
         command = "true"
         container = Container(
             image="ubuntu:20.10",
@@ -529,7 +582,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org,
+                project_name=project,
                 schedule_timeout=10,
             ),
         )
@@ -558,6 +612,8 @@ class TestKubeOrchestrator:
         self,
         kube_orchestrator: KubeOrchestrator,
         kube_client_selector: KubeClientSelector,
+        org_name: str,
+        project_name: str,
     ) -> None:
         command = "true"
         container = Container(
@@ -570,7 +626,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 schedule_timeout=10,
             ),
         )
@@ -612,9 +669,9 @@ class TestKubeOrchestrator:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
-        org_name = "test-org"
-        project_name = DEFAULT_ORPHANED_JOB_OWNER
         user_name = self._create_username()
         async with kube_client_selector.get_client(
             org_name=org_name, project_name=project_name
@@ -637,7 +694,8 @@ class TestKubeOrchestrator:
                 record=JobRecord.create(
                     request=JobRequest.create(container),
                     cluster_name="test-cluster",
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                 ),
             )
             await delete_job_later(job)
@@ -671,6 +729,8 @@ class TestKubeOrchestrator:
         kube_orchestrator: KubeOrchestrator,
         kube_client_selector: KubeClientSelector,
         cluster_name: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         volumes = [
             ContainerVolume(
@@ -694,7 +754,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
 
@@ -734,6 +795,8 @@ class TestKubeOrchestrator:
         kube_orchestrator: KubeOrchestrator,
         expected_result: str,
         expected_status: JobStatus,
+        org_name: str,
+        project_name: str,
     ) -> None:
         product = expected_result
         container = Container(
@@ -747,7 +810,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
 
@@ -765,6 +829,8 @@ class TestKubeOrchestrator:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         user_name = self._create_username()
         container = Container(
@@ -777,7 +843,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name=cluster_name,
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 owner=user_name,
                 name="test-job",
             ),
@@ -815,7 +882,12 @@ class TestKubeOrchestrator:
         for key, value in expected_values.items():
             assert real_values[key] == value, key
 
-    async def test_working_dir(self, kube_orchestrator: KubeOrchestrator) -> None:
+    async def test_working_dir(
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        org_name: str,
+        project_name: str,
+    ) -> None:
         container = Container(
             image="ubuntu:20.10",
             working_dir="/var/log",
@@ -827,7 +899,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
 
@@ -884,10 +957,13 @@ class TestKubeOrchestrator:
                 await get_ingress(kube_client, name)
 
     async def test_delete_ingress_failure(
-        self, kube_client_selector: KubeClientSelector
+        self,
+        kube_client_selector: KubeClientSelector,
+        org_name: str,
+        project_name: str,
     ) -> None:
         async with kube_client_selector.get_client(
-            org_name="org", project_name="proj"
+            org_name=org_name, project_name=project_name
         ) as kube_client:
             with pytest.raises(ResourceNotFound):
                 await delete_ingress(kube_client, "unknown")
@@ -1020,6 +1096,8 @@ class TestKubeOrchestrator:
         port: int | None,
         kube_orchestrator: KubeOrchestrator,
         delete_job_later: Callable[[Job], Awaitable[None]],
+        org_name: str,
+        project_name: str,
         interval_s: float = 0.5,
         max_time: float = 180,
     ) -> None:
@@ -1041,7 +1119,8 @@ class TestKubeOrchestrator:
                     ),
                 ),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 name=job_name,
                 owner="owner",
             ),
@@ -1072,6 +1151,8 @@ class TestKubeOrchestrator:
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
         kube_client_selector: KubeClientSelector,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="python",
@@ -1084,7 +1165,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         async with kube_client_selector.get_client(
@@ -1178,6 +1260,8 @@ class TestKubeOrchestrator:
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
         kube_client_selector: KubeClientSelector,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="python",
@@ -1190,7 +1274,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         async with kube_client_selector.get_client(
@@ -1230,6 +1315,8 @@ class TestKubeOrchestrator:
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
         kube_client_selector: KubeClientSelector,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="python",
@@ -1242,7 +1329,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 name=f"test-job-name-{random_str()}",
                 owner="owner",
             ),
@@ -1289,6 +1377,8 @@ class TestKubeOrchestrator:
         kube_client_selector: KubeClientSelector,
         job_named: bool,
         delete_job_later: Callable[[Job], Awaitable[None]],
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="python",
@@ -1302,7 +1392,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 name=job_name,
                 owner="owner",
             ),
@@ -1337,6 +1428,8 @@ class TestKubeOrchestrator:
             port=job.request.container.port,
             kube_orchestrator=kube_orchestrator,
             delete_job_later=delete_job_later,
+            org_name=job.org_name,
+            project_name=job.project_name,
         )
         if job_named:
             assert job.internal_hostname_named is not None
@@ -1349,6 +1442,8 @@ class TestKubeOrchestrator:
                 port=job.request.container.port,
                 kube_orchestrator=kube_orchestrator,
                 delete_job_later=delete_job_later,
+                org_name=job.org_name,
+                project_name=job.project_name,
             )
         await kube_orchestrator.delete_job(job)
 
@@ -1371,6 +1466,8 @@ class TestKubeOrchestrator:
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
         delete_job_later: Callable[[Job], Awaitable[None]],
+        org_name: str,
+        project_name: str,
     ) -> None:
         job_name = f"test-job-name-{random_str()}"
 
@@ -1387,7 +1484,8 @@ class TestKubeOrchestrator:
                         ),
                     ),
                     cluster_name="test-cluster",
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                     name=job_name,
                     owner="owner",
                 ),
@@ -1410,6 +1508,8 @@ class TestKubeOrchestrator:
             port=job1.request.container.port,
             kube_orchestrator=kube_orchestrator,
             delete_job_later=delete_job_later,
+            org_name=job1.org_name,
+            project_name=job1.project_name,
         )
 
         await job2.start()
@@ -1426,11 +1526,16 @@ class TestKubeOrchestrator:
             port=job2.request.container.port,
             kube_orchestrator=kube_orchestrator,
             delete_job_later=delete_job_later,
+            org_name=job2.org_name,
+            project_name=job2.project_name,
         )
 
     @pytest.fixture
     def create_server_job(
-        self, kube_orchestrator: KubeOrchestrator
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        org_name: str,
+        project_name: str,
     ) -> Iterator[Callable[[str | None], MyJob]]:
         def impl(job_name: str | None = None) -> MyJob:
             server_cont = Container(
@@ -1444,7 +1549,8 @@ class TestKubeOrchestrator:
                 record=JobRecord.create(
                     request=JobRequest.create(server_cont),
                     cluster_name="test-cluster",
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                     name=job_name,
                 ),
             )
@@ -1453,7 +1559,10 @@ class TestKubeOrchestrator:
 
     @pytest.fixture
     def create_client_job(
-        self, kube_orchestrator: KubeOrchestrator
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        org_name: str,
+        project_name: str,
     ) -> Iterator[Callable[[str], MyJob]]:
         def impl(server_hostname: str) -> MyJob:
             cmd = (
@@ -1470,7 +1579,8 @@ class TestKubeOrchestrator:
                 record=JobRecord.create(
                     request=JobRequest.create(client_cont),
                     cluster_name="test-cluster",
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                 ),
             )
 
@@ -1538,6 +1648,8 @@ class TestKubeOrchestrator:
         kube_orchestrator: KubeOrchestrator,
         kube_ingress_ip: str,
         delete_job_later: Callable[[Job], Awaitable[None]],
+        org_name: str,
+        project_name: str,
     ) -> None:
         def create_server_job() -> MyJob:
             server_cont = Container(
@@ -1550,7 +1662,8 @@ class TestKubeOrchestrator:
                 record=JobRecord.create(
                     request=JobRequest.create(server_cont),
                     cluster_name="test-cluster",
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                 ),
             )
 
@@ -1569,7 +1682,8 @@ class TestKubeOrchestrator:
                 record=JobRecord.create(
                     request=JobRequest.create(client_cont),
                     cluster_name="test-cluster",
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                 ),
             )
 
@@ -1590,6 +1704,8 @@ class TestKubeOrchestrator:
         kube_orchestrator: KubeOrchestrator,
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -1601,7 +1717,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 preset_name="cpu-micro",
             ),
         )
@@ -1616,13 +1733,13 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/preset": job.preset_name,
             "platform.neuromation.io/user": job.owner,
-            "platform.neuromation.io/org": "test-org",
-            "platform.neuromation.io/project": job.owner,
+            "platform.neuromation.io/org": job.org_name,
+            "platform.neuromation.io/project": job.project_name,
             "platform.apolo.us/job": job.id,
             "platform.apolo.us/preset": job.preset_name,
             "platform.apolo.us/user": job.owner,
-            "platform.apolo.us/org": "test-org",
-            "platform.apolo.us/project": job.owner,
+            "platform.apolo.us/org": job.org_name,
+            "platform.apolo.us/project": job.project_name,
         }
 
     async def test_job_org_pod_labels(
@@ -1631,6 +1748,8 @@ class TestKubeOrchestrator:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -1642,7 +1761,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         await delete_job_later(job)
@@ -1659,11 +1779,11 @@ class TestKubeOrchestrator:
             "platform.neuromation.io/job": job.id,
             "platform.neuromation.io/user": job.owner,
             "platform.neuromation.io/org": job.org_name,
-            "platform.neuromation.io/project": job.owner,
+            "platform.neuromation.io/project": job.project_name,
             "platform.apolo.us/job": job.id,
             "platform.apolo.us/user": job.owner,
             "platform.apolo.us/org": job.org_name,
-            "platform.apolo.us/project": job.owner,
+            "platform.apolo.us/project": job.project_name,
         }
 
     async def test_job_resource_labels(
@@ -1672,6 +1792,8 @@ class TestKubeOrchestrator:
         kube_orchestrator: KubeOrchestrator,
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -1684,7 +1806,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         await delete_job_later(job)
@@ -1702,12 +1825,12 @@ class TestKubeOrchestrator:
             assert service.labels == {
                 "platform.neuromation.io/job": job.id,
                 "platform.neuromation.io/user": job.owner,
-                "platform.neuromation.io/org": "test-org",
-                "platform.neuromation.io/project": job.owner,
+                "platform.neuromation.io/org": job.org_name,
+                "platform.neuromation.io/project": job.project_name,
                 "platform.apolo.us/job": job.id,
                 "platform.apolo.us/user": job.owner,
-                "platform.apolo.us/org": "test-org",
-                "platform.apolo.us/project": job.owner,
+                "platform.apolo.us/org": job.org_name,
+                "platform.apolo.us/project": job.project_name,
             }
 
             ingress_name = job.id
@@ -1715,12 +1838,12 @@ class TestKubeOrchestrator:
             assert ingress.labels == {
                 "platform.neuromation.io/job": job.id,
                 "platform.neuromation.io/user": job.owner,
-                "platform.neuromation.io/org": "test-org",
-                "platform.neuromation.io/project": job.owner,
+                "platform.neuromation.io/org": job.org_name,
+                "platform.neuromation.io/project": job.project_name,
                 "platform.apolo.us/job": job.id,
                 "platform.apolo.us/user": job.owner,
-                "platform.apolo.us/org": "test-org",
-                "platform.apolo.us/project": job.owner,
+                "platform.apolo.us/org": job.org_name,
+                "platform.apolo.us/project": job.project_name,
             }
 
     async def test_named_job_resource_labels(
@@ -1729,6 +1852,8 @@ class TestKubeOrchestrator:
         kube_orchestrator: KubeOrchestrator,
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -1742,7 +1867,8 @@ class TestKubeOrchestrator:
                 name=f"test-{uuid.uuid4().hex[:6]}",
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         await delete_job_later(job)
@@ -1760,12 +1886,12 @@ class TestKubeOrchestrator:
             assert service.labels == {
                 "platform.neuromation.io/job": job.id,
                 "platform.neuromation.io/user": job.owner,
-                "platform.neuromation.io/org": "test-org",
-                "platform.neuromation.io/project": job.owner,
+                "platform.neuromation.io/org": job.org_name,
+                "platform.neuromation.io/project": job.project_name,
                 "platform.apolo.us/job": job.id,
                 "platform.apolo.us/user": job.owner,
-                "platform.apolo.us/org": "test-org",
-                "platform.apolo.us/project": job.owner,
+                "platform.apolo.us/org": job.org_name,
+                "platform.apolo.us/project": job.project_name,
             }
 
             ingress_name = job.id
@@ -1774,13 +1900,13 @@ class TestKubeOrchestrator:
                 "platform.neuromation.io/job": job.id,
                 "platform.neuromation.io/job-name": job.name,
                 "platform.neuromation.io/user": job.owner,
-                "platform.neuromation.io/org": "test-org",
-                "platform.neuromation.io/project": job.owner,
+                "platform.neuromation.io/org": job.org_name,
+                "platform.neuromation.io/project": job.project_name,
                 "platform.apolo.us/job": job.id,
                 "platform.apolo.us/job-name": job.name,
                 "platform.apolo.us/user": job.owner,
-                "platform.apolo.us/org": "test-org",
-                "platform.apolo.us/project": job.owner,
+                "platform.apolo.us/org": job.org_name,
+                "platform.apolo.us/project": job.project_name,
             }
 
     async def test_job_check_ingress_annotations_jobs_ingress_class_nginx(
@@ -1788,6 +1914,8 @@ class TestKubeOrchestrator:
         kube_config_factory: Callable[..., KubeConfig],
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
         kube_client_selector: KubeClientSelector,
+        org_name: str,
+        project_name: str,
     ) -> None:
         kube_config = kube_config_factory(jobs_ingress_class="nginx")
         orchestrator = kube_orchestrator_factory(kube_config=kube_config)
@@ -1802,7 +1930,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         async with kube_client_selector.get_client(
@@ -1825,6 +1954,8 @@ class TestKubeOrchestrator:
         kube_config_factory: Callable[..., KubeConfig],
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
         kube_client_selector: KubeClientSelector,
+        org_name: str,
+        project_name: str,
     ) -> None:
         kube_config = kube_config_factory(jobs_ingress_class="traefik")
         orchestrator = kube_orchestrator_factory(kube_config=kube_config)
@@ -1839,7 +1970,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         async with kube_client_selector.get_client(
@@ -1867,6 +1999,8 @@ class TestKubeOrchestrator:
         kube_config_factory: Callable[..., KubeConfig],
         kube_orchestrator_factory: Callable[..., KubeOrchestrator],
         kube_client_selector: KubeClientSelector,
+        org_name: str,
+        project_name: str,
     ) -> None:
         kube_config = kube_config_factory(jobs_ingress_class="traefik")
         orchestrator = kube_orchestrator_factory(kube_config=kube_config)
@@ -1881,7 +2015,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         async with kube_client_selector.get_client(
@@ -1910,6 +2045,8 @@ class TestKubeOrchestrator:
         kube_orchestrator: KubeOrchestrator,
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -1922,7 +2059,8 @@ class TestKubeOrchestrator:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         await delete_job_later(job)
@@ -2072,10 +2210,10 @@ class TestKubeOrchestrator:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         user_name = self._create_username()
-        org_name = "test-org"
-        project_name = user_name
         async with kube_client_selector.get_client(
             org_name=org_name, project_name=project_name
         ) as kube_client:
@@ -2098,7 +2236,8 @@ class TestKubeOrchestrator:
                 record=JobRecord.create(
                     request=JobRequest.create(container),
                     cluster_name=cluster_name,
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                     owner=user_name,
                 ),
             )
@@ -2132,10 +2271,10 @@ class TestKubeOrchestrator:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         user_name = self._create_username()
-        org_name = "test-org"
-        project_name = user_name
 
         async with kube_client_selector.get_client(
             org_name=org_name, project_name=project_name
@@ -2167,7 +2306,8 @@ class TestKubeOrchestrator:
                 record=JobRecord.create(
                     request=JobRequest.create(container),
                     cluster_name=cluster_name,
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                     owner=user_name,
                 ),
             )
@@ -2181,10 +2321,10 @@ class TestKubeOrchestrator:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         user_name = self._create_username()
-        org_name = "test-org"
-        project_name = user_name
 
         async with kube_client_selector.get_client(
             org_name=org_name, project_name=project_name
@@ -2213,7 +2353,8 @@ class TestKubeOrchestrator:
                 record=JobRecord.create(
                     request=JobRequest.create(container),
                     cluster_name=cluster_name,
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                     owner=user_name,
                 ),
             )
@@ -2244,10 +2385,10 @@ class TestKubeOrchestrator:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         user_name = self._create_username()
-        org_name = "test-org"
-        project_name = user_name
         async with kube_client_selector.get_client(
             org_name=org_name, project_name=project_name
         ) as kube_client:
@@ -2279,7 +2420,8 @@ class TestKubeOrchestrator:
                 record=JobRecord.create(
                     request=JobRequest.create(container),
                     cluster_name=cluster_name,
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                     owner=user_name,
                 ),
             )
@@ -2314,10 +2456,10 @@ class TestKubeOrchestrator:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         user_name = self._create_username()
-        org_name = "test-org"
-        project_name = user_name
 
         async with kube_client_selector.get_client(
             org_name=org_name, project_name=project_name
@@ -2349,7 +2491,8 @@ class TestKubeOrchestrator:
                 record=JobRecord.create(
                     request=JobRequest.create(container),
                     cluster_name=cluster_name,
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                     owner=user_name,
                 ),
             )
@@ -2383,10 +2526,10 @@ class TestKubeOrchestrator:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         user_name = self._create_username()
-        org_name = "test-org"
-        project_name = user_name
         async with kube_client_selector.get_client(
             org_name=org_name, project_name=project_name
         ) as kube_client:
@@ -2421,7 +2564,8 @@ class TestKubeOrchestrator:
                 record=JobRecord.create(
                     request=JobRequest.create(container),
                     cluster_name=cluster_name,
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                     owner=user_name,
                 ),
             )
@@ -2435,10 +2579,10 @@ class TestKubeOrchestrator:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         cluster_name: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         user_name = self._create_username()
-        org_name = "test-org"
-        project_name = user_name
 
         async with kube_client_selector.get_client(
             org_name=org_name, project_name=project_name
@@ -2493,7 +2637,8 @@ class TestKubeOrchestrator:
                 record=JobRecord.create(
                     request=JobRequest.create(container),
                     cluster_name=cluster_name,
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                     owner=user_name,
                 ),
             )
@@ -2533,6 +2678,8 @@ class TestKubeOrchestrator:
         kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         delete_job_later: Callable[[Job], Awaitable[None]],
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -2548,7 +2695,8 @@ class TestKubeOrchestrator:
                 owner="owner1",
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         job2 = MyJob(
@@ -2558,7 +2706,8 @@ class TestKubeOrchestrator:
                 owner="owner2",
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         await delete_job_later(job1)
@@ -2587,7 +2736,8 @@ class TestKubeOrchestrator:
                     owner="owner1",
                     request=JobRequest.create(container),
                     cluster_name="test-cluster",
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                 ),
             )
             async with kube_client_selector.get_client(
@@ -2628,6 +2778,8 @@ class TestKubeOrchestrator:
         self,
         kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -2640,7 +2792,8 @@ class TestKubeOrchestrator:
                 owner="owner1",
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
 
@@ -2659,7 +2812,11 @@ class TestKubeOrchestrator:
 
     @pytest.mark.usefixtures("start_watchers")
     async def test_get_schedulable_jobs(
-        self, kube_orchestrator: KubeOrchestrator, node_resources: NodeResources
+        self,
+        kube_orchestrator: KubeOrchestrator,
+        node_resources: NodeResources,
+        org_name: str,
+        project_name: str,
     ) -> None:
         # Schedulable
         container = Container(
@@ -2673,7 +2830,8 @@ class TestKubeOrchestrator:
                 owner="owner1",
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         # Not schedulable
@@ -2690,7 +2848,8 @@ class TestKubeOrchestrator:
                 owner="owner1",
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         # Won't fit into cluster
@@ -2705,7 +2864,8 @@ class TestKubeOrchestrator:
                 owner="owner1",
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         jobs = await kube_orchestrator.get_schedulable_jobs([job1, job2, job3])
@@ -2947,7 +3107,10 @@ class TestAffinityFixtures:
 
     @pytest.fixture
     async def start_job(
-        self, kube_client_selector: KubeClientSelector
+        self,
+        kube_client_selector: KubeClientSelector,
+        org_name: str,
+        project_name: str,
     ) -> Callable[..., AbstractAsyncContextManager[MyJob]]:
         @asynccontextmanager
         async def _create(
@@ -2979,7 +3142,8 @@ class TestAffinityFixtures:
                     owner="owner1",
                     request=JobRequest.create(container),
                     cluster_name="test-cluster",
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                     scheduler_enabled=scheduler_enabled,
                     preemptible_node=preemptible_node,
                     preset_name=preset_name,
@@ -3575,6 +3739,8 @@ class TestPreemption:
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_regular_labels: str,
         kube_node_preemptible: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -3586,7 +3752,8 @@ class TestPreemption:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
             ),
         )
         await delete_job_later(job)
@@ -3615,6 +3782,8 @@ class TestPreemption:
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_regular_labels: str,
         kube_node_preemptible: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -3626,7 +3795,8 @@ class TestPreemption:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 # marking the job as scheduled
                 scheduler_enabled=True,
             ),
@@ -3660,6 +3830,8 @@ class TestPreemption:
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_preemptible_labels: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -3671,7 +3843,8 @@ class TestPreemption:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 # marking the job as preemptible
                 preemptible_node=True,
             ),
@@ -3706,6 +3879,8 @@ class TestPreemption:
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_regular_labels: str,
         kube_node_preemptible: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         node_name = kube_node_preemptible
         container = Container(
@@ -3718,7 +3893,8 @@ class TestPreemption:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 # marking the job as preemptible
                 preemptible_node=True,
             ),
@@ -3749,6 +3925,8 @@ class TestPreemption:
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_regular_labels: str,
         kube_node_preemptible: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         node_name = kube_node_preemptible
         container = Container(
@@ -3761,7 +3939,8 @@ class TestPreemption:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 # marking the job as preemptible
                 preemptible_node=True,
             ),
@@ -3809,6 +3988,8 @@ class TestPreemption:
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_regular_labels: str,
         kube_node_preemptible: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         node_name = kube_node_preemptible
         container = Container(
@@ -3821,7 +4002,8 @@ class TestPreemption:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 # marking the job as preemptible
                 preemptible_node=True,
             ),
@@ -3848,7 +4030,8 @@ class TestPreemption:
             record=JobRecord.create(
                 request=JobRequest(job_id=job.id, container=container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 # marking the job as preemptible
                 preemptible_node=True,
             ),
@@ -3866,6 +4049,8 @@ class TestRestartPolicy:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -3877,7 +4062,8 @@ class TestRestartPolicy:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 restart_policy=JobRestartPolicy.ON_FAILURE,
             ),
         )
@@ -3904,6 +4090,8 @@ class TestRestartPolicy:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -3915,7 +4103,8 @@ class TestRestartPolicy:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 restart_policy=JobRestartPolicy.ON_FAILURE,
             ),
         )
@@ -3937,6 +4126,8 @@ class TestRestartPolicy:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -3948,7 +4139,8 @@ class TestRestartPolicy:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 restart_policy=JobRestartPolicy.ALWAYS,
             ),
         )
@@ -3975,6 +4167,8 @@ class TestRestartPolicy:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -3986,7 +4180,8 @@ class TestRestartPolicy:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 restart_policy=JobRestartPolicy.ALWAYS,
             ),
         )
@@ -4029,6 +4224,8 @@ class TestJobsPreemption:
         kube_client_selector: KubeClientSelector,
         kube_orchestrator: KubeOrchestrator,
         delete_job_later: Callable[[Job], Awaitable[None]],
+        org_name: str,
+        project_name: str,
     ) -> Callable[..., Awaitable[Job]]:
         async def _create(
             cpu: float = 0.1,
@@ -4046,7 +4243,8 @@ class TestJobsPreemption:
                     owner="owner1",
                     request=JobRequest.create(container),
                     cluster_name="test-cluster",
-                    org_name="test-org",
+                    org_name=org_name,
+                    project_name=project_name,
                 ),
             )
             await kube_orchestrator.start_job(job)
@@ -4265,6 +4463,8 @@ class TestExternalJobs:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="not-used",
@@ -4276,7 +4476,8 @@ class TestExternalJobs:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 preset_name="vast-ai",
             ),
         )
@@ -4300,6 +4501,8 @@ class TestExternalJobs:
         kube_orchestrator: KubeOrchestrator,
         external_job_runner_port: int,
         external_job_runner_factory: ApiFactory,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="not-used",
@@ -4312,7 +4515,8 @@ class TestExternalJobs:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 preset_name="vast-ai",
             ),
         )
@@ -4343,6 +4547,8 @@ class TestExternalJobs:
         self,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="not-used",
@@ -4354,7 +4560,8 @@ class TestExternalJobs:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 preset_name="vast-ai",
             ),
         )
@@ -4370,6 +4577,8 @@ class TestExternalJobs:
         kube_orchestrator: KubeOrchestrator,
         external_job_runner_port: int,
         external_job_runner_factory: ApiFactory,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="not-used",
@@ -4382,7 +4591,8 @@ class TestExternalJobs:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 preset_name="vast-ai",
             ),
         )
@@ -4403,6 +4613,8 @@ class TestExternalJobs:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="not-used",
@@ -4415,7 +4627,8 @@ class TestExternalJobs:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 preset_name="vast-ai",
             ),
         )
@@ -4437,6 +4650,8 @@ class TestExternalJobs:
         kube_client_selector: KubeClientSelector,
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="not-used",
@@ -4449,7 +4664,8 @@ class TestExternalJobs:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 preset_name="vast-ai",
             ),
         )
@@ -4674,6 +4890,8 @@ class TestExternalJobsPreemption:
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_main_node_cpu_regular_labels: None,
+        org_name: str,
+        project_name: str,
     ) -> None:
         container = Container(
             image="ubuntu:20.10",
@@ -4685,7 +4903,8 @@ class TestExternalJobsPreemption:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 preset_name="vast-ai",
             ),
         )
@@ -4711,6 +4930,8 @@ class TestExternalJobsPreemption:
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_node_preemptible: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         node_name = kube_node_preemptible
         container = Container(
@@ -4723,7 +4944,8 @@ class TestExternalJobsPreemption:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 preset_name="vast-ai-p",
             ),
         )
@@ -4751,6 +4973,8 @@ class TestExternalJobsPreemption:
         kube_orchestrator: KubeOrchestrator,
         kube_client_selector: KubeClientSelector,
         kube_node_preemptible: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         node_name = kube_node_preemptible
         container = Container(
@@ -4763,7 +4987,8 @@ class TestExternalJobsPreemption:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 preset_name="vast-ai-p",
             ),
         )
@@ -4805,6 +5030,8 @@ class TestExternalJobsPreemption:
         delete_job_later: Callable[[Job], Awaitable[None]],
         kube_orchestrator: KubeOrchestrator,
         kube_node_preemptible: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         node_name = kube_node_preemptible
         container = Container(
@@ -4817,7 +5044,8 @@ class TestExternalJobsPreemption:
             record=JobRecord.create(
                 request=JobRequest.create(container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 preset_name="vast-ai-p",
             ),
         )
@@ -4843,7 +5071,8 @@ class TestExternalJobsPreemption:
             record=JobRecord.create(
                 request=JobRequest(job_id=job.id, container=container),
                 cluster_name="test-cluster",
-                org_name="test-org",
+                org_name=org_name,
+                project_name=project_name,
                 preset_name="vast-ai-p",
             ),
         )
