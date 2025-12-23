@@ -21,23 +21,12 @@ function k8s::install {
 }
 
 function k8s::start {
-    echo "• Disabling swap …"
-    sudo swapoff -a
-
     export KUBECONFIG=$HOME/.kube/config
     mkdir -p $(dirname $KUBECONFIG)
     touch $KUBECONFIG
 
-    export MINIKUBE_WANTUPDATENOTIFICATION=false
-    export MINIKUBE_HOME=$HOME
-    export CHANGE_MINIKUBE_NONE_USER=true
-
-    sudo -E mkdir -p ~/.minikube/files/files
-    sudo -E minikube config set WantUpdateNotification false
-    sudo -E minikube config set WantNoneDriverWarning false
-
-    sudo -E minikube start \
-        --vm-driver=docker \
+    minikube start \
+        --driver=docker \
         --install-addons=true \
         --addons=ingress \
         --feature-gates=DevicePlugins=true \
