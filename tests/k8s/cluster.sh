@@ -3,10 +3,18 @@
 # based on
 # https://github.com/kubernetes/minikube#linux-continuous-integration-without-vm-support
 
-function k8s::install_minikube {
+function k8s::install {
+    echo "installing minikube..."
     curl -Lo minikube https://storage.googleapis.com/minikube/releases/v1.25.2/minikube-linux-amd64
     chmod +x minikube
     sudo mv minikube /usr/local/bin/
+    echo "minikube installed."
+
+    echo "installing vcluster..."
+    curl -L -o vcluster https://github.com/loft-sh/vcluster/releases/download/v0.30.0/vcluster-linux-amd64
+    sudo install -c -m 0755 vcluster /usr/local/bin
+    rm -f vcluster
+    echo "vcluster installed."
 }
 
 function k8s::start {
@@ -97,7 +105,7 @@ function k8s::test {
 
 case "${1:-}" in
     install)
-        k8s::install_minikube
+        k8s::install
         ;;
     up)
         k8s::start
