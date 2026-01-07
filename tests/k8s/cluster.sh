@@ -7,7 +7,7 @@ set -euo pipefail
 
 function k8s::install {
     echo "installing minikube..."
-    local minikube_version="v1.34.0"
+    local minikube_version="v1.37.0"
     sudo apt-get update
     sudo apt-get install -y conntrack
     curl -Lo minikube https://storage.googleapis.com/minikube/releases/${minikube_version}/minikube-linux-amd64
@@ -28,14 +28,23 @@ function k8s::start {
     mkdir -p "$(dirname "$KUBECONFIG")"
     touch "$KUBECONFIG"
 
-    minikube start \
+    if ! minikube start \
         --driver=docker \
+        --container-runtime=containerd \
+        --kubernetes-version=stable-1.30 \
         --install-addons=true \
         --addons=ingress \
         --feature-gates=DevicePlugins=true \
         --extra-config=kubelet.fail-swap-on=false \
         --wait=all \
-        --wait-timeout=5m
+        --wait-timeout=10m; then
+        echo "minikube start failed; collecting diagnostics..."
+        minikube logs --length=200 || true
+        minikube status || true
+        docker ps -a || true
+        docker logs minikube || true
+        exit 1
+    fi
     echo "minikube started"
 }
 
