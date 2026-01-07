@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: platformauthapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: platformauthapi
+  template:
+    metadata:
+      labels:
+        service: platformauthapi
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+      - name: platformauthapi
+        image: ghcr.io/neuro-inc/platformauthapi:latest
+        imagePullPolicy: Always
+        env:
+        - name: NP_LOG_LEVEL
+          value: DEBUG
+        - name: NP_JWT_SECRET
+          value: secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platformauthapi
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    service: platformauthapi

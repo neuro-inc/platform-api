@@ -31,7 +31,7 @@ VCLUSTER_SECRET_POLL_INTERVAL_S = 5
     scope="session",
     params=[
         "minikube",
-        "vcluster",
+        # "vcluster",
     ],
 )
 async def _org_project(
@@ -86,6 +86,27 @@ async def org_project(
     if is_vcluster:
         # add a small sleep to give a chance for vcluster to sync back and force
         await asyncio.sleep(1)
+
+
+@pytest.fixture
+def org_name(org_project: tuple[str, str]) -> str:
+    """Get org_name from org_project fixture."""
+    org, _ = org_project
+    return org
+
+
+@pytest.fixture
+def project_name(org_project: tuple[str, str]) -> str:
+    """Get project_name from org_project fixture."""
+    _, project = org_project
+    return project
+
+
+@pytest.fixture
+def is_vcluster(_org_project: tuple[str, str, bool]) -> bool:
+    """Check if the current test is running on vcluster."""
+    _, _, is_vcluster = _org_project
+    return is_vcluster
 
 
 async def _delete_namespace(

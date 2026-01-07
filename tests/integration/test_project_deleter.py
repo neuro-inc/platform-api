@@ -23,7 +23,7 @@ async def test_project_deleter(
     regular_user_factory: UserFactory,
     admin_client_factory: Callable[[str], Awaitable[AdminClient]],
     cluster_name: str,
-    test_org_name: str,
+    org_name: str,
 ) -> None:
     # Create test jobs in different projects
     project_to_delete = random_str()
@@ -32,7 +32,7 @@ async def test_project_deleter(
     # Create user with organization membership
     regular_user = await regular_user_factory(
         clusters=[
-            (cluster_name, test_org_name, Balance(), Quota()),
+            (cluster_name, org_name, Balance(), Quota()),
         ],
         cluster_user_role=ClusterUserRoleType.MANAGER,
         org_user_role=OrgUserRoleType.MANAGER,
@@ -44,10 +44,10 @@ async def test_project_deleter(
 
     # Create the projects in the organization
     await admin_client.create_project(
-        project_to_delete, regular_user.cluster_name, test_org_name
+        project_to_delete, regular_user.cluster_name, org_name
     )
     await admin_client.create_project(
-        project_to_keep, regular_user.cluster_name, test_org_name
+        project_to_keep, regular_user.cluster_name, org_name
     )
 
     jobs_url = f"{api_url}/jobs"
@@ -60,7 +60,7 @@ async def test_project_deleter(
             "command": "sleep 3600",
             "resources": {"cpu": 0.1, "memory_mb": 1024},
         },
-        "org_name": test_org_name,
+        "org_name": org_name,
         "project_name": project_to_delete,
     }
 
@@ -77,7 +77,7 @@ async def test_project_deleter(
             "command": "sleep 3600",
             "resources": {"cpu": 0.1, "memory_mb": 1024},
         },
-        "org_name": test_org_name,
+        "org_name": org_name,
         "project_name": project_to_keep,
     }
 
@@ -89,7 +89,7 @@ async def test_project_deleter(
     async with client.get(
         jobs_url,
         headers={**headers, "Accept": "application/x-ndjson"},
-        params={"project_name": project_to_delete, "org_name": test_org_name},
+        params={"project_name": project_to_delete, "org_name": org_name},
     ) as resp:
         assert resp.status == 200
         content = await resp.text()
@@ -100,7 +100,7 @@ async def test_project_deleter(
     async with client.get(
         jobs_url,
         headers={**headers, "Accept": "application/x-ndjson"},
-        params={"project_name": project_to_keep, "org_name": test_org_name},
+        params={"project_name": project_to_keep, "org_name": org_name},
     ) as resp:
         assert resp.status == 200
         content = await resp.text()
@@ -125,7 +125,7 @@ async def test_project_deleter(
                         sender="platform-admin",
                         stream=StreamType("platform-admin"),
                         event_type=EventType("project-remove"),
-                        org=test_org_name,
+                        org=org_name,
                         cluster=cluster_name,
                         project=project_to_delete,
                         user="admin",
@@ -146,7 +146,7 @@ async def test_project_deleter(
     async with client.get(
         jobs_url,
         headers={**headers, "Accept": "application/x-ndjson"},
-        params={"project_name": project_to_delete, "org_name": test_org_name},
+        params={"project_name": project_to_delete, "org_name": org_name},
     ) as resp:
         assert resp.status == 200
         content = await resp.text()
@@ -161,7 +161,7 @@ async def test_project_deleter(
     async with client.get(
         jobs_url,
         headers={**headers, "Accept": "application/x-ndjson"},
-        params={"project_name": project_to_keep, "org_name": test_org_name},
+        params={"project_name": project_to_keep, "org_name": org_name},
     ) as resp:
         assert resp.status == 200
         content = await resp.text()

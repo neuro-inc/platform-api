@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: postgres-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: postgres-admin
+  template:
+    metadata:
+      labels:
+        service: postgres-admin
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16.11
+        env:
+          - name: POSTGRES_DB
+            value: postgres
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_PASSWORD
+            value: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-admin
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    service: postgres-admin

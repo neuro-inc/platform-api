@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: postgres-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: postgres-api
+  template:
+    metadata:
+      labels:
+        service: postgres-api
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16.11
+        env:
+          - name: POSTGRES_DB
+            value: postgres
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_PASSWORD
+            value: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-api
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    service: postgres-api

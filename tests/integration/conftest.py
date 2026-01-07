@@ -71,7 +71,6 @@ from platform_api.orchestrator.kube_client import (
     NodeTaint,
     PodDescriptor,
     Resources,
-    create_pod,
 )
 from platform_api.orchestrator.kube_config import KubeConfig
 from platform_api.orchestrator.kube_orchestrator import KubeOrchestrator
@@ -535,73 +534,6 @@ async def kube_node_gpu(
 
 
 @pytest.fixture
-async def kube_node_tpu(
-    kube_client_selector: KubeClientSelector,
-    delete_node_later: Callable[[str], Awaitable[None]],
-) -> AsyncIterator[str]:
-    node_name = str(uuid.uuid4())
-    await delete_node_later(node_name)
-
-    capacity = {
-        "pods": "110",
-        "memory": "1Gi",
-        "cpu": "2",
-        "cloud-tpus.google.com/v2": "8",
-    }
-    model = V1Node(
-        metadata=V1ObjectMeta(name=node_name),
-        spec=V1NodeSpec(),
-        status=V1NodeStatus(
-            capacity=capacity,
-            conditions=[V1NodeCondition(status="True", type="Ready")],
-        ),
-    )
-    await kube_client_selector.host_client.core_v1.node.create(model)
-
-    yield node_name
-
-
-@pytest.fixture
-def kube_config_node_preemptible(
-    kube_config_factory: Callable[..., KubeConfig],
-) -> KubeConfig:
-    return kube_config_factory(
-        node_label_preemptible="preemptible",
-        jobs_pod_preemptible_toleration_key="preemptible-taint",
-    )
-
-
-@pytest.fixture
-async def kube_node_preemptible(
-    kube_config_node_preemptible: KubeConfig,
-    kube_client_selector: KubeClientSelector,
-    delete_node_later: Callable[[str], Awaitable[None]],
-    default_node_capacity: dict[str, str],
-) -> AsyncIterator[str]:
-    node_name = str(uuid.uuid4())
-    await delete_node_later(node_name)
-
-    kube_config = kube_config_node_preemptible
-    assert kube_config.node_label_preemptible is not None
-    assert kube_config.jobs_pod_preemptible_toleration_key is not None
-    labels = {kube_config.node_label_preemptible: "true"}
-    taints = [
-        NodeTaint(key=kube_config.jobs_pod_preemptible_toleration_key, value="present")
-    ]
-    model = V1Node(
-        metadata=V1ObjectMeta(name=node_name, labels=labels),
-        spec=V1NodeSpec(taints=[taint.to_model() for taint in taints]),
-        status=V1NodeStatus(
-            capacity=default_node_capacity,
-            conditions=[V1NodeCondition(status="True", type="Ready")],
-        ),
-    )
-    await kube_client_selector.host_client.core_v1.node.create(model)
-
-    yield node_name
-
-
-@pytest.fixture
 async def delete_pod_later(
     kube_client_selector: KubeClientSelector,
 ) -> AsyncIterator[Callable[[PodDescriptor, str, str], Awaitable[None]]]:
@@ -623,51 +555,6 @@ async def delete_pod_later(
 
 
 @pytest.fixture
-async def pod_factory(
-    kube_client_selector: KubeClientSelector,
-    delete_pod_later: Callable[[PodDescriptor, str, str], Awaitable[None]],
-) -> Callable[..., Awaitable[PodDescriptor]]:
-    name_prefix = f"pod-{uuid.uuid4()}"
-    name_index = 1
-
-    async def _create(
-        image: str,
-        command: list[str] | None = None,
-        cpu: float = 0.1,
-        memory: int = 128 * 10**6,
-        labels: dict[str, str] | None = None,
-        wait: bool = True,
-        wait_timeout_s: float = 60,
-        idle: bool = False,
-    ) -> PodDescriptor:
-        nonlocal name_index
-        name = f"{name_prefix}-{name_index}"
-        name_index += 1
-        labels = labels or {}
-        if idle:
-            labels["platform.neuromation.io/idle"] = "true"
-        pod = PodDescriptor(
-            name=name,
-            labels=labels,
-            image=image,
-            command=command or [],
-            resources=Resources(cpu=cpu, memory=memory),
-        )
-        async with kube_client_selector.get_client(
-            org_name="org", project_name="proj"
-        ) as kube_client:
-            pod = await create_pod(kube_client, pod)
-            await delete_pod_later(pod, "org", "proj")
-            if wait:
-                await kube_client.core_v1.pod[pod.name].apolo_waiter.wait_running(
-                    timeout_s=wait_timeout_s
-                )
-            return pod
-
-    return _create
-
-
-@pytest.fixture
 def jobs_config() -> JobsConfig:
     return JobsConfig(orphaned_job_owner="compute", deletion_delay_s=0)
 
@@ -676,36 +563,36 @@ def jobs_config() -> JobsConfig:
 def config_factory(
     kube_config: KubeConfig,
     postgres_config: PostgresConfig,
-    auth_config: AuthConfig,
+    k8s_auth_config: AuthConfig,
     jobs_config: JobsConfig,
     notifications_config: NotificationsConfig,
-    admin_url: URL,
+    k8s_admin_url: URL,
     token_factory: Callable[[str], str],
     events_config: EventsClientConfig,
 ) -> Callable[..., Config]:
     def _factory(**kwargs: Any) -> Config:
         server_config = ServerConfig()
         job_policy_enforcer = JobPolicyEnforcerConfig(
-            platform_api_url=URL("http://localhost:8080/api/v1"),
+            platform_api_url=URL("http://localhost:8085/api/v1"),
             interval_sec=1,
             credit_notification_threshold=Decimal("0.1"),
             retention_delay_days=20 / (24 * 60 * 60),  # 20 seconds
         )
         database_config = DatabaseConfig(postgres=postgres_config)
         config_url = URL("http://localhost:8082/api/v1")
-        api_base_url = URL("http://localhost:8080/api/v1")
-        vcluster_public_url = URL("http://localhost:8080/apis/vcluster/v1")
+        api_base_url = URL("http://localhost:8085/api/v1")
+        vcluster_public_url = URL("http://localhost:8085/apis/vcluster/v1")
         return Config(
             server=server_config,
             database=database_config,
-            auth=auth_config,
+            auth=k8s_auth_config,
             jobs=jobs_config,
             job_policy_enforcer=job_policy_enforcer,
             notifications=notifications_config,
             events=events_config,
             config_url=config_url,
-            admin_url=admin_url,
-            admin_public_url=admin_url,
+            admin_url=k8s_admin_url,
+            admin_public_url=k8s_admin_url,
             api_base_url=api_base_url,
             vcluster_public_url=vcluster_public_url,
             **kwargs,

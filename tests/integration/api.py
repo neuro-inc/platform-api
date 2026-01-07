@@ -14,7 +14,6 @@ from yarl import URL
 from platform_api import poller_main
 from platform_api.api import create_app
 from platform_api.config import (
-    AuthConfig,
     Config,
     PollerConfig,
     RegistryConfig,
@@ -71,10 +70,9 @@ async def api(
 ) -> AsyncIterator[ApiConfig]:
     clusters = [
         cluster_config_factory("test-cluster"),
-        cluster_config_factory("testcluster2"),
     ]
     app = await create_app(config, clusters)
-    runner = ApiRunner(app, port=8080)
+    runner = ApiRunner(app, port=8085)
     api_address = await runner.run()
     api_config = ApiConfig(host=api_address.host, port=api_address.port, runner=runner)
 
@@ -136,12 +134,6 @@ async def api_with_oauth(
     for poller_runner in poller_runners:
         await poller_runner.close()
     await runner.close()
-
-
-@pytest.fixture
-async def auth_api(auth_config: AuthConfig) -> AuthApiConfig:
-    assert auth_config.server_endpoint_url is not None
-    return AuthApiConfig(server_endpoint_url=auth_config.server_endpoint_url)
 
 
 @pytest.fixture
@@ -424,5 +416,10 @@ def cluster_name() -> str:
 @pytest.fixture
 async def job_submit(
     job_request_factory: Callable[[], dict[str, Any]],
+    org_name: str,
+    project_name: str,
 ) -> dict[str, Any]:
-    return job_request_factory()
+    request = job_request_factory()
+    request["org_name"] = org_name
+    request["project_name"] = project_name
+    return request

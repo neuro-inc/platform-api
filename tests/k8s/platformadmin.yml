@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platformadmin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: platformadmin
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        service: platformadmin
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      initContainers:
+      - name: platformadmin-migrations
+        image: ghcr.io/neuro-inc/platformadmin:latest
+        imagePullPolicy: Always
+        command: ["alembic", "upgrade", "head"]
+        env:
+        - name: NP_ADMIN_POSTGRES_DSN
+          value: postgresql://postgres:postgres@postgres-admin:5432/postgres
+      containers:
+      - name: platformadmin
+        image: ghcr.io/neuro-inc/platformadmin:latest
+        imagePullPolicy: Always
+        env:
+        - name: NP_JWT_SECRET
+          value: secret
+        - name: NP_ADMIN_AUTH_TOKEN
+          value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6ImFkbWluIn0.WDzJ3g8qa23kqkNUJilYnGIAfLvHD6nc-4R6DMZZzcc
+        - name: NP_ADMIN_AUTH_URL
+          value: http://platformauthapi:8080
+        - name: NP_ADMIN_CONFIG_TOKEN
+          value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6ImNsdXN0ZXIifQ.kZG6EyaHMa2gNzrgKQlwVnZ0OZ5mruFZ0xVAbntm-dU
+        - name: NP_ADMIN_CONFIG_URL
+          value: http://platformconfig:8080
+        - name: NP_ADMIN_POSTGRES_DSN
+          value: postgresql://postgres:postgres@postgres-admin:5432/postgres
+        - name: NP_ADMIN_NOTIFICATIONS_URL
+          value: http://platformnotifications:8080
+        - name: NP_ADMIN_NOTIFICATIONS_TOKEN
+          value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6ImNvbXB1dGUifQ.Ry-cSjY7bxAYCwoBnSIOhY0CmgqV7vBe--ngHRknY-M
+        - name: NP_LOG_LEVEL
+          value: DEBUG
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platformadmin
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    service: platformadmin
