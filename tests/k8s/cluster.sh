@@ -4,14 +4,14 @@
 # https://github.com/kubernetes/minikube#linux-continuous-integration-without-vm-support
 
 function k8s::install {
-    echo "installing minikube..."
-    local minikube_version="v1.34.0"
-    sudo apt-get update
-    sudo apt-get install -y conntrack
-    curl -Lo minikube https://storage.googleapis.com/minikube/releases/${minikube_version}/minikube-linux-amd64
-    chmod +x minikube
-    sudo mv minikube /usr/local/bin/
-    echo "minikube installed."
+#    echo "installing minikube..."
+#    local minikube_version="v1.34.0"
+#    sudo apt-get update
+#    sudo apt-get install -y conntrack
+#    curl -Lo minikube https://storage.googleapis.com/minikube/releases/${minikube_version}/minikube-linux-amd64
+#    chmod +x minikube
+#    sudo mv minikube /usr/local/bin/
+#    echo "minikube installed."
 
     echo "installing vcluster..."
     curl -L -o vcluster https://github.com/loft-sh/vcluster/releases/download/v0.30.0/vcluster-linux-amd64
@@ -25,13 +25,13 @@ function k8s::start {
     mkdir -p $(dirname $KUBECONFIG)
     touch $KUBECONFIG
 
-    minikube start \
-        --driver=docker \
-        --install-addons=true \
-        --addons=ingress \
-        --feature-gates=DevicePlugins=true \
-        --wait=all \
-        --wait-timeout=5m
+#    minikube start \
+#        --driver=docker \
+#        --install-addons=true \
+#        --addons=ingress \
+#        --feature-gates=DevicePlugins=true \
+#        --wait=all \
+#        --wait-timeout=5m
     kubectl config use-context minikube
 
     # Install nvidia device plugin
