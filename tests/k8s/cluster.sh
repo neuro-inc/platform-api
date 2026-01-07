@@ -31,7 +31,7 @@ function k8s::start {
     if ! minikube start \
         --driver=docker \
         --container-runtime=containerd \
-        --kubernetes-version=stable-1.30 \
+        --kubernetes-version="v1.31.0" \
         --install-addons=true \
         --addons=ingress \
         --feature-gates=DevicePlugins=true \
