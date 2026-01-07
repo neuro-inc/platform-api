@@ -3,6 +3,8 @@
 # based on
 # https://github.com/kubernetes/minikube#linux-continuous-integration-without-vm-support
 
+set -euo pipefail
+
 function k8s::install {
     echo "installing minikube..."
     local minikube_version="v1.34.0"
@@ -23,21 +25,22 @@ function k8s::install {
 function k8s::start {
     echo "starting minikube..."
     export KUBECONFIG=$HOME/.kube/config
-    mkdir -p $(dirname $KUBECONFIG)
-    touch $KUBECONFIG
+    mkdir -p "$(dirname "$KUBECONFIG")"
+    touch "$KUBECONFIG"
 
     minikube start \
         --driver=docker \
         --install-addons=true \
         --addons=ingress \
         --feature-gates=DevicePlugins=true \
+        --extra-config=kubelet.fail-swap-on=false \
         --wait=all \
         --wait-timeout=5m
     echo "minikube started"
 }
 
 function k8s::setup {
-  kubectl config use-context minikube
+    kubectl config use-context minikube
 
     # Install nvidia device plugin
     kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v1.9/nvidia-device-plugin.yml
