@@ -74,8 +74,6 @@ jobs:
     strategy:
       matrix:
         chunks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    env:
-      MINIKUBE_DRIVER: none
     steps:
     - name: Checkout commit
       uses: actions/checkout@v6
@@ -97,6 +95,12 @@ jobs:
           poetry-
     - name: Install dependencies
       run: make setup
+    - name: Login to ghcr.io
+      uses: docker/login-action@v3.6.0
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
     - name: Start minikube
       uses: medyagh/setup-minikube@latest
       id: minikube
@@ -107,7 +111,8 @@ jobs:
         kubernetes-version: v1.31.0
         addons: ingress
         feature-gates: 'DevicePlugins=true'
-    - name: Start minikube
+        start-args: '--nodes 1 --disk-size 30g'
+    - name: Setup services in minikube
       run: |
         kubectl create secret docker-registry ghcr-secret --docker-server=https://ghcr.io --docker-username=${{ github.actor }} --docker-password=${{ secrets.GITHUB_TOKEN }}
         make install_k8s

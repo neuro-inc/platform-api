@@ -70,6 +70,7 @@ class UserFactory(Protocol):
         # fmt: on
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
+        project_name: str = "",
         do_create_project: bool = True,
     ) -> _User: ...
 
