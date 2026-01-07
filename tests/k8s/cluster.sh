@@ -34,10 +34,10 @@ function k8s::start {
         --kubernetes-version="v1.31.0" \
         --install-addons=true \
         --addons=ingress \
-        --feature-gates=DevicePlugins=true \
         --extra-config=kubelet.fail-swap-on=false \
+        --extra-config=kubelet.cgroup-driver=systemd \
         --wait=all \
-        --wait-timeout=10m; then
+        --wait-timeout=5m; then
         echo "minikube start failed; collecting diagnostics..."
         minikube logs --length=200 || true
         minikube status || true
@@ -50,9 +50,6 @@ function k8s::start {
 
 function k8s::setup {
     kubectl config use-context minikube
-
-    # Install nvidia device plugin
-    kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v1.9/nvidia-device-plugin.yml
 
     k8s::wait k8s::setup_namespace
     k8s::wait k8s::setup_storageclass
