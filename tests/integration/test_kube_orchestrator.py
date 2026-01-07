@@ -4118,8 +4118,13 @@ class TestRestartPolicy:
         ) as kube_client:
             await wait_pod_is_terminated(kube_client, pod_name=pod_name, timeout_s=60.0)
 
-        status = await kube_orchestrator.get_job_status(job)
-        assert status == JobStatusItem.create(status=JobStatus.SUCCEEDED, exit_code=0)
+        expected_status = JobStatusItem.create(status=JobStatus.SUCCEEDED, exit_code=0)
+        async with timeout(60):
+            while True:
+                status = await kube_orchestrator.get_job_status(job)
+                if status == expected_status:
+                    return
+                await asyncio.sleep(0.5)
 
     async def test_restart_always(
         self,
