@@ -3,51 +3,58 @@
 # based on
 # https://github.com/kubernetes/minikube#linux-continuous-integration-without-vm-support
 
-function k8s::install_minikube {
-    curl -Lo minikube https://storage.googleapis.com/minikube/releases/v1.25.2/minikube-linux-amd64
+set -euo pipefail
+
+function k8s::install {
+    echo "installing minikube..."
+    local minikube_version="v1.37.0"
+    sudo apt-get update
+    sudo apt-get install -y conntrack
+    curl -Lo minikube https://storage.googleapis.com/minikube/releases/${minikube_version}/minikube-linux-amd64
     chmod +x minikube
     sudo mv minikube /usr/local/bin/
+    echo "minikube installed."
+
+    echo "installing vcluster..."
+    curl -L -o vcluster https://github.com/loft-sh/vcluster/releases/download/v0.30.0/vcluster-linux-amd64
+    sudo install -c -m 0755 vcluster /usr/local/bin
+    rm -f vcluster
+    echo "vcluster installed."
 }
 
 function k8s::start {
-    # ----- Kernel prerequisites for the none driver ----------------------------
-    echo "• Enabling br_netfilter and required sysctl flags …"
-    sudo modprobe br_netfilter
-    sudo sysctl -w \
-        net.bridge.bridge-nf-call-iptables=1 \
-        net.bridge.bridge-nf-call-ip6tables=1 \
-        net.ipv4.ip_forward=1
-
-    # ----- Disable swap (kubeadm requirement) -----------------------------------
-    echo "• Disabling swap …"
-    sudo swapoff -a
-
+    echo "starting minikube..."
     export KUBECONFIG=$HOME/.kube/config
-    mkdir -p $(dirname $KUBECONFIG)
-    touch $KUBECONFIG
+    mkdir -p "$(dirname "$KUBECONFIG")"
+    touch "$KUBECONFIG"
 
-    export MINIKUBE_WANTUPDATENOTIFICATION=false
-    export MINIKUBE_HOME=$HOME
-    export CHANGE_MINIKUBE_NONE_USER=true
-
-    sudo -E mkdir -p ~/.minikube/files/files
-    sudo -E minikube config set WantUpdateNotification false
-    sudo -E minikube config set WantNoneDriverWarning false
-
-    sudo -E minikube start \
-        --driver=none \
+    if ! minikube start \
+        --driver=docker \
+        --container-runtime=containerd \
+        --kubernetes-version="v1.31.0" \
         --install-addons=true \
         --addons=ingress \
-        --feature-gates=DevicePlugins=true \
+        --extra-config=kubelet.fail-swap-on=false \
+        --extra-config=kubelet.cgroup-driver=systemd \
         --wait=all \
-        --wait-timeout=5m
+        --wait-timeout=5m; then
+        echo "minikube start failed; collecting diagnostics..."
+        minikube logs --length=200 || true
+        minikube status || true
+        docker ps -a || true
+        docker logs minikube || true
+        exit 1
+    fi
+    echo "minikube started"
+}
 
-    # Install nvidia device plugin
-    kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v1.9/nvidia-device-plugin.yml
+function k8s::setup {
+    kubectl config use-context minikube
 
     k8s::wait k8s::setup_namespace
     k8s::wait k8s::setup_storageclass
     k8s::wait "kubectl get po --all-namespaces"
+    k8s::setup_platform_services
 }
 
 function k8s::wait {
@@ -79,6 +86,68 @@ function k8s::setup_storageclass {
     kubectl apply -f tests/k8s/storageclass.yml
 }
 
+function k8s::setup_platform_services {
+    echo "Applying platform services..."
+
+    kubectl apply -f tests/k8s/rbac-services.yml
+    kubectl apply -f tests/k8s/platformauthapi.yml
+    kubectl apply -f tests/k8s/postgres-admin.yml
+    kubectl apply -f tests/k8s/postgres-api.yml
+    kubectl apply -f tests/k8s/platformconfig.yml
+    echo "Waiting for postgres-admin to be ready..."
+    kubectl wait --for=condition=ready pod -l service=postgres-admin --timeout=120s || true
+    echo "Waiting for platformconfig-postgres to be ready..."
+    kubectl wait --for=condition=ready pod -l service=platformconfig-postgres --timeout=120s || true
+    echo "Waiting for postgres-api to be ready..."
+    kubectl wait --for=condition=ready pod -l service=postgres-api --timeout=120s || true
+    # Admin service (depends on auth, postgres, config)
+    kubectl apply -f tests/k8s/platformadmin.yml
+    kubectl apply -f tests/k8s/platformnotifications.yml
+    # Secrets service (depends on auth)
+    kubectl apply -f tests/k8s/platformsecrets.yml
+    # Disk API service (depends on auth)
+    kubectl apply -f tests/k8s/platformdiskapi.yml
+    echo "Platform services applied."
+
+    # Wait for all services to be ready
+    k8s::wait_for_platform_services
+
+    # Initialize the cluster in platformadmin and platformconfig
+    k8s::create_cluster
+}
+
+function k8s::wait_for_platform_services {
+    echo "Waiting for platform services to be ready..."
+
+    kubectl wait --for=condition=ready pod -l service=platformauthapi --timeout=300s
+    kubectl wait --for=condition=ready pod -l service=postgres-admin --timeout=300s
+    kubectl wait --for=condition=ready pod -l service=postgres-api --timeout=300s
+    kubectl wait --for=condition=ready pod -l service=platformconfig-postgres --timeout=300s
+    kubectl wait --for=condition=ready pod -l service=platformconfig --timeout=300s
+    kubectl wait --for=condition=ready pod -l service=platformadmin --timeout=300s
+    kubectl wait --for=condition=ready pod -l service=platformnotifications --timeout=300s
+    kubectl wait --for=condition=ready pod -l service=platformsecrets --timeout=300s
+    kubectl wait --for=condition=ready pod -l service=platformdiskapi --timeout=300s
+
+    echo "All platform services are ready."
+}
+
+function k8s::create_cluster {
+    echo "Running create-cluster job..."
+
+    # Delete old job if exists
+    kubectl delete job create-cluster --ignore-not-found=true
+
+    # Apply the job
+    kubectl apply -f tests/k8s/create-cluster-job.yml
+
+    # Wait for the job to complete
+    echo "Waiting for create-cluster job to complete..."
+    kubectl wait --for=condition=complete job/create-cluster --timeout=120s
+
+    echo "Cluster initialization complete."
+}
+
 function k8s::test {
     kubectl delete jobs testjob1 || :
     kubectl create -f tests/k8s/pod.yml
@@ -97,10 +166,13 @@ function k8s::test {
 
 case "${1:-}" in
     install)
-        k8s::install_minikube
+        k8s::install
         ;;
     up)
         k8s::start
+        ;;
+    setup)
+        k8s::setup
         ;;
     down)
         k8s::stop
@@ -110,6 +182,15 @@ case "${1:-}" in
         ;;
     test)
         k8s::test
+        ;;
+    apply-services)
+        k8s::setup_platform_services
+        ;;
+    wait-services)
+        k8s::wait_for_platform_services
+        ;;
+    create-cluster)
+        k8s::create_cluster
         ;;
     *)
         exit 1

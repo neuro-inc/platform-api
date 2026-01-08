@@ -74,8 +74,6 @@ jobs:
     strategy:
       matrix:
         chunks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    env:
-      MINIKUBE_DRIVER: none
     steps:
     - name: Checkout commit
       uses: actions/checkout@v6
@@ -103,14 +101,14 @@ jobs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ github.token }}
-    - name: Install Conntrack
-      run: sudo apt-get -q install -y conntrack
-    - name: Start minikube
+    - name: Install minikube
+      run: make install_k8s
+    - name: Setup services in minikube
       run: |
-        make install_k8s
         make start_k8s
-    - name: Pull test images
-      run: make docker_pull_test_images
+        kubectl create secret docker-registry ghcr-secret --docker-server=https://ghcr.io --docker-username=${{ github.actor }} --docker-password=${{ secrets.GITHUB_TOKEN }}
+        make setup_k8s
+
     - name: Increment index
       id: group
       shell: python

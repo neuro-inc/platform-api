@@ -1,18 +1,12 @@
 from __future__ import annotations
 
-import asyncio
-from asyncio import timeout
-from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
-from pathlib import Path
 from typing import Protocol
 
-import aiodocker
 import pytest
-from aiodocker.types import JSONObject
-from aiohttp import ClientError, ClientResponseError
+from aiohttp import ClientResponseError
 from aiohttp.hdrs import AUTHORIZATION
 from jose import jwt
 from neuro_admin_client import (
@@ -26,58 +20,8 @@ from neuro_auth_client import AuthClient, Permission, User as AuthUser
 from neuro_config_client import ConfigClient
 from yarl import URL
 
-from platform_api.config import AuthConfig, OAuthConfig
+from platform_api.config import OAuthConfig
 from tests.conftest import random_str
-
-
-@pytest.fixture(scope="session")
-def auth_server_image_name() -> str:
-    with Path("PLATFORMAUTHAPI_IMAGE").open() as f:
-        return f.read().strip()
-
-
-@pytest.fixture(scope="session")
-async def auth_server(
-    docker: aiodocker.Docker, reuse_docker: bool, auth_server_image_name: str
-) -> AsyncIterator[AuthConfig]:
-    image_name = auth_server_image_name
-    container_name = "auth_server"
-    container_config: JSONObject = {
-        "Image": image_name,
-        "AttachStdout": False,
-        "AttachStderr": False,
-        "HostConfig": {"PublishAllPorts": True},
-        "Env": ["NP_JWT_SECRET=secret", "NP_LOG_LEVEL=DEBUG"],
-    }
-
-    if reuse_docker:
-        try:
-            container = await docker.containers.get(container_name)
-            if container["State"]["Running"]:
-                auth_config = await create_auth_config(container)
-                await wait_for_auth_server(auth_config)
-                yield auth_config
-                return
-        except aiodocker.exceptions.DockerError:
-            pass
-
-    try:
-        await docker.images.inspect(auth_server_image_name)
-    except aiodocker.exceptions.DockerError:
-        await docker.images.pull(auth_server_image_name)
-
-    container = await docker.containers.create_or_replace(
-        name=container_name, config=container_config
-    )
-    await container.start()
-
-    auth_config = await create_auth_config(container)
-    await wait_for_auth_server(auth_config)
-    yield auth_config
-
-    if not reuse_docker:
-        await container.kill()
-        await container.delete(force=True)
 
 
 def create_token(name: str) -> str:
@@ -93,56 +37,6 @@ def token_factory() -> Callable[[str], str]:
 @pytest.fixture(scope="session")
 def admin_token(token_factory: Callable[[str], str]) -> str:
     return token_factory("admin")
-
-
-async def create_auth_config(
-    container: aiodocker.containers.DockerContainer,
-) -> AuthConfig:
-    host = "0.0.0.0"
-    val = await container.port(8080)
-    assert val is not None
-    port = int(val[0]["HostPort"])
-    url = URL(f"http://{host}:{port}")
-    token = create_token("compute")
-    public_endpoint_url = URL("https://neu.ro/api/v1/users")
-    return AuthConfig(
-        server_endpoint_url=url,
-        service_token=token,
-        public_endpoint_url=public_endpoint_url,
-    )
-
-
-@pytest.fixture
-async def auth_config(auth_server: AuthConfig) -> AsyncIterator[AuthConfig]:
-    yield auth_server
-
-
-@asynccontextmanager
-async def create_auth_client(config: AuthConfig) -> AsyncGenerator[AuthClient]:
-    async with AuthClient(
-        url=config.server_endpoint_url, token=config.service_token
-    ) as client:
-        yield client
-
-
-@pytest.fixture
-async def auth_client(auth_server: AuthConfig) -> AsyncGenerator[AuthClient]:
-    async with create_auth_client(auth_server) as client:
-        yield client
-
-
-async def wait_for_auth_server(
-    config: AuthConfig, timeout_s: float = 30, interval_s: float = 1
-) -> None:
-    async with timeout(timeout_s):
-        while True:
-            try:
-                async with create_auth_client(config) as auth_client:
-                    await auth_client.ping()
-                    break
-            except (AssertionError, ClientError):
-                pass
-            await asyncio.sleep(interval_s)
 
 
 @dataclass(frozen=True)
@@ -166,11 +60,6 @@ def test_cluster_name() -> str:
     return "test-cluster"
 
 
-@pytest.fixture
-def test_org_name() -> str:
-    return "test-org"
-
-
 class UserFactory(Protocol):
     async def __call__(
         self,
@@ -181,20 +70,21 @@ class UserFactory(Protocol):
         # fmt: on
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
+        project_name: str = "",
         do_create_project: bool = True,
     ) -> _User: ...
 
 
 @pytest.fixture
 async def regular_user_factory(
-    auth_client: AuthClient,
-    config_client: ConfigClient,
-    admin_client: AdminClient,
+    k8s_auth_client: AuthClient,
+    k8s_config_client: ConfigClient,
+    k8s_admin_client: AdminClient,
     token_factory: Callable[[str], str],
     admin_token: str,
     test_cluster_name: str,
-    test_org_name: str,
-    admin_client_factory: Callable[[str], Awaitable[AdminClient]],
+    org_name: str,
+    project_name: str,
 ) -> UserFactory:
     async def _factory(
         name: str | None = None,
@@ -204,43 +94,42 @@ async def regular_user_factory(
         # fmt: on
         cluster_user_role: ClusterUserRoleType = ClusterUserRoleType.USER,
         org_user_role: OrgUserRoleType = OrgUserRoleType.USER,
+        project_name: str = project_name,
         do_create_project: bool = True,
     ) -> _User:
         if not name:
             name = random_str()
         if clusters is None:
-            clusters = [(test_cluster_name, test_org_name, Balance(), Quota())]
-        await admin_client.create_user(name=name, email=f"{name}@email.com")
+            clusters = [(test_cluster_name, org_name, Balance(), Quota())]
+        await k8s_admin_client.create_user(name=name, email=f"{name}@email.com")
         user_token = token_factory(name)
-        user_admin_client = await admin_client_factory(user_token)
-        admin_admin_client = await admin_client_factory(admin_token)
         for entry in clusters:
-            org_name: str | None = None
+            entry_org_name: str | None = None
             if len(entry) == 3:
                 cluster, balance, quota = entry
             else:
-                cluster, org_name, balance, quota = entry
+                cluster, entry_org_name, balance, quota = entry
             try:
-                await admin_client.create_cluster(cluster)
+                await k8s_admin_client.create_cluster(cluster)
             except ClientResponseError:
                 pass
             try:
                 # in case docker containers are reused, we want to recreate clusters
                 # that were previously stored in memory
-                await config_client.create_blank_cluster(
+                await k8s_config_client.create_blank_cluster(
                     name=cluster, service_token="cluster-token"
                 )
             except ClientResponseError:
                 pass
 
-            if org_name is not None:
+            if entry_org_name is not None:
                 try:
-                    await admin_client.create_org(org_name)
+                    await k8s_admin_client.create_org(entry_org_name)
                 except ClientResponseError:
                     pass
                 try:
-                    await admin_client.create_org_user(
-                        org_name=org_name,
+                    await k8s_admin_client.create_org_user(
+                        org_name=entry_org_name,
                         user_name=name,
                         role=org_user_role,
                         balance=balance,
@@ -248,23 +137,23 @@ async def regular_user_factory(
                 except ClientResponseError:
                     pass
                 try:
-                    await admin_client.create_org_cluster(
+                    await k8s_admin_client.create_org_cluster(
                         cluster_name=cluster,
-                        org_name=org_name,
+                        org_name=entry_org_name,
                     )
                 except ClientResponseError:
                     pass
                 try:
-                    await admin_admin_client.update_org_balance(
-                        org_name=org_name,
+                    await k8s_admin_client.update_org_balance(
+                        org_name=entry_org_name,
                         credits=Decimal("100"),
                     )
                 except ClientResponseError:
                     pass
             try:
-                await admin_client.create_cluster_user(
+                await k8s_admin_client.create_cluster_user(
                     cluster_name=cluster,
-                    org_name=org_name,
+                    org_name=entry_org_name,
                     role=cluster_user_role,
                     user_name=name,
                     quota=quota,
@@ -272,9 +161,21 @@ async def regular_user_factory(
             except ClientResponseError:
                 pass
             if do_create_project:
-                # creating a default project in the tenant for the user
                 try:
-                    await user_admin_client.create_project(name, cluster, org_name)
+                    await k8s_admin_client.create_project(
+                        project_name,
+                        cluster,
+                        entry_org_name,
+                    )
+                except ClientResponseError:
+                    pass
+                try:
+                    await k8s_admin_client.create_project_user(
+                        project_name=project_name,
+                        cluster_name=cluster,
+                        org_name=entry_org_name,
+                        user_name=name,
+                    )
                 except ClientResponseError:
                     pass
         return _User(
@@ -296,11 +197,12 @@ class ServiceAccountFactory(Protocol):
 
 @pytest.fixture
 async def service_account_factory(
-    auth_client: AuthClient,
+    k8s_auth_client: AuthClient,
     token_factory: Callable[[str], str],
     admin_token: str,
     test_cluster_name: str,
-    test_org_name: str,
+    org_name: str,
+    project_name: str,
 ) -> ServiceAccountFactory:
     async def _factory(
         owner: _User,
@@ -309,35 +211,65 @@ async def service_account_factory(
         if not name:
             name = random_str()
         user = AuthUser(name=f"{owner.name}/service-accounts/{name}")
-        await auth_client.add_user(user, token=admin_token)
+        await k8s_auth_client.add_user(user, token=admin_token)
         permissions = []
-        # Fake grant access to SA stuff
+        # Grant org-level permissions (covers all projects under the org)
         for cluster in owner.clusters:
             permissions.extend(
                 [
                     Permission(
-                        uri=f"storage://{cluster}/{test_org_name}/{owner.name}",
+                        uri=f"disk://{cluster}/{org_name}",
+                        action="write",
+                    ),
+                    Permission(
+                        uri=f"job://{cluster}/{org_name}",
+                        action="write",
+                    ),
+                    Permission(
+                        uri=f"storage://{cluster}/{org_name}",
+                        action="write",
+                    ),
+                    Permission(
+                        uri=f"image://{cluster}/{org_name}",
+                        action="write",
+                    ),
+                    Permission(
+                        uri=f"secret://{cluster}/{org_name}",
+                        action="read",
+                    ),
+                ]
+            )
+        # Grant owner-specific manage permissions (for service account operations)
+        for cluster in owner.clusters:
+            permissions.extend(
+                [
+                    Permission(
+                        uri=f"storage://{cluster}/{org_name}/{owner.name}",
                         action="manage",
                     ),
                     Permission(
-                        uri=f"image://{cluster}/{test_org_name}/{owner.name}",
+                        uri=f"image://{cluster}/{org_name}/{owner.name}",
                         action="manage",
                     ),
                     Permission(
-                        uri=f"job://{cluster}/{test_org_name}/{owner.name}",
+                        uri=f"job://{cluster}/{org_name}/{owner.name}",
                         action="manage",
                     ),
                     Permission(
-                        uri=f"secret://{cluster}/{test_org_name}/{owner.name}",
+                        uri=f"secret://{cluster}/{org_name}/{owner.name}",
                         action="manage",
                     ),
                     Permission(
-                        uri=f"disk://{cluster}/{test_org_name}/{owner.name}",
+                        uri=f"secret://{cluster}/{org_name}/{project_name}",
+                        action="manage",
+                    ),
+                    Permission(
+                        uri=f"disk://{cluster}/{org_name}/{owner.name}",
                         action="write",
                     ),
                 ]
             )
-        await auth_client.grant_user_permissions(
+        await k8s_auth_client.grant_user_permissions(
             user.name, permissions, token=admin_token
         )
         return _User(
@@ -351,26 +283,10 @@ async def service_account_factory(
 
 @pytest.fixture
 async def regular_user(
-    regular_user_factory: UserFactory, test_cluster_name: str, test_org_name: str
+    regular_user_factory: UserFactory, test_cluster_name: str, org_name: str
 ) -> _User:
     return await regular_user_factory(
-        clusters=[(test_cluster_name, test_org_name, Balance(), Quota())]
-    )
-
-
-@pytest.fixture
-async def regular_user_with_missing_cluster_name(
-    regular_user_factory: UserFactory,
-) -> _User:
-    return await regular_user_factory(None, [("missing", Balance(), Quota())])
-
-
-@pytest.fixture
-def cluster_user(token_factory: Callable[[str], str]) -> _User:
-    name = "cluster"
-    return _User(
-        name=name,
-        token=token_factory(name),
+        clusters=[(test_cluster_name, org_name, Balance(), Quota())]
     )
 
 

@@ -22,13 +22,13 @@ class TestCannotStartJobNoCredits:
         regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
         test_cluster_name: str,
-        test_org_name: str,
+        org_name: str,
     ) -> None:
         user = await regular_user_factory(
             clusters=[
                 (
                     test_cluster_name,
-                    test_org_name,
+                    org_name,
                     Balance(credits=Decimal("100")),
                     Quota(),
                 )
@@ -53,13 +53,14 @@ class TestCannotStartJobNoCredits:
         regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
         test_cluster_name: str,
-        test_org_name: str,
+        org_name: str,
+        project_name: str,
     ) -> None:
         user = await regular_user_factory(
             clusters=[
                 (
                     test_cluster_name,
-                    test_org_name,
+                    org_name,
                     Balance(credits=Decimal("0")),
                     Quota(),
                 )
@@ -67,6 +68,8 @@ class TestCannotStartJobNoCredits:
         )
         url = api.jobs_base_url
         job_request = job_request_factory()
+        job_request["org_name"] = org_name
+        job_request["project_name"] = project_name
         async with client.post(url, headers=user.headers, json=job_request) as response:
             await response.read()
         # Notification will be sent in graceful app shutdown
@@ -148,11 +151,15 @@ class TestJobTransition:
         regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
         run_job: Callable[..., Awaitable[str]],
+        org_name: str,
+        project_name: str,
     ) -> None:
         user = await regular_user_factory()
         jobs_client = jobs_client_factory(user)
         job_request = job_request_factory()
         job_request["container"]["command"] = "sleep 15m"
+        job_request["org_name"] = org_name
+        job_request["project_name"] = project_name
 
         mock_notifications_server.remove_requests()
         job_id = await run_job(user, job_request, do_kill=False)
@@ -189,11 +196,15 @@ class TestJobTransition:
         regular_user_factory: UserFactory,
         mock_notifications_server: NotificationsServer,
         run_job: Callable[..., Awaitable[str]],
+        org_name: str,
+        project_name: str,
     ) -> None:
         user = await regular_user_factory()
         jobs_client = jobs_client_factory(user)
         job_request = job_request_factory()
         job_request["container"]["command"] = "failed-command"
+        job_request["org_name"] = org_name
+        job_request["project_name"] = project_name
 
         mock_notifications_server.remove_requests()
         job_id = await run_job(user, job_request, wait_for_start=False)

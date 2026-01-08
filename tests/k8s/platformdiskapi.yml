@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platformdiskapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: platformdiskapi
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        service: platformdiskapi
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      serviceAccountName: platform-jobs
+      containers:
+      - name: platformdiskapi
+        image: ghcr.io/neuro-inc/platformdiskapi:latest
+        imagePullPolicy: Always
+        env:
+        - name: NP_DISK_API_PLATFORM_AUTH_URL
+          value: http://platformauthapi:8080
+        - name: NP_DISK_API_PLATFORM_AUTH_TOKEN
+          value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6ImNvbXB1dGUifQ.Ry-cSjY7bxAYCwoBnSIOhY0CmgqV7vBe--ngHRknY-M
+        - name: NP_DISK_API_K8S_API_URL
+          value: https://kubernetes.default.svc
+        - name: NP_DISK_API_K8S_AUTH_TYPE
+          value: token
+        - name: NP_DISK_API_K8S_TOKEN_PATH
+          value: /var/run/secrets/kubernetes.io/serviceaccount/token
+        - name: NP_DISK_API_K8S_CA_PATH
+          value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        - name: NP_DISK_API_K8S_STORAGE_CLASS
+          value: test-storage-class
+        - name: NP_DISK_API_STORAGE_LIMIT_PER_PROJECT
+          value: "104857600"
+        - name: NP_CLUSTER_NAME
+          value: test-cluster
+        - name: NP_LOG_LEVEL
+          value: DEBUG
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platformdiskapi
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    service: platformdiskapi

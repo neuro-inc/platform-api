@@ -1,0 +1,97 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-cluster
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      initContainers:
+      - name: wait-for-services
+        image: curlimages/curl:8.4.0
+        command: [sh]
+        args:
+        - -c
+        - |
+          echo "Waiting for platformconfig..."
+          until curl -sf "$NP_PLATFORM_CONFIG_URL/ping" 2>/dev/null; do
+            sleep 2
+          done
+          echo "platformconfig is ready"
+
+          echo "Waiting for platformadmin..."
+          until curl -sf "$NP_PLATFORM_ADMIN_URL/apis/admin/v1/ping" 2>/dev/null; do
+            sleep 2
+          done
+          echo "platformadmin is ready"
+        env:
+        - name: NP_PLATFORM_CONFIG_URL
+          value: http://platformconfig:8080
+        - name: NP_PLATFORM_ADMIN_URL
+          value: http://platformadmin:8080
+      containers:
+      - name: create-cluster
+        image: curlimages/curl:8.4.0
+        command: [sh]
+        args:
+        - -ec
+        - |
+          echo "Creating admin user..."
+          curl -sf -X POST \
+            -H "Authorization: Bearer $NP_ADMIN_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"name": "admin", "email": "admin@test.com"}' \
+            "$NP_PLATFORM_ADMIN_URL/apis/admin/v1/users" || echo "admin user may already exist"
+
+          echo "Creating compute user..."
+          curl -sf -X POST \
+            -H "Authorization: Bearer $NP_ADMIN_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"name": "compute", "email": "compute@test.com"}' \
+            "$NP_PLATFORM_ADMIN_URL/apis/admin/v1/users" || echo "compute user may already exist"
+
+          echo "Creating cluster user..."
+          curl -sf -X POST \
+            -H "Authorization: Bearer $NP_ADMIN_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"name": "cluster", "email": "cluster@test.com"}' \
+            "$NP_PLATFORM_ADMIN_URL/apis/admin/v1/users" || echo "cluster user may already exist"
+
+          echo "Creating test-cluster in platformconfig..."
+          curl -sf -X POST \
+            -H "Authorization: Bearer $NP_ADMIN_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"name": "test-cluster", "token": "cluster-token"}' \
+            "$NP_PLATFORM_CONFIG_URL/api/v1/clusters" || echo "test-cluster may already exist in config"
+
+          echo "Creating test-cluster in platformadmin..."
+          curl -sf -X POST \
+            -H "Authorization: Bearer $NP_ADMIN_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"name": "test-cluster"}' \
+            "$NP_PLATFORM_ADMIN_URL/apis/admin/v1/clusters" || echo "test-cluster may already exist in admin"
+
+          echo "Creating test-cluster role in auth..."
+          curl -sf -X POST \
+            -H "Authorization: Bearer $NP_ADMIN_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"name": "test-cluster"}' \
+            "$NP_PLATFORM_AUTH_URL/api/v1/users" || echo "test-cluster role may already exist in auth"
+
+          echo "Adding compute as cluster admin for test-cluster..."
+          curl -sf -X POST \
+            -H "Authorization: Bearer $NP_ADMIN_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"user_name": "compute", "role": "admin"}' \
+            "$NP_PLATFORM_ADMIN_URL/apis/admin/v1/clusters/test-cluster/users" || echo "compute cluster_user may already exist"
+
+          echo "Cluster initialization complete!"
+        env:
+        - name: NP_PLATFORM_CONFIG_URL
+          value: http://platformconfig:8080
+        - name: NP_PLATFORM_ADMIN_URL
+          value: http://platformadmin:8080
+        - name: NP_PLATFORM_AUTH_URL
+          value: http://platformauthapi:8080
+        - name: NP_ADMIN_TOKEN
+          value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6ImFkbWluIn0.WDzJ3g8qa23kqkNUJilYnGIAfLvHD6nc-4R6DMZZzcc

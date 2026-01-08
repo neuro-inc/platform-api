@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platformnotifications-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: platformnotifications-redis
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        service: platformnotifications-redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:4
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platformnotifications-redis
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    service: platformnotifications-redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platformnotifications
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: platformnotifications
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        service: platformnotifications
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+      - name: platformnotifications
+        image: ghcr.io/neuro-inc/platformnotificationsapi:latest
+        imagePullPolicy: Always
+        env:
+        - name: NP_LOG_LEVEL
+          value: DEBUG
+        - name: NP_NOTIFICATIONS_PLATFORM_API_URL
+          value: http://platformapi:8080/api/v1
+        - name: NP_NOTIFICATIONS_PLATFORM_API_TOKEN
+          value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6Im5vdGlmaWNhdGlvbiJ9.F_W02EEUu7gglKpYoK1T9NroNSCa5YMD6fNVRyXUOW0
+        - name: NP_NOTIFICATIONS_PLATFORM_AUTH_URL
+          value: http://platformauthapi:8080
+        - name: NP_NOTIFICATIONS_PLATFORM_AUTH_TOKEN
+          value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6Im5vdGlmaWNhdGlvbiJ9.F_W02EEUu7gglKpYoK1T9NroNSCa5YMD6fNVRyXUOW0
+        - name: NP_NOTIFICATIONS_PLATFORM_ADMIN_URL
+          value: http://platformadmin:8080
+        - name: NP_NOTIFICATIONS_PLATFORM_ADMIN_TOKEN
+          value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZGVudGl0eSI6Im5vdGlmaWNhdGlvbiJ9.F_W02EEUu7gglKpYoK1T9NroNSCa5YMD6fNVRyXUOW0
+        - name: NP_DB_REDIS_URI
+          value: redis://platformnotifications-redis:6379/0
+        - name: NP_NOTIFICATIONS_TRANSPORT
+          value: ""
+        - name: SECURITY_PRIVATE_KEY_BASE64
+          value: cHJpdmF0ZSBrZXk=
+        - name: SECURITY_JWK_KID
+          value: kid
+        - name: NP_CONSOLE_URL
+          value: http://localhost:8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platformnotifications
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    service: platformnotifications

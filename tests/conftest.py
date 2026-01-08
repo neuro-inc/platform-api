@@ -7,12 +7,13 @@ import pytest
 pytest_plugins = [
     "tests.integration.auth",
     "tests.integration.api",
-    "tests.integration.docker",
     "tests.integration.secrets",
     "tests.integration.diskapi",
     "tests.integration.notifications",
     "tests.integration.admin",
     "tests.integration.postgres",
+    "tests.integration.clusters",
+    "tests.integration.k8s_services",
 ]
 
 
