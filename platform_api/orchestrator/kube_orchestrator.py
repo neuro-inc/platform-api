@@ -522,17 +522,15 @@ class KubeOrchestrator(Orchestrator):
         """
         await self._create_docker_secret(job)
         try:
-            descriptor = self._create_pod_descriptor(
-                job, tolerate_unreachable_node=tolerate_unreachable_node
-            )
-            # Use the new KubeClientSelector for pod creation
-            assert job.org_name is not None
             async with self._selector.get_client(
                 org_name=job.org_name, project_name=job.project_name
             ) as client_proxy:
-                pod = await create_pod(client_proxy, descriptor)
                 if client_proxy.is_vcluster:
                     job.mark_as_vcluster()
+                descriptor = self._create_pod_descriptor(
+                    job, tolerate_unreachable_node=tolerate_unreachable_node
+                )
+                pod = await create_pod(client_proxy, descriptor)
 
             logger.info("Starting Service for %s.", job.id)
             service = await self._create_service(descriptor)
