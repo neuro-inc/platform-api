@@ -531,6 +531,8 @@ class KubeOrchestrator(Orchestrator):
                 org_name=job.org_name, project_name=job.project_name
             ) as client_proxy:
                 pod = await create_pod(client_proxy, descriptor)
+                if client_proxy.is_vcluster:
+                    job.mark_as_vcluster()
 
             logger.info("Starting Service for %s.", job.id)
             service = await self._create_service(descriptor)
