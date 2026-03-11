@@ -61,7 +61,7 @@ spec:
           curl -sf -X POST \
             -H "Authorization: Bearer $NP_ADMIN_TOKEN" \
             -H "Content-Type: application/json" \
-            -d '{"name": "test-cluster", "token": "cluster-token"}' \
+            -d '{"name": "test-cluster"}' \
             "$NP_PLATFORM_CONFIG_URL/api/v1/clusters" || echo "test-cluster may already exist in config"
 
           echo "Creating test-cluster in platformadmin..."
