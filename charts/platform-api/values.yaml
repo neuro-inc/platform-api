@@ -57,7 +57,11 @@ postgres-db-init:
       repository: "$IMAGE_REPO"
       tag: "$IMAGE_TAG"
 
-    command: ["alembic", "upgrade", "head"]
+    command: ["/bin/bash", "c"]
+    args:
+      - |
+        alembic upgrade head
+        alembic check
 
 resources:
   requests:
