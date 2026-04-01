@@ -117,7 +117,7 @@ async def regular_user_factory(
                 # in case docker containers are reused, we want to recreate clusters
                 # that were previously stored in memory
                 await k8s_config_client.create_blank_cluster(
-                    name=cluster, service_token="cluster-token"
+                    name=cluster, token="cluster-token"
                 )
             except ClientResponseError:
                 pass

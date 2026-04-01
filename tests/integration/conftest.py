@@ -38,13 +38,14 @@ from neuro_config_client import (
     DNSConfig,
     EnergyConfig,
     EnergySchedule,
+    GrafanaConfig,
     IngressConfig,
     IntelGPU,
-    MetricsConfig,
     MonitoringConfig,
     NvidiaGPU,
     NvidiaGPUPreset,
     OrchestratorConfig,
+    PrometheusConfig,
     ResourcePoolType,
     ResourcePreset,
     SecretsConfig,
@@ -635,7 +636,8 @@ def cluster_config_factory(
             ),
             monitoring=MonitoringConfig(url=URL("https://neu.ro/api/v1/monitoring")),
             secrets=SecretsConfig(url=URL("https://neu.ro/api/v1/secrets")),
-            metrics=MetricsConfig(url=URL("https://neu.ro/api/v1/metrics")),
+            grafana=GrafanaConfig(url=URL("https://neu.ro/api/v1/grafana")),
+            prometheus=PrometheusConfig(url=URL("https://neu.ro/api/v1/prometheus")),
             disks=DisksConfig(
                 url=URL("https://neu.ro/api/v1/disk"),
                 storage_limit_per_user=100 * 2**30,
@@ -644,6 +646,7 @@ def cluster_config_factory(
             apps=AppsConfig(
                 apps_hostname_templates=["{app_name}.apps.dev.neu.ro"],
                 app_proxy_url=URL("https://proxy.apps.dev.neu.ro"),
+                launchpad_use_subdomain=True,
             ),
             dns=DNSConfig(name="neu.ro"),
         )

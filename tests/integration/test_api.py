@@ -43,40 +43,6 @@ def cluster_name() -> str:
     return "test-cluster"
 
 
-@pytest.fixture
-def cluster_configs_payload() -> list[dict[str, Any]]:
-    return [
-        {
-            "name": "cluster_name",
-            "storage": {
-                "nfs": {"server": "127.0.0.1", "export_path": "/nfs/export/path"},
-                "url": "https://dev.neu.ro/api/v1/storage",
-            },
-            "registry": {
-                "url": "https://registry-dev.neu.ro",
-                "email": "registry@neuromation.io",
-            },
-            "orchestrator": {
-                "job_hostname_template": "{job_id}.jobs.neu.ro",
-                "job_internal_hostname_template": "{job_id}.platformapi-tests",
-                "resource_pool_types": [
-                    {"name": "node-pool1"},
-                    {"name": "node-pool1", "nvidia_gpu": 0},
-                    {"name": "node-pool1", "nvidia_gpu": 1},
-                ],
-                "is_http_ingress_secure": True,
-            },
-            "monitoring": {"url": "https://dev.neu.ro/api/v1/jobs"},
-            "secrets": {"url": "https://dev.neu.ro/api/v1/secrets"},
-            "metrics": {"url": "https://metrics.dev.neu.ro"},
-            "blob_storage": {"url": "https://dev.neu.ro/api/v1/blob"},
-            "disks": {"url": "https://dev.neu.ro/api/v1/disk"},
-            "buckets": {"url": "https://dev.neu.ro/api/v1/buckets"},
-            "apps": {"apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"]},
-        }
-    ]
-
-
 class TestApi:
     async def test_ping(self, api: ApiConfig, client: aiohttp.ClientSession) -> None:
         async with client.get(api.ping_url) as response:
@@ -146,7 +112,8 @@ class TestApi:
                 "users_url": "https://neu.ro/api/v1/users",
                 "monitoring_url": "https://neu.ro/api/v1/monitoring",
                 "secrets_url": "https://neu.ro/api/v1/secrets",
-                "metrics_url": "https://neu.ro/api/v1/metrics",
+                "grafana_url": "https://neu.ro/api/v1/grafana",
+                "prometheus_url": "https://neu.ro/api/v1/prometheus",
                 "disks_url": "https://neu.ro/api/v1/disk",
                 "buckets_url": "https://neu.ro/api/v1/buckets",
                 "resource_pool_types": [
@@ -444,7 +411,11 @@ class TestApi:
                         "credits_per_hour_per_gb": "100",
                     }
                 ],
-                "apps": {"apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"]},
+                "apps": {
+                    "apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"],
+                    "app_proxy_url": "https://proxy.apps.dev.neu.ro",
+                    "launchpad_use_subdomain": True,
+                },
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -501,7 +472,8 @@ class TestApi:
                 "users_url": "https://neu.ro/api/v1/users",
                 "monitoring_url": "https://neu.ro/api/v1/monitoring",
                 "secrets_url": "https://neu.ro/api/v1/secrets",
-                "metrics_url": "https://neu.ro/api/v1/metrics",
+                "grafana_url": "https://neu.ro/api/v1/grafana",
+                "prometheus_url": "https://neu.ro/api/v1/prometheus",
                 "disks_url": "https://neu.ro/api/v1/disk",
                 "buckets_url": "https://neu.ro/api/v1/buckets",
                 "resource_pool_types": [
@@ -713,7 +685,11 @@ class TestApi:
                 "timezone": "UTC",
                 "energy_schedules": mock.ANY,
                 "storage_volumes": mock.ANY,
-                "apps": {"apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"]},
+                "apps": {
+                    "apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"],
+                    "app_proxy_url": "https://proxy.apps.dev.neu.ro",
+                    "launchpad_use_subdomain": True,
+                },
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
@@ -783,8 +759,9 @@ class TestApi:
                 "storage_url": "https://neu.ro/api/v1/storage",
                 "users_url": "https://neu.ro/api/v1/users",
                 "monitoring_url": "https://neu.ro/api/v1/monitoring",
+                "grafana_url": "https://neu.ro/api/v1/grafana",
+                "prometheus_url": "https://neu.ro/api/v1/prometheus",
                 "secrets_url": "https://neu.ro/api/v1/secrets",
-                "metrics_url": "https://neu.ro/api/v1/metrics",
                 "disks_url": "https://neu.ro/api/v1/disk",
                 "buckets_url": "https://neu.ro/api/v1/buckets",
                 "resource_pool_types": [
@@ -996,7 +973,11 @@ class TestApi:
                 "timezone": "UTC",
                 "energy_schedules": mock.ANY,
                 "storage_volumes": mock.ANY,
-                "apps": {"apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"]},
+                "apps": {
+                    "apps_hostname_templates": ["{app_name}.apps.dev.neu.ro"],
+                    "app_proxy_url": "https://proxy.apps.dev.neu.ro",
+                    "launchpad_use_subdomain": True,
+                },
             }
             expected_payload: dict[str, Any] = {
                 "authorized": True,
