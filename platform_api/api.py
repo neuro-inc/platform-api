@@ -341,7 +341,7 @@ class ConfigApiHandler:
     ) -> dict[str, Any]:
         return {
             "apps_hostname_templates": apps_config.apps_hostname_templates,
-            "app_proxy_url": apps_config.app_proxy_url,
+            "app_proxy_url": str(apps_config.app_proxy_url),
             "launchpad_use_subdomain": apps_config.launchpad_use_subdomain,
         }
 
