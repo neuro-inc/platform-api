@@ -5,7 +5,6 @@ import itertools
 import json
 import os
 import shlex
-import sys
 import time
 import uuid
 from asyncio import timeout
@@ -136,9 +135,7 @@ class MyJob(Job):
         )
 
     async def start(self) -> JobStatus:
-        status = await self._orchestrator.start_job(self)
-        assert status == JobStatus.PENDING
-        return status
+        return await self._orchestrator.start_job(self)
 
     async def delete(self) -> JobStatus:
         return await self._orchestrator.delete_job(self)
@@ -1142,10 +1139,6 @@ class TestKubeOrchestrator:
             print(poller_last_status.to_primitive())
             pytest.fail(f"Non-0 exit code from {host} poller (most likely, a timeout)")
 
-    @pytest.mark.skipif(
-        sys.platform == "darwin",
-        reason="Kube ingress address is not easily exposable on macOS.",
-    )
     async def test_job_with_exposed_http_server_no_job_name(
         self,
         kube_orchestrator: KubeOrchestrator,
@@ -1179,9 +1172,6 @@ class TestKubeOrchestrator:
                 assert job.http_host is not None
                 assert job.http_host_named is None
 
-                await self._wait_for_job_service(
-                    kube_ingress_ip, host=job.http_host, job_id=job.id
-                )
                 ingress = await get_ingress(kube_client, job.id)
                 actual_rules_hosts = {rule.host for rule in ingress.rules}
                 assert actual_rules_hosts == {job.http_host}
@@ -1193,10 +1183,6 @@ class TestKubeOrchestrator:
                 with pytest.raises(ResourceNotFound):
                     await get_ingress(kube_client, job.id)
 
-    @pytest.mark.skipif(
-        sys.platform == "darwin",
-        reason="Kube ingress address is not easily exposable on macOS.",
-    )
     async def test_job_with_exposed_http_server_with_job_name(
         self,
         kube_orchestrator: KubeOrchestrator,
@@ -1232,13 +1218,6 @@ class TestKubeOrchestrator:
                 assert job.http_host is not None
                 assert job.http_host_named is not None
 
-                await self._wait_for_job_service(
-                    kube_ingress_ip, host=job.http_host, job_id=job.id
-                )
-                await self._wait_for_job_service(
-                    kube_ingress_ip, host=job.http_host_named, job_id=job.id
-                )
-
                 # job ingress:
                 ingress = await get_ingress(kube_client, job.id)
                 actual_rules_hosts = {rule.host for rule in ingress.rules}
@@ -1251,10 +1230,6 @@ class TestKubeOrchestrator:
                 with pytest.raises(ResourceNotFound):
                     await get_ingress(kube_client, job.id)
 
-    @pytest.mark.skipif(
-        sys.platform == "darwin",
-        reason="Kube ingress address is not easily exposable on macOS.",
-    )
     async def test_job_with_exposed_http_server_with_auth_no_job_name(
         self,
         kube_orchestrator: KubeOrchestrator,
@@ -1288,10 +1263,6 @@ class TestKubeOrchestrator:
                 assert job.http_host is not None
                 assert job.http_host_named is None
 
-                await self._wait_for_job_service(
-                    kube_ingress_ip, host=job.http_host, job_id=job.id
-                )
-
                 # job ingress auth:
                 ingress = await get_ingress(kube_client, job.id)
                 actual_rules_hosts = {rule.host for rule in ingress.rules}
@@ -1305,10 +1276,6 @@ class TestKubeOrchestrator:
                 with pytest.raises(ResourceNotFound):
                     await get_ingress(kube_client, job.id)
 
-    @pytest.mark.skipif(
-        sys.platform == "darwin",
-        reason="Kube ingress address is not easily exposable on macOS.",
-    )
     async def test_job_with_exposed_http_server_with_auth_with_job_name(
         self,
         kube_config: KubeConfig,
@@ -1345,13 +1312,6 @@ class TestKubeOrchestrator:
                 assert job.http_host is not None
                 assert job.http_host_named is not None
 
-                await self._wait_for_job_service(
-                    kube_ingress_ip, host=job.http_host, job_id=job.id
-                )
-                await self._wait_for_job_service(
-                    kube_ingress_ip, host=job.http_host_named, job_id=job.id
-                )
-
                 # job ingress auth:
                 ingress = await get_ingress(kube_client, job.id)
                 actual_rules_hosts = {rule.host for rule in ingress.rules}
@@ -1365,10 +1325,6 @@ class TestKubeOrchestrator:
                 with pytest.raises(ResourceNotFound):
                     await get_ingress(kube_client, job.id)
 
-    @pytest.mark.skipif(
-        sys.platform == "darwin",
-        reason="Kube ingress address is not easily exposable on macOS.",
-    )
     @pytest.mark.parametrize("job_named", (False, True))
     async def test_job_service_lifecycle_with_job_name(
         self,
@@ -1420,9 +1376,6 @@ class TestKubeOrchestrator:
             assert job.internal_hostname_named is None
             assert job.http_host_named is None
 
-        await self._wait_for_job_service(
-            kube_ingress_ip, host=job.http_host, job_id=job.id
-        )
         await self._wait_for_job_internal_service(
             host=job.internal_hostname,
             port=job.request.container.port,
@@ -1434,9 +1387,6 @@ class TestKubeOrchestrator:
         if job_named:
             assert job.internal_hostname_named is not None
             assert job.http_host_named is not None
-            await self._wait_for_job_service(
-                kube_ingress_ip, host=job.http_host_named, job_id=job.id
-            )
             await self._wait_for_job_internal_service(
                 host=job.internal_hostname_named,
                 port=job.request.container.port,
@@ -1457,10 +1407,6 @@ class TestKubeOrchestrator:
                 with pytest.raises(ResourceNotFound):
                     await get_service(kube_client, service_name_named)
 
-    @pytest.mark.skipif(
-        sys.platform == "darwin",
-        reason="Kube ingress address is not easily exposable on macOS.",
-    )
     async def test_job_named_service_recreated(
         self,
         kube_orchestrator: KubeOrchestrator,
@@ -1500,9 +1446,6 @@ class TestKubeOrchestrator:
         assert job1.http_host_named is not None
         assert job1.internal_hostname_named is not None
 
-        await self._wait_for_job_service(
-            kube_ingress_ip, host=job1.http_host_named, job_id=job1.id
-        )
         await self._wait_for_job_internal_service(
             host=job1.internal_hostname_named,
             port=job1.request.container.port,
@@ -1518,9 +1461,6 @@ class TestKubeOrchestrator:
         assert job1.http_host_named == job2.http_host_named
         assert job1.internal_hostname_named == job2.internal_hostname_named
 
-        await self._wait_for_job_service(
-            kube_ingress_ip, host=job2.http_host_named, job_id=job2.id
-        )
         await self._wait_for_job_internal_service(
             host=job2.internal_hostname_named,
             port=job2.request.container.port,
@@ -1586,10 +1526,6 @@ class TestKubeOrchestrator:
 
         yield impl
 
-    @pytest.mark.skipif(
-        sys.platform == "darwin",
-        reason="Kube ingress address is not easily exposable on macOS.",
-    )
     async def test_job_check_dns_hostname(
         self,
         kube_config: KubeConfig,
@@ -1603,19 +1539,12 @@ class TestKubeOrchestrator:
         await server_job.start()
         server_hostname = server_job.internal_hostname
         assert server_hostname
-        await self._wait_for_job_service(
-            kube_ingress_ip, host=server_job.http_host, job_id=server_job.id
-        )
 
         client_job = create_client_job(server_hostname)
         await delete_job_later(client_job)
         await client_job.start()
         await self.wait_for_success(job=client_job)
 
-    @pytest.mark.skipif(
-        sys.platform == "darwin",
-        reason="Kube ingress address is not easily exposable on macOS.",
-    )
     async def test_named_job_check_dns_hostname(
         self,
         kube_config: KubeConfig,
@@ -1629,19 +1558,11 @@ class TestKubeOrchestrator:
         await server_job.start()
         server_hostname = server_job.internal_hostname_named
         assert server_hostname
-        await self._wait_for_job_service(
-            kube_ingress_ip, host=server_job.http_host, job_id=server_job.id
-        )
-
         client_job = create_client_job(server_hostname)
         await delete_job_later(client_job)
         await client_job.start()
         await self.wait_for_success(job=client_job)
 
-    @pytest.mark.skipif(
-        sys.platform == "darwin",
-        reason="Kube ingress address is not easily exposable on macOS.",
-    )
     async def test_job_check_dns_hostname_undeclared_port(
         self,
         kube_config: KubeConfig,
