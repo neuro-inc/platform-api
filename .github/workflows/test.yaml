@@ -125,7 +125,7 @@ jobs:
         GROUP: ${{ steps.group.outputs.group }}
         COVERAGE_FILE: ${{ strategy.job-index }}.coverage
     - name: Upload coverage part
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: coverage-${{ strategy.job-index }}
         path: ${{ strategy.job-index }}.coverage
