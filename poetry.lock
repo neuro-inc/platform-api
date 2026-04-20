@@ -230,14 +230,14 @@ session = ["aiohttp-session"]
 
 [[package]]
 name = "aiorwlock"
-version = "1.5.0"
+version = "1.5.1"
 description = "Read write lock for asyncio."
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "aiorwlock-1.5.0-py3-none-any.whl", hash = "sha256:0010cd2d2c603eb84bfee1cfd06233a976618dab90ec7108191e936137a8420a"},
-    {file = "aiorwlock-1.5.0.tar.gz", hash = "sha256:b529da24da659bdedcf68faf216595bde00db228c905197ac554773620e7fd2f"},
+    {file = "aiorwlock-1.5.1-py3-none-any.whl", hash = "sha256:a28e534a5fce4dabe437055db141369a0803c69fe61c406b6fc5cdfa8f3dda13"},
+    {file = "aiorwlock-1.5.1.tar.gz", hash = "sha256:2729c77ec736c8d85ec305aa3827a50394fd8c6d823f4404d301cc8c59a4b7f5"},
 ]
 
 [[package]]
@@ -3395,4 +3395,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<4.0"
-content-hash = "9ad109fba978b7bf4982456b5b00db1777de3deea84001b10f4163c6fedf6998"
+content-hash = "5a1b9087c41959a0ebb6f0babf02b5636bb0072e9d23012e3c91106ba8fc4fbb"
