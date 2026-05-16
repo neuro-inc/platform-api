@@ -1010,7 +1010,7 @@ class KubeOrchestrator(Orchestrator):
             try:
                 job_pods.append(self._create_pod_descriptor(job))
             except JobError as exc:
-                logger.debug("Job %r cannot be scheduled. Reason: %s", job.id, exc)
+                logger.warning("Job %r cannot be scheduled. Reason: %s", job.id, exc)
         schedulable_pods = self._scheduler.get_schedulable_pods(job_pods)
         schedulable_pod_names = {pod.name for pod in schedulable_pods}
         return [job for job in jobs if job.id in schedulable_pod_names]
