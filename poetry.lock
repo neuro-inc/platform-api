@@ -3307,14 +3307,14 @@ zstd = ["backports-zstd (>=1.0.0) ; python_version < \"3.14\""]
 
 [[package]]
 name = "virtualenv"
-version = "21.4.0"
+version = "21.4.1"
 description = "Virtual Python Environment builder"
 optional = false
 python-versions = ">=3.8"
 groups = ["dev"]
 files = [
-    {file = "virtualenv-21.4.0-py3-none-any.whl", hash = "sha256:334fb2e774003e53a889c4808c5392114020813faf8a6c291d0d97dd3cb26b7a"},
-    {file = "virtualenv-21.4.0.tar.gz", hash = "sha256:8d401ab6ee040a7c679f2d3947faa9ed07edf284c0a4e7bda9edd2f34b1fe500"},
+    {file = "virtualenv-21.4.1-py3-none-any.whl", hash = "sha256:caf4ff72d1b4039057f41d8e8466e859513d67c0400d9c6b62c02c9d1ebc3e12"},
+    {file = "virtualenv-21.4.1.tar.gz", hash = "sha256:2ca543c713b72840ceffd94e9bdedfbd09a661defa1f7f69e5429ad4059442e2"},
 ]
 
 [package.dependencies]
