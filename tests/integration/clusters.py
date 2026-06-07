@@ -31,7 +31,7 @@ VCLUSTER_SECRET_POLL_INTERVAL_S = 5
     scope="session",
     params=[
         "minikube",
-        # "vcluster",
+        "vcluster",
     ],
 )
 async def _org_project(
