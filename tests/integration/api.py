@@ -49,6 +49,9 @@ class ApiConfig(NamedTuple):
     def config_url(self) -> str:
         return self.endpoint + "/config"
 
+    def cluster_resource_presets_url(self, cluster_name: str) -> str:
+        return f"{self.endpoint}/clusters/{cluster_name}/orchestrator/resource_presets"
+
 
 class AuthApiConfig(NamedTuple):
     server_endpoint_url: URL

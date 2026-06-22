@@ -429,8 +429,39 @@ class TestApi:
             }
             assert result == expected_payload
 
-            result_orgs = result["clusters"][0]["orgs"]
-            assert org_name in result_orgs
+    async def test_cluster_resource_presets(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+    ) -> None:
+        url = api.cluster_resource_presets_url("test-cluster")
+        async with client.get(url, headers=regular_user.headers) as resp:
+            assert resp.status == HTTPOk.status_code, await resp.text()
+            result = await resp.json()
+            assert isinstance(result, list)
+            assert result
+            assert result[0]["name"] == "gpu-small"
+
+    async def test_cluster_resource_presets_forbidden(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user_factory: UserFactory,
+        org_name: str,
+    ) -> None:
+        regular_user = await regular_user_factory(
+            clusters=[("another-cluster", org_name, Balance(), Quota())]
+        )
+        url = api.cluster_resource_presets_url("test-cluster")
+        async with client.get(url, headers=regular_user.headers) as resp:
+            assert resp.status == HTTPForbidden.status_code, await resp.text()
+            result = await resp.json()
+            assert result == {
+                "error": (
+                    "User is not allowed to access presets for the specified cluster"
+                )
+            }
 
     async def test_config__with_orgs_and_projects(
         self,

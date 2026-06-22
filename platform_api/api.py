@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
@@ -55,6 +56,63 @@ from .project_deleter import ProjectDeleter
 from .user import authorized_user
 
 logger = logging.getLogger(__name__)
+
+
+def convert_preset_to_payload(preset: ResourcePreset) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "name": preset.name,
+        "credits_per_hour": str(preset.credits_per_hour),
+        "cpu": preset.cpu,
+        "memory": preset.memory,
+        "memory_mb": preset.memory // 2**20,
+        "scheduler_enabled": preset.scheduler_enabled,
+        "preemptible_node": preset.preemptible_node,
+        "is_preemptible": preset.scheduler_enabled,
+        "is_preemptible_node_required": preset.preemptible_node,
+    }
+    if preset.nvidia_gpu is not None:
+        payload["nvidia_gpu"] = {
+            "count": preset.nvidia_gpu.count,
+        }
+        if preset.nvidia_gpu.model:
+            payload["nvidia_gpu"]["model"] = preset.nvidia_gpu.model
+        if preset.nvidia_gpu.memory:
+            payload["nvidia_gpu"]["memory"] = preset.nvidia_gpu.memory
+    if preset.nvidia_migs:
+        payload["nvidia_migs"] = {
+            key: {
+                "count": value.count,
+                **({"model": value.model} if value.model else {}),
+                **({"memory": value.memory} if value.memory else {}),
+            }
+            for key, value in preset.nvidia_migs.items()
+        }
+    if preset.amd_gpu is not None:
+        payload["amd_gpu"] = {
+            "count": preset.amd_gpu.count,
+        }
+        if preset.amd_gpu.model:
+            payload["amd_gpu"]["model"] = preset.amd_gpu.model
+        if preset.amd_gpu.memory:
+            payload["amd_gpu"]["memory"] = preset.amd_gpu.memory
+    if preset.intel_gpu is not None:
+        payload["intel_gpu"] = {
+            "count": preset.intel_gpu.count,
+        }
+        if preset.intel_gpu.model:
+            payload["intel_gpu"]["model"] = preset.intel_gpu.model
+        if preset.intel_gpu.memory:
+            payload["intel_gpu"]["memory"] = preset.intel_gpu.memory
+    if preset.tpu:
+        payload["tpu"] = {
+            "type": preset.tpu.type,
+            "software_version": preset.tpu.software_version,
+        }
+    if preset.resource_pool_names:
+        payload["resource_pool_names"] = preset.resource_pool_names
+    if preset.available_resource_pool_names:
+        payload["available_resource_pool_names"] = preset.available_resource_pool_names
+    return payload
 
 
 class ApiHandler:
@@ -137,7 +195,7 @@ class ConfigApiHandler:
             for r in cluster_config.orchestrator.resource_pool_types
         ]
         presets = [
-            self._convert_preset_to_payload(preset)
+            convert_preset_to_payload(preset)
             for preset in cluster_config.orchestrator.resource_presets
         ]
         result = {
@@ -236,64 +294,6 @@ class ConfigApiHandler:
             payload["cpu_max_watts"] = resource_pool_type.cpu_max_watts
         return payload
 
-    def _convert_preset_to_payload(self, preset: ResourcePreset) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "name": preset.name,
-            "credits_per_hour": str(preset.credits_per_hour),
-            "cpu": preset.cpu,
-            "memory": preset.memory,
-            "memory_mb": preset.memory // 2**20,
-            "scheduler_enabled": preset.scheduler_enabled,
-            "preemptible_node": preset.preemptible_node,
-            "is_preemptible": preset.scheduler_enabled,
-            "is_preemptible_node_required": preset.preemptible_node,
-        }
-        if preset.nvidia_gpu is not None:
-            payload["nvidia_gpu"] = {
-                "count": preset.nvidia_gpu.count,
-            }
-            if preset.nvidia_gpu.model:
-                payload["nvidia_gpu"]["model"] = preset.nvidia_gpu.model
-            if preset.nvidia_gpu.memory:
-                payload["nvidia_gpu"]["memory"] = preset.nvidia_gpu.memory
-        if preset.nvidia_migs:
-            payload["nvidia_migs"] = {
-                key: {
-                    "count": value.count,
-                    **({"model": value.model} if value.model else {}),
-                    **({"memory": value.memory} if value.memory else {}),
-                }
-                for key, value in preset.nvidia_migs.items()
-            }
-        if preset.amd_gpu is not None:
-            payload["amd_gpu"] = {
-                "count": preset.amd_gpu.count,
-            }
-            if preset.amd_gpu.model:
-                payload["amd_gpu"]["model"] = preset.amd_gpu.model
-            if preset.amd_gpu.memory:
-                payload["amd_gpu"]["memory"] = preset.amd_gpu.memory
-        if preset.intel_gpu is not None:
-            payload["intel_gpu"] = {
-                "count": preset.intel_gpu.count,
-            }
-            if preset.intel_gpu.model:
-                payload["intel_gpu"]["model"] = preset.intel_gpu.model
-            if preset.intel_gpu.memory:
-                payload["intel_gpu"]["memory"] = preset.intel_gpu.memory
-        if preset.tpu:
-            payload["tpu"] = {
-                "type": preset.tpu.type,
-                "software_version": preset.tpu.software_version,
-            }
-        if preset.resource_pool_names:
-            payload["resource_pool_names"] = preset.resource_pool_names
-        if preset.available_resource_pool_names:
-            payload["available_resource_pool_names"] = (
-                preset.available_resource_pool_names
-            )
-        return payload
-
     def _convert_energy_schedule_to_payload(
         self, schedule: EnergySchedule
     ) -> dict[str, Any]:
@@ -346,6 +346,56 @@ class ConfigApiHandler:
         }
 
 
+class ClusterApiHandler:
+    def __init__(self, *, app: aiohttp.web.Application) -> None:
+        self._app = app
+
+    def register(self, app: aiohttp.web.Application) -> None:
+        app.add_routes(
+            (
+                aiohttp.web.get(
+                    "/{cluster_name}/orchestrator/resource_presets",
+                    self.handle_get_resource_presets,
+                ),
+            )
+        )
+
+    @property
+    def _jobs_service(self) -> JobsService:
+        return self._app["jobs_service"]
+
+    async def handle_get_resource_presets(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.Response:
+        user = await authorized_user(request)
+        cluster_name = request.match_info["cluster_name"]
+        cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
+        for user_cluster_config in cluster_configs:
+            if user_cluster_config.config.name != cluster_name:
+                continue
+            if not user_cluster_config.orgs:
+                break
+            return aiohttp.web.json_response(
+                [
+                    convert_preset_to_payload(preset)
+                    for preset in (
+                        user_cluster_config.config.orchestrator.resource_presets
+                    )
+                ]
+            )
+        raise aiohttp.web.HTTPForbidden(
+            text=json.dumps(
+                {
+                    "error": (
+                        "User is not allowed to access presets for the specified "
+                        "cluster"
+                    )
+                }
+            ),
+            content_type="application/json",
+        )
+
+
 @aiohttp.web.middleware
 async def handle_exceptions(
     request: aiohttp.web.Request,
@@ -394,6 +444,13 @@ async def create_jobs_app(config: Config) -> aiohttp.web.Application:
     jobs_handler = JobsHandler(app=jobs_app, config=config)
     jobs_handler.register(jobs_app)
     return jobs_app
+
+
+async def create_clusters_app() -> aiohttp.web.Application:
+    clusters_app = aiohttp.web.Application()
+    clusters_handler = ClusterApiHandler(app=clusters_app)
+    clusters_handler.register(clusters_app)
+    return clusters_app
 
 
 async def add_version_to_header(
@@ -506,6 +563,7 @@ async def create_app(
 
             app["config_app"]["jobs_service"] = jobs_service
             app["jobs_app"]["jobs_service"] = jobs_service
+            app["clusters_app"]["jobs_service"] = jobs_service
 
             logger.info("Initializing JobPolicyEnforcePoller")
 
@@ -544,6 +602,10 @@ async def create_app(
     jobs_app = await create_jobs_app(config=config)
     app["jobs_app"] = jobs_app
     api_v1_app.add_subapp("/jobs", jobs_app)
+
+    clusters_app = await create_clusters_app()
+    app["clusters_app"] = clusters_app
+    api_v1_app.add_subapp("/clusters", clusters_app)
 
     app.add_subapp("/api/v1", api_v1_app)
 
