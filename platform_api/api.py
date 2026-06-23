@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import AsyncExitStack
@@ -351,49 +350,11 @@ class ClusterApiHandler:
         self._app = app
 
     def register(self, app: aiohttp.web.Application) -> None:
-        app.add_routes(
-            (
-                aiohttp.web.get(
-                    "/{cluster_name}/orchestrator/resource_presets",
-                    self.handle_get_resource_presets,
-                ),
-            )
-        )
+        pass
 
     @property
     def _jobs_service(self) -> JobsService:
         return self._app["jobs_service"]
-
-    async def handle_get_resource_presets(
-        self, request: aiohttp.web.Request
-    ) -> aiohttp.web.Response:
-        user = await authorized_user(request)
-        cluster_name = request.match_info["cluster_name"]
-        cluster_configs = await self._jobs_service.get_user_cluster_configs(user)
-        for user_cluster_config in cluster_configs:
-            if user_cluster_config.config.name != cluster_name:
-                continue
-            if not user_cluster_config.orgs:
-                break
-            return aiohttp.web.json_response(
-                [
-                    convert_preset_to_payload(preset)
-                    for preset in (
-                        user_cluster_config.config.orchestrator.resource_presets
-                    )
-                ]
-            )
-        raise aiohttp.web.HTTPForbidden(
-            text=json.dumps(
-                {
-                    "error": (
-                        "User is not allowed to access presets for the specified "
-                        "cluster"
-                    )
-                }
-            ),
-            content_type="application/json",
-        )
 
 
 @aiohttp.web.middleware
