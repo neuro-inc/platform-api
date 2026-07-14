@@ -33,7 +33,7 @@ neuro-admin-client = "25.12.0"
 yarl = "^1.22.0"
 python-jose = ">=3.4.0"
 apolo-kube-client = "^25.12.1"
-apolo-events-client = "25.10.0"
+apolo-events-client = "26.7.1"
 neuro-config-client = "26.3.1"
 
 [tool.poetry.scripts]
@@ -59,7 +59,7 @@ pytest-aiohttp="1.1.0"
 requests="2.34.2"
 ruff = "0.15.17"
 pytest-retry = "^1.7.0"
-apolo-events-client = {extras = ["pytest"], version = "25.10.0"}
+apolo-events-client = {extras = ["pytest"], version = "26.7.1"}
 pytest-test-groups = "^1.2.1"
 types-pyyaml = "^6.0.12.20250915"
 
