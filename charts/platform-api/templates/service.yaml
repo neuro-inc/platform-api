@@ -9,7 +9,7 @@ metadata:
     {{- toYaml . | nindent 4 }}
     {{- end }}
   annotations:
-    platform.apolo.us/ping-url: http://{{ include "platformApi.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.port }}/ping
+    platform.apolo.us/ping-url: http://{{ include "platformApi.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.port | default 8080 }}/ping
     {{- with .Values.service.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
