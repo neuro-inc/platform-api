@@ -181,9 +181,10 @@ class ClusterHolder:
     def __init__(self, *, factory: ClusterFactory) -> None:
         self._factory = factory
         self._cluster: Cluster | None = None
+        self._config: neuro_config_client.Cluster | None = None
         self._lock = RWLock()
 
-    async def __aenter__(self) -> "ClusterHolder":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *args: object) -> None:
@@ -191,12 +192,19 @@ class ClusterHolder:
 
     async def update(self, config: neuro_config_client.Cluster) -> None:
         async with self._lock.writer:
+            if self._cluster and self._cluster.config == config:
+                return
+            self._config = config
             if self._cluster:
-                if self._cluster.config == config:
-                    return
                 await self._close_cluster(self._cluster)
-            self._cluster = self._factory(config)
-            await self._init_cluster(self._cluster)
+                self._cluster = None
+            cluster = self._factory(config)
+            try:
+                await self._init_cluster(cluster)
+            except Exception:
+                await self._close_cluster(cluster)
+                raise
+            self._cluster = cluster
 
     async def _init_cluster(self, cluster: Cluster) -> None:
         logger.info("Initializing cluster '%s'", cluster.name)
@@ -220,16 +228,19 @@ class ClusterHolder:
     @asynccontextmanager
     async def get(self) -> AsyncIterator[Cluster]:
         async with self._lock.reader:
-            if self._cluster is None:
-                raise ClusterNotFound("Cluster is not present")
-            else:
+            if self._cluster is not None:
                 yield self._cluster
+            elif self._config is not None:
+                raise ClusterNotAvailable.create(self._config.name)
+            else:
+                raise ClusterNotFound("Cluster is not present")
 
     async def clean(self) -> None:
         async with self._lock.writer:
             if self._cluster:
                 await self._close_cluster(self._cluster)
                 self._cluster = None
+            self._config = None
 
 
 class ClusterConfigRegistry:
