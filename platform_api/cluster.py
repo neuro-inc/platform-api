@@ -201,7 +201,7 @@ class ClusterHolder:
             cluster = self._factory(config)
             try:
                 await self._init_cluster(cluster)
-            except Exception:
+            except BaseException:
                 await self._close_cluster(cluster)
                 raise
             self._cluster = cluster

@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Callable
 from unittest import mock
 
@@ -14,9 +15,15 @@ from platform_api.orchestrator.base import Orchestrator
 
 
 class _FlakyCluster(Cluster):
-    def __init__(self, config: neuro_config_client.Cluster, failures: int) -> None:
+    def __init__(
+        self,
+        config: neuro_config_client.Cluster,
+        failures: int,
+        error: type[BaseException] = RuntimeError,
+    ) -> None:
         self._config = config
         self._failures = failures
+        self._error = error
         self.closed = 0
 
     @property
@@ -30,7 +37,7 @@ class _FlakyCluster(Cluster):
     async def init(self) -> None:
         if self._failures:
             self._failures -= 1
-            raise RuntimeError("kube api is not ready")
+            raise self._error("kube api is not ready")
 
     async def close(self) -> None:
         self.closed += 1
@@ -103,5 +110,24 @@ class TestClusterHolder:
             await holder.clean()
 
             with pytest.raises(ClusterNotFound):
+                async with holder.get():
+                    pass
+
+    async def test_update__cancelled_init_closes_cluster(
+        self, cluster_config: neuro_config_client.Cluster
+    ) -> None:
+        created: list[_FlakyCluster] = []
+
+        def _factory(config: neuro_config_client.Cluster) -> Cluster:
+            cluster = _FlakyCluster(config, failures=1, error=asyncio.CancelledError)
+            created.append(cluster)
+            return cluster
+
+        async with ClusterHolder(factory=_factory) as holder:
+            with pytest.raises(asyncio.CancelledError):
+                await holder.update(cluster_config)
+
+            assert created[0].closed == 1
+            with pytest.raises(ClusterNotAvailable):
                 async with holder.get():
                     pass
