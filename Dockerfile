@@ -1,5 +1,5 @@
 ARG PY_VERSION=3.13.1
-FROM python:${PY_VERSION}-slim-bullseye AS builder
+FROM python:${PY_VERSION}-slim-bookworm AS builder
 
 ENV PATH=/root/.local/bin:$PATH
 
@@ -11,7 +11,7 @@ RUN pip install --user --no-cache-dir -r requirements.txt
 COPY dist /tmp/dist/
 RUN pip install --user --no-cache-dir --find-links /tmp/dist platform-api
 
-FROM python:${PY_VERSION}-slim-bullseye AS runtime
+FROM python:${PY_VERSION}-slim-bookworm AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/neuro-inc/platform-api"
 
