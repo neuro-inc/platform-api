@@ -108,7 +108,7 @@ class JobsConfig:
 @dataclass(frozen=True)
 class NotificationsConfig:
     url: URL
-    token: str
+    token: str = field(repr=False)
 
 
 @dataclass(frozen=True)
