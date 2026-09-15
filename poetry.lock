@@ -1988,14 +1988,14 @@ tzdata = "*"
 
 [[package]]
 name = "neuro-logging"
-version = "26.9.0"
+version = "26.9.1"
 description = "Logging client for Neu.ro platform services"
 optional = false
 python-versions = ">=3.13"
 groups = ["main"]
 files = [
-    {file = "neuro_logging-26.9.0-py3-none-any.whl", hash = "sha256:7b4ac3a805e12a0c4405972f6343261e5e65e35e9efcd25939ed7939ef8e4d55"},
-    {file = "neuro_logging-26.9.0.tar.gz", hash = "sha256:6cced38719dba41db2eb0549640f62e373b241d7df1da664d565b0e639503e6d"},
+    {file = "neuro_logging-26.9.1-py3-none-any.whl", hash = "sha256:e21dd6b24b46ed492eab59db4b435214c87939f8973b17406734a51d0fc23c65"},
+    {file = "neuro_logging-26.9.1.tar.gz", hash = "sha256:c2f7bc7ba571d313a5fe182061ed9165dfd2861c286edc8f5b717231d23f0f68"},
 ]
 
 [package.dependencies]
