@@ -2239,6 +2239,64 @@ class TestJobsServiceCluster:
         assert job.http_host == f"{job.id}.{job.namespace}.missing-cluster"
         assert job.http_host_named is None
 
+    async def test_get_job_fallback_warns_once_per_cluster(
+        self,
+        cluster_config_registry: ClusterConfigRegistry,
+        cluster_config: neuro_config_client.Cluster,
+        mock_jobs_storage: MockJobsStorage,
+        job_request_factory: Callable[[], JobRequest],
+        jobs_config: JobsConfig,
+        mock_notifications_client: NotificationsClient,
+        mock_auth_client: AuthClient,
+        mock_admin_client: AdminClient,
+        mock_admin_auth_client: AdminAuthClient,
+        mock_api_base: URL,
+        user_factory: UserFactory,
+        org_factory: OrgFactory,
+        test_project: str,
+        caplog: LogCaptureFixture,
+    ) -> None:
+        jobs_service = JobsService(
+            cluster_config_registry=cluster_config_registry,
+            jobs_storage=mock_jobs_storage,
+            jobs_config=jobs_config,
+            notifications_client=mock_notifications_client,
+            auth_client=mock_auth_client,
+            admin_client=mock_admin_client,
+            admin_auth_client=mock_admin_auth_client,
+            api_base_url=mock_api_base,
+        )
+        missing_cluster = replace(cluster_config, name="missing")
+        await cluster_config_registry.replace(cluster_config)
+        await cluster_config_registry.replace(replace(cluster_config, name="default"))
+        await cluster_config_registry.replace(missing_cluster)
+
+        org = await org_factory("testuser", [("missing", Balance(), Quota())])
+        user = await user_factory("testuser", [("missing", org, Balance(), Quota())])
+        for _ in range(3):
+            await jobs_service.create_job(
+                job_request_factory(),
+                user=user,
+                cluster_name="missing",
+                org_name=org,
+                project_name=test_project,
+            )
+        message = "Falling back to dummy cluster config for jobs of cluster 'missing'"
+
+        cluster_config_registry.remove("missing")
+        jobs = await jobs_service.get_all_jobs()
+        assert len(jobs) == 3
+        assert caplog.text.count(message) == 1
+
+        await jobs_service.get_all_jobs()
+        assert caplog.text.count(message) == 1
+
+        await cluster_config_registry.replace(missing_cluster)
+        await jobs_service.get_all_jobs()
+        cluster_config_registry.remove("missing")
+        await jobs_service.get_all_jobs()
+        assert caplog.text.count(message) == 2
+
     async def test_delete_missing_cluster(
         self,
         cluster_holder: ClusterHolder,

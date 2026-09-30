@@ -120,6 +120,7 @@ class JobsService:
         self._notifications_client = notifications_client
 
         self._max_deletion_attempts = 10
+        self._missing_clusters: set[str] = set()
 
         self._dummy_cluster_orchestrator_config = OrchestratorConfig(
             job_hostname_template="{job_id}.{namespace}.missing-cluster",
@@ -401,14 +402,18 @@ class JobsService:
     async def _get_cluster_job(self, record: JobRecord) -> Job:
         try:
             cluster_config = self._cluster_registry.get(record.cluster_name)
+            self._missing_clusters.discard(record.cluster_name)
             return self._make_job(record, cluster_config)
         except ClusterNotFound:
             # in case the cluster is missing, we still want to return the job
             # to be able to render a proper HTTP response, therefore we have
             # the fallback logic that uses the dummy cluster instead.
-            logger.warning(
-                "Falling back to dummy cluster config to retrieve job '%s'", record.id
-            )
+            if record.cluster_name not in self._missing_clusters:
+                self._missing_clusters.add(record.cluster_name)
+                logger.warning(
+                    "Falling back to dummy cluster config for jobs of cluster '%s'",
+                    record.cluster_name,
+                )
             return self._make_job(record)
 
     async def get_job(self, job_id: str) -> Job:
