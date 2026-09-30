@@ -863,6 +863,9 @@ class JobsHandler:
         await check_authorized(request)
         user = await untrusted_user(request)
 
+        if "hostname" not in request.query and "cluster_name" not in request.query:
+            raise ValueError("cluster_name is required")
+
         with log_debug_time(f"Retrieved job access tree for user '{user.name}'"):
             tree = await self._auth_client.get_permissions_tree(user.name, "job:")
 

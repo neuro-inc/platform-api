@@ -1218,8 +1218,11 @@ class TestJobs:
             assert result["http_url_named"].startswith(f"http://{job_name}--")
 
         url = api.jobs_base_url
+        params = {"cluster_name": "test-cluster"}
 
-        async with client.get(url, headers=service_user.headers) as response:
+        async with client.get(
+            url, headers=service_user.headers, params=params
+        ) as response:
             assert response.status == HTTPOk.status_code, await response.text()
             assert response.headers["Content-Type"] == "application/json; charset=utf-8"
             result = await response.json()
@@ -1254,8 +1257,9 @@ class TestJobs:
             assert result["org_name"] == org_name
 
         url = api.jobs_base_url
+        params = {"cluster_name": "test-cluster"}
 
-        async with client.get(url, headers=user.headers) as response:
+        async with client.get(url, headers=user.headers, params=params) as response:
             assert response.status == HTTPOk.status_code, await response.text()
             assert response.headers["Content-Type"] == "application/json; charset=utf-8"
             result = await response.json()
@@ -3805,13 +3809,40 @@ class TestJobs:
         headers = regular_user.headers
         url = api.jobs_base_url
 
-        filters = {"status": "abrakadabra"}
+        filters = {"cluster_name": "test-cluster", "status": "abrakadabra"}
         async with client.get(url, headers=headers, params=filters) as response:
             assert response.status == HTTPBadRequest.status_code, await response.text()
+            assert "abrakadabra" in (await response.json())["error"]
 
-        filters2 = [("status", "running"), ("status", "abrakadabra")]
+        filters2 = [
+            ("cluster_name", "test-cluster"),
+            ("status", "running"),
+            ("status", "abrakadabra"),
+        ]
         async with client.get(url, headers=headers, params=filters2) as response:
             assert response.status == HTTPBadRequest.status_code, await response.text()
+            assert "abrakadabra" in (await response.json())["error"]
+
+    async def test_get_all_jobs_requires_cluster_name(
+        self,
+        api: ApiConfig,
+        client: aiohttp.ClientSession,
+        regular_user: _User,
+    ) -> None:
+        headers = regular_user.headers
+        url = api.jobs_base_url
+
+        for filters in ({}, {"status": "running"}, {"name": "test-job"}):
+            async with client.get(url, headers=headers, params=filters) as response:
+                assert response.status == HTTPBadRequest.status_code, (
+                    await response.text()
+                )
+                assert await response.json() == {"error": "cluster_name is required"}
+
+        filters2 = [("cluster_name", "test-cluster"), ("cluster_name", "other-cluster")]
+        async with client.get(url, headers=headers, params=filters2) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            assert await response.json() == {"jobs": []}
 
     async def test_get_all_jobs_filter_by_status_only_single_status_pending(
         self,
