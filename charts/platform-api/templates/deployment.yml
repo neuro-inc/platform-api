@@ -47,6 +47,7 @@ spec:
             port: http
           initialDelaySeconds: 10
           periodSeconds: 5
+          timeoutSeconds: 5
         readinessProbe:
           httpGet:
             path: /ping
