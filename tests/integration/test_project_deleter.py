@@ -89,7 +89,11 @@ async def test_project_deleter(
     async with client.get(
         jobs_url,
         headers={**headers, "Accept": "application/x-ndjson"},
-        params={"project_name": project_to_delete, "org_name": org_name},
+        params={
+            "cluster_name": regular_user.cluster_name,
+            "project_name": project_to_delete,
+            "org_name": org_name,
+        },
     ) as resp:
         assert resp.status == 200
         content = await resp.text()
@@ -100,7 +104,11 @@ async def test_project_deleter(
     async with client.get(
         jobs_url,
         headers={**headers, "Accept": "application/x-ndjson"},
-        params={"project_name": project_to_keep, "org_name": org_name},
+        params={
+            "cluster_name": regular_user.cluster_name,
+            "project_name": project_to_keep,
+            "org_name": org_name,
+        },
     ) as resp:
         assert resp.status == 200
         content = await resp.text()
@@ -146,7 +154,11 @@ async def test_project_deleter(
     async with client.get(
         jobs_url,
         headers={**headers, "Accept": "application/x-ndjson"},
-        params={"project_name": project_to_delete, "org_name": org_name},
+        params={
+            "cluster_name": regular_user.cluster_name,
+            "project_name": project_to_delete,
+            "org_name": org_name,
+        },
     ) as resp:
         assert resp.status == 200
         content = await resp.text()
@@ -161,7 +173,11 @@ async def test_project_deleter(
     async with client.get(
         jobs_url,
         headers={**headers, "Accept": "application/x-ndjson"},
-        params={"project_name": project_to_keep, "org_name": org_name},
+        params={
+            "cluster_name": regular_user.cluster_name,
+            "project_name": project_to_keep,
+            "org_name": org_name,
+        },
     ) as resp:
         assert resp.status == 200
         content = await resp.text()

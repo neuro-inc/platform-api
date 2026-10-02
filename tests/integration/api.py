@@ -8,6 +8,7 @@ import aiohttp
 import pytest
 from aiohttp.client import ClientSession
 from aiohttp.web import HTTPAccepted, HTTPNoContent, HTTPOk
+from multidict import MultiDict
 from neuro_config_client import Cluster
 from yarl import URL
 
@@ -162,6 +163,9 @@ class JobsClient:
         url = self._api_config.jobs_base_url
         headers = self._headers.copy()
         headers["Accept"] = "application/x-ndjson"
+        params = MultiDict(params or {})
+        if "hostname" not in params and "cluster_name" not in params:
+            params.add("cluster_name", "test-cluster")
         async with self._client.get(url, headers=headers, params=params) as response:
             assert response.status == HTTPOk.status_code, await response.text()
             assert response.headers["Content-Type"] == "application/x-ndjson"
