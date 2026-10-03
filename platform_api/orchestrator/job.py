@@ -620,6 +620,14 @@ class Job:
         self._preemptible_node = record.preemptible_node
         self._pass_config = record.pass_config
         self._image_pull_error_delay = image_pull_error_delay
+        self._is_vcluster = False
+
+    @property
+    def is_vcluster(self) -> bool:
+        return self._is_vcluster
+
+    def mark_as_vcluster(self) -> None:
+        self._is_vcluster = True
 
     @property
     def id(self) -> str:
@@ -879,13 +887,13 @@ class Job:
 
     @property
     def internal_hostname(self) -> str | None:
-        return f"{self.id}.{self.namespace}"
+        return f"{self.id}.{self.cluster_namespace}"
 
     @property
     def internal_hostname_named(self) -> str | None:
         if not self.is_named:
             return None
-        return f"{self.host_segment_named}.{self.namespace}"
+        return f"{self.host_segment_named}.{self.cluster_namespace}"
 
     @property
     def scheduler_enabled(self) -> bool:
@@ -964,6 +972,17 @@ class Job:
     @property
     def namespace(self) -> str:
         return self._record.namespace
+
+    @property
+    def cluster_namespace(self) -> str:
+        """
+        Returns a cluster-based namespace, e.g.
+        a real namespace if job is running in a real cluster,
+        or a vcluster default namespace in case of running inside a vcluster
+        """
+        if self.is_vcluster:
+            return "default"
+        return self.namespace
 
     def to_primitive(self) -> dict[str, Any]:
         return self._record.to_primitive()
