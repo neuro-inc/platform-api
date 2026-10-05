@@ -3769,6 +3769,11 @@ class TestJobs:
     ) -> None:
         url = api.jobs_base_url
         headers = regular_user.headers
+        params = {"cluster_name": "test-cluster"}
+        async with client.get(url, headers=headers, params=params) as response:
+            assert response.status == HTTPOk.status_code, await response.text()
+            assert await response.json() == {"jobs": []}
+
         job_request = job_request_factory()
         job_request["org_name"] = org_name
         job_request["project_name"] = project_name
@@ -3784,7 +3789,6 @@ class TestJobs:
             result = await resp.json()
             job2_id = result["id"]
 
-        params = {"cluster_name": "test-cluster"}
         async with client.get(url, headers=headers, params=params) as response:
             assert response.status == HTTPOk.status_code, await response.text()
             assert response.headers["Content-Type"] == "application/json; charset=utf-8"

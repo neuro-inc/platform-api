@@ -600,9 +600,6 @@ class JobsHandler:
             create_job_update_max_run_time_minutes_validator()
         )
         self._drop_progress_validator = create_drop_progress_validator()
-        self._bulk_jobs_response_validator = t.Dict(
-            {"jobs": t.List(self._job_response_validator)}
-        )
 
     @property
     def _jobs_service(self) -> JobsService:
@@ -902,37 +899,41 @@ class JobsHandler:
 
                 jobs = limit_filter(jobs, limit)
 
-            if self._accepts_ndjson(request):
-                response = aiohttp.web.StreamResponse()
+            ndjson = self._accepts_ndjson(request)
+            response = aiohttp.web.StreamResponse()
+            if ndjson:
                 response.headers["Content-Type"] = "application/x-ndjson"
-                await response.prepare(request)
-                try:
-                    async for job in jobs:
-                        response_payload = convert_job_to_job_response(job)
-                        self._job_response_validator.check(response_payload)
-                        await response.write(
-                            json.dumps(response_payload).encode() + b"\n"
-                        )
-                except asyncio.CancelledError:
-                    raise
-                except Exception as e:
-                    msg_str = (
-                        f"Unexpected exception {e.__class__.__name__}: {str(e)}. "
-                        f"Path with query: {request.path_qs}."
-                    )
-                    logging.exception(msg_str)
-                    payload = {"error": msg_str}
-                    await response.write(json.dumps(payload).encode())
-                await response.write_eof()
-                return response
-
-            response_payload = {
-                "jobs": [convert_job_to_job_response(job) async for job in jobs]
-            }
-            self._bulk_jobs_response_validator.check(response_payload)
-            return aiohttp.web.json_response(
-                data=response_payload, status=aiohttp.web.HTTPOk.status_code
-            )
+            else:
+                response.content_type = "application/json"
+                response.charset = "utf-8"
+            await response.prepare(request)
+            try:
+                if not ndjson:
+                    await response.write(b'{"jobs": [')
+                first = True
+                async for job in jobs:
+                    response_payload = convert_job_to_job_response(job)
+                    self._job_response_validator.check(response_payload)
+                    chunk = json.dumps(response_payload).encode()
+                    if ndjson:
+                        await response.write(chunk + b"\n")
+                    else:
+                        await response.write(chunk if first else b", " + chunk)
+                        first = False
+                if not ndjson:
+                    await response.write(b"]}")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                msg_str = (
+                    f"Unexpected exception {e.__class__.__name__}: {str(e)}. "
+                    f"Path with query: {request.path_qs}."
+                )
+                logging.exception(msg_str)
+                payload = {"error": msg_str}
+                await response.write(json.dumps(payload).encode())
+            await response.write_eof()
+            return response
 
     @asyncgeneratorcontextmanager
     async def _iter_filtered_jobs(
