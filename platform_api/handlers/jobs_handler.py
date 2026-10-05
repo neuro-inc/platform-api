@@ -600,9 +600,6 @@ class JobsHandler:
             create_job_update_max_run_time_minutes_validator()
         )
         self._drop_progress_validator = create_drop_progress_validator()
-        self._bulk_jobs_response_validator = t.Dict(
-            {"jobs": t.List(self._job_response_validator)}
-        )
 
     @property
     def _jobs_service(self) -> JobsService:
@@ -615,7 +612,7 @@ class JobsHandler:
     def register(self, app: aiohttp.web.Application) -> None:
         app.add_routes(
             (
-                aiohttp.web.get("", self.handle_get_all),
+                aiohttp.web.get("", self.handle_get_all, allow_head=False),
                 aiohttp.web.post("", self.create_job),
                 aiohttp.web.delete("/{job_id}", self.handle_delete),
                 aiohttp.web.get("/{job_id}", self.handle_get),
@@ -926,13 +923,32 @@ class JobsHandler:
                 await response.write_eof()
                 return response
 
-            response_payload = {
-                "jobs": [convert_job_to_job_response(job) async for job in jobs]
-            }
-            self._bulk_jobs_response_validator.check(response_payload)
-            return aiohttp.web.json_response(
-                data=response_payload, status=aiohttp.web.HTTPOk.status_code
-            )
+            response = aiohttp.web.StreamResponse()
+            response.content_type = "application/json"
+            response.charset = "utf-8"
+            separator = b'{"jobs": ['
+            try:
+                async for job in jobs:
+                    response_payload = convert_job_to_job_response(job)
+                    self._job_response_validator.check(response_payload)
+                    if not response.prepared:
+                        await response.prepare(request)
+                    await response.write(
+                        separator + json.dumps(response_payload).encode()
+                    )
+                    separator = b", "
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                if response.prepared and request.transport is not None:
+                    request.transport.close()
+                raise
+            if not response.prepared:
+                await response.prepare(request)
+                await response.write(separator)
+            await response.write(b"]}")
+            await response.write_eof()
+            return response
 
     @asyncgeneratorcontextmanager
     async def _iter_filtered_jobs(
