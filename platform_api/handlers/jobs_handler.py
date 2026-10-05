@@ -612,7 +612,7 @@ class JobsHandler:
     def register(self, app: aiohttp.web.Application) -> None:
         app.add_routes(
             (
-                aiohttp.web.get("", self.handle_get_all),
+                aiohttp.web.get("", self.handle_get_all, allow_head=False),
                 aiohttp.web.post("", self.create_job),
                 aiohttp.web.delete("/{job_id}", self.handle_delete),
                 aiohttp.web.get("/{job_id}", self.handle_get),
