@@ -927,13 +927,22 @@ class JobsHandler:
             response.content_type = "application/json"
             response.charset = "utf-8"
             separator = b'{"jobs": ['
-            async for job in jobs:
-                response_payload = convert_job_to_job_response(job)
-                self._job_response_validator.check(response_payload)
-                if not response.prepared:
-                    await response.prepare(request)
-                await response.write(separator + json.dumps(response_payload).encode())
-                separator = b", "
+            try:
+                async for job in jobs:
+                    response_payload = convert_job_to_job_response(job)
+                    self._job_response_validator.check(response_payload)
+                    if not response.prepared:
+                        await response.prepare(request)
+                    await response.write(
+                        separator + json.dumps(response_payload).encode()
+                    )
+                    separator = b", "
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                if response.prepared and request.transport is not None:
+                    request.transport.close()
+                raise
             if not response.prepared:
                 await response.prepare(request)
                 await response.write(separator)
