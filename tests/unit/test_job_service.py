@@ -1745,6 +1745,33 @@ class TestJobsService:
         job = await jobs_service.get_job(original_job.id)
         assert job.status == JobStatus.PENDING
 
+    async def test_drop_materialized(
+        self,
+        jobs_service: JobsService,
+        job_request_factory: Callable[[], JobRequest],
+        jobs_poller_service: JobsPollerService,
+        test_user_with_org: AuthUser,
+        test_cluster: str,
+        test_org: str,
+        test_project: str,
+    ) -> None:
+        original_job, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
+        )
+        await jobs_poller_service.update_jobs_statuses()
+        await jobs_service.cancel_job(original_job.id)
+
+        with pytest.raises(JobError, match="are not cleaned up yet"):
+            await jobs_service.drop_job(original_job.id)
+
+        job = await jobs_service.get_job(original_job.id)
+        assert job.status == JobStatus.CANCELLED
+        assert job.materialized
+
     @pytest.mark.parametrize(
         "balance",
         [

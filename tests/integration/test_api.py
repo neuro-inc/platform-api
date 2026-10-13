@@ -5169,6 +5169,7 @@ class TestJobs:
             assert result["status"] in ["pending"]
             job_id = result["id"]
             await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.wait_job_dematerialized(job_id)
         await jobs_client.drop_job(job_id=job_id)
 
         jobs = await jobs_client.get_all_jobs()
