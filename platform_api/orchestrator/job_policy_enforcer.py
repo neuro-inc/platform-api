@@ -15,7 +15,7 @@ from neuro_logging import new_trace, trace
 from platform_api.cluster import ClusterConfigRegistry
 from platform_api.config import JobPolicyEnforcerConfig
 from platform_api.orchestrator.job import Job, JobStatusItem, JobStatusReason
-from platform_api.orchestrator.job_request import JobStatus
+from platform_api.orchestrator.job_request import JobError, JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
 from platform_api.orchestrator.poller_service import _revoke_pass_config
@@ -196,7 +196,8 @@ class RetentionPolicyEnforcer(JobPolicyEnforcer):
             delay=self._retention_delay, limit=100
         )
         for job_id in job_ids:
-            await self._jobs_service.drop_job(job_id)
+            with contextlib.suppress(JobError):
+                await self._jobs_service.drop_job(job_id)
 
 
 class JobPolicyEnforcePoller:

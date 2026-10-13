@@ -1699,6 +1699,52 @@ class TestJobsService:
         assert job.finished_at
         assert not job.materialized
 
+    async def test_drop_finished(
+        self,
+        jobs_service: JobsService,
+        job_request_factory: Callable[[], JobRequest],
+        test_user_with_org: AuthUser,
+        test_cluster: str,
+        test_org: str,
+        test_project: str,
+    ) -> None:
+        original_job, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
+        )
+        await jobs_service.cancel_job(original_job.id)
+
+        await jobs_service.drop_job(original_job.id)
+
+        with pytest.raises(JobError, match="no such job"):
+            await jobs_service.get_job(original_job.id)
+
+    async def test_drop_not_finished(
+        self,
+        jobs_service: JobsService,
+        job_request_factory: Callable[[], JobRequest],
+        test_user_with_org: AuthUser,
+        test_cluster: str,
+        test_org: str,
+        test_project: str,
+    ) -> None:
+        original_job, _ = await jobs_service.create_job(
+            job_request=job_request_factory(),
+            user=test_user_with_org,
+            cluster_name=test_cluster,
+            org_name=test_org,
+            project_name=test_project,
+        )
+
+        with pytest.raises(JobError, match="is not finished"):
+            await jobs_service.drop_job(original_job.id)
+
+        job = await jobs_service.get_job(original_job.id)
+        assert job.status == JobStatus.PENDING
+
     @pytest.mark.parametrize(
         "balance",
         [

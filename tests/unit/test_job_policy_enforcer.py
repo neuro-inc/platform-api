@@ -21,7 +21,7 @@ from platform_api.orchestrator.job_policy_enforcer import (
     RuntimeLimitEnforcer,
     StopOnClusterRemoveEnforcer,
 )
-from platform_api.orchestrator.job_request import JobRequest, JobStatus
+from platform_api.orchestrator.job_request import JobError, JobRequest, JobStatus
 from platform_api.orchestrator.jobs_service import JobsService
 from platform_api.orchestrator.jobs_storage import JobFilter
 from tests.unit.conftest import (
@@ -553,7 +553,7 @@ class TestRetentionPolicyEnforcer:
         job = await jobs_service.get_job(job.id)
         assert job.status == JobStatus.PENDING
 
-    async def test_job_not_marked_to_drop_if_delay_is_smaller(
+    async def test_job_not_dropped_if_delay_is_smaller(
         self,
         test_user_with_org: AuthUser,
         jobs_service: JobsService,
@@ -581,10 +581,9 @@ class TestRetentionPolicyEnforcer:
 
         await enforcer.enforce()
 
-        job = await jobs_service.get_job(job.id)
-        assert not job.being_dropped
+        await jobs_service.get_job(job.id)
 
-    async def test_job_marked_to_drop(
+    async def test_job_dropped(
         self,
         test_user_with_org: AuthUser,
         jobs_service: JobsService,
@@ -610,10 +609,40 @@ class TestRetentionPolicyEnforcer:
         )
         await jobs_service.set_job_materialized(job.id, False)
 
-        job = await jobs_service.get_job(job.id)
-        assert not job.being_dropped
+        await enforcer.enforce()
+
+        with pytest.raises(JobError, match="no such job"):
+            await jobs_service.get_job(job.id)
+
+    async def test_job_marked_by_previous_version_dropped(
+        self,
+        test_user_with_org: AuthUser,
+        jobs_service: JobsService,
+        job_request_factory: Callable[[], JobRequest],
+        test_org: str,
+        test_project: str,
+    ) -> None:
+        enforcer = RetentionPolicyEnforcer(jobs_service, datetime.timedelta(days=1))
+        job, _ = await jobs_service.create_job(
+            job_request_factory(),
+            test_user_with_org,
+            cluster_name="test-cluster",
+            org_name=test_org,
+            project_name=test_project,
+        )
+
+        now = datetime.datetime.now(datetime.UTC)
+        await jobs_service.set_job_status(
+            job.id,
+            JobStatusItem(
+                JobStatus.SUCCEEDED, transition_time=now - datetime.timedelta(days=2)
+            ),
+        )
+        await jobs_service.set_job_materialized(job.id, False)
+        async with jobs_service.jobs_storage.try_update_job(job.id) as record:
+            record.being_dropped = True
 
         await enforcer.enforce()
 
-        job = await jobs_service.get_job(job.id)
-        assert job.being_dropped
+        with pytest.raises(JobError, match="no such job"):
+            await jobs_service.get_job(job.id)
