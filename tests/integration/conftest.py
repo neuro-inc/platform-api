@@ -577,7 +577,6 @@ def config_factory(
             platform_api_url=URL("http://localhost:8085/api/v1"),
             interval_sec=1,
             credit_notification_threshold=Decimal("0.1"),
-            retention_delay_days=20 / (24 * 60 * 60),  # 20 seconds
         )
         database_config = DatabaseConfig(postgres=postgres_config)
         config_url = URL("http://localhost:8082/api/v1")
