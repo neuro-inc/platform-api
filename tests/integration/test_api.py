@@ -2,6 +2,7 @@ import asyncio
 import re
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import AbstractAsyncContextManager
+from dataclasses import replace
 from decimal import Decimal
 from typing import Any, cast
 from unittest import mock
@@ -5169,13 +5170,8 @@ class TestJobs:
             assert result["status"] in ["pending"]
             job_id = result["id"]
             await jobs_client.long_polling_by_job_id(job_id=job_id, status="succeeded")
+        await jobs_client.wait_job_dematerialized(job_id)
         await jobs_client.drop_job(job_id=job_id)
-
-        jobs = await jobs_client.get_all_jobs()
-        assert len(jobs) == 1
-        assert jobs[0]["being_dropped"]
-        assert not jobs[0]["logs_removed"]
-        await jobs_client.drop_progress(job_id=job_id, logs_removed=True)
 
         jobs = await jobs_client.get_all_jobs()
         assert len(jobs) == 0
@@ -5752,6 +5748,16 @@ class TestRuntimeLimitEnforcer:
 
 
 class TestRetentionEnforcer:
+    @pytest.fixture
+    def config(self, config_factory: Callable[..., Config]) -> Config:
+        config = config_factory()
+        return replace(
+            config,
+            job_policy_enforcer=replace(
+                config.job_policy_enforcer, retention_delay_days=20 / (24 * 60 * 60)
+            ),
+        )
+
     async def test_enforce_retention(
         self,
         api: ApiConfig,
@@ -5775,13 +5781,14 @@ class TestRetentionEnforcer:
         await user_jobs_client.delete_job(job_id)
         await user_jobs_client.long_polling_by_job_id(job_id, status="cancelled")
 
-        job = await user_jobs_client.get_job_by_id(job_id)
-        assert not job["being_dropped"]
+        await user_jobs_client.get_job_by_id(job_id)
 
-        async def _wait_set_for_drop() -> None:
+        async def _wait_dropped() -> None:
+            url = api.generate_job_url(job_id)
             while True:
-                job = await user_jobs_client.get_job_by_id(job_id)
-                if job["being_dropped"]:
-                    return
+                async with client.get(url, headers=user.headers) as response:
+                    if response.status != HTTPOk.status_code:
+                        return
+                await asyncio.sleep(1)
 
-        await asyncio.wait_for(_wait_set_for_drop(), timeout=30)
+        await asyncio.wait_for(_wait_dropped(), timeout=60)
