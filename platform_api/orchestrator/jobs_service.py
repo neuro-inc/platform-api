@@ -641,15 +641,3 @@ class JobsService:
         if record.materialized:
             raise JobError(f"Job {job_id} resources are not cleaned up yet")
         await self._jobs_storage.drop_job(job_id)
-
-    async def drop_progress(
-        self, job_id: str, *, logs_removed: bool | None = None
-    ) -> None:
-        async with self._jobs_storage.try_update_job(job_id) as record:
-            if not record.being_dropped:
-                raise JobError(f"Job {job_id} is not being dropped")
-            if logs_removed:
-                record.logs_removed = logs_removed
-        all_resources_cleaned = record.logs_removed
-        if all_resources_cleaned:
-            await self._jobs_storage.drop_job(job_id)
