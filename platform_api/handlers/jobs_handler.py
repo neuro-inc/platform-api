@@ -367,14 +367,6 @@ def create_job_update_max_run_time_minutes_validator() -> t.Trafaret:
     )
 
 
-def create_drop_progress_validator() -> t.Trafaret:
-    return t.Dict(
-        {
-            t.Key("logs_removed", optional=True): t.Bool,
-        }
-    )
-
-
 def convert_job_container_to_json(container: Container) -> dict[str, Any]:
     ret: dict[str, Any] = {
         "image": container.image,
@@ -599,7 +591,6 @@ class JobsHandler:
         self._job_update_run_time_validator = (
             create_job_update_max_run_time_minutes_validator()
         )
-        self._drop_progress_validator = create_drop_progress_validator()
 
     @property
     def _jobs_service(self) -> JobsService:
@@ -623,7 +614,6 @@ class JobsHandler:
                     self.handle_put_max_run_time_minutes,
                 ),
                 aiohttp.web.post("/{job_id}/drop", self.handle_drop_job),
-                aiohttp.web.post("/{job_id}/drop_progress", self.handle_drop_progress),
             )
         )
 
@@ -1099,19 +1089,6 @@ class JobsHandler:
             )
         else:
             raise aiohttp.web.HTTPNoContent()
-
-    async def handle_drop_progress(
-        self, request: aiohttp.web.Request
-    ) -> aiohttp.web.StreamResponse:
-        job = await self._resolve_job(request, "write")
-
-        orig_payload = await request.json()
-        request_payload = self._drop_progress_validator.check(orig_payload)
-
-        await self._jobs_service.drop_progress(
-            job.id, logs_removed=request_payload.get("logs_removed")
-        )
-        raise aiohttp.web.HTTPNoContent()
 
 
 class JobFilterException(ValueError):

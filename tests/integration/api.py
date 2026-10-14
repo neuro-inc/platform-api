@@ -306,23 +306,6 @@ class JobsClient:
             if assert_success:
                 assert resp.status == HTTPNoContent.status_code, await resp.text()
 
-    async def drop_progress(
-        self,
-        job_id: str,
-        logs_removed: bool | None = None,
-        assert_success: bool = True,
-        headers: dict[str, str] | None = None,
-    ) -> None:
-        url = self._api_config.generate_job_url(job_id) + "/drop_progress"
-        payload = {}
-        if logs_removed is not None:
-            payload["logs_removed"] = logs_removed
-        async with self._client.post(
-            url, json=payload, headers=headers or self._headers
-        ) as resp:
-            if assert_success:
-                assert resp.status == HTTPNoContent.status_code, await resp.text()
-
 
 @pytest.fixture
 async def jobs_client_factory(
