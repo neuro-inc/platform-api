@@ -1,4 +1,4 @@
-ARG PY_VERSION=3.13.1
+ARG PY_VERSION=3.14.10
 FROM python:${PY_VERSION}-slim-bookworm AS builder
 
 ENV PATH=/root/.local/bin:$PATH

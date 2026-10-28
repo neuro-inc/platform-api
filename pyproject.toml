@@ -15,18 +15,18 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.13,<4.0"
+python = ">=3.14,<3.15"
 aiohttp = {version = "^3.13.4", extras = ["speedups"]}
 trafaret = "2.1.1"
 neuro-auth-client = "25.8.2"
-cryptography = "50.0.0"
+cryptography = "50.0.2"
 aiorwlock = "1.5.1"
 neuro-notifications-client = "25.3.0"
 neuro-logging = ">=26.9,<27.0"
 aiohttp-cors = "0.8.1"
-asyncpg = "0.31.0"
-sqlalchemy = "1.4.54"
-alembic = "1.19.2"
+asyncpg = "0.32.0"
+sqlalchemy = { version = ">=1.4.54,<2.0", extras = ["asyncio"] }
+alembic = ">=1.17.2,<1.18"
 psycopg2-binary = "2.9.13"
 typing-extensions = "4.16.0"
 neuro-admin-client = "25.12.0"
@@ -57,14 +57,14 @@ pytest-cov="7.1.0"
 pytest-timeout="2.4.0"
 pytest-aiohttp="1.1.1"
 requests="2.34.2"
-ruff = "0.17.0"
+ruff = "0.17.3"
 pytest-retry = "^1.7.0"
 apolo-events-client = {extras = ["pytest"], version = ">=26.9,<27.0"}
 pytest-test-groups = "^1.2.1"
 types-pyyaml = "^6.0.12.20250915"
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [
@@ -81,6 +81,8 @@ ignore = [
     "EM101",
     "EM102",
     "B008",
+    "UP042",
+    "ICN001",
     "RET503",
     "PT012",
     "FBT001",

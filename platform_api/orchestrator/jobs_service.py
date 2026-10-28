@@ -67,11 +67,11 @@ class RunningJobsQuotaExceededError(JobsServiceException):
         super().__init__(f"Jobs limit quota exceeded for {quota_owner}")
 
     @classmethod
-    def create_for_user(cls, user: str) -> "RunningJobsQuotaExceededError":
+    def create_for_user(cls, user: str) -> RunningJobsQuotaExceededError:
         return RunningJobsQuotaExceededError(f"user '{user}'")
 
     @classmethod
-    def create_for_org(cls, org: str) -> "RunningJobsQuotaExceededError":
+    def create_for_org(cls, org: str) -> RunningJobsQuotaExceededError:
         return RunningJobsQuotaExceededError(f"org '{org}'")
 
 
@@ -80,11 +80,11 @@ class NoCreditsError(JobsServiceException):
         super().__init__(f"No credits left for {quota_owner}")
 
     @classmethod
-    def create_for_user(cls, user: str) -> "NoCreditsError":
+    def create_for_user(cls, user: str) -> NoCreditsError:
         return NoCreditsError(f"user '{user}'")
 
     @classmethod
-    def create_for_org(cls, org: str) -> "NoCreditsError":
+    def create_for_org(cls, org: str) -> NoCreditsError:
         return NoCreditsError(f"org '{org}'")
 
 

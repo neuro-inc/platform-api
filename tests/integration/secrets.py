@@ -1,6 +1,7 @@
 import base64
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import Self
 
 import aiohttp
 import pytest
@@ -18,7 +19,7 @@ class SecretsClient:
             headers["Authorization"] = f"Bearer {user_token}"
         self._client = aiohttp.ClientSession(headers=headers)
 
-    async def __aenter__(self) -> "SecretsClient":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *args: object) -> None:

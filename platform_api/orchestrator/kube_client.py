@@ -15,7 +15,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import PurePath
-from typing import Any, ClassVar, NoReturn, Optional, Self
+from typing import Any, ClassVar, NoReturn, Self
 
 import aiohttp
 from apolo_kube_client import (
@@ -130,7 +130,7 @@ class Volume(metaclass=abc.ABCMeta):
         self,
         container_volume: ContainerVolume,
         mount_sub_path: PurePath | None = None,
-    ) -> "VolumeMount":
+    ) -> VolumeMount:
         raise NotImplementedError("Cannot create mount for abstract Volume type.")
 
     def to_model(self) -> V1Volume:
@@ -147,7 +147,7 @@ class PathVolume(Volume):
         self,
         container_volume: ContainerVolume,
         mount_sub_path: PurePath | None = None,
-    ) -> "VolumeMount":
+    ) -> VolumeMount:
         try:
             sub_path = container_volume.src_path.relative_to(
                 "/" if self.path is None else str(self.path)
@@ -174,7 +174,7 @@ class SharedMemoryVolume(Volume):
         self,
         container_volume: ContainerVolume,
         mount_sub_path: PurePath | None = None,
-    ) -> "VolumeMount":
+    ) -> VolumeMount:
         mount_sub_path = mount_sub_path or PurePath()
         return VolumeMount(
             volume=self,
@@ -190,7 +190,7 @@ class SecretEnvVar:
     secret: Secret
 
     @classmethod
-    def create(cls, name: str, secret: Secret) -> "SecretEnvVar":
+    def create(cls, name: str, secret: Secret) -> SecretEnvVar:
         return cls(name=name, secret=secret)
 
     def to_model(self) -> V1EnvVar:
@@ -227,7 +227,7 @@ class VolumeMount:
 class SecretVolume(Volume):
     k8s_secret_name: str
 
-    def create_secret_mount(self, sec_volume: SecretContainerVolume) -> "VolumeMount":
+    def create_secret_mount(self, sec_volume: SecretContainerVolume) -> VolumeMount:
         return VolumeMount(
             volume=self,
             mount_path=sec_volume.dst_path,
@@ -248,7 +248,7 @@ class SecretVolume(Volume):
 class PVCDiskVolume(Volume):
     claim_name: str
 
-    def create_disk_mount(self, disk_volume: DiskContainerVolume) -> "VolumeMount":
+    def create_disk_mount(self, disk_volume: DiskContainerVolume) -> VolumeMount:
         return VolumeMount(
             volume=self,
             mount_path=disk_volume.dst_path,
@@ -330,7 +330,7 @@ class Resources:
         return ret
 
     @classmethod
-    def from_model(cls, model: V1ResourceRequirements) -> "Resources":
+    def from_model(cls, model: V1ResourceRequirements) -> Resources:
         requests = model.requests or {}
         nvidia_gpu = None
         if cls.nvidia_gpu_key in requests:
@@ -401,11 +401,11 @@ class Resources:
         try:
             tpu_version, tpu_cores = tpu.type.rsplit("-", 1)
             return tpu_version, int(tpu_cores)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             raise ValueError(f"invalid TPU type format: '{tpu.type}'")
 
     @classmethod
-    def from_container_resources(cls, resources: ContainerResources) -> "Resources":
+    def from_container_resources(cls, resources: ContainerResources) -> Resources:
         kwargs: dict[str, Any] = {}
         if resources.nvidia_migs:
             kwargs["nvidia_migs"] = {
@@ -466,7 +466,7 @@ class Service:
         return V1Service(metadata=metadata, spec=spec)
 
     @classmethod
-    def create_for_pod(cls, pod: "PodDescriptor") -> "Service":
+    def create_for_pod(cls, pod: PodDescriptor) -> Service:
         return cls(
             name=pod.name,
             selector=pod.labels,
@@ -475,7 +475,7 @@ class Service:
         )
 
     @classmethod
-    def create_headless_for_pod(cls, pod: "PodDescriptor") -> "Service":
+    def create_headless_for_pod(cls, pod: PodDescriptor) -> Service:
         http_port = pod.port or cls.port
         return cls(
             name=pod.name,
@@ -485,7 +485,7 @@ class Service:
             labels=pod.labels,
         )
 
-    def make_named(self, name: str) -> "Service":
+    def make_named(self, name: str) -> Service:
         return replace(self, name=name)
 
     @classmethod
@@ -498,7 +498,7 @@ class Service:
         return {}
 
     @classmethod
-    def from_model(cls, model: V1Service) -> "Service":
+    def from_model(cls, model: V1Service) -> Service:
         spec = model.spec or V1ServiceSpec()
         http_port: V1ServicePort | None = None
         for p in spec.ports or []:
@@ -551,7 +551,7 @@ class IngressRule:
         )
 
     @classmethod
-    def from_service(cls, host: str, service: Service) -> "IngressRule":
+    def from_service(cls, host: str, service: Service) -> IngressRule:
         return cls(host=host, service_name=service.name, service_port=service.port)
 
     def to_model(self) -> V1IngressRule:
@@ -596,7 +596,7 @@ class Ingress:
         return V1Ingress(metadata=metadata, spec=spec)
 
     @classmethod
-    def from_model(cls, model: V1Ingress) -> "Ingress":
+    def from_model(cls, model: V1Ingress) -> Ingress:
         metadata = model.metadata or V1ObjectMeta()
         spec = model.spec or V1IngressSpec()
         rules = []
@@ -922,7 +922,7 @@ class PodDescriptor:
     health_check_path: str = "/"
     tty: bool = False
 
-    status: Optional["PodStatus"] = None
+    status: PodStatus | None = None
 
     image_pull_secrets: list[SecretRef] = field(default_factory=list)
 
@@ -995,7 +995,7 @@ class PodDescriptor:
         restart_policy: PodRestartPolicy = PodRestartPolicy.NEVER,
         meta_env: dict[str, str] | None = None,
         privileged: bool = False,
-    ) -> "PodDescriptor":
+    ) -> PodDescriptor:
         container = job_request.container
 
         secret_volumes, secret_volume_mounts = cls._process_secret_volumes(
@@ -1350,7 +1350,7 @@ class PodCondition:
                 raise ValueError(f"Invalid status {model.status!r}")
         try:
             type = PodConditionType(model.type)
-        except (KeyError, ValueError):
+        except KeyError, ValueError:
             type = PodConditionType.UNKNOWN
         assert model.last_transition_time is not None
         return cls(
@@ -1589,7 +1589,7 @@ class NodeResources:
             and self.intel_gpu >= (r.intel_gpu or 0)
         )
 
-    def __add__(self, other: "NodeResources") -> "NodeResources":
+    def __add__(self, other: NodeResources) -> NodeResources:
         return self.__class__(
             cpu=self.cpu + other.cpu,
             memory=self.memory + other.memory,
@@ -1602,7 +1602,7 @@ class NodeResources:
             intel_gpu=self.intel_gpu + other.intel_gpu,
         )
 
-    def __sub__(self, other: "NodeResources") -> "NodeResources":
+    def __sub__(self, other: NodeResources) -> NodeResources:
         return self.__class__(
             cpu=self.cpu - other.cpu,
             memory=self.memory - other.memory,
@@ -1631,10 +1631,10 @@ class NodeConditionType(enum.StrEnum):
     READY = "Ready"
 
     @classmethod
-    def parse(cls, value: str) -> "NodeConditionType":
+    def parse(cls, value: str) -> NodeConditionType:
         try:
             return cls(value)
-        except (KeyError, ValueError):
+        except KeyError, ValueError:
             return cls.UNKNOWN
 
 

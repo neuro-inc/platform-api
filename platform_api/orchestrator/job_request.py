@@ -44,7 +44,7 @@ class ContainerVolume:
     @classmethod
     def create(
         cls, uri: str, dst_path: PurePath, read_only: bool = False
-    ) -> "ContainerVolume":
+    ) -> ContainerVolume:
         return cls(
             uri=URL(uri.replace("%2f", "/").replace("%2F", "/")),
             dst_path=dst_path,
@@ -52,7 +52,7 @@ class ContainerVolume:
         )
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "ContainerVolume":
+    def from_primitive(cls, payload: dict[str, Any]) -> ContainerVolume:
         return cls(
             uri=URL(payload.get("uri", "")),
             dst_path=PurePath(payload["dst_path"]),
@@ -81,7 +81,7 @@ class Disk:
         )
 
     @classmethod
-    def create(cls, disk_uri: str | URL) -> "Disk":
+    def create(cls, disk_uri: str | URL) -> Disk:
         # Note: format of `disk_uri` is enforced by validators
         uri = URL(disk_uri)
         cluster_name = uri.host
@@ -102,11 +102,11 @@ class DiskContainerVolume:
     @classmethod
     def create(
         cls, uri: str, dst_path: PurePath, read_only: bool = False
-    ) -> "DiskContainerVolume":
+    ) -> DiskContainerVolume:
         return cls(disk=Disk.create(uri), dst_path=dst_path, read_only=read_only)
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "DiskContainerVolume":
+    def from_primitive(cls, payload: dict[str, Any]) -> DiskContainerVolume:
         return cls.create(
             uri=payload["src_disk_uri"],
             dst_path=PurePath(payload["dst_path"]),
@@ -143,7 +143,7 @@ class Secret:
         )
 
     @classmethod
-    def create(cls, secret_uri: str | URL) -> "Secret":
+    def create(cls, secret_uri: str | URL) -> Secret:
         # Note: format of `secret_uri` is enforced by validators
         uri = URL(secret_uri)
         cluster_name = uri.host
@@ -165,11 +165,11 @@ class SecretContainerVolume:
         return self.secret.to_uri()
 
     @classmethod
-    def create(cls, uri: str, dst_path: PurePath) -> "SecretContainerVolume":
+    def create(cls, uri: str, dst_path: PurePath) -> SecretContainerVolume:
         return cls(secret=Secret.create(uri), dst_path=dst_path)
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "SecretContainerVolume":
+    def from_primitive(cls, payload: dict[str, Any]) -> SecretContainerVolume:
         return cls.create(
             uri=payload["src_secret_uri"], dst_path=PurePath(payload["dst_path"])
         )
@@ -187,7 +187,7 @@ class ContainerNvidiaMIGResource:
     model: str | None = None
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "ContainerNvidiaMIGResource":
+    def from_primitive(cls, payload: dict[str, Any]) -> ContainerNvidiaMIGResource:
         return cls(count=payload["count"], model=payload.get("model"))
 
     def to_primitive(self) -> dict[str, Any]:
@@ -203,7 +203,7 @@ class ContainerTPUResource:
     software_version: str
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "ContainerTPUResource":
+    def from_primitive(cls, payload: dict[str, Any]) -> ContainerTPUResource:
         return cls(type=payload["type"], software_version=payload["software_version"])
 
     def to_primitive(self) -> dict[str, Any]:
@@ -225,7 +225,7 @@ class ContainerResources:
     tpu: ContainerTPUResource | None = None
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "ContainerResources":
+    def from_primitive(cls, payload: dict[str, Any]) -> ContainerResources:
         nvidia_migs = None
         if nvidia_migs_payload := payload.get("nvidia_migs"):
             nvidia_migs = {
@@ -394,7 +394,7 @@ class ContainerHTTPServer:
     requires_auth: bool = False
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "ContainerHTTPServer":
+    def from_primitive(cls, payload: dict[str, Any]) -> ContainerHTTPServer:
         return cls(
             port=payload["port"],
             health_check_path=payload.get("health_check_path") or cls.health_check_path,
@@ -495,7 +495,7 @@ class Container:
         return bool(self.http_server and self.http_server.requires_auth)
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "Container":
+    def from_primitive(cls, payload: dict[str, Any]) -> Container:
         kwargs = payload.copy()
         kwargs["resources"] = ContainerResources.from_primitive(kwargs["resources"])
         kwargs["volumes"] = [
@@ -577,15 +577,13 @@ class JobRequest:
     description: str | None = None
 
     @classmethod
-    def create(
-        cls, container: Container, description: str | None = None
-    ) -> "JobRequest":
+    def create(cls, container: Container, description: str | None = None) -> JobRequest:
         return cls(
             job_id=f"job-{uuid.uuid4()}", description=description, container=container
         )
 
     @classmethod
-    def from_primitive(cls, payload: dict[str, Any]) -> "JobRequest":
+    def from_primitive(cls, payload: dict[str, Any]) -> JobRequest:
         kwargs = payload.copy()
         kwargs["container"] = Container.from_primitive(kwargs["container"])
         return cls(**kwargs)

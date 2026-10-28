@@ -3,7 +3,7 @@ import logging
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 from pathlib import PurePath
-from typing import Any
+from typing import Any, Self
 
 import aiohttp
 from multidict import MultiDict
@@ -193,7 +193,7 @@ class HttpJobsPollerApi(JobsPollerApi):
             await self._client.close()
             self._client = None
 
-    async def __aenter__(self) -> "HttpJobsPollerApi":
+    async def __aenter__(self) -> Self:
         await self.init()
         return self
 
@@ -272,7 +272,7 @@ class JobsPoller:
         logger.info("Starting jobs polling")
         await self._init_task()
 
-    async def __aenter__(self) -> "JobsPoller":
+    async def __aenter__(self) -> Self:
         await self.start()
         return self
 

@@ -5,7 +5,7 @@ import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from datetime import timedelta
-from typing import TypeVar
+from typing import Self, TypeVar
 
 from aiohttp import ClientResponseError
 from neuro_admin_client import AdminClient, ClusterUser, OrgCluster
@@ -210,7 +210,7 @@ class JobPolicyEnforcePoller:
 
         self._task: asyncio.Task[None] | None = None
 
-    async def __aenter__(self) -> "JobPolicyEnforcePoller":
+    async def __aenter__(self) -> Self:
         await self.start()
         return self
 

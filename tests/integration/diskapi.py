@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import Self
 
 import aiohttp
 import pytest
@@ -18,7 +19,7 @@ class DiskAPIClient:
             headers["Authorization"] = f"Bearer {auth_token}"
         self._client = aiohttp.ClientSession(headers=headers)
 
-    async def __aenter__(self) -> "DiskAPIClient":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *args: object) -> None:
