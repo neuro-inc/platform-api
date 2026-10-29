@@ -137,6 +137,10 @@ jobs:
     steps:
     - name: Checkout commit
       uses: actions/checkout@v7
+    - name: Install python
+      uses: actions/setup-python@v7
+      with:
+        python-version-file: .python-version
     - name: Download All Coverages
       uses: actions/download-artifact@v8
       with:
