@@ -490,7 +490,7 @@ class KubeOrchestrator(Orchestrator):
                         or normalize_name(pvc_org) != normalize_name(org_name)
                     ):
                         missing.append(disk)
-                except KubeClientException, KeyError:
+                except (KubeClientException, KeyError):  # fmt: skip
                     missing.append(disk)
         return sorted(missing, key=lambda disk: disk.disk_id)
 

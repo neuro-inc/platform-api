@@ -401,7 +401,7 @@ class Resources:
         try:
             tpu_version, tpu_cores = tpu.type.rsplit("-", 1)
             return tpu_version, int(tpu_cores)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):  # fmt: skip
             raise ValueError(f"invalid TPU type format: '{tpu.type}'")
 
     @classmethod
@@ -1350,7 +1350,7 @@ class PodCondition:
                 raise ValueError(f"Invalid status {model.status!r}")
         try:
             type = PodConditionType(model.type)
-        except KeyError, ValueError:
+        except (KeyError, ValueError):  # fmt: skip
             type = PodConditionType.UNKNOWN
         assert model.last_transition_time is not None
         return cls(
@@ -1634,7 +1634,7 @@ class NodeConditionType(enum.StrEnum):
     def parse(cls, value: str) -> NodeConditionType:
         try:
             return cls(value)
-        except KeyError, ValueError:
+        except (KeyError, ValueError):  # fmt: skip
             return cls.UNKNOWN
 
 
