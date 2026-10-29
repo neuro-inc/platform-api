@@ -52,7 +52,7 @@ test_integration:
 .PHONY: docker_build
 docker_build: .python-version dist
 	PY_VERSION=$$(cat .python-version) && \
-	docker build --pull --no-cache \
+	docker build --pull \
 		-t platformapi:latest \
 		--build-arg PY_VERSION=$$PY_VERSION \
 		.
