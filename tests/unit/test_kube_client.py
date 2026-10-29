@@ -675,6 +675,20 @@ class TestNodeCondition:
                 )
             )
 
+    def test_from_model_unknown_type(self) -> None:
+        now = datetime.now(UTC)
+        condition = NodeCondition.from_model(
+            V1NodeCondition(
+                type="UnknownCondition",
+                status="True",
+                last_transition_time=now,
+            )
+        )
+
+        assert condition == NodeCondition(
+            type=NodeConditionType.UNKNOWN, status=True, transition_time=now
+        )
+
 
 class TestNodeStatus:
     def test_from_model(self) -> None:
