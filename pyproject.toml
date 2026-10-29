@@ -26,7 +26,7 @@ neuro-logging = ">=26.9,<27.0"
 aiohttp-cors = "0.8.1"
 asyncpg = "0.32.0"
 sqlalchemy = { version = ">=1.4.54,<2.0", extras = ["asyncio"] }
-alembic = ">=1.17.2,<1.18"
+alembic = ">=1.19.2,<1.20"
 psycopg2-binary = "2.9.13"
 typing-extensions = "4.16.0"
 neuro-admin-client = "25.12.0"
