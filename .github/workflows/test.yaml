@@ -126,7 +126,7 @@ jobs:
         COVERAGE_FILE: ${{ strategy.job-index }}.coverage
     - name: Show Admin logs after test failure
       if: failure()
-      run: kubectl --context=minikube -n platformapi-tests logs deployment/platformadmin --tail=150
+      run: kubectl --context=minikube -n default logs deployment/platformadmin --tail=150
     - name: Upload coverage part
       uses: actions/upload-artifact@v7
       with:
