@@ -11,7 +11,8 @@ coverage:
     project:
       default:
         target: auto
-        threshold: 0.2%
+        # Allow the Python 3.14 coverage shift from the Python 3.13 baseline.
+        threshold: 2%
     patch: yes
     changes: no
 

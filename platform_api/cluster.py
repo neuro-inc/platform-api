@@ -27,13 +27,13 @@ class ClusterException(Exception):
 
 class ClusterNotFound(ClusterException):
     @classmethod
-    def create(cls, name: str) -> "ClusterNotFound":
+    def create(cls, name: str) -> ClusterNotFound:
         return cls(f"Cluster '{name}' not found")
 
 
 class ClusterNotAvailable(ClusterException):
     @classmethod
-    def create(cls, name: str) -> "ClusterNotAvailable":
+    def create(cls, name: str) -> ClusterNotAvailable:
         return cls(f"Cluster '{name}' not available")
 
 
@@ -73,7 +73,7 @@ class ClusterUpdater:
     def __init__(
         self,
         events_client: AbstractEventsClient,
-        cluster_registry: "ClusterConfigRegistry",
+        cluster_registry: ClusterConfigRegistry,
         config_client: ConfigClient,
     ):
         self._events_client = events_client
@@ -131,7 +131,7 @@ class SingleClusterUpdater:
         self,
         events_client: AbstractEventsClient,
         config_client: ConfigClient,
-        cluster_holder: "ClusterHolder",
+        cluster_holder: ClusterHolder,
         cluster_name: str,
     ):
         self._events_client = events_client

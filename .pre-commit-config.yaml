@@ -10,6 +10,7 @@ repos:
   - id: check-toml
   - id: check-xml
   - id: debug-statements
+    language_version: python3.14
   - id: check-added-large-files
   - id: end-of-file-fixer
   - id: requirements-txt-fixer
@@ -17,7 +18,7 @@ repos:
   - id: check-symlinks
     exclude: ^charts/
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.14.10
+  rev: v0.17.3
   hooks:
   - id: ruff-format
   - id: ruff-check

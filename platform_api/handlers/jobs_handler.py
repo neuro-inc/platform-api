@@ -942,7 +942,7 @@ class JobsHandler:
 
     @asyncgeneratorcontextmanager
     async def _iter_filtered_jobs(
-        self, bulk_job_filter: "BulkJobFilter", reverse: bool, limit: int | None
+        self, bulk_job_filter: BulkJobFilter, reverse: bool, limit: int | None
     ) -> AsyncIterator[Job]:
         def job_key(job: Job) -> tuple[float, str, Job]:
             return job.status_history.created_at_timestamp, job.id, job

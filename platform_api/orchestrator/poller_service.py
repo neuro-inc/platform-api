@@ -150,7 +150,7 @@ class JobsScheduler:
         try:
             async with self._cluster_holder.get() as cluster:
                 return cluster.config
-        except (ClusterNotFound, ClusterNotAvailable):
+        except ClusterNotFound, ClusterNotAvailable:
             return None
 
     def _check_energy_schedule(

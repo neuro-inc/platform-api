@@ -23,7 +23,7 @@ class retries:  # noqa: N801
         self._attempt = 0
         self._sleeptime = 0.0
 
-    def __iter__(self) -> Iterator["retries"]:
+    def __iter__(self) -> Iterator[retries]:
         while self._attempt < self._attempts:
             self._sleeptime += 0.1
             self._attempt += 1

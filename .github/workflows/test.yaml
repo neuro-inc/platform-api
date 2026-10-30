@@ -124,6 +124,9 @@ jobs:
         COUNT: ${{ strategy.job-total }}
         GROUP: ${{ steps.group.outputs.group }}
         COVERAGE_FILE: ${{ strategy.job-index }}.coverage
+    - name: Show Admin logs after test failure
+      if: failure()
+      run: kubectl --context=minikube -n default logs deployment/platformadmin --tail=150
     - name: Upload coverage part
       uses: actions/upload-artifact@v7
       with:
@@ -137,6 +140,10 @@ jobs:
     steps:
     - name: Checkout commit
       uses: actions/checkout@v7
+    - name: Install python
+      uses: actions/setup-python@v7
+      with:
+        python-version-file: .python-version
     - name: Download All Coverages
       uses: actions/download-artifact@v8
       with:

@@ -33,7 +33,7 @@ class JobTables:
     metadata = sa.MetaData()
 
     @classmethod
-    def create(cls) -> "JobTables":
+    def create(cls) -> JobTables:
         table_name = "jobs"
         if table_name in cls.metadata:
             return cls(jobs=cls.metadata.tables[table_name])
