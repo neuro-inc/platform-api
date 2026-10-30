@@ -35,5 +35,4 @@ ENV PATH=/home/$SERVICE_NAME/.local/bin:$PATH
 ENV NP_API_PORT=8080
 EXPOSE $NP_API_PORT
 
-
 CMD ["platform-api"]
