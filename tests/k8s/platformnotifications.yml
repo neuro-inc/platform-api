@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: redis
-        image: redis:4
+        image: redis:7.4-alpine
 ---
 apiVersion: v1
 kind: Service
