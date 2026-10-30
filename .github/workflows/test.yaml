@@ -16,7 +16,8 @@ jobs:
     - name: Install pipx
       run: python3 -m pip install --user pipx && python3 -m pipx ensurepath
     - name: Install Poetry with pipx
-      run: pipx install "poetry==$(awk '/python-poetry\/poetry/{f=1} f && /rev:/{gsub(/[^0-9.]/,"",$2); print $2; exit}' .pre-commit-config.yaml)"
+      run: |
+        pipx install "poetry==$(awk '/python-poetry\/poetry/{f=1} f && /rev:/{gsub(/[^0-9.]/,"",$2); print $2; exit}' .pre-commit-config.yaml)"
     - name: Setup Python dependencies cache
       uses: actions/cache@v6
       with:
@@ -45,7 +46,8 @@ jobs:
     - name: Install pipx
       run: python3 -m pip install --user pipx && python3 -m pipx ensurepath
     - name: Install Poetry with pipx
-      run: pipx install "poetry==$(awk '/python-poetry\/poetry/{f=1} f && /rev:/{gsub(/[^0-9.]/,"",$2); print $2; exit}' .pre-commit-config.yaml)"
+      run: |
+        pipx install "poetry==$(awk '/python-poetry\/poetry/{f=1} f && /rev:/{gsub(/[^0-9.]/,"",$2); print $2; exit}' .pre-commit-config.yaml)"
     - name: Setup Python dependencies cache
       uses: actions/cache@v6
       with:
@@ -82,7 +84,8 @@ jobs:
     - name: Install pipx
       run: python3 -m pip install --user pipx && python3 -m pipx ensurepath
     - name: Install Poetry with pipx
-      run: pipx install "poetry==$(awk '/python-poetry\/poetry/{f=1} f && /rev:/{gsub(/[^0-9.]/,"",$2); print $2; exit}' .pre-commit-config.yaml)"
+      run: |
+        pipx install "poetry==$(awk '/python-poetry\/poetry/{f=1} f && /rev:/{gsub(/[^0-9.]/,"",$2); print $2; exit}' .pre-commit-config.yaml)"
     - name: Setup Python dependencies cache
       uses: actions/cache@v6
       with:
@@ -170,7 +173,8 @@ jobs:
     - name: Install pipx
       run: python3 -m pip install --user pipx && python3 -m pipx ensurepath
     - name: Install Poetry with pipx
-      run: pipx install "poetry==$(awk '/python-poetry\/poetry/{f=1} f && /rev:/{gsub(/[^0-9.]/,"",$2); print $2; exit}' .pre-commit-config.yaml)"
+      run: |
+        pipx install "poetry==$(awk '/python-poetry\/poetry/{f=1} f && /rev:/{gsub(/[^0-9.]/,"",$2); print $2; exit}' .pre-commit-config.yaml)"
     - name: Setup Python dependencies cache
       uses: actions/cache@v6
       with:
