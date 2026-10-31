@@ -558,5 +558,6 @@ def main() -> None:
     config = EnvironConfigFactory().create()
     logging.info("Loaded config: %r", config)
     setup_sentry(ignore_errors=[JobError, JobStorageTransactionError])
-    app = create_app(config)
-    aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)
+    aiohttp.web.run_app(
+        create_app(config), host=config.server.host, port=config.server.port
+    )

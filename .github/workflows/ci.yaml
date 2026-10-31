@@ -41,7 +41,7 @@ jobs:
     name: Create release
     needs: test
     if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
-    uses: neuro-inc/reuse/.github/workflows/release-service.yaml@v26.8.0
+    uses: neuro-inc/reuse/.github/workflows/release-service.yaml@802efa22fc6a20134f03d908172bf9429f0935eb
     with:
       image: platformapi
       helm_charts: platform-api platform-api-poller
