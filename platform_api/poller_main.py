@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack
@@ -163,7 +162,6 @@ def main() -> None:
     init_logging(health_check_url_path="/ping")
     config = EnvironConfigFactory().create_poller()
     logging.info("Loaded config: %r", config)
-    loop = asyncio.get_event_loop()
     setup_sentry(ignore_errors=[JobError, JobStorageTransactionError])
-    app = loop.run_until_complete(create_app(config))
+    app = create_app(config)
     aiohttp.web.run_app(app, host=config.server.host, port=config.server.port)
