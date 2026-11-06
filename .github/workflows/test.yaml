@@ -96,7 +96,7 @@ jobs:
     - name: Install dependencies
       run: make setup
     - name: Login to ghcr.io
-      uses: docker/login-action@v4.6.0
+      uses: docker/login-action@v4.7.0
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
@@ -186,7 +186,7 @@ jobs:
         restore-keys: |
           poetry-
     - name: Login to ghcr.io
-      uses: docker/login-action@v4.6.0
+      uses: docker/login-action@v4.7.0
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
