@@ -55,9 +55,10 @@ from neuro_config_client import OrchestratorConfig
 from yarl import URL
 
 from platform_api.config import RegistryConfig
-from platform_api.orchestrator.job import JobStatusItem, JobStatusReason
+from platform_api.orchestrator.job import Job, JobRecord, JobStatusItem, JobStatusReason
 from platform_api.orchestrator.job_request import (
     Container,
+    ContainerHTTPServer,
     ContainerResources,
     ContainerTPUResource,
     ContainerVolume,
@@ -1606,3 +1607,113 @@ class TestKubeOrchestrator:
             ),
             kube_config=KubeConfig(endpoint_url="https://kuberrnetes.svc"),
         )
+
+    @pytest.mark.parametrize(
+        "ingress_class,token_filter_middleware,requires_auth,expected",
+        [
+            (
+                "traefik",
+                None,
+                False,
+                {
+                    "traefik.ingress.kubernetes.io/router.middlewares": (
+                        "error-page@kubernetescrd"
+                    )
+                },
+            ),
+            (
+                "traefik",
+                None,
+                True,
+                {
+                    "traefik.ingress.kubernetes.io/router.middlewares": (
+                        "error-page@kubernetescrd,ingress-auth@kubernetescrd"
+                    )
+                },
+            ),
+            (
+                "traefik",
+                "",
+                True,
+                {
+                    "traefik.ingress.kubernetes.io/router.middlewares": (
+                        "error-page@kubernetescrd,ingress-auth@kubernetescrd"
+                    )
+                },
+            ),
+            (
+                "traefik",
+                "token-filter@kubernetescrd",
+                False,
+                {
+                    "traefik.ingress.kubernetes.io/router.middlewares": (
+                        "error-page@kubernetescrd,token-filter@kubernetescrd"
+                    )
+                },
+            ),
+            (
+                "traefik",
+                "token-filter@kubernetescrd",
+                True,
+                {
+                    "traefik.ingress.kubernetes.io/router.middlewares": (
+                        "error-page@kubernetescrd,ingress-auth@kubernetescrd,"
+                        "token-filter@kubernetescrd"
+                    )
+                },
+            ),
+            ("nginx", "token-filter@kubernetescrd", True, {}),
+        ],
+        ids=[
+            "no-filter-no-auth",
+            "no-filter-auth",
+            "empty-filter-auth",
+            "filter-no-auth",
+            "filter-auth",
+            "nginx",
+        ],
+    )
+    async def test_get_ingress_annotations(
+        self,
+        ingress_class: str,
+        token_filter_middleware: str | None,
+        requires_auth: bool,
+        expected: dict[str, str],
+    ) -> None:
+        orchestrator_config = OrchestratorConfig(
+            job_hostname_template="{job_id}.default.org.neu.ro",
+            job_fallback_hostname="default.org.neu.ro",
+            job_schedule_timeout_s=300,
+            job_schedule_scale_up_timeout_s=900,
+            resource_pool_types=[],
+            resource_presets=[],
+        )
+        orchestrator = KubeOrchestrator(
+            cluster_name="default",
+            registry_config=RegistryConfig(username="username", password="password"),
+            orchestrator_config=orchestrator_config,
+            kube_config=KubeConfig(
+                endpoint_url="https://kuberrnetes.svc",
+                jobs_ingress_class=ingress_class,
+                jobs_ingress_token_filter_middleware=token_filter_middleware,
+            ),
+        )
+        container = Container(
+            image="ubuntu:20.10",
+            command="sleep 1h",
+            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
+            http_server=ContainerHTTPServer(port=80, requires_auth=requires_auth),
+        )
+        job = Job(
+            orchestrator_config=orchestrator_config,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="default",
+                org_name="test-org",
+            ),
+        )
+
+        assert orchestrator._get_ingress_annotations(job) == {
+            "kubernetes.io/ingress.class": ingress_class,
+            **expected,
+        }

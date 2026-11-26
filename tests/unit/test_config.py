@@ -193,6 +193,9 @@ class TestEnvironConfigFactory:
                 "NP_KUBE_INGRESS_ERROR_PAGE_MIDDLEWARE": (
                     "custom-error-page@kubernetescrd"
                 ),
+                "NP_KUBE_INGRESS_TOKEN_FILTER_MIDDLEWARE": (
+                    "custom-token-filter@kubernetescrd"
+                ),
                 "NP_KUBE_INGRESS_OAUTH_AUTHORIZE_URL": "http://ingress-auth",
                 "NP_KUBE_POD_JOB_TOLERATION_KEY": "job",
                 "NP_KUBE_POD_PREEMPTIBLE_TOLERATION_KEY": "preemptible",
@@ -221,6 +224,7 @@ class TestEnvironConfigFactory:
             jobs_ingress_class="nginx",
             jobs_ingress_auth_middleware="custom-ingress-auth@kubernetescrd",
             jobs_ingress_error_page_middleware="custom-error-page@kubernetescrd",
+            jobs_ingress_token_filter_middleware="custom-token-filter@kubernetescrd",
             jobs_pod_job_toleration_key="job",
             jobs_pod_preemptible_toleration_key="preemptible",
             node_label_job="job-label",

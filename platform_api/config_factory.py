@@ -284,6 +284,9 @@ class EnvironConfigFactory:
                     call_default_factory=True
                 ),
             ),
+            jobs_ingress_token_filter_middleware=self._environ.get(
+                "NP_KUBE_INGRESS_TOKEN_FILTER_MIDDLEWARE"
+            ),
             jobs_pod_job_toleration_key=self._environ.get(
                 "NP_KUBE_POD_JOB_TOLERATION_KEY",
                 fields["jobs_pod_job_toleration_key"].get_default(

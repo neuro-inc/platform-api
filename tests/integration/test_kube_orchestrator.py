@@ -2039,6 +2039,66 @@ class TestKubeOrchestrator:
             finally:
                 await orchestrator.delete_job(job)
 
+    @pytest.mark.parametrize(
+        "requires_auth,middlewares",
+        [
+            (False, "error-page@kubernetescrd,token-filter@kubernetescrd"),
+            (
+                True,
+                "error-page@kubernetescrd,ingress-auth@kubernetescrd,"
+                "token-filter@kubernetescrd",
+            ),
+        ],
+        ids=["no-auth", "auth"],
+    )
+    async def test_job_check_ingress_annotations_jobs_ingress_token_filter(
+        self,
+        kube_config_factory: Callable[..., KubeConfig],
+        kube_orchestrator_factory: Callable[..., KubeOrchestrator],
+        kube_client_selector: KubeClientSelector,
+        org_name: str,
+        project_name: str,
+        requires_auth: bool,
+        middlewares: str,
+    ) -> None:
+        kube_config = kube_config_factory(
+            jobs_ingress_class="traefik",
+            jobs_ingress_token_filter_middleware="token-filter@kubernetescrd",
+        )
+        orchestrator = kube_orchestrator_factory(kube_config=kube_config)
+        container = Container(
+            image="ubuntu:20.10",
+            command="sleep 1h",
+            resources=ContainerResources(cpu=0.1, memory=32 * 10**6),
+            http_server=ContainerHTTPServer(port=80, requires_auth=requires_auth),
+        )
+        job = MyJob(
+            orchestrator,
+            record=JobRecord.create(
+                request=JobRequest.create(container),
+                cluster_name="test-cluster",
+                org_name=org_name,
+                project_name=project_name,
+            ),
+        )
+        async with kube_client_selector.get_client(
+            org_name=job.org_name,
+            project_name=job.project_name,
+        ) as kube_client:
+            try:
+                await job.start()
+                pod_name = job.id
+                await wait_pod_is_running(
+                    kube_client, pod_name=pod_name, timeout_s=60.0
+                )
+                ingress = await get_ingress(kube_client, pod_name)
+                assert ingress.ingress_class == "traefik"
+                assert ingress.annotations == {
+                    "traefik.ingress.kubernetes.io/router.middlewares": middlewares,
+                }
+            finally:
+                await orchestrator.delete_job(job)
+
     async def test_job_pod_tolerations(
         self,
         kube_config: KubeConfig,

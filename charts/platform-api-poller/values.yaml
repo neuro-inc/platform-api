@@ -35,6 +35,7 @@ jobs:
   ingressClass: traefik
   ingressAuthMiddleware:
   ingressErrorPageMiddleware:
+  ingressTokenFilterMiddleware:
   tolerationKey: platform.neuromation.io/job
   preemptibleTolerationKey:
   imagePullSecret:

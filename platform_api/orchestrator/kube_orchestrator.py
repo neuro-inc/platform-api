@@ -907,6 +907,10 @@ class KubeOrchestrator(Orchestrator):
             middlewares.append(self._kube_config.jobs_ingress_error_page_middleware)
             if job.requires_http_auth:
                 middlewares.append(self._kube_config.jobs_ingress_auth_middleware)
+            if self._kube_config.jobs_ingress_token_filter_middleware:
+                middlewares.append(
+                    self._kube_config.jobs_ingress_token_filter_middleware
+                )
             annotations.update(
                 {
                     "traefik.ingress.kubernetes.io/router.middlewares": ",".join(

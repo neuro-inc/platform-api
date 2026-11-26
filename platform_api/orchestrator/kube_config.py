@@ -7,6 +7,7 @@ class KubeConfig(ApoloKubeConfig):
     jobs_ingress_class: str = "traefik"
     jobs_ingress_auth_middleware: str = "ingress-auth@kubernetescrd"
     jobs_ingress_error_page_middleware: str = "error-page@kubernetescrd"
+    jobs_ingress_token_filter_middleware: str | None = None
     jobs_pod_job_toleration_key: str = "platform.neuromation.io/job"
     jobs_pod_preemptible_toleration_key: str | None = None
 
