@@ -110,6 +110,10 @@ spec:
         - name: NP_KUBE_INGRESS_ERROR_PAGE_MIDDLEWARE
           value: {{ .Values.jobs.ingressErrorPageMiddleware | quote }}
         {{- end }}
+        {{- if .Values.jobs.ingressTokenFilterMiddleware }}
+        - name: NP_KUBE_INGRESS_TOKEN_FILTER_MIDDLEWARE
+          value: {{ .Values.jobs.ingressTokenFilterMiddleware | quote }}
+        {{- end }}
         {{- if .Values.jobs.tolerationKey }}
         - name: NP_KUBE_POD_JOB_TOLERATION_KEY
           value: {{ .Values.jobs.tolerationKey | quote }}
